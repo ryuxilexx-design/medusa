@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response } from 'express';
 import { loginSchema } from '@meduza/contracts';
 import { assertDatabaseName, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
@@ -11,6 +11,9 @@ import { hashToken } from '../core/guard';
 import { parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { now, syncClock, today } from '../core/clock';
+
+/** Failed access-code attempts per client IP (in-memory; resets on restart). */
+const failures = new Map<string, { n: number; until: number }>();
 
 const demoOnly = () => { if (!config.demoEnabled) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi'); };
 
@@ -26,19 +29,32 @@ export class SessionController {
          FROM memberships m JOIN users u ON u.id = m.user_id LEFT JOIN doctors d ON d.membership_id = m.id
         WHERE m.demo_card AND m.status = 'active' AND m.tenant_id = $1
         ORDER BY array_position(ARRAY['manager','registrar','doctor','cashier','lab'], m.role), u.full_name`, [SEED_IDS.tenant]);
-    return { data: rows };
+    return { data: rows, meta: { access_code_required: !!config.demoAccessCode } };
   }
 
   @Public() @Post('demo/login') @HttpCode(200)
-  async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+  async login(@Body() body: unknown, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     demoOnly();
-    const { membership_id } = parse(loginSchema, body);
+    const { membership_id, access_code } = parse(loginSchema, body);
+    if (config.demoAccessCode) {
+      const ip = String(req.ip ?? '');
+      const now = Date.now();
+      const rec = failures.get(ip);
+      if (rec && rec.until > now && rec.n >= 10) throw new AppError(429, 'TOO_MANY_ATTEMPTS', 'Juda ko‘p noto‘g‘ri urinish. 10 daqiqadan keyin qayta urinib ko‘ring.');
+      const a = Buffer.from(createHash('sha256').update(access_code ?? '').digest('hex'));
+      const b = Buffer.from(createHash('sha256').update(config.demoAccessCode).digest('hex'));
+      if (!timingSafeEqual(a, b)) {
+        failures.set(ip, { n: (rec && rec.until > now ? rec.n : 0) + 1, until: now + 10 * 60_000 });
+        throw new AppError(401, 'ACCESS_CODE', 'Kirish kodi noto‘g‘ri');
+      }
+      failures.delete(ip);
+    }
     const m = await this.db.one(`SELECT id, tenant_id FROM memberships WHERE id = $1 AND status = 'active'`, [membership_id]);
     if (!m) throw forbidden('Bu demo akkaunt mavjud emas');
     const token = randomBytes(32).toString('base64url');
     await this.db.rows(`INSERT INTO sessions (token_hash, membership_id, tenant_id, expires_at) VALUES ($1,$2,$3, now() + make_interval(hours => $4))`,
       [hashToken(token), m.id, m.tenant_id, config.sessionTtlHours]);
-    res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.mode === 'production', path: '/', maxAge: config.sessionTtlHours * 3600_000 });
+    res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, path: '/', maxAge: config.sessionTtlHours * 3600_000 });
     return { data: { ok: true } };
   }
 

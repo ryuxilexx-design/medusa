@@ -18,7 +18,7 @@ const phone = z.string().optional().nullable().transform((s, ctx) => {
 });
 const uuid = z.string().uuid('Noto‘g‘ri identifikator');
 
-export const loginSchema = z.object({ membership_id: uuid });
+export const loginSchema = z.object({ membership_id: uuid, access_code: z.string().max(200).optional() });
 
 export const patientBaseSchema = z.object({
   last_name: trimmed(2, 80, 'Familiya'),
