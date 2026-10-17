@@ -1,0 +1,10 @@
+node_modules
+dist
+.next
+.env
+*.tsbuildinfo
+.DS_Store
+e2e/shots
+e2e/node_modules
+backups/
+.next-e2e

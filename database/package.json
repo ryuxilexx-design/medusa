@@ -1,0 +1,10 @@
+{
+  "name": "@meduza/db",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": { "build": "tsc -p tsconfig.json" },
+  "dependencies": { "pg": "8.23.1", "dotenv": "^16.4.7" },
+  "devDependencies": { "@types/pg": "^8.11.10", "@types/node": "^20.17.0" }
+}

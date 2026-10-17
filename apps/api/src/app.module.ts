@@ -1,0 +1,35 @@
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { randomUUID } from 'crypto';
+import { Db } from './core/db';
+import { AuthGuard } from './core/guard';
+import { ErrorFilter } from './core/errors';
+import { SessionController } from './modules/session.controller';
+import { ReferenceController } from './modules/reference.controller';
+import { PatientsController } from './modules/patients.controller';
+import { AppointmentsController } from './modules/appointments.controller';
+import { QueueController } from './modules/queue.controller';
+import { DoctorController, EncountersController } from './modules/encounters.controller';
+import { LabController } from './modules/lab.controller';
+import { InvoicesController, PaymentsController } from './modules/invoices.controller';
+import { DashboardController } from './modules/dashboard.controller';
+import { ReportsController } from './modules/reports.controller';
+import { InventoryController } from './modules/inventory.controller';
+import { DiagnosticsController } from './modules/diagnostics.controller';
+import { AiController } from './modules/ai.controller';
+
+@Module({
+  controllers: [SessionController, ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
+    LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController],
+  providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
+})
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply((req: any, res: any, next: () => void) => {
+      req.requestId = randomUUID();
+      res.setHeader('X-Request-Id', req.requestId);
+      res.setHeader('Cache-Control', 'no-store');
+      next();
+    }).forRoutes('*');
+  }
+}

@@ -1,0 +1,20 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: meduza-db
+    environment:
+      POSTGRES_USER: meduza
+      POSTGRES_PASSWORD: meduza_local
+      POSTGRES_DB: meduza
+      TZ: UTC
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - meduza_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meduza -d meduza"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  meduza_pg:

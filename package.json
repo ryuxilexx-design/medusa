@@ -1,0 +1,38 @@
+{
+  "name": "meduza",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*",
+    "database",
+    "apps/*"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d db && node database/scripts/wait-db.mjs",
+    "db:down": "docker compose down",
+    "build:packages": "npm run build -w @meduza/contracts -w @meduza/db",
+    "db:migrate": "npm run build:packages && node database/dist/src/cli.js migrate",
+    "db:seed": "npm run build:packages && node database/dist/src/cli.js reset",
+    "db:reset": "npm run db:seed",
+    "dev:api": "npm run dev -w @meduza/api",
+    "dev:web": "npm run dev -w @meduza/web",
+    "dev": "npm run build:packages && concurrently -k -n api,web -c cyan,magenta \"npm run dev -w @meduza/api\" \"npm run dev -w @meduza/web\"",
+    "build": "npm run build:packages && npm run build -w @meduza/api && npm run build -w @meduza/web",
+    "start": "concurrently -k -n api,web -c cyan,magenta \"npm run start -w @meduza/api\" \"npm run start -w @meduza/web\"",
+    "test": "npm run build:packages && node database/scripts/prepare-test-db.mjs && npm run test -w @meduza/api",
+    "typecheck": "npm run build:packages && npm run typecheck -w @meduza/api && npm run typecheck -w @meduza/web",
+    "setup": "npm install && npm run db:up && npm run db:seed",
+    "demo": "npm run build && npm run start",
+    "e2e": "npm run build:packages && npm run build -w @meduza/api && cd e2e && npm install --no-audit --no-fund --silent && node run.mjs",
+    "e2e:tour": "cd e2e && npm install --no-audit --no-fund --silent && node tour.mjs",
+    "db:backup": "node database/scripts/backup.mjs",
+    "db:restore": "node database/scripts/restore.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

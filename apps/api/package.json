@@ -1,0 +1,31 @@
+{
+  "name": "@meduza/api",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsc -p tsconfig.json && concurrently -k -r \"tsc -p tsconfig.json -w --preserveWatchOutput\" \"node --watch dist/main.js\"",
+    "start": "node dist/main.js",
+    "test": "tsc -p tsconfig.json && node --test --test-concurrency=1 test/"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0",
+    "@meduza/contracts": "*",
+    "@meduza/db": "*",
+    "@nestjs/common": "11.2.7",
+    "@nestjs/core": "11.2.7",
+    "@nestjs/platform-express": "11.2.7",
+    "cookie-parser": "1.4.7",
+    "dotenv": "^16.4.7",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/cookie-parser": "^1.4.8",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.17.0"
+  }
+}
