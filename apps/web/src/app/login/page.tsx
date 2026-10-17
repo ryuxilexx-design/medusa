@@ -33,9 +33,9 @@ export default function LoginPage() {
   async function enter(role: Role) {
     const acc = role === 'doctor' ? doctors.find((d) => d.membership_id === doctorId) ?? doctors.find((d) => d.specialty === 'Terapevt') ?? doctors[0] : accounts.data?.find((a) => a.role === role);
     if (!acc) return;
+    if (codeRequired && !code.trim()) { toast.error(new Error('Kirish kodini kiriting')); return; }
     setBusy(role);
     try {
-      if (codeRequired && !code.trim()) { toast.error(new Error('Kirish kodini kiriting')); return; }
       await api('/demo/login', { method: 'POST', body: { membership_id: acc.membership_id, access_code: code.trim() || undefined } });
       qc.clear(); // never reuse the previous role's cached data
       router.replace(HOME_BY_ROLE[role]);
