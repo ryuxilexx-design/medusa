@@ -6,12 +6,13 @@ import { Alert, Badge, Button, ErrorState, LoadingRows, Table, Td, Th, useToast 
 import { NewsCard } from '@/components/news-card';
 
 type Usage = {
-  mode: 'off' | 'sample' | 'live'; model: string; key_configured: boolean;
+  mode: 'off' | 'sample' | 'live'; provider: 'anthropic' | 'gemini'; model: string; key_configured: boolean; gemini_free: boolean; clinical_allowed: boolean;
   by_route: { route: string; calls: number; ok: number; failed: number; input_tokens: number; output_tokens: number; cache_read_tokens: number; cost_usd: number; avg_latency_ms: number | null }[];
   today: { calls: number; cost_usd: number }; icd10: { n: number; official: number };
 };
 const ROUTE: Record<string, string> = { note_draft: 'Qaydni tartiblash', icd10_suggest: 'MKB-10 taklifi', news_summary: 'Yangiliklar qisqa mazmuni (barcha klinikalar uchun umumiy)' };
 const usd = (n: number) => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
+const PROVIDER = { anthropic: { name: 'Claude (Anthropic)', key: 'ANTHROPIC_API_KEY', console: 'Anthropic Console' }, gemini: { name: 'Gemini (Google)', key: 'GEMINI_API_KEY', console: 'Google AI Studio' } } as const;
 const MODE: Record<Usage['mode'], [string, 'teal' | 'yellow' | 'gray']> = { live: ['Jonli AI', 'teal'], sample: ['Namunaviy rejim', 'yellow'], off: ['O‘chiq', 'gray'] };
 
 /** Settings → AI: mode, model, 30-day usage and estimated cost, ICD-10 table status, news preview. */
@@ -33,17 +34,26 @@ export function AiSettings() {
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   const u = q.data!;
   const total = u.by_route.reduce((a, b) => a + b.cost_usd, 0);
+  const pv = PROVIDER[u.provider] ?? PROVIDER.anthropic;
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="space-y-5">
         <section className="flex flex-wrap items-center gap-3">
           <Badge tone={MODE[u.mode][1]}>{MODE[u.mode][0]}</Badge>
-          {u.mode === 'live' && <span className="text-sm text-slate-700">Model: <code>{u.model}</code></span>}
+          {u.mode === 'live' && <span className="text-sm text-slate-700">{pv.name} · <code>{u.model}</code>{u.gemini_free && ' · bepul tarif'}</span>}
           <span className="text-sm text-slate-600">Bugun: {u.today.calls} ta so‘rov, ~{usd(u.today.cost_usd)}</span>
         </section>
         {u.mode !== 'live' && (
           <Alert tone="yellow" title="Jonli AI ulanmagan">
-            {u.key_configured ? 'Kalit bor, lekin AI_MODE=live emas.' : 'Serverda ANTHROPIC_API_KEY yo‘q.'} Hozir: qayd tartiblash faqat demo matni uchun namunaviy; MKB-10 taklifi so‘z bo‘yicha; yangiliklar asl sarlavha bilan.
+            {u.key_configured ? 'Kalit bor, lekin AI_MODE=live emas.' : `Serverda ${pv.key} yo‘q.`} Hozir: qayd tartiblash faqat demo matni uchun namunaviy; MKB-10 taklifi so‘z bo‘yicha; yangiliklar asl sarlavha bilan.
+          </Alert>
+        )}
+        {u.mode === 'live' && u.gemini_free && (
+          <Alert tone={u.clinical_allowed ? 'yellow' : 'red'} title="Gemini bepul tarifi">
+            Google bepul tarifdagi so‘rovlardan o‘z mahsulotlarini yaxshilash uchun foydalanishi mumkin.{' '}
+            {u.clinical_allowed
+              ? 'Demoda ma’lumotlar sun’iy, shuning uchun ruxsat berilgan. Haqiqiy klinikada (APP_MODE=production) qayd va MKB-10 so‘rovlari bepul tarifga yuborilmaydi.'
+              : 'Shuning uchun qaydni tartiblash va MKB-10 taklifi o‘chirilgan (so‘z bo‘yicha qidiruv ishlaydi). Yangiliklar — ochiq maqolalar, ular ishlaydi.'}
           </Alert>
         )}
         <section>
@@ -63,7 +73,7 @@ export function AiSettings() {
               </Table>
             </div>
           )}
-          <p className="mt-1 text-xs text-slate-500">Narx — Anthropic narxlari bo‘yicha taxmin; aniq hisob Anthropic Console’da. So‘rov matni va javoblar saqlanmaydi, faqat token soni.</p>
+          <p className="mt-1 text-xs text-slate-500">Narx — {pv.name} pullik tarifi narxlari bo‘yicha taxmin{u.gemini_free ? ' (bepul tarifda to‘lov olinmaydi)' : ''}; aniq hisob {pv.console}’da. So‘rov matni va javoblar saqlanmaydi, faqat token soni.</p>
         </section>
         <section className="text-[13px] text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">MKB-10 ro‘yxati</h3>

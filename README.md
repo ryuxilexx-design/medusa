@@ -69,11 +69,13 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 | `DEMO_DATE` | Demo «bugun» sanasi (Toshkent). Asosiy preset: `2026-10-18`. Seed va demo vaqti shu sanaga nisbatan quriladi. O‘zgartirgandan keyin `npm run db:reset` qiling (API ishga tushganda nomuvofiqlik bo‘lsa ogohlantiradi) |
 | `DEMO_TIME` | Demo soatining boshlanishi (`HH:MM`, standart `11:30`). **Demo vaqti bazada saqlanadi** (`demo_clock` jadvali, `demo_now()`): oxirgi reset paytidagi `DEMO_DATE + DEMO_TIME` dan real vaqtda yuradi. API qayta ishga tushsa vaqt orqaga qaytmaydi; uni faqat demo reset boshlang‘ich nuqtaga qaytaradi. Qabul, navbat, to‘lov, audit va dashboard filtrlari shu bitta manbadan foydalanadi. 11:30 da seed’dagi barcha ertalabki yozuvlar o‘tmishda qoladi va tushdan keyingi slotlar bo‘sh bo‘ladi. Bo‘sh qoldirilsa, reset paytidagi real Toshkent soati olinadi |
 | `NEWS_ENABLED`, `NCBI_API_KEY` | Shifokorlar uchun kundalik yangiliklar (PubMed). `off` — o‘chiq. NCBI kaliti ixtiyoriy (so‘rov limitini oshiradi) |
-| `AI_MODE` | `sample` (standart): faqat tayyor demo matni uchun oldindan yozilgan natija, «Namunaviy AI natijasi» deb belgilangan. `live`: server orqali Claude API. `off`: tugma o‘chiq va sababi ko‘rsatiladi |
+| `AI_MODE` | `sample` (standart): faqat tayyor demo matni uchun oldindan yozilgan natija, «Namunaviy AI natijasi» deb belgilangan. `live`: server orqali Claude yoki Gemini API (`AI_PROVIDER`). `off`: tugma o‘chiq va sababi ko‘rsatiladi |
 | `APP_SECRET_KEY` | Saqlanadigan sirlarni (Telegram bot tokeni) shifrlash kaliti: 32 tasodifiy bayt, base64 (`openssl rand -base64 32`). Bo‘lmasa haqiqiy botni ulab bo‘lmaydi (simulyator ishlaydi). Kalit almashsa, botni qayta ulash kerak. Repozitoriyaga qo‘ymang |
 | `TELEGRAM_WORKERS` | `on` (standart) / `off`. Fon jarayonlari: Telegram’dan xabarlarni o‘qish (long polling), eslatmalarni rejalashtirish va yuborish. Testlarda avtomatik o‘chadi |
-| `ANTHROPIC_API_KEY` | Faqat `AI_MODE=live` uchun. Faqat serverda o‘qiladi, frontendga yuborilmaydi. Repozitoriyaga qo‘ymang |
-| `AI_MODEL`, `AI_TIMEOUT_MS` | Model (standart `claude-opus-5-5`) va timeout (20 000 ms) |
+| `AI_PROVIDER` | `anthropic` (standart, Claude) yoki `gemini`. Almashtirish uchun shu qator va tegishli kalit yetarli |
+| `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` | Faqat `AI_MODE=live` uchun. Faqat serverda o‘qiladi, frontendga yuborilmaydi. Repozitoriyaga qo‘ymang |
+| `AI_MODEL`, `GEMINI_MODEL`, `AI_TIMEOUT_MS` | Claude modeli (standart `claude-opus-5-5`), Gemini modeli (standart `gemini-3.5-flash-lite`) va timeout (20 000 ms) |
+| `GEMINI_PAID` | `1` — pullik Gemini tarifi. Bepul tarifda Google so‘rovlardan mahsulotini yaxshilash uchun foydalanishi mumkin, shuning uchun `APP_MODE=production`da qayd tartiblash va MKB-10 taklifi bepul tarifga yuborilmaydi (yangiliklar ishlaydi) |
 
 ## Kirish
 
@@ -93,7 +95,7 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 
 ## AI (1-bosqich)
 
-Barcha AI chaqiruvlari bitta joydan o‘tadi (`apps/api/src/ai/ai-client.ts`, rasmiy Anthropic SDK, standart model `claude-opus-5-5`).
+Barcha AI chaqiruvlari bitta joydan o‘tadi (`apps/api/src/ai/ai-client.ts`). Ikki provayder: Claude (rasmiy Anthropic SDK, `claude-opus-5-5`) va Gemini (REST `generateContent`, `gemini-3.5-flash-lite`). Ikkalasida ham javob JSON sxema bo‘yicha olinadi va zod bilan tekshiriladi.
 
 Har bir chaqiruvda:
 - javob JSON sxemasi bo‘yicha tekshiriladi;
@@ -111,7 +113,7 @@ Qoidalar:
 - **Anonimlashtirish:** AI’ga yuborishdan oldin bemorning ismi, familiyasi (qo‘shimchalari bilan), telefoni, tug‘ilgan sanasi va ID raqami olib tashlanadi.
 - **MKB-10:** AI faqat klinika jadvalidagi kodlardan tanlaydi, server har bir kodni tekshiradi. Qaydga kodni shifokor o‘zi qo‘shadi. Bazada boshlang‘ich ro‘yxat bor (~130 ta ko‘p uchraydigan ambulator tashxis), rasmiy ro‘yxat `db:import-icd10` bilan yuklanadi.
 - **Yangiliklar:** PubMed’dan oxirgi 30 kundagi RCT, meta-tahlil, tizimli sharh va tavsiyalar olinadi, har bir mutaxassislik uchun kuniga 5 tagacha. AI o‘zbekcha qisqa mazmunni faqat annotatsiyadan yozadi. Saqlanadi: sarlavha, AI qisqa mazmuni, havola. Annotatsiyaning o‘zi saqlanmaydi.
-- **Testlar:** AI soxta Claude va soxta PubMed serverlari bilan sinaladi, haqiqiy model chaqirilmaydi va pul sarflanmaydi.
+- **Testlar:** AI soxta Claude, soxta Gemini va soxta PubMed serverlari bilan sinaladi, haqiqiy model chaqirilmaydi va pul sarflanmaydi.
 
 ## Kassa: smena, qaytarish, xarajat
 

@@ -72,7 +72,7 @@ export class Icd10Service {
 
   /** Suggestions for a diagnosis text: AI over the code table when live, word matching otherwise. */
   async suggest(text: string, ctx: { tenantId: string; membershipId: string }, patient?: PatientIdentity | null) {
-    const mode = this.ai.mode();
+    const mode = this.ai.clinicalMode();
     if (mode !== 'live') {
       const rows = await this.lexical(text, 3);
       return { mode: 'search' as const, suggestions: rows.map((r) => ({ code: r.code, title: r.title_uz ?? r.title_ru, title_ru: r.title_ru, confidence: null, reason: null })) };

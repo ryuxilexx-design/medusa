@@ -1,5 +1,6 @@
-// One door to Claude for every AI feature: structured JSON output validated against a schema, refusal and
+// One door to the model for every AI feature: structured JSON output validated against a schema, refusal and
 // error handling, and a usage row per call (tokens + estimated cost, never the prompt or the answer).
+// Two providers behind the same call: Claude (official Anthropic SDK) and Gemini (REST generateContent).
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import type { ZodType } from 'zod';
@@ -9,20 +10,31 @@ import { AppError } from '../core/errors';
 
 export type AiMode = 'off' | 'sample' | 'live';
 export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary';
+/** Routes that carry (de-identified) clinical text. News summaries only carry public PubMed abstracts. */
+const CLINICAL_ROUTES = new Set<AiRoute>(['note_draft', 'icd10_suggest']);
 
-/** USD per 1M tokens (Anthropic first-party API). Unknown models are metered without a cost. */
+/**
+ * USD per 1M tokens, paid tier. Unknown models are metered without a cost. Gemini bills thinking tokens as output;
+ * its free tier costs nothing, so there the figure is what the same traffic would cost on the paid tier.
+ */
 const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
+  // ai.google.dev/gemini-api/docs/pricing, checked 2026-10-19 (3.8 Flash doubles on 2027-01-01)
+  'gemini-3.8-flash': { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0 },
+  'gemini-3.5-flash-lite': { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0 },
+  'gemini-2.5-flash': { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0 },
 };
 /** Models that accept the server-side refusal fallback (`fallbacks: "default"`). Haiku has none. */
 const FALLBACK_MODELS = new Set(['claude-opus-5-5', 'claude-opus-5', 'claude-sonnet-5-5', 'claude-fable-5-1']);
+/** Gemini answers that mean "will not answer" rather than "answer cut short". */
+const GEMINI_REFUSALS = new Set(['SAFETY', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'RECITATION', 'IMAGE_SAFETY']);
 
 export type JsonCall<T> = {
   route: AiRoute;
   system: string;
-  /** Mark the system prompt for prompt caching (long, stable prompts such as the ICD-10 list). */
+  /** Mark the system prompt for prompt caching (long, stable prompts such as the ICD-10 list). Gemini caches implicitly. */
   cacheSystem?: boolean;
   user: string;
   schema: Record<string, unknown>;
@@ -32,6 +44,26 @@ export type JsonCall<T> = {
   tenantId: string | null;
   membershipId: string | null;
 };
+
+type Meter = { model: string; input: number; output: number; cacheRead: number; cacheWrite: number };
+/** What a provider returned, before validation. */
+type Raw = { text: string | undefined; end: 'ok' | 'refusal' | 'max_tokens'; refusalCategory: string | null };
+const ERR = {
+  timeout: [504, 'AI_TIMEOUT', 'AI javob bermadi (vaqt tugadi). Qo‘lda davom ettiring.'],
+  busy: [429, 'AI_BUSY', 'AI hozir band yoki limit tugagan. Birozdan keyin urinib ko‘ring.'],
+  key: [503, 'AI_KEY', 'AI kaliti noto‘g‘ri yoki bekor qilingan. Administratorga xabar bering.'],
+  unreachable: [502, 'AI_UNREACHABLE', 'AI xizmatiga ulanib bo‘lmadi. Internetni tekshiring yoki qo‘lda davom ettiring.'],
+  api: [502, 'AI_ERROR', 'AI xizmatida xato. Qo‘lda davom ettiring.'],
+  unexpected: [500, 'AI_ERROR', 'AI so‘rovida kutilmagan xato.'],
+} as const;
+/** Models often write Uzbek with ASCII apostrophes; the UI uses o‘ g‘ and ’ (ma’lumot). Applied to every string answered. */
+export const uzQuotes = (s: string) => s.replace(/([oOgG])['`ʻ]/g, '$1‘').replace(/(\p{L})['`ʼ](?=\p{L})/gu, '$1’');
+const mapStrings = (v: unknown): unknown =>
+  typeof v === 'string' ? uzQuotes(v) : Array.isArray(v) ? v.map(mapStrings)
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mapStrings(x)])) : v;
+class ProviderError extends Error {
+  constructor(readonly kind: keyof typeof ERR, readonly detail: string) { super(detail); }
+}
 
 @Injectable()
 export class AiClient {
@@ -46,6 +78,54 @@ export class AiClient {
     return config.ai.mode;
   }
 
+  /**
+   * May clinical text (even de-identified) go to the current provider? Not to the Gemini free tier in a real clinic:
+   * Google may use free-tier prompts to improve its products. Demo data is synthetic, so the demo may use it.
+   */
+  clinicalAllowed(): boolean {
+    return config.ai.provider !== 'gemini' || config.ai.geminiPaid || config.mode !== 'production';
+  }
+
+  /** The mode clinical features see: a provider that may not receive clinical text counts as off. */
+  clinicalMode(): AiMode {
+    const m = this.mode();
+    return m === 'live' && !this.clinicalAllowed() ? 'off' : m;
+  }
+
+  /** One structured request. Throws AppError (AI_*) the UI can show; the caller keeps the user's own text. */
+  async json<T>(c: JsonCall<T>): Promise<{ value: T; model: string }> {
+    if (this.mode() !== 'live') throw new AppError(503, 'AI_OFF', 'AI ulanmagan.');
+    if (CLINICAL_ROUTES.has(c.route) && !this.clinicalAllowed())
+      throw new AppError(503, 'AI_NOT_ALLOWED', 'Bepul Gemini tarifiga bemor ma’lumoti yuborilmaydi. Pullik kalit yoki Claude ulang.');
+    const started = Date.now();
+    const meter: Meter = { model: config.ai.model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    try {
+      const raw = config.ai.provider === 'gemini' ? await this.gemini(c, meter) : await this.anthropic(c, meter);
+      if (raw.end === 'refusal') {
+        await this.record(c, meter, started, 'refusal', raw.refusalCategory);
+        throw new AppError(502, 'AI_REFUSED', 'AI bu so‘rovni bajarmadi. Qo‘lda davom ettiring.');
+      }
+      let parsed: unknown;
+      try { parsed = JSON.parse(raw.text ?? ''); } catch { parsed = undefined; }
+      const ok = raw.end !== 'max_tokens' ? c.validate.safeParse(parsed) : null;
+      if (!ok || !ok.success) {
+        await this.record(c, meter, started, 'bad_output', raw.end === 'max_tokens' ? 'max_tokens' : 'schema');
+        throw new AppError(502, 'AI_BAD_OUTPUT', 'AI javobi to‘liq emas. Qayta urinib ko‘ring yoki qo‘lda davom ettiring.');
+      }
+      await this.record(c, meter, started, 'ok', null);
+      return { value: mapStrings(ok.data) as T, model: meter.model };
+    } catch (e) {
+      if (e instanceof AppError) throw e;
+      const kind = e instanceof ProviderError ? e.kind : 'unexpected';
+      const [status, code, message] = ERR[kind];
+      this.log.warn(`${c.route}: ${config.ai.provider} ${e instanceof ProviderError ? e.detail : (e as Error).name}`);
+      await this.record(c, meter, started, 'error', code);
+      throw new AppError(status, code, message);
+    }
+  }
+
+  // ---------- Claude ----------
+
   private client(): Anthropic {
     const key = `${config.ai.apiKey}|${config.ai.baseUrl}|${config.ai.timeoutMs}`;
     if (!this.sdk || this.sdkKey !== key) {
@@ -55,14 +135,11 @@ export class AiClient {
     return this.sdk;
   }
 
-  /** One structured request. Throws AppError (AI_*) the UI can show; the caller keeps the user's own text. */
-  async json<T>(c: JsonCall<T>): Promise<{ value: T; model: string }> {
-    if (this.mode() !== 'live') throw new AppError(503, 'AI_OFF', 'AI ulanmagan.');
+  private async anthropic(c: JsonCall<unknown>, meter: Meter): Promise<Raw> {
     const model = config.ai.model;
-    const started = Date.now();
-    const meter = { model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    let response: any;
     try {
-      const response: any = await this.client().beta.messages.create({
+      response = await this.client().beta.messages.create({
         model,
         max_tokens: c.maxTokens ?? 4000,
         ...(FALLBACK_MODELS.has(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
@@ -70,41 +147,84 @@ export class AiClient {
         system: c.cacheSystem ? [{ type: 'text', text: c.system, cache_control: { type: 'ephemeral' } }] : c.system,
         messages: [{ role: 'user', content: c.user }],
       } as any);
-      meter.model = response.model ?? model;
-      meter.input = response.usage?.input_tokens ?? 0;
-      meter.output = response.usage?.output_tokens ?? 0;
-      meter.cacheRead = response.usage?.cache_read_input_tokens ?? 0;
-      meter.cacheWrite = response.usage?.cache_creation_input_tokens ?? 0;
-      if (response.stop_reason === 'refusal') {
-        await this.record(c, meter, started, 'refusal', response.stop_details?.category ?? null);
-        throw new AppError(502, 'AI_REFUSED', 'AI bu so‘rovni bajarmadi. Qo‘lda davom ettiring.');
-      }
-      const text = (response.content as any[]).find((b) => b.type === 'text')?.text;
-      let parsed: unknown;
-      try { parsed = JSON.parse(text ?? ''); } catch { parsed = undefined; }
-      const ok = response.stop_reason !== 'max_tokens' ? c.validate.safeParse(parsed) : null;
-      if (!ok || !ok.success) {
-        await this.record(c, meter, started, 'bad_output', response.stop_reason === 'max_tokens' ? 'max_tokens' : 'schema');
-        throw new AppError(502, 'AI_BAD_OUTPUT', 'AI javobi to‘liq emas. Qayta urinib ko‘ring yoki qo‘lda davom ettiring.');
-      }
-      await this.record(c, meter, started, 'ok', null);
-      return { value: ok.data, model: meter.model };
     } catch (e) {
-      if (e instanceof AppError) throw e;
-      const [status, code, message] =
-        e instanceof Anthropic.APIConnectionTimeoutError ? [504, 'AI_TIMEOUT', 'AI javob bermadi (vaqt tugadi). Qo‘lda davom ettiring.']
-        : e instanceof Anthropic.RateLimitError ? [429, 'AI_BUSY', 'AI hozir band yoki oylik limit tugagan. Birozdan keyin urinib ko‘ring.']
-        : e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError ? [503, 'AI_KEY', 'AI kaliti noto‘g‘ri yoki bekor qilingan. Administratorga xabar bering.']
-        : e instanceof Anthropic.APIConnectionError ? [502, 'AI_UNREACHABLE', 'AI xizmatiga ulanib bo‘lmadi. Internetni tekshiring yoki qo‘lda davom ettiring.']
-        : e instanceof Anthropic.APIError ? [502, 'AI_ERROR', 'AI xizmatida xato. Qo‘lda davom ettiring.']
-        : [500, 'AI_ERROR', 'AI so‘rovida kutilmagan xato.'];
-      this.log.warn(`${c.route}: ${(e as Error).name} ${(e as any).status ?? ''}`);
-      await this.record(c, meter, started, 'error', code as string);
-      throw new AppError(status as number, code as string, message as string);
+      const status = (e as any).status ?? '';
+      throw new ProviderError(
+        e instanceof Anthropic.APIConnectionTimeoutError ? 'timeout'
+        : e instanceof Anthropic.RateLimitError ? 'busy'
+        : e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError ? 'key'
+        : e instanceof Anthropic.APIConnectionError ? 'unreachable'
+        : e instanceof Anthropic.APIError ? 'api' : 'unexpected', `${(e as Error).name} ${status}`);
     }
+    meter.model = response.model ?? model;
+    meter.input = response.usage?.input_tokens ?? 0;
+    meter.output = response.usage?.output_tokens ?? 0;
+    meter.cacheRead = response.usage?.cache_read_input_tokens ?? 0;
+    meter.cacheWrite = response.usage?.cache_creation_input_tokens ?? 0;
+    if (response.stop_reason === 'refusal') return { text: undefined, end: 'refusal', refusalCategory: response.stop_details?.category ?? null };
+    return {
+      text: (response.content as any[]).find((b) => b.type === 'text')?.text,
+      end: response.stop_reason === 'max_tokens' ? 'max_tokens' : 'ok', refusalCategory: null,
+    };
   }
 
-  private async record(c: JsonCall<unknown>, m: { model: string; input: number; output: number; cacheRead: number; cacheWrite: number }, started: number, outcome: string, errorCode: string | null) {
+  // ---------- Gemini ----------
+
+  private async gemini(c: JsonCall<unknown>, meter: Meter): Promise<Raw> {
+    const model = config.ai.model;
+    const base = (config.ai.baseUrl || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
+    const body = {
+      systemInstruction: { parts: [{ text: c.system }] },
+      contents: [{ role: 'user', parts: [{ text: c.user }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseJsonSchema: c.schema,
+        maxOutputTokens: c.maxTokens ?? 4000,
+        // Gemini 3+ thinks at "high" by default (~30 s for a note); the call's effort keeps it within the timeout.
+        ...(/^gemini-2\./.test(model) ? {} : { thinkingConfig: { thinkingLevel: c.effort } }),
+      },
+    };
+    // one time budget for the whole call, including the single retry of a 503 ("model overloaded")
+    const signal = AbortSignal.timeout(config.ai.timeoutMs);
+    let res!: Response;
+    let json: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        if (attempt) await new Promise((r) => setTimeout(r, 1000));
+        res = await fetch(`${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': config.ai.apiKey },
+          body: JSON.stringify(body),
+          signal,
+        });
+        json = await res.json().catch(() => null);
+      } catch (e) {
+        const name = (e as Error).name;
+        throw new ProviderError(name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'unreachable', name);
+      }
+      if (res.status !== 503) break;
+    }
+    if (!res.ok) {
+      const reason = json?.error?.details?.find((d: any) => d?.reason)?.reason ?? json?.error?.status ?? '';
+      const kind = res.status === 429 || res.status === 503 ? 'busy'
+        : res.status === 401 || res.status === 403 || /API_KEY/.test(reason) ? 'key'
+        : 'api';
+      throw new ProviderError(kind, `HTTP ${res.status} ${reason}`);
+    }
+    const u = json?.usageMetadata ?? {};
+    meter.model = json?.modelVersion ?? model;
+    meter.cacheRead = u.cachedContentTokenCount ?? 0;
+    meter.input = Math.max(0, (u.promptTokenCount ?? 0) - meter.cacheRead);
+    meter.output = (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0);
+    const blocked = json?.promptFeedback?.blockReason;
+    const cand = json?.candidates?.[0];
+    const finish: string = cand?.finishReason ?? '';
+    if (blocked || GEMINI_REFUSALS.has(finish)) return { text: undefined, end: 'refusal', refusalCategory: String(blocked || finish).toLowerCase() };
+    const text = ((cand?.content?.parts ?? []) as any[]).filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('');
+    return { text, end: finish === 'MAX_TOKENS' ? 'max_tokens' : 'ok', refusalCategory: null };
+  }
+
+  private async record(c: JsonCall<unknown>, m: Meter, started: number, outcome: string, errorCode: string | null) {
     const p = PRICES[m.model] ?? PRICES[m.model.replace(/-\d{8}$/, '')];
     const cost = p ? (m.input * p.input + m.output * p.output + m.cacheRead * p.cacheRead + m.cacheWrite * p.cacheWrite) / 1e6 : null;
     await this.db.rows(

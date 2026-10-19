@@ -65,17 +65,20 @@ export class AiController {
 
   @Get('ai/status')
   status() {
-    const m = this.ai.mode();
-    return { data: { mode: m, model: m === 'live' ? config.ai.model : null, sample_text: m === 'sample' ? SAMPLE_NOTE_TEXT : null,
-      reason: m === 'off' ? (config.ai.mode === 'live' ? 'AI kaliti sozlanmagan' : 'AI o‘chirilgan (AI_MODE=off)') : null } };
+    // the doctor's AI buttons follow the clinical mode: a provider that may not receive patient text counts as off
+    const m = this.ai.clinicalMode();
+    return { data: { mode: m, provider: m === 'live' ? config.ai.provider : null, model: m === 'live' ? config.ai.model : null, sample_text: m === 'sample' ? SAMPLE_NOTE_TEXT : null,
+      reason: m === 'off' ? (this.ai.mode() === 'live' ? 'Bepul Gemini tarifiga bemor ma’lumoti yuborilmaydi' : config.ai.mode === 'live' ? 'AI kaliti sozlanmagan' : 'AI o‘chirilgan (AI_MODE=off)') : null } };
   }
 
   /** AI-01: draft restructuring of the doctor's own text. De-identified before sending; never saves or signs. */
   @Roles('doctor') @Post('ai/note-draft') @HttpCode(200)
   async noteDraft(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const { text, encounter_id } = parse(aiNoteDraftSchema, body);
-    const m = this.ai.mode();
-    if (m === 'off') throw new AppError(503, 'AI_OFF', 'AI yordamchisi hozir o‘chirilgan. Qaydni qo‘lda davom ettiring.');
+    const m = this.ai.clinicalMode();
+    if (m === 'off') throw new AppError(503, 'AI_OFF', this.ai.mode() === 'live'
+      ? 'Bepul Gemini tarifiga bemor ma’lumoti yuborilmaydi. Qaydni qo‘lda davom ettiring.'
+      : 'AI yordamchisi hozir o‘chirilgan. Qaydni qo‘lda davom ettiring.');
     if (m === 'sample') {
       if (normalize(text) !== normalize(SAMPLE_NOTE_TEXT))
         throw new AppError(422, 'AI_SAMPLE_ONLY', 'Namunaviy rejimda faqat tayyor demo matni tartiblanadi. Haqiqiy AI ulanmagan — qaydni qo‘lda to‘ldiring.');
@@ -122,7 +125,8 @@ export class AiController {
       `SELECT count(*)::int AS calls, coalesce(sum(cost_usd),0)::float AS cost_usd FROM ai_usage
         WHERE tenant_id = $1 AND created_at >= date_trunc('day', demo_now() AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent'`, [ctx.tenantId]))!;
     const icd = (await this.db.one(`SELECT count(*)::int AS n, count(*) FILTER (WHERE source = 'official')::int AS official FROM icd10_codes`))!;
-    return { data: { mode: this.ai.mode(), model: config.ai.model, key_configured: !!config.ai.apiKey, by_route: rows, today, icd10: icd } };
+    return { data: { mode: this.ai.mode(), provider: config.ai.provider, model: config.ai.model, key_configured: !!config.ai.apiKey,
+      gemini_free: config.ai.provider === 'gemini' && !config.ai.geminiPaid, clinical_allowed: this.ai.clinicalAllowed(), by_route: rows, today, icd10: icd } };
   }
 
   // ---------- Daily specialty news ----------

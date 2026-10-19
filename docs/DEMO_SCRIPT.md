@@ -67,7 +67,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 
 ### 4. Shifokor — ko‘rik, AI loyihasi, tahlil (3:00–5:00) · Oyna 3
 1. **Shifokor kabineti** → chap ro‘yxatda *Abdullayev Jamshid* (Keldi) → **Qabulni boshlash**.
-2. **AI bilan tartiblash** → **Demo matnni qo‘yish** → **Tartiblash** → yonma-yon loyiha.
+2. **AI bilan tartiblash** → **Demo matnni qo‘yish** → **Tartiblash** → yonma-yon loyiha. Jonli AI yoqilgan bo‘lsa (yashil «Jonli AI»), bu tugma yo‘q: o‘zingiz qisqa matn yozing yoki mehmondan aytib berishini so‘rang.
 3. AI’ni shunday tushuntiring (quyidagi bo‘limga qarang) → **Loyihani formaga qo‘llash**.
 4. Sistolik `125`, Diastolik `80`, Harorat `37.6` → **Qoralamani saqlash** (o‘ng yuqorida «Qoralama saqlangan: hh:mm»).
 5. **Tekshiruv buyurish** → *Umumiy qon tahlili (UQT)* belgilang → **Buyurtma berish**.
@@ -113,6 +113,8 @@ Oynada sariq **«Namunaviy rejim»** belgisi va «Namunaviy AI natijasi — haqi
 > «Hozir internetsiz, namunaviy rejimdamiz. Bu tayyor demo matni uchun oldindan yozilgan natija — jonli model ishlamayapti. Haqiqiy ulanishda xuddi shu oyna serverdagi AI’ga matnni yuboradi. AI faqat shifokor yozganini bo‘limlarga ajratadi; yangi tashxis yoki dori qo‘shmaydi, yo‘q bo‘lim «Kiritilmagan» bo‘lib qoladi. Natija faqat qoralamaga tushadi — tasdiqlashni shifokor qiladi.»
 
 Agar mehmon boshqa matn yozib ko‘rmoqchi bo‘lsa, tizim «Namunaviy rejimda faqat tayyor demo matni tartiblanadi» deb javob beradi. Bu ataylab shunday: namunaviy javob boshqa matnga moslashtirilib, AI ishlayotgandek ko‘rsatilmaydi.
+
+**Jonli AI (Gemini) yoqilgan bo‘lsa:** oynada yashil «Jonli AI», har qanday matn ~1–2 soniyada tartiblanadi. Ayting: «Bu haqiqiy AI. Hozir sinov uchun Google Gemini, keyin Claude’ga o‘tamiz. Bemorning ismi va telefoni yuborishdan oldin olib tashlanadi. Haqiqiy klinikada bepul tarifga bemor ma’lumoti umuman yuborilmaydi — buni server o‘zi to‘sadi.» AI band bo‘lsa («AI hozir band…»), qaydni qo‘lda davom ettiring. Namoyishdan oldin bir marta sinab ko‘ring: bepul tarifda limit kunlik.
 
 ## Internet uzilsa
 

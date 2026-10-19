@@ -1,8 +1,21 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.6 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari + kassa: smena, qaytarish, xarajat)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.7 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari + kassa: smena, qaytarish, xarajat + Gemini AI provayderi)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 000000. 0.7 relizda nima qo‘shildi: Gemini — ikkinchi AI provayderi
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| `AI_PROVIDER=gemini`: o‘sha AI funksiyalari Gemini orqali (standart `gemini-3.5-flash-lite`) | Ishlaydi | API test (soxta Gemini serveri): so‘rov shakli (`responseJsonSchema`, `thinkingLevel`), ism va telefon yuborilmaydi, token va narx hisobi (kesh va «o‘ylash» tokenlari bilan). **Haqiqiy Gemini kaliti bilan, test bazasida, sun’iy matnda:** qayd tartiblash ~1,2 s, MKB-10 taklifi ~1 s (I10, R51), 8 soha yangiliklari 52 s |
+| Xatolar: rad etish, kesilgan javob, noto‘g‘ri kalit, limit, «model band» (503 — bir marta qayta so‘raladi) | Ishlaydi | API test: tushunarli xato, kalit javobda yo‘q, har biri `ai_usage`da |
+| Bepul tarif himoyasi | Ishlaydi | API test: `APP_MODE=production` va `GEMINI_PAID≠1` bo‘lsa qayd va MKB-10 so‘rovi Gemini’ga umuman ketmaydi (MKB-10 so‘z bo‘yicha qidiradi), Sozlamalar → AI’da qizil ogohlantirish. Demoda ma’lumot sun’iy, shuning uchun ruxsat |
+| O‘zbekcha apostroflar | Ishlaydi | Model yozgan `o'`, `g'` → `o‘`, `g‘`; `ma'lumot` → `ma’lumot` (API test) |
+
+Cheklovlar:
+- **`gemini-3.8-flash` bepul tarifda sekin** (11–20 s) va tez-tez «band» javobini beradi, shuning uchun standart model `gemini-3.5-flash-lite`. Sifati qayd va MKB-10 uchun yetarli ko‘rindi, lekin shifokor bilan baholanmagan.
+- **Claude’ga qaytish:** `AI_PROVIDER=anthropic` va `ANTHROPIC_API_KEY` — kod o‘zgarmaydi.
 
 ## 00000. 0.6 relizda nima qo‘shildi: kassa (smena, qaytarish, xarajat, sof natija)
 
@@ -45,7 +58,7 @@ Hali yo‘q: hujjatlarni bemorga Telegram orqali yuborish, davlat elektron retse
 
 Cheklovlar:
 - **MKB-10 ro‘yxati boshlang‘ich**, ~130 kod. O‘zbekcha nomlarni tibbiyot mutaxassisi tekshirishi kerak; rasmiy ro‘yxat yuklanguncha shu ro‘yxat ishlaydi.
-- **Narx taxminiy:** Anthropic narxlar jadvaliga asoslangan. Aniq hisob Console’da.
+- **Narx taxminiy:** provayderning pullik tarif narxlari jadvaliga asoslangan (Gemini bepul tarifida to‘lov yo‘q). Aniq hisob Anthropic Console yoki Google AI Studio’da.
 - **Ovozli qayd va hujjatlar:** ovozli qayd keyingi bosqichda. Hujjatlarni avtomatik yaratish (yo‘llanma, ma’lumotnoma) hali yo‘q, faqat xulosada MKB-10 chiqadi.
 
 ## 00. 0.3 relizda nima qo‘shildi: bemorlar uchun Telegram bot
@@ -210,7 +223,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 65/65 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar, 5 ta qabul hujjatlari, 8 ta kassa testi |
+| `npm test` (meduza_test) | 66/66 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
 | `npm run e2e` (izolyatsiyalangan stek) | 89/89: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 + 7 qabul hujjatlari + 12 kassa |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |

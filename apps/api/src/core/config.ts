@@ -3,6 +3,8 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const mode = (process.env.APP_MODE || 'demo') as 'development' | 'demo' | 'production';
+const aiProvider = (process.env.AI_PROVIDER || 'anthropic') as 'anthropic' | 'gemini';
+if (aiProvider !== 'anthropic' && aiProvider !== 'gemini') throw new Error(`AI_PROVIDER must be anthropic or gemini, got "${aiProvider}"`);
 export const config = {
   port: Number(process.env.API_PORT || 4000),
   databaseUrl: process.env.DATABASE_URL || 'postgres://meduza:meduza_local@127.0.0.1:5433/meduza',
@@ -27,10 +29,14 @@ export const config = {
   },
   ai: {
     mode: (process.env.AI_MODE || 'sample') as 'off' | 'sample' | 'live',
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
-    model: process.env.AI_MODEL || 'claude-opus-5-5',
+    /** anthropic (Claude) | gemini. Each provider has its own key and model variable, so switching is one line. */
+    provider: aiProvider,
+    apiKey: (aiProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY) || '',
+    model: (aiProvider === 'gemini' ? process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite' : process.env.AI_MODEL || 'claude-opus-5-5'),
+    /** Gemini free tier lets Google use prompts to improve its products: no patient text there in production. */
+    geminiPaid: process.env.GEMINI_PAID === '1',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 20000),
-    /** Only for tests/proxies; empty = Anthropic's API. */
+    /** Only for tests/proxies; empty = the provider's own API. */
     baseUrl: process.env.AI_BASE_URL || '',
   },
   news: {

@@ -83,7 +83,7 @@ before(async () => {
   config = require('../dist/core/config.js').config;
   news = app.get(require('../dist/ai/news.js').NewsService);
   await Promise.all([startClaude(), startPubmed()]);
-  config.ai.mode = 'live'; config.ai.apiKey = 'test-key'; config.ai.baseUrl = claude.url; config.ai.model = 'claude-opus-5-5';
+  config.ai.mode = 'live'; config.ai.provider = 'anthropic'; config.ai.apiKey = 'test-key'; config.ai.baseUrl = claude.url; config.ai.model = 'claude-opus-5-5';
   config.news.pubmedBase = pubmed.url; config.news.ncbiKey = 'x'; // short pause between specialties in tests
   manager = session(); await manager.demo(M.manager);
   assert.equal((await manager.post('/demo/reset')).status, 200);
@@ -244,4 +244,85 @@ test('yangiliklar AI o‘chiq: faqat asl sarlavha va havola; rahbar yangilashi 1
   assert.equal((await manager.post('/news/refresh')).status, 200);
   assert.equal((await manager.post('/news/refresh')).status, 429);
   assert.equal((await doctor.post('/news/refresh')).status, 403);
+});
+
+// ---------- Gemini (second provider behind the same AiClient) ----------
+test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilgan javob, kalit, limit; bepul tarifga real klinikada bemor matni ketmaydi', async () => {
+  const gem = { calls: [], next: null };
+  const ok = (obj, extra = {}) => ({ candidates: [{ content: { role: 'model', parts: [{ text: 'o‘ylash', thought: true }, { text: JSON.stringify(obj) }] }, finishReason: 'STOP' }],
+    usageMetadata: { promptTokenCount: 1000, cachedContentTokenCount: 200, candidatesTokenCount: 100, thoughtsTokenCount: 50 }, modelVersion: 'gemini-3.8-flash', ...extra });
+  const server = http.createServer(async (req, res) => {
+    let raw = ''; for await (const ch of req) raw += ch;
+    const body = JSON.parse(raw || '{}');
+    gem.calls.push({ url: req.url, headers: req.headers, body });
+    const send = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
+    const next = gem.next; gem.next = null;
+    if (next === 'blocked') return send(200, { promptFeedback: { blockReason: 'PROHIBITED_CONTENT' }, usageMetadata: { promptTokenCount: 50 } });
+    if (next === 'cut') return send(200, { ...ok({}), candidates: [{ content: { parts: [{ text: '{"complaints":"Bosh' }] }, finishReason: 'MAX_TOKENS' }] });
+    if (next === 'auth') return send(401, { error: { code: 401, message: 'API key not valid.', status: 'UNAUTHENTICATED' } });
+    if (next === 'overloaded') return send(503, { error: { code: 503, message: 'high demand', status: 'UNAVAILABLE' } });
+    if (next === 'overloaded2') { gem.next = 'overloaded'; return send(503, { error: { code: 503, message: 'high demand', status: 'UNAVAILABLE' } }); }
+    if (next === 'quota') return send(429, { error: { code: 429, message: 'Quota exceeded', status: 'RESOURCE_EXHAUSTED' } });
+    const sys = body.systemInstruction.parts[0].text;
+    if (sys.includes('MKB-10')) return send(200, ok({ suggestions: [{ code: 'I10', confidence: 'high', reason_uz: 'Gipertenziya.' }, { code: 'Q00.0', confidence: 'low', reason_uz: 'To‘qilgan.' }] }));
+    return send(200, ok({ complaints: "Bosh og'rig'i, ma`lumot yo'q.", anamnesis: 'Kiritilmagan', examination: 'AQB 150/95.', diagnosis: 'Arterial gipertenziya.', recommendations: 'Kuzatuv.' }));
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const saved = { ...config.ai }, savedMode = config.mode;
+  Object.assign(config.ai, { provider: 'gemini', apiKey: 'gem-test-key', model: 'gemini-3.8-flash', baseUrl: `http://127.0.0.1:${server.address().port}`, geminiPaid: false });
+  try {
+    const p = encounter.patient;
+    const text = `${p.last_name} ${p.first_name} 2 kundan beri bosh og‘rig‘i, tel +998 90 123 45 67. AQB 150/95.`;
+    let r = await doctor.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id });
+    assert.equal(r.status, 200, r.text);
+    assert.equal(r.body.data.draft.diagnosis, 'Arterial gipertenziya.', 'o‘ylash qismi javobga qo‘shilmadi');
+    assert.equal(r.body.data.draft.complaints, 'Bosh og‘rig‘i, ma’lumot yo‘q.', 'ASCII apostrof o‘zbekcha belgiga almashtirildi');
+    const call = gem.calls.at(-1);
+    assert.equal(call.url, '/v1beta/models/gemini-3.8-flash:generateContent');
+    assert.equal(call.headers['x-goog-api-key'], 'gem-test-key');
+    assert.equal(call.body.generationConfig.responseMimeType, 'application/json');
+    assert.deepEqual(call.body.generationConfig.responseJsonSchema.required, ['complaints', 'anamnesis', 'examination', 'diagnosis', 'recommendations']);
+    assert.equal(call.body.generationConfig.thinkingConfig.thinkingLevel, 'low');
+    const sent = JSON.stringify(call.body.contents);
+    assert.ok(!sent.includes(p.last_name) && !sent.includes('123 45 67') && sent.includes('[bemor]'), sent);
+    const u = (await pool.query(`SELECT * FROM ai_usage WHERE route = 'note_draft' ORDER BY id DESC LIMIT 1`)).rows[0];
+    assert.equal(u.model, 'gemini-3.8-flash'); assert.equal(u.outcome, 'ok');
+    assert.equal(u.input_tokens, 800, 'keshdan o‘qilgan tokenlar alohida'); assert.equal(u.cache_read_tokens, 200);
+    assert.equal(u.output_tokens, 150, 'o‘ylash tokenlari chiqishga qo‘shiladi');
+    assert.ok(Math.abs(Number(u.cost_usd) - (800 * 0.75 + 150 * 3.75 + 200 * 0.075) / 1e6) < 1e-6, String(u.cost_usd));
+
+    r = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya' });
+    assert.deepEqual(r.body.data.suggestions.map((x) => x.code), ['I10']);
+
+    gem.next = 'overloaded'; // 503 once: retried after a second
+    const before503 = gem.calls.length;
+    r = await doctor.post('/ai/note-draft', { text: 'Bemor yo‘taldan shikoyat qiladi.' });
+    assert.equal(r.status, 200, r.text); assert.equal(gem.calls.length, before503 + 2, 'bir marta qayta so‘raldi');
+
+    for (const [next, status, code] of [['blocked', 502, 'AI_REFUSED'], ['cut', 502, 'AI_BAD_OUTPUT'], ['auth', 503, 'AI_KEY'], ['quota', 429, 'AI_BUSY'], ['overloaded2', 429, 'AI_BUSY']]) {
+      gem.next = next;
+      r = await doctor.post('/ai/note-draft', { text: 'Bemor yo‘taldan shikoyat qiladi.' });
+      assert.equal(r.status, status, `${next}: ${r.text}`); assert.equal(r.body.error.code, code);
+      assert.ok(!r.text.includes('gem-test-key'));
+    }
+    const outcomes = (await pool.query(`SELECT outcome, error_code FROM ai_usage WHERE route = 'note_draft' ORDER BY id DESC LIMIT 5`)).rows;
+    assert.deepEqual(outcomes.map((x) => x.outcome), ['error', 'error', 'error', 'bad_output', 'refusal']);
+
+    // a real clinic on the free tier: no clinical text leaves the server; ICD-10 falls back to word search
+    config.mode = 'production';
+    const calls = gem.calls.length;
+    assert.equal((await doctor.get('/ai/status')).body.data.mode, 'off');
+    r = await doctor.post('/ai/note-draft', { text: 'Bemor yo‘taldan shikoyat qiladi.' });
+    assert.equal(r.status, 503); assert.match(r.body.error.message, /Bepul Gemini/);
+    r = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya' });
+    assert.equal(r.body.data.mode, 'search');
+    assert.equal(gem.calls.length, calls, 'Gemini’ga hech narsa yuborilmadi');
+    const usage = (await manager.get('/ai/usage')).body.data;
+    assert.equal(usage.provider, 'gemini'); assert.equal(usage.gemini_free, true); assert.equal(usage.clinical_allowed, false);
+    config.ai.geminiPaid = true;
+    assert.equal((await doctor.post('/ai/note-draft', { text: 'Bemor yo‘taldan shikoyat qiladi.' })).status, 200, 'pullik kalit bilan ruxsat');
+  } finally {
+    Object.assign(config.ai, saved); config.mode = savedMode;
+    server.close();
+  }
 });
