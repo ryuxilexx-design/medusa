@@ -2,7 +2,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Pencil, UserPlus } from 'lucide-react';
+import { CalendarClock, Pencil, UserPlus } from 'lucide-react';
 import { ROLE_LABEL } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { addDays, fmtDateTime, formatPhone, formatSom, fullName, WEEKDAYS } from '@/lib/format';
@@ -10,6 +10,7 @@ import { useSession } from '@/lib/session';
 import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Table, Td, Th, DemoTag } from '@/components/ui';
 import { AppointmentStatus } from '@/components/status';
 import { StaffFormModal, TempPasswordModal, type StaffRow } from '@/components/staff-form';
+import { ScheduleEditor } from '@/components/schedule-editor';
 
 export default function StaffPage() { return <Suspense><Staff /></Suspense>; }
 
@@ -46,7 +47,8 @@ function Staff() {
                 <tr key={s.membership_id} onClick={s.doctor_id ? () => router.replace(`/staff?doctor=${s.doctor_id}`) : undefined} className={cx(s.doctor_id && 'cursor-pointer hover:bg-slate-50', sel && sel === s.doctor_id && 'bg-brand-50', s.status !== 'active' && 'text-slate-400')}>
                   <Td className="font-medium">{s.full_name}{s.is_self && <span className="ml-1 text-xs font-normal text-slate-500">(siz)</span>}
                     {s.login && <div className="text-xs font-normal text-slate-500">{showLogin(s.login)}</div>}</Td>
-                  <Td>{ROLE_LABEL[s.role]}{s.specialty ? <span className="text-slate-500"> · {s.specialty}</span> : ''}</Td>
+                  <Td>{ROLE_LABEL[s.role]}{s.specialty ? <span className="text-slate-500"> · {s.specialty}</span> : ''}
+                    {s.doctor_id && !s.has_schedule && s.status === 'active' && <div><Badge tone="yellow">Jadval yo‘q — qabul yozilmaydi</Badge></div>}</Td>
                   <Td className="text-slate-600">{s.branch_names?.join(', ')}</Td>
                   <Td><AccessBadge s={s} /></Td>
                   <Td>{s.status === 'active' ? <Badge tone="green">Faol</Badge> : <Badge>Nofaol</Badge>}</Td>
@@ -66,6 +68,7 @@ function Staff() {
 
 function DoctorDetail({ id }: { id: string }) {
   const { me } = useSession();
+  const [editSchedule, setEditSchedule] = useState(false);
   const from = addDays(me.today, -29);
   const q = useQuery({ queryKey: ['staff', 'doctor', id], queryFn: () => api(`/staff/doctors/${id}?from=${from}&to=${me.today}`).then((r) => r.data) });
   const today = useQuery({ queryKey: ['appointments', 'staff', id, me.today], queryFn: () => api(`/appointments?date=${me.today}&doctor_id=${id}`).then((r) => r.data as any[]) });
@@ -76,11 +79,16 @@ function DoctorDetail({ id }: { id: string }) {
   return (
     <div className="space-y-4">
       <Card title={`${d.doctor.display_name} · ${d.doctor.specialty}`} actions={<span className="text-xs text-slate-500">Standart ulush: {d.doctor.default_share_percent}%</span>}>
-        <h3 className="mb-1 text-xs font-semibold uppercase text-slate-500">Ish jadvali</h3>
+        <div className="mb-1 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase text-slate-500">Ish jadvali</h3>
+          {me.role === 'manager' && <Button size="sm" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setEditSchedule(true)}>Jadvalni tahrirlash</Button>}
+        </div>
+        {!d.schedule.length && <p className="py-2 text-sm text-amber-800">Ish jadvali kiritilmagan — bu shifokorga qabul yozib bo‘lmaydi.</p>}
         <table className="w-full text-sm"><tbody>{d.schedule.map((s: any) => (
           <tr key={s.weekday} className="border-t border-slate-100"><td className="py-1 w-28">{WEEKDAYS[s.weekday]}</td><td className="tabular-nums">{s.start}–{s.end}</td><td className="text-slate-500">{s.break_start ? `tanaffus ${s.break_start}–${s.break_end}` : ''}</td><td>{s.branch_name}{s.room_name ? ` · ${s.room_name}` : ''}</td></tr>
         ))}</tbody></table>
-        <p className="mt-2 text-xs text-slate-500">Bir shifokor bir vaqtda ikki filialda band bo‘la olmaydi (server tekshiruvi). Jadvalni tahrirlash keyingi relizda.</p>
+        <p className="mt-2 text-xs text-slate-500">Bir kunda shifokor bitta filialda ishlaydi; qabul faqat ish vaqti ichida, tanaffusdan tashqarida yoziladi (server tekshiruvi).</p>
+        {me.role === 'manager' && <ScheduleEditor open={editSchedule} onClose={() => setEditSchedule(false)} doctor={{ id: d.doctor.id, display_name: d.doctor.display_name, branch_ids: d.doctor.branch_ids }} schedule={d.schedule} />}
       </Card>
       <Card title="Bugungi qabullar" padded={false}>
         {today.isLoading ? <LoadingRows rows={3} /> : !today.data?.length ? <EmptyState title="Bugun qabul yo‘q" /> : (

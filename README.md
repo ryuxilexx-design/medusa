@@ -44,9 +44,9 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (27 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (31 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
-| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
+| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
 | `npm run db:create-clinic -- --name … --branch … --manager-name … --manager-login … [--catalog demo]` | Haqiqiy klinikani ochish: tenant, birinchi filial va rahbar akkaunti. Vaqtinchalik parol terminalda **bir marta** chiqadi. Real klinika uchun alohida, `APP_MODE=production` muhitida ishlating |
 | `node e2e/visual.mjs` | Xuddi shu vizual o‘tish **ishlab turgan demo ilovada**, faqat o‘qish rejimida (hech narsa saqlanmaydi) → `docs/screenshots/` |

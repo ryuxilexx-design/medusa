@@ -182,3 +182,31 @@ export const staffUpdateSchema = z.object({
   status: z.enum(['active', 'inactive']).optional(),
   doctor: staffDoctorSchema.partial().optional(),
 });
+
+// ---------- Doctor weekly schedule ----------
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Vaqt HH:MM formatida bo‘lsin');
+const mins = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+
+/** One working day. A doctor works in a single branch per weekday (0 = Sunday). */
+export const scheduleDaySchema = z.object({
+  weekday: z.number().int().min(0).max(6),
+  branch_id: uuid,
+  room_id: uuid.nullable().optional(),
+  start: hhmm,
+  end: hhmm,
+  break_start: hhmm.nullable().optional(),
+  break_end: hhmm.nullable().optional(),
+}).superRefine((d, ctx) => {
+  if (mins(d.end) - mins(d.start) < 30) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['end'], message: 'Ish vaqti kamida 30 daqiqa bo‘lsin' });
+  if (!!d.break_start !== !!d.break_end) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['break_end'], message: 'Tanaffusning boshi va oxirini kiriting' });
+  else if (d.break_start && d.break_end) {
+    if (mins(d.break_end) <= mins(d.break_start)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['break_end'], message: 'Tanaffus oxiri boshidan keyin bo‘lsin' });
+    else if (mins(d.break_start) < mins(d.start) || mins(d.break_end) > mins(d.end)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['break_start'], message: 'Tanaffus ish vaqti ichida bo‘lsin' });
+  }
+});
+
+export const schedulePutSchema = z.object({
+  days: z.array(scheduleDaySchema).max(7),
+  /** Save even though some future appointments fall outside the new hours (they are kept and must be rescheduled). */
+  confirm_conflicts: z.boolean().optional(),
+}).refine((d) => new Set(d.days.map((x) => x.weekday)).size === d.days.length, { message: 'Har bir hafta kuni bir marta', path: ['days'] });

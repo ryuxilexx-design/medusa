@@ -99,7 +99,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 
 ### 8. Kengayish (8:00–9:00) · Oyna 1
 - **Ombor** → «Faqat kam qolganlar» (4 ta; dashboard ogohlantirishi bilan bir xil).
-- **Xodimlar** → *Akmal Rasulov* → ish jadvali, bugungi qabullar, hisoblangan ulush.
+- **Xodimlar** → *Akmal Rasulov* → ish jadvali, bugungi qabullar, hisoblangan ulush. **Jadvalni tahrirlash** → kun, filial, xona, ish vaqti va tanaffus; kelgusi qabulga to‘g‘ri keladigan kunni o‘chirsangiz, tizim o‘sha qabullarni ro‘yxat qilib ko‘rsatadi (saqlamasdan **Bekor qilish**).
 - **Sozlamalar** → **Xizmatlar katalogi** → narxni o‘zgartirish mumkin (eski hisoblar o‘zgarmaydi) → **Audit jurnali**: namoyishdagi barcha amallar.
 
 ### 9. Yakun (9:00–10:00)

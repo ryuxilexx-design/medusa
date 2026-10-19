@@ -59,6 +59,7 @@ export class ReportsController {
       `SELECT m.id AS membership_id, u.full_name, u.login, m.role, m.title, m.status, m.branch_ids, m.demo_card, (m.id = $2) AS is_self,
               u.password_hash IS NOT NULL AS has_password, u.must_change_password, u.last_login_at, u.locked_until > now() AS locked,
               (SELECT coalesce(array_agg(ds.service_id), '{}') FROM doctor_services ds WHERE ds.doctor_id = d.id) AS service_ids,
+              EXISTS (SELECT 1 FROM schedules sc WHERE sc.doctor_id = d.id) AS has_schedule,
               (SELECT array_agg(b.name ORDER BY b.code) FROM branches b WHERE b.id = ANY(m.branch_ids)) AS branch_names,
               d.id AS doctor_id, d.specialty, d.default_share_percent
          FROM memberships m JOIN users u ON u.id = m.user_id LEFT JOIN doctors d ON d.membership_id = m.id
@@ -70,11 +71,12 @@ export class ReportsController {
   async doctor(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Query() q: any) {
     if (!isUuid(id)) throw notFound('Shifokor');
     if (ctx.role === 'doctor' && ctx.doctorId !== id) throw forbidden();
-    const d = await this.db.one(`SELECT id, display_name, specialty, phone, default_share_percent, active FROM doctors WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
+    const d = await this.db.one(`SELECT d.id, d.display_name, d.specialty, d.phone, d.default_share_percent, d.active, m.branch_ids
+       FROM doctors d LEFT JOIN memberships m ON m.id = d.membership_id WHERE d.id = $1 AND d.tenant_id = $2`, [id, ctx.tenantId]);
     if (!d) throw notFound('Shifokor');
     const r = range(q);
     const schedule = await this.db.rows(
-      `SELECT s.weekday, to_char(s.start_time,'HH24:MI') AS start, to_char(s.end_time,'HH24:MI') AS "end", to_char(s.break_start,'HH24:MI') AS break_start,
+      `SELECT s.weekday, s.branch_id, s.room_id, to_char(s.start_time,'HH24:MI') AS start, to_char(s.end_time,'HH24:MI') AS "end", to_char(s.break_start,'HH24:MI') AS break_start,
               to_char(s.break_end,'HH24:MI') AS break_end, b.name AS branch_name, r.name AS room_name
          FROM schedules s JOIN branches b ON b.id = s.branch_id LEFT JOIN rooms r ON r.id = s.room_id WHERE s.doctor_id = $1 ORDER BY (s.weekday + 6) % 7`, [id]);
     const services = await this.db.rows(

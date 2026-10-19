@@ -1,13 +1,15 @@
-import { Body, Controller, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, Patch, Post, Put } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { staffCreateSchema, staffUpdateSchema } from '@meduza/contracts';
+import { schedulePutSchema, staffCreateSchema, staffUpdateSchema } from '@meduza/contracts';
 import { generateTempPassword, hashPassword, SEED_IDS } from '@meduza/db';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, conflict, forbidden, invalid, notFound } from '../core/errors';
 import { isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
+import { localDate, localTime, now, toMinutes, weekday } from '../core/clock';
 
+const WEEKDAY = ['yakshanba', 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba'];
 const ROLE_LABEL: Record<string, string> = { manager: 'Rahbar', registrar: 'Registrator', doctor: 'Shifokor', cashier: 'Kassir', lab: 'Laborant' };
 const LOGIN_TAKEN = () => new AppError(409, 'LOGIN_TAKEN', 'Bu login band. Boshqa telefon yoki login kiriting.', { login: 'Bu login band' });
 
@@ -110,6 +112,11 @@ export class StaffController {
         const sets: string[] = [], vals: unknown[] = [m.id];
         if (roleChanges) { vals.push(input.role); sets.push(`role = $${vals.length}`); changed.push(`rol → ${ROLE_LABEL[input.role!]}`); }
         if (input.title !== undefined) { vals.push(input.title ?? null); sets.push(`title = $${vals.length}`); changed.push('lavozim'); }
+        if (input.branch_ids && m.doctor_id) {
+          const used = (await c.query(`SELECT DISTINCT b.name FROM schedules s JOIN branches b ON b.id = s.branch_id WHERE s.doctor_id = $1 AND NOT (s.branch_id = ANY($2::uuid[]))`,
+            [m.doctor_id, input.branch_ids])).rows.map((r) => r.name);
+          if (used.length) throw invalid({ branch_ids: `Ish jadvalida ${used.join(', ')} bor — avval jadvalni o‘zgartiring` });
+        }
         if (input.branch_ids) { vals.push(this.checkBranches(ctx, input.branch_ids)); sets.push(`branch_ids = $${vals.length}`); changed.push('filiallar'); }
         if (input.status !== undefined && input.status !== m.status) { vals.push(input.status); sets.push(`status = $${vals.length}`); changed.push(input.status === 'active' ? 'faollashtirildi' : 'faolsizlantirildi'); }
         if (sets.length) await c.query(`UPDATE memberships SET ${sets.join(', ')}, updated_at = now() WHERE id = $1`, vals);
@@ -156,6 +163,61 @@ export class StaffController {
       await c.query(`DELETE FROM sessions WHERE membership_id IN (SELECT id FROM memberships WHERE user_id = $1) AND token_hash <> $2`, [m.user_id, ctx.sessionHash]);
       await audit(c, ctx, 'staff.password_reset', 'membership', m.id, `${m.full_name}: vaqtinchalik parol berildi`);
       return { data: { membership_id: m.id, login: m.login, temp_password: temp } };
+    });
+  }
+
+  /**
+   * Replaces a doctor's weekly schedule. Future bookings that no longer fit are never touched: the first call
+   * returns 409 SCHEDULE_CONFLICTS with the list, and saving anyway needs confirm_conflicts (registrar reschedules them).
+   */
+  @Put('doctors/:id/schedule')
+  async putSchedule(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    if (!isUuid(id)) throw notFound('Shifokor');
+    const input = parse(schedulePutSchema, body);
+    return this.db.tx(async (c) => {
+      const d = (await c.query(
+        `SELECT d.id, d.display_name, m.branch_ids FROM doctors d LEFT JOIN memberships m ON m.id = d.membership_id
+          WHERE d.id = $1 AND d.tenant_id = $2 FOR UPDATE OF d`, [id, ctx.tenantId])).rows[0];
+      if (!d) throw notFound('Shifokor');
+      const allowed: string[] = d.branch_ids ?? ctx.branchIds;
+      const fields: Record<string, string> = {};
+      const rooms = (await c.query(`SELECT id, branch_id FROM rooms WHERE tenant_id = $1`, [ctx.tenantId])).rows;
+      input.days.forEach((day, i) => {
+        if (!ctx.branchIds.includes(day.branch_id)) fields[`days.${i}.branch_id`] = 'Filial topilmadi yoki sizga biriktirilmagan';
+        else if (!allowed.includes(day.branch_id)) fields[`days.${i}.branch_id`] = 'Shifokor bu filialga biriktirilmagan — avval xodim kartasida filialni qo‘shing';
+        if (day.room_id && !rooms.some((r) => r.id === day.room_id && r.branch_id === day.branch_id)) fields[`days.${i}.room_id`] = 'Xona shu filialda emas';
+      });
+      if (Object.keys(fields).length) throw invalid(fields);
+
+      // Future active bookings that would fall outside the new schedule.
+      const byDay = new Map(input.days.map((x) => [x.weekday, x]));
+      const future = (await c.query(
+        `SELECT a.id, a.starts_at, a.ends_at, a.branch_id, p.patient_number, p.last_name, p.first_name, s.name AS service_name
+           FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN services s ON s.id = a.service_id
+          WHERE a.doctor_id = $1 AND a.tenant_id = $2 AND a.status IN ('scheduled','arrived') AND a.starts_at >= $3 ORDER BY a.starts_at`,
+        [id, ctx.tenantId, now()])).rows;
+      const conflicts = future.flatMap((a) => {
+        const date = localDate(a.starts_at), st = toMinutes(localTime(a.starts_at)), en = toMinutes(localTime(a.ends_at));
+        const day = byDay.get(weekday(date));
+        let reason: string | null = null;
+        if (!day) reason = 'Bu kuni ishlamaydi';
+        else if (day.branch_id !== a.branch_id) reason = 'Boshqa filialda';
+        else if (st < toMinutes(day.start) || en > toMinutes(day.end)) reason = `Ish vaqtidan tashqarida (${day.start}–${day.end})`;
+        else if (day.break_start && day.break_end && st < toMinutes(day.break_end) && toMinutes(day.break_start) < en) reason = `Tanaffusga to‘g‘ri keladi (${day.break_start}–${day.break_end})`;
+        return reason ? [{ appointment_id: a.id, date, time: localTime(a.starts_at), patient_number: a.patient_number, patient: `${a.last_name} ${a.first_name}`, service_name: a.service_name, reason }] : [];
+      });
+      if (conflicts.length && !input.confirm_conflicts)
+        throw conflict('SCHEDULE_CONFLICTS', `${conflicts.length} ta kelgusi qabul yangi jadvalga sig‘maydi`, { conflicts });
+
+      await c.query(`DELETE FROM schedules WHERE doctor_id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
+      for (const day of input.days)
+        await c.query(`INSERT INTO schedules (id, tenant_id, doctor_id, branch_id, room_id, weekday, start_time, end_time, break_start, break_end)
+                       VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [ctx.tenantId, id, day.branch_id, day.room_id ?? null, day.weekday, day.start, day.end, day.break_start ?? null, day.break_end ?? null]);
+      const daysText = input.days.length ? [...input.days].sort((a, b) => ((a.weekday + 6) % 7) - ((b.weekday + 6) % 7)).map((x) => WEEKDAY[x.weekday].slice(0, 2)).join(', ') : 'ish kuni yo‘q';
+      await audit(c, ctx, 'doctor.schedule', 'doctor', id,
+        `${d.display_name}: ish jadvali yangilandi (${daysText})${conflicts.length ? `; jadvalga sig‘magan ${conflicts.length} ta qabul qoldi` : ''}`);
+      return { data: { ok: true, conflicts } };
     });
   }
 }

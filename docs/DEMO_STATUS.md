@@ -1,6 +1,6 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.2 (demo MVP + haqiqiy xodim kirishi)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.2 (demo MVP + haqiqiy xodim kirishi + shifokor jadvali)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
@@ -16,13 +16,15 @@ Klinikaga qo‘yish uchun birinchi qadam: demo kartalardan tashqari, har bir xod
 | 5 xato → 15 daqiqa blok, audit yozuvi; IP bo‘yicha cheklov | Ishlaydi | API test. IP cheklovi xotirada — server qayta ishga tushsa nolga tushadi |
 | Vaqtinchalik parol → birinchi kirishda majburiy almashtirish | Ishlaydi | API test (boshqa barcha so‘rov 403); E2E (menyu ochilmaydi, almashtirgach ish joyi ochiladi) |
 | Rahbar: xodim qo‘shish / tahrirlash / parolni tiklash / faolsizlantirish | Ishlaydi | API test; E2E. Faolsizlantirish sessiyani darhol yopadi |
-| Shifokor qo‘shish: mutaxassislik, ulush, bajaradigan xizmatlar | Ishlaydi | API test. **Jadval kiritish UI yo‘q** — yangi shifokorga hozircha qabul yozib bo‘lmaydi (keyingi qadam) |
+| Shifokor qo‘shish: mutaxassislik, ulush, bajaradigan xizmatlar | Ishlaydi | API test. Jadvali yo‘q shifokor ro‘yxatda «Jadval yo‘q — qabul yozilmaydi» belgisi bilan |
+| Shifokorning haftalik jadvali: kun, filial, xona, ish vaqti, tanaffus | Ishlaydi | API test: jadval kiritilgach bo‘sh vaqt chiqadi va qabul yoziladi; tanaffusda slot yo‘q; noto‘g‘ri tanaffus, takroriy kun, boshqa filial xonasi, biriktirilmagan filial → 422; registrator/shifokor → 403, boshqa klinika → 404. E2E: tekshiruv, ziddiyat ro‘yxati, saqlash |
+| Jadvalga sig‘magan kelgusi qabullar | Ishlaydi | Saqlashda 409 va ro‘yxat (sana, bemor, sabab). «Baribir saqlash» dan keyin qabullar **o‘chirilmaydi** — registrator ko‘chiradi; audit’da soni yoziladi. Jadvalda ishlatilgan filialni shifokordan olib tashlab bo‘lmaydi |
 | Himoya: o‘zini, oxirgi rahbarni, demo kartani o‘chirib bo‘lmaydi; boshqa klinika xodimi → 404; begona filial → 422 | Ishlaydi | API test, jumladan ikki rahbar bir vaqtda bir-birini o‘chirish poygasi (bittasi qoladi) |
 | Demo kartalar faqat demo klinikani ochadi | Ishlaydi | API test: demo bo‘lmagan klinika a’zosi `demo_card` bo‘lsa ham 403 |
 | Demo reset haqiqiy klinika bor bazada rad etiladi | Ishlaydi | API test (409 `REAL_CLINIC_PRESENT`); CLI’da qo‘lda tekshirildi |
 | `db:create-clinic` CLI: klinika + filial + rahbar (+ demo xizmatlar katalogi) | Ishlaydi | Vaqtinchalik bazada qo‘lda sinaldi: 30 xizmat narxi bilan, band login rad etildi; baza o‘chirildi |
 
-Hali yo‘q (klinikaga qo‘yishdan oldin kerak): shifokor jadvalini tahrirlash, ikki bosqichli tasdiq (MFA), SMS orqali parol tiklash, sessiyalar ro‘yxati, O‘zbekistondagi hosting va zaxira nusxa rejasi.
+Hali yo‘q (klinikaga qo‘yishdan oldin kerak): ta’til/kasallik kabi bir martalik istisnolar (jadval faqat haftalik), ikki bosqichli tasdiq (MFA), SMS orqali parol tiklash, sessiyalar ro‘yxati, O‘zbekistondagi hosting va zaxira nusxa rejasi.
 
 ## 1. «P0 to‘liqmi?» — TZ bilan banddan-band solishtirish
 
@@ -126,7 +128,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 | M-09 UZI | Ishlaydi (P1) | DICOM/PACS, rasm yuklash — Rejada |
 | M-10 Kassa | Ishlaydi | Qaytarish — Rejada; chegirma oqimi soddalashtirilgan (1.3) |
 | M-11 Moliya | Ishlaydi | Xarajatlar — Demo ma’lumoti (faqat ko‘rish); smena, sof natija — Rejada |
-| M-12 Xodimlar, ulush | Ishlaydi (P1) | 0.2: xodim qo‘shish/tahrirlash/parol tiklash/faolsizlantirish. Jadvalni tahrirlash, payroll — Rejada |
+| M-12 Xodimlar, ulush | Ishlaydi (P1) | 0.2: xodim qo‘shish/tahrirlash/parol tiklash/faolsizlantirish. 0.2: haftalik jadvalni tahrirlash. Bir martalik istisnolar (ta’til), payroll — Rejada |
 | M-13 Ombor | Ishlaydi (P1) | Avtomatik yechish, partiya — Rejada |
 | M-14 Sozlamalar | Ishlaydi | Logotip, shablon maydonlari, modul ko‘rinishi — Rejada |
 | AI-01 qaydni tartiblash | Namunaviy AI | `AI_MODE=sample` (standart): faqat demo matni. `live` rejim kodda bor, **haqiqiy kalit bilan sinalmagan** |
@@ -137,8 +139,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 27/27 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik testi, 8 ta xodim kirishi testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 46/46: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi |
+| `npm test` (meduza_test) | 31/31 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik testi, 8 ta xodim kirishi, 4 ta shifokor jadvali testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 54/54: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |

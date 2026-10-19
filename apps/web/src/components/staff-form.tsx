@@ -11,7 +11,7 @@ import { Alert, Button, cx, Field, Input, Modal, Select, useToast } from '@/comp
 export type StaffRow = {
   membership_id: string; full_name: string; login: string | null; role: Role; title: string | null; status: 'active' | 'inactive';
   branch_ids: string[]; branch_names: string[] | null; demo_card: boolean; is_self: boolean; has_password: boolean; must_change_password: boolean;
-  last_login_at: string | null; locked: boolean | null; doctor_id: string | null; specialty: string | null; default_share_percent: number | null; service_ids: string[];
+  last_login_at: string | null; locked: boolean | null; doctor_id: string | null; has_schedule: boolean; specialty: string | null; default_share_percent: number | null; service_ids: string[];
 };
 type Issued = { name: string; login: string; temp_password: string };
 type Form = { full_name: string; role: Role; title: string; login: string; branch_ids: string[]; specialty: string; share_percent: string; service_ids: string[] };
@@ -200,7 +200,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
                   ))}
                 </div>
               )}
-              {isNew && <p className="mt-1 text-xs text-slate-500">Ish jadvalini kiritmaguncha shifokorga onlayn qabul yozilmaydi. Jadval tahriri keyingi qadamda qo‘shiladi.</p>}
+              {isNew && <p className="mt-1 text-xs text-slate-500">Saqlangach ro‘yxatda shifokorni tanlang → «Jadvalni tahrirlash». Jadvalsiz shifokorga qabul yozilmaydi.</p>}
             </div>
           </div>
         )}
