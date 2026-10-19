@@ -1,8 +1,20 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.4 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.5 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 0000. 0.5 relizda nima qo‘shildi: qabul hujjatlari
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Yo‘llanma, tibbiy ma’lumotnoma, retsept: berish, ro‘yxat, chop etish | Ishlaydi | API test (ketma-ket raqam, snapshot, MKB-10 tekshiruvi); E2E: retsept → chop etish sahifasi |
+| Ma’lumotnomada tashxis faqat bemor so‘rasa va faqat tasdiqlangan qayddan | Ishlaydi | API test: sukut bo‘yicha tashxis yo‘q; tasdiqlanmagan qayd bilan 409 |
+| O‘zgarmaslik va bekor qilish | Ishlaydi | API test: baza triggeri tahrir va o‘chirishni bloklaydi; bekor qilish sabab bilan, ikkinchi marta 409. E2E: bosma nusxada «Bekor qilingan» |
+| Ruxsat | Ishlaydi | API test: boshqa shifokor, rahbar, registrator — 403 |
+| «DEMO» belgisi faqat demo rejimida | Ishlaydi | Kodda; production rejimida vizual tekshirilmagan |
+
+Hali yo‘q: hujjatlarni bemorga Telegram orqali yuborish, davlat elektron retsepti (DMED), mehnatga layoqatsizlik varaqasi (rasmiy shakl). Haqiqiy printerda chop etib ko‘rilmagan.
 
 ## 000. 0.4 relizda nima qo‘shildi: AI 1-bosqich (shifokor vaqtini tejash)
 
@@ -182,8 +194,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 52/52 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 70/70: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 |
+| `npm test` (meduza_test) | 57/57 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar, 5 ta qabul hujjatlari testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 77/77: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 + 7 qabul hujjatlari |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |

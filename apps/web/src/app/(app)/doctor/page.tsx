@@ -12,6 +12,7 @@ import { useUnsavedGuard } from '@/lib/unsaved';
 import { IntakePanel } from '@/components/intake-panel';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { NewsCard } from '@/components/news-card';
+import { DocumentsCard } from '@/components/documents-card';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
@@ -256,6 +257,8 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
           </ul>
         )}
       </Card>
+
+      <DocumentsCard encounterId={encounterId} note={{ diagnosis: form.diagnosis, icd10: form.icd10, signed }} />
 
       <AiModal open={aiOpen} encounterId={encounterId} onClose={() => setAiOpen(false)} onApply={(d) => { setForm((f) => ({ ...f!, ...d })); toast.info('AI loyihasi formaga qo‘llandi. Tekshirib, qoralamani saqlang.'); }} />
       <OrderModal open={orderOpen} onClose={() => setOrderOpen(false)} encounterId={encounterId} existing={enc.data.orders} />

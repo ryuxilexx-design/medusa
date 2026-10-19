@@ -214,3 +214,47 @@ export const schedulePutSchema = z.object({
   /** Save even though some future appointments fall outside the new hours (they are kept and must be rescheduled). */
   confirm_conflicts: z.boolean().optional(),
 }).refine((d) => new Set(d.days.map((x) => x.weekday)).size === d.days.length, { message: 'Har bir hafta kuni bir marta', path: ['days'] });
+
+// ---------- Visit documents (referral, certificate, prescription) ----------
+const icdCode = z.string().regex(/^[A-Z][0-9]{2}(\.[0-9]{1,2})?$/, 'Noto‘g‘ri MKB-10 kodi');
+
+export const referralBodySchema = z.object({
+  to_specialty: trimmed(2, 120, 'Kimga (mutaxassislik yoki tekshiruv)'),
+  to_institution: optionalText(200),
+  reason: trimmed(3, 1000, 'Yo‘llanma sababi'),
+  urgency: z.enum(['routine', 'urgent']).default('routine'),
+  icd10: z.array(icdCode).max(5).default([]),
+  notes: optionalText(1000),
+});
+
+export const certificateBodySchema = z.object({
+  purpose: trimmed(2, 200, 'Qayerga taqdim etiladi'),
+  /** Off by default: a certificate leaves the clinic, the diagnosis is shown only if the patient asks for it. */
+  include_diagnosis: z.boolean().default(false),
+  rest_days: z.number().int().min(0, '0–30 kun').max(30, '0–30 kun').default(0),
+  notes: optionalText(1000),
+});
+
+export const prescriptionItemSchema = z.object({
+  name: trimmed(2, 120, 'Dori nomi'),
+  form: optionalText(60),
+  dose: trimmed(1, 60, 'Doza'),
+  frequency: trimmed(1, 80, 'Qabul tartibi'),
+  duration: trimmed(1, 60, 'Davomiyligi'),
+  instructions: optionalText(200),
+});
+export const prescriptionBodySchema = z.object({
+  items: z.array(prescriptionItemSchema).min(1, 'Kamida bitta dori kiriting').max(15, 'Ko‘pi bilan 15 ta dori'),
+  notes: optionalText(1000),
+});
+
+export const documentCreateSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('referral'), body: referralBodySchema }),
+  z.object({ kind: z.literal('certificate'), body: certificateBodySchema }),
+  z.object({ kind: z.literal('prescription'), body: prescriptionBodySchema }),
+]);
+export const documentVoidSchema = z.object({ reason: trimmed(3, 300, 'Bekor qilish sababi') });
+
+export const DOCUMENT_KIND_LABEL: Record<'referral' | 'certificate' | 'prescription', string> = {
+  referral: 'Yo‘llanma', certificate: 'Tibbiy ma’lumotnoma', prescription: 'Retsept (dori tavsiyasi)',
+};

@@ -130,6 +130,14 @@ Agar mehmon boshqa matn yozib ko‘rmoqchi bo‘lsa, tizim «Namunaviy rejimda f
 
 Ayting: «AI faqat qoralama va taklif beradi, imzo shifokorda. Bemorning ismi va telefoni AI’ga yuborilmaydi. Har bir AI so‘rovining narxi rahbar sahifasida ko‘rinadi.»
 
+## Hujjatlar (1 daqiqa, Shifokor oynasida)
+
+1. Qabul sahifasi → **Hujjatlar** → **Retsept** → `Amlodipin`, `tabletka`, `5 mg`, `kuniga 1 marta`, `30 kun` → **Berish va saqlash**.
+2. **Chop etish**: raqamli retsept, shifokor va qabul ma’lumotlari bilan.
+3. *(Ixtiyoriy)* **Yo‘llanma**: sabab va MKB-10 qayddan o‘zi to‘ladi.
+
+Ayting: «Hujjat raqamlanadi va o‘zgartirilmaydi. Xato bo‘lsa sabab bilan bekor qilinadi, iz qoladi. Ma’lumotnomaga tashxis faqat bemor so‘rasa yoziladi.»
+
 ## Telegram bot (2 daqiqa, Rahbar oynasida)
 
 **Sozlamalar → Telegram bot**. O‘ngda simulyator bor: haqiqiy bot mantig‘i, faqat Telegram’siz.

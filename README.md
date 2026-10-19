@@ -44,9 +44,9 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (52 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (57 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
-| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
+| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10 + hujjatlar) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
 | `npm run db:create-clinic -- --name … --branch … --manager-name … --manager-login … [--catalog demo]` | Haqiqiy klinikani ochish: tenant, birinchi filial va rahbar akkaunti. Vaqtinchalik parol terminalda **bir marta** chiqadi. Real klinika uchun alohida, `APP_MODE=production` muhitida ishlating |
 | `npm run db:import-icd10 -- fayl.csv [--replace]` | Rasmiy MKB-10 ro‘yxatini yuklash (ustunlar: `code;title_ru;title_uz`). `--replace` boshlang‘ich ro‘yxatdagi, faylda yo‘q kodlarni olib tashlaydi. Qaydlardagi kodlar o‘z nomi bilan saqlangan, buzilmaydi |
@@ -112,6 +112,23 @@ Qoidalar:
 - **MKB-10:** AI faqat klinika jadvalidagi kodlardan tanlaydi, server har bir kodni tekshiradi. Qaydga kodni shifokor o‘zi qo‘shadi. Bazada boshlang‘ich ro‘yxat bor (~130 ta ko‘p uchraydigan ambulator tashxis), rasmiy ro‘yxat `db:import-icd10` bilan yuklanadi.
 - **Yangiliklar:** PubMed’dan oxirgi 30 kundagi RCT, meta-tahlil, tizimli sharh va tavsiyalar olinadi, har bir mutaxassislik uchun kuniga 5 tagacha. AI o‘zbekcha qisqa mazmunni faqat annotatsiyadan yozadi. Saqlanadi: sarlavha, AI qisqa mazmuni, havola. Annotatsiyaning o‘zi saqlanmaydi.
 - **Testlar:** AI soxta Claude va soxta PubMed serverlari bilan sinaladi, haqiqiy model chaqirilmaydi va pul sarflanmaydi.
+
+## Qabul hujjatlari
+
+Shifokor qabul sahifasidagi **«Hujjatlar»** blokidan uch turdagi hujjat beradi:
+
+| Hujjat | Nima yoziladi | Muhim |
+|---|---|---|
+| **Yo‘llanma** | Kimga (mutaxassis/tekshiruv/muassasa), sabab, MKB-10, shoshilinchlik | Sabab va MKB-10 qayddan oldindan to‘ldiriladi |
+| **Tibbiy ma’lumotnoma** | Qabulda bo‘lganligi, qayerga taqdim etiladi, uyda davolanish tavsiyasi (0–30 kun) | Tashxis **sukut bo‘yicha yozilmaydi**. Bemor so‘rasa, faqat tasdiqlangan qayddan olinadi. Mehnatga layoqatsizlik varaqasi emas |
+| **Retsept (dori tavsiyasi)** | Dori, shakli, doza, qabul tartibi, muddati, ko‘rsatma (15 tagacha) | Klinika ichki retsepti, davlat elektron retsepti (DMED) emas |
+
+Qoidalar:
+- **Raqamlash:** har bir hujjat klinika bo‘yicha ketma-ket raqam oladi (Y-/M-/R-00001).
+- **Snapshot:** shifokor, filial, qabul vaqti va MKB-10 berilgan paytdagi holati bilan saqlanadi, qayta chop etilganda o‘zgarmaydi.
+- **O‘zgarmaslik:** berilgan hujjatni tahrirlab yoki o‘chirib bo‘lmaydi, buni baza triggeri ham tekshiradi. Xato bo‘lsa, sabab bilan **bekor qilinadi** va yangisi beriladi; bosma nusxada «Bekor qilingan» chiqadi.
+- **Ruxsat:** faqat davolovchi shifokor beradi va ko‘radi.
+- **Demo belgisi:** bosma hujjatlardagi «DEMO» belgisi faqat demo rejimida chiqadi.
 
 ## Telegram bot (bemorlar uchun)
 
