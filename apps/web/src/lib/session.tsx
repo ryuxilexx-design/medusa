@@ -2,13 +2,16 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import type { Role } from '@meduza/contracts';
+import { translate, type Locale, type Role, type TextSize } from '@meduza/contracts';
 import { api } from './api';
+import { formatLocale } from './format';
 
 export interface Me {
   membership_id: string; name: string; title: string | null; role: Role; tenant_id: string; clinic_name: string;
   doctor_id: string | null; doctor_specialty: string | null; branches: { id: string; name: string; code: string }[];
   today: string; now: string; demo: boolean; ai_mode: 'off' | 'sample' | 'live'; ai_off_reason: string | null;
+  /** Interface language and text size saved for this person (staff account) or this session (demo card). */
+  locale: Locale; text_size: TextSize;
   /** 'demo' = role card, 'password' = real staff account */
   auth_kind: 'demo' | 'password'; must_change_password: boolean;
   /** browser Date.now() when `now` was received — used to keep the demo clock offset exact even from cache */
@@ -44,7 +47,7 @@ export function SessionProvider({ me, children }: { me: Me; children: React.Reac
     me,
     demoNow: () => new Date(Date.now() + offset),
     branchId: me.branches.length === 1 ? me.branches[0].id : branchId,
-    branchName: me.branches.length === 1 ? me.branches[0].name : me.branches.find((b) => b.id === branchId)?.name ?? 'Barcha filiallar',
+    branchName: me.branches.length === 1 ? me.branches[0].name : me.branches.find((b) => b.id === branchId)?.name ?? translate(formatLocale(), 'shell.allBranches'),
     setBranchId: (id: string) => {
       setBranchState(id);
       try { localStorage.setItem(`${BRANCH_KEY}.${me.membership_id}`, id); } catch { /* ignore */ }

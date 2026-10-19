@@ -1,8 +1,24 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.7 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari + kassa: smena, qaytarish, xarajat + Gemini AI provayderi)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari + kassa: smena, qaytarish, xarajat + Gemini AI provayderi + uch til va sodda dizayn, 1-bosqich)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 0000000. 0.8 relizda nima qo‘shildi: uch til va sodda dizayn (1-bosqich)
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Interfeys tili: o‘zbek (lotin), o‘zbek (kirill), rus | Ishlaydi: kirish sahifasi, menyu va tepadagi panel, umumiy komponentlar, shifokor kabineti (qayd, AI, buyurtmalar, tarix, MKB-10, Telegram so‘rovnomasi, yangiliklar, hujjatlar) | E2E `i18n`: rus tilida kirish → shifokor sahifasi ruscha, sana «18 октября 2026»; kirillga o‘tish yangilangandan keyin ham saqlanadi; lotin matn qolmaydi |
+| Til va matn o‘lchami xodimda saqlanadi | Ishlaydi | API test: xodim akkauntida saqlanadi (boshqa qurilmada ham), demo kartada faqat shu sessiyada (boshqa tashrifchiga o‘tmaydi), kirishdan oldingi til yangi sessiyaga o‘tadi, noto‘g‘ri qiymat 422 |
+| O‘zbek kirill matni lotindan avtomatik | Ishlaydi | API test: har bir xabar ikkala tilda, o‘rinbosarlar mos, kirill matnda lotin harfi qolmagan; namunaviy so‘zlar (Йўқ, Консультация, Телеграмда, 18-октябрь) to‘g‘ri |
+| Sodda dizayn: Golos Text shrifti (ilova ichida, internetsiz), asosiy matn 18 px, «Katta» — 20 px, katta tugmalar, sariq fokus halqasi, katta harfli sarlavhalar yo‘q | Ishlaydi | E2E: «Katta» matnni 18 → 20 px qiladi va saqlanadi; skrinshotlar 1366×768 da ko‘rildi |
+| Allergiya qizil chiziq bilan, qaydning pastki panelida faqat «Saqlash» va «Tasdiqlash» | Ishlaydi | Skrinshot |
+| Server xato xabarlari va forma xatolari xodim tilida | Ishlaydi | API test: ruscha sessiyada «Пациент: не найдено», kirishdan oldin cookie tili bilan «Неверный логин или пароль»; o‘zgaruvchi qismlar (summa, xizmat nomi) o‘girilmaydi; qamrov testi: koddagi har bir doimiy xato xabari lug‘atda bor |
+
+Cheklovlar (keyingi bosqichlar):
+- **Hali tarjima qilinmagan:** registratura, navbat, kassa, laboratoriya, UZI, moliya, hisobotlar, xodimlar, ombor, sozlamalar sahifalari; chop etiladigan hujjatlar; Telegram bot. Bu sahifalar yangi shrift va o‘lchamni oladi, lekin matni o‘zbekcha.
+- **Klinika ma’lumotlari** (xizmat, xona, mutaxassislik nomlari, MKB-10 o‘zbekcha nomlari) bazada bitta tilda; ko‘p tilli katalog keyinroq.
+- **Kirill imlosi** qoidalar va istisno so‘zlar ro‘yxati bilan; ona tilida so‘zlashuvchi tekshirishi kerak.
 
 ## 000000. 0.7 relizda nima qo‘shildi: Gemini — ikkinchi AI provayderi
 

@@ -54,7 +54,7 @@ export default function QueuePage() {
                       <Td right>
                         {me.role === 'doctor' && t.status === 'arrived' && <Button size="sm" variant="primary" icon={<PlayCircle className="h-3.5 w-3.5" />} onClick={() => router.push(`/doctor?appointment=${t.appointment_id}`)}>Qabulni boshlash</Button>}
                         {me.role === 'doctor' && t.status === 'in_progress' && <Button size="sm" onClick={() => router.push(`/doctor?appointment=${t.appointment_id}`)}>Ochish</Button>}
-                        {me.role !== 'doctor' && <Link href={`/patients/${t.patient_id}`} className="text-[13px] font-medium text-brand-700 hover:underline">Profil</Link>}
+                        {me.role !== 'doctor' && <Link href={`/patients/${t.patient_id}`} className="text-[0.8125rem] font-medium text-brand-700 hover:underline">Profil</Link>}
                       </Td>
                     </tr>
                   );

@@ -17,9 +17,9 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
         <button onClick={() => window.close()} className="text-sm text-slate-600 hover:underline">Yopish</button>
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-brand-700"><Printer className="h-4 w-4" />Chop etish / PDF saqlash</button>
       </div>
-      <article className="relative mx-auto min-h-[297mm] max-w-[210mm] overflow-hidden bg-white p-[14mm] text-[13px] leading-relaxed text-slate-900 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
+      <article className="relative mx-auto min-h-[297mm] max-w-[210mm] overflow-hidden bg-white p-[14mm] text-[0.8125rem] leading-relaxed text-slate-900 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
         {demo && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="-rotate-[30deg] select-none whitespace-nowrap text-[42px] font-black tracking-widest text-slate-200/60 print:text-slate-200">DEMO — SUN’IY MA’LUMOT</span>
+          <span className="-rotate-[30deg] select-none whitespace-nowrap text-[2.625rem] font-black tracking-widest text-slate-200/60 print:text-slate-200">DEMO — SUN’IY MA’LUMOT</span>
         </div>}
         <div className="relative">
           <header className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
@@ -30,7 +30,7 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
             <h1 className="text-xl font-bold">{title}</h1>
             {draft && <span className="rounded border-[3px] border-amber-500 px-3 py-1 text-xl font-black uppercase tracking-wider text-amber-600">Qoralama</span>}
           </div>
-          <section className="print-avoid-break mt-3 grid grid-cols-2 gap-x-6 rounded border border-slate-300 p-3 text-[13px]">
+          <section className="print-avoid-break mt-3 grid grid-cols-2 gap-x-6 rounded border border-slate-300 p-3 text-[0.8125rem]">
             <div><span className="text-slate-500">Bemor:</span> <b>{fullName(patient, true)}</b></div>
             <div><span className="text-slate-500">Bemor ID:</span> <b>{pid(patient?.patient_number)}</b></div>
             <div><span className="text-slate-500">Tug‘ilgan sana:</span> {fmtDate(patient?.birth_date)}</div>

@@ -43,12 +43,12 @@ function Finance() {
         <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
         {tab !== 'debts' && (
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
-            <Input type="date" aria-label="Boshlanish" className="h-8 w-[145px] text-[13px]" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
+            <Input type="date" aria-label="Boshlanish" className="h-8 w-[145px] text-[0.8125rem]" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
             <span className="text-slate-400">–</span>
-            <Input type="date" aria-label="Tugash" className="h-8 w-[145px] text-[13px]" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
+            <Input type="date" aria-label="Tugash" className="h-8 w-[145px] text-[0.8125rem]" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
             <div className="flex gap-1">{[['Bugun', 0], ['7 kun', 6], ['30 kun', 29]].map(([l, d]) => <button key={l} onClick={() => setRange(d as number)} className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">{l}</button>)}</div>
-            {tab === 'payments' && <Select aria-label="Usul" className="h-8 w-auto text-[13px]" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">Barcha usullar</option>{Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}
-            {tab === 'payments' && <a href={`/api/v1/payments/export.csv${qs(filters)}`} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-[13px] font-medium text-slate-700 shadow-sm hover:bg-slate-50"><Download className="h-3.5 w-3.5" />CSV eksport</a>}
+            {tab === 'payments' && <Select aria-label="Usul" className="h-8 w-auto text-[0.8125rem]" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">Barcha usullar</option>{Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}
+            {tab === 'payments' && <a href={`/api/v1/payments/export.csv${qs(filters)}`} className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-[0.8125rem] font-medium text-slate-700 shadow-sm hover:bg-slate-50"><Download className="h-3.5 w-3.5" />CSV eksport</a>}
           </div>
         )}
         {tab === 'payments' && (pays.isLoading ? <LoadingRows /> : pays.isError ? <ErrorState error={pays.error} onRetry={() => pays.refetch()} /> : (

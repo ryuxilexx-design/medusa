@@ -74,7 +74,7 @@ export function ShiftsTab({ from, to, branchId }: { from: string; to: string; br
             <Td right>{s.counted_cash == null ? '—' : formatSom(s.counted_cash)}</Td>
             <Td right className={cx('font-medium', s.difference ? (s.difference > 0 ? 'text-amber-700' : 'text-red-700') : 'text-slate-500')}>{s.difference == null ? '—' : s.difference === 0 ? '0' : `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`}</Td>
             <Td right className="whitespace-nowrap">
-              <Link href={`/print/shift/${s.id}`} target="_blank" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-700 hover:underline"><Printer className="h-3.5 w-3.5" />Hisobot</Link>
+              <Link href={`/print/shift/${s.id}`} target="_blank" className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-700 hover:underline"><Printer className="h-3.5 w-3.5" />Hisobot</Link>
               {me.role === 'manager' && s.status === 'open' && <Button size="sm" variant="ghost" className="ml-2" onClick={() => setClosing(s)}>Yopish</Button>}
             </Td>
           </tr>

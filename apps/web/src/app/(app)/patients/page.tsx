@@ -59,7 +59,7 @@ function Patients() {
                     <Td className="whitespace-nowrap text-slate-600">{p.next_appointment ? fmtDateTime(p.next_appointment) : '—'}</Td>
                     <Td right>
                       <div className="flex justify-end gap-1">
-                        <Link href={`/patients/${p.id}`} className="rounded px-2 py-1 text-[13px] font-medium text-brand-700 hover:bg-brand-50">Profil</Link>
+                        <Link href={`/patients/${p.id}`} className="rounded px-2 py-1 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">Profil</Link>
                         {canEdit && <Button size="sm" variant="ghost" icon={<CalendarPlus className="h-3.5 w-3.5" />} onClick={() => setBooking({ patient: p })}>Qabulga yozish</Button>}
                         {canEdit && <Button size="sm" variant="ghost" aria-label="Tahrirlash" title="Asosiy ma’lumotni tahrirlash" onClick={() => setForm({ open: true, patient: p })}><Pencil className="h-3.5 w-3.5" /></Button>}
                       </div>

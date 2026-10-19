@@ -1,13 +1,19 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
+import '@fontsource-variable/golos-text';
 import './globals.css';
+import { isLocale, LOCALE_TAG, type Locale } from '@meduza/contracts';
 import { Providers } from './providers';
 
 export const metadata: Metadata = { title: 'Med.uz.ai — klinika boshqaruv platformasi', description: 'Med.uz.ai demo muhit · Sun’iy ma’lumotlar' };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // the language chosen before (cookie, UI preference only) renders on the first paint — no flash of another language
+  const c = (await cookies()).get('meduza_lang')?.value;
+  const locale: Locale = isLocale(c) ? c : 'uz';
   return (
-    <html lang="uz">
-      <body><Providers>{children}</Providers></body>
+    <html lang={LOCALE_TAG[locale]}>
+      <body><Providers initialLocale={locale}>{children}</Providers></body>
     </html>
   );
 }

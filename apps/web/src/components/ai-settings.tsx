@@ -75,12 +75,12 @@ export function AiSettings() {
           )}
           <p className="mt-1 text-xs text-slate-500">{u.gemini_free ? 'Bepul tarif: to‘lov olinmaydi, narx 0 deb yoziladi.' : `Narx — ${pv.name} narxlari bo‘yicha taxmin.`} Aniq hisob {pv.console}’da. So‘rov matni va javoblar saqlanmaydi, faqat token soni.</p>
         </section>
-        <section className="text-[13px] text-slate-600">
+        <section className="text-[0.8125rem] text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">MKB-10 ro‘yxati</h3>
           <p className="mt-1">{u.icd10.n} ta kod{u.icd10.official ? `, shundan ${u.icd10.official} tasi rasmiy ro‘yxatdan` : ' — boshlang‘ich ro‘yxat (eng ko‘p uchraydigan ambulator tashxislar)'}.
             {!u.icd10.official && <> Rasmiy ro‘yxatni administrator yuklaydi: <code>npm run db:import-icd10 -- fayl.csv</code>.</>}</p>
         </section>
-        <section className="text-[13px] text-slate-600">
+        <section className="text-[0.8125rem] text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">Xavfsizlik</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             <li>AI’ga yuborishdan oldin bemorning ismi, telefoni, tug‘ilgan sanasi va ID raqami olib tashlanadi.</li>

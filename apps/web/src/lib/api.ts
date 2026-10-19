@@ -1,3 +1,6 @@
+import { translate } from '@meduza/contracts';
+import { formatLocale } from './format';
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public fields?: Record<string, string>, public details?: any, public requestId?: string) {
     super(message);
@@ -20,7 +23,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     });
   } catch (e) {
     if ((e as Error).name === 'AbortError') throw e;
-    throw new ApiError(0, 'NETWORK', 'Server bilan aloqa yo‘q. Ma’lumot saqlanmadi — internet/serverni tekshirib, qayta urinib ko‘ring.');
+    throw new ApiError(0, 'NETWORK', translate(formatLocale(), 'net.offline'));
   }
   const text = await res.text();
   let json: any = null;
@@ -29,7 +32,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     const e = json?.error;
     if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('/demo/login') && !path.startsWith('/auth/')) window.dispatchEvent(new Event('meduza:unauthorized'));
     if (e?.code === 'PASSWORD_CHANGE_REQUIRED' && typeof window !== 'undefined') window.dispatchEvent(new Event('meduza:password-change'));
-    throw new ApiError(res.status, e?.code ?? 'HTTP_' + res.status, e?.message ?? (res.status >= 500 ? 'Server xatosi. Qayta urinib ko‘ring.' : 'So‘rov bajarilmadi'), e?.fields, e?.details, json?.request_id);
+    throw new ApiError(res.status, e?.code ?? 'HTTP_' + res.status, e?.message ?? translate(formatLocale(), res.status >= 500 ? 'net.serverError' : 'net.failed'), e?.fields, e?.details, json?.request_id);
   }
   return json as T;
 }

@@ -23,9 +23,9 @@ function Reports() {
     <>
       <PageHeader title={me.role === 'doctor' ? 'Mening faoliyatim' : 'Hisobotlar'} subtitle={`${fmtDate(from)} – ${fmtDate(to)} · bajarilgan xizmatlar (chegirmadan keyin)`}
         actions={<div className="flex items-center gap-2">
-          <Input type="date" aria-label="Boshlanish" className="h-8 w-[145px] text-[13px]" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
+          <Input type="date" aria-label="Boshlanish" className="h-8 w-[145px] text-[0.8125rem]" value={from} max={to} onChange={(e) => e.target.value && setFrom(e.target.value)} />
           <span className="text-slate-400">–</span>
-          <Input type="date" aria-label="Tugash" className="h-8 w-[145px] text-[13px]" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
+          <Input type="date" aria-label="Tugash" className="h-8 w-[145px] text-[0.8125rem]" value={to} min={from} onChange={(e) => e.target.value && setTo(e.target.value)} />
         </div>} />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         {me.role === 'manager' && (

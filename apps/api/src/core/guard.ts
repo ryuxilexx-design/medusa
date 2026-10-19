@@ -21,7 +21,9 @@ export class AuthGuard implements CanActivate {
       const h = hashToken(token);
       const row = await this.db.one(
         `SELECT m.id AS membership_id, m.user_id, m.tenant_id, t.name AS tenant_name, m.role, m.branch_ids, m.title, u.full_name,
-                d.id AS doctor_id, d.specialty, s.kind, u.must_change_password, s.last_seen_at < now() - interval '1 minute' AS seen_stale, demo_now() AS demo_now
+                d.id AS doctor_id, d.specialty, s.kind, u.must_change_password,
+                COALESCE(s.locale, CASE WHEN s.kind = 'password' THEN u.locale END, 'uz') AS locale,
+                COALESCE(s.text_size, CASE WHEN s.kind = 'password' THEN u.text_size END, 'normal') AS text_size, s.last_seen_at < now() - interval '1 minute' AS seen_stale, demo_now() AS demo_now
            FROM sessions s JOIN memberships m ON m.id = s.membership_id JOIN users u ON u.id = m.user_id
            JOIN tenants t ON t.id = m.tenant_id LEFT JOIN doctors d ON d.membership_id = m.id AND d.tenant_id = m.tenant_id
           WHERE s.token_hash = $1 AND s.expires_at > now() AND m.status = 'active' AND t.status = 'active'`, [h]);
@@ -31,6 +33,7 @@ export class AuthGuard implements CanActivate {
           membershipId: row.membership_id, userId: row.user_id, tenantId: row.tenant_id, tenantName: row.tenant_name, role: row.role,
           name: row.full_name, title: row.title, branchIds: row.branch_ids, doctorId: row.doctor_id, doctorSpecialty: row.specialty,
           requestId: req.requestId, sessionHash: h, authKind: row.kind, mustChangePassword: row.kind === 'password' && row.must_change_password,
+          locale: row.locale, textSize: row.text_size,
         } satisfies Ctx;
         if (row.seen_stale) await this.db.rows(`UPDATE sessions SET last_seen_at = now() WHERE token_hash = $1`, [h]);
       }

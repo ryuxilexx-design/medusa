@@ -62,7 +62,7 @@ function Cashier() {
                   <Td right>{formatSom(i.total)}</Td><Td right>{formatSom(i.paid_amount)}</Td>
                   <Td right className={i.status !== 'void' && i.due > 0 ? 'font-semibold text-red-700' : ''}>{i.status === 'void' ? '—' : formatSom(i.due)}</Td>
                   <Td><InvoiceStatus status={i.status} /></Td>
-                  <Td right><Link href={`/cashier/${i.id}`} className="rounded-md px-2 py-1 text-[13px] font-medium text-brand-700 hover:bg-brand-50">{me.role === 'cashier' && ['unpaid', 'partially_paid'].includes(i.status) ? 'To‘lash' : 'Ochish'}</Link></Td>
+                  <Td right><Link href={`/cashier/${i.id}`} className="rounded-md px-2 py-1 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">{me.role === 'cashier' && ['unpaid', 'partially_paid'].includes(i.status) ? 'To‘lash' : 'Ochish'}</Link></Td>
                 </tr>
               ))}</tbody>
             </Table>

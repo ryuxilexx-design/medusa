@@ -7,8 +7,8 @@ const { SEED_IDS } = db;
 const M = SEED_IDS.membership;
 let app, base, pool;
 
-function session() {
-  let cookie = '';
+function session(initialCookie = '') {
+  let cookie = initialCookie;
   const req = async (method, path, body) => {
     const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
     const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
@@ -178,4 +178,53 @@ test('demo/login faqat demo klinikalarga; demo reseti haqiqiy klinika bor bazada
     await pool.query(`DELETE FROM tenants WHERE id = $1`, [tenant]);
   }
   assert.equal((await manager.post('/demo/reset')).status, 200, 'tozalangach reset yana ishlaydi');
+});
+
+test('til va matn o‘lchami: demo kartada faqat shu sessiyada; xodimda akkauntda saqlanadi; kirishdan oldingi til o‘tadi', async () => {
+  // demo cards are shared: one visitor's choice must not reach another
+  const a = session(), b = session();
+  await a.demo(M.doctor(0)); await b.demo(M.doctor(0));
+  assert.equal((await a.get('/me')).body.data.locale, 'uz');
+  const r = await a.req('PUT', '/me/preferences', { locale: 'ru', text_size: 'large' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([(await a.get('/me')).body.data.locale, (await a.get('/me')).body.data.text_size], ['ru', 'large']);
+  assert.deepEqual([(await b.get('/me')).body.data.locale, (await b.get('/me')).body.data.text_size], ['uz', 'normal'], 'boshqa tashrifchiga o‘tmadi');
+  assert.equal((await a.req('PUT', '/me/preferences', { locale: 'en' })).status, 422);
+  assert.equal((await a.req('PUT', '/me/preferences', {})).status, 422);
+  assert.equal((await a.req('PUT', '/me/preferences', { locale: 'ru', theme: 'dark' })).status, 422, 'noma’lum maydon');
+  // errors come back in the person's language
+  const nf = await a.get('/patients/00000000-0000-4000-8000-000000000000');
+  assert.equal(nf.status, 404); assert.equal(nf.body.error.message, 'Пациент: не найдено');
+  const v = await a.req('PUT', '/me/preferences', { locale: 'en' });
+  assert.equal(v.body.error.message, 'Проверьте поля', JSON.stringify(v.body));
+  const bad = session('meduza_lang=ru');
+  const lr = await bad.login('nobody.here', 'Xato12345');
+  assert.equal(lr.body.error.message, 'Неверный логин или пароль', 'kirishdan oldin — cookie tili');
+
+  // the language picked on the login page carries into the new session
+  const c = session('meduza_lang=uz-Cyrl');
+  await c.demo(M.cashier);
+  assert.equal((await c.get('/me')).body.data.locale, 'uz-Cyrl');
+  const junk = session('meduza_lang=xx');
+  await junk.demo(M.cashier);
+  assert.equal((await junk.get('/me')).body.data.locale, 'uz');
+
+  // a staff account keeps its choice for the next sign-in, on any device
+  const st = await newStaff({ full_name: 'Til Sinovchi', role: 'registrar', login: 'til.sinov' });
+  const u = session();
+  await u.login('til.sinov', st.temp_password);
+  assert.equal((await u.req('PUT', '/me/preferences', { locale: 'uz-Cyrl' })).status, 200, 'vaqtinchalik parol bilan ham ruxsat');
+  await u.post('/auth/password', { current_password: st.temp_password, new_password: 'Yangi2026parol' });
+  const u2 = session();
+  assert.equal((await u2.login('til.sinov', 'Yangi2026parol')).status, 200);
+  await u2.req('PUT', '/me/preferences', { text_size: 'large' });
+  const u3 = session();
+  await u3.login('til.sinov', 'Yangi2026parol');
+  const me = (await u3.get('/me')).body.data;
+  assert.deepEqual([me.locale, me.text_size], ['uz-Cyrl', 'large']);
+  // a language chosen on the login page wins for that session only
+  const u4 = session('meduza_lang=ru');
+  await u4.login('til.sinov', 'Yangi2026parol');
+  assert.equal((await u4.get('/me')).body.data.locale, 'ru');
+  assert.equal((await pool.query(`SELECT locale FROM users WHERE login = 'til.sinov'`)).rows[0].locale, 'uz-Cyrl');
 });

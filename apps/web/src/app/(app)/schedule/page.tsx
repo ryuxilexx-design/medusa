@@ -56,23 +56,23 @@ function Schedule() {
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-3 py-2.5">
           <div className="flex items-center gap-1">
             <Button size="sm" variant="ghost" aria-label="Oldingi kun" onClick={() => setDate(addDays(date, -1))}><ChevronLeft className="h-4 w-4" /></Button>
-            <Input type="date" aria-label="Sana" className="h-8 w-[150px] text-[13px]" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
+            <Input type="date" aria-label="Sana" className="h-8 w-[150px] text-[0.8125rem]" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
             <Button size="sm" variant="ghost" aria-label="Keyingi kun" onClick={() => setDate(addDays(date, 1))}><ChevronRight className="h-4 w-4" /></Button>
             {date !== me.today && <Button size="sm" onClick={() => setDate(me.today)}>Bugun</Button>}
           </div>
           {me.role !== 'doctor' && (
-            <Select aria-label="Shifokor" className="h-8 w-auto text-[13px]" value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
+            <Select aria-label="Shifokor" className="h-8 w-auto text-[0.8125rem]" value={doctorId} onChange={(e) => setDoctorId(e.target.value)}>
               <option value="">Barcha shifokorlar</option>
               {doctors.data?.filter((d) => d.service_ids?.length).map((d) => <option key={d.id} value={d.id}>{d.display_name} — {d.specialty}</option>)}
             </Select>
           )}
-          <Select aria-label="Holat" className="h-8 w-auto text-[13px]" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select aria-label="Holat" className="h-8 w-auto text-[0.8125rem]" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">Barcha holatlar ({appts.data?.length ?? 0})</option>
             {Object.entries(APPOINTMENT_STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v} ({counts[k] ?? 0})</option>)}
           </Select>
           <div className="ml-auto flex rounded-md border border-slate-300 p-0.5">
-            <button className={cx('rounded px-2 py-1 text-[13px]', view === 'grid' ? 'bg-slate-100 font-medium' : 'text-slate-500')} onClick={() => setView('grid')} aria-pressed={view === 'grid'}><LayoutGrid className="mr-1 inline h-3.5 w-3.5" />Kunlik</button>
-            <button className={cx('rounded px-2 py-1 text-[13px]', view === 'list' ? 'bg-slate-100 font-medium' : 'text-slate-500')} onClick={() => setView('list')} aria-pressed={view === 'list'}><List className="mr-1 inline h-3.5 w-3.5" />Ro‘yxat</button>
+            <button className={cx('rounded px-2 py-1 text-[0.8125rem]', view === 'grid' ? 'bg-slate-100 font-medium' : 'text-slate-500')} onClick={() => setView('grid')} aria-pressed={view === 'grid'}><LayoutGrid className="mr-1 inline h-3.5 w-3.5" />Kunlik</button>
+            <button className={cx('rounded px-2 py-1 text-[0.8125rem]', view === 'list' ? 'bg-slate-100 font-medium' : 'text-slate-500')} onClick={() => setView('list')} aria-pressed={view === 'list'}><List className="mr-1 inline h-3.5 w-3.5" />Ro‘yxat</button>
           </div>
         </div>
         {appts.isLoading || doctors.isLoading ? <LoadingRows rows={8} /> : appts.isError ? <ErrorState error={appts.error} onRetry={() => appts.refetch()} /> : view === 'list' ? (
@@ -103,7 +103,7 @@ function Schedule() {
                 return (
                   <div key={d.id} className="min-w-[138px] flex-1 basis-0 border-r border-slate-100">
                     <div className="h-12 border-b border-slate-100 px-2 py-1.5 leading-tight">
-                      <div className="truncate text-[13px] font-semibold text-slate-800">{d.display_name}</div>
+                      <div className="truncate text-[0.8125rem] font-semibold text-slate-800">{d.display_name}</div>
                       <div className="truncate text-2xs text-slate-500">{d.specialty}{s ? ` · ${s.room ?? ''}` : ' · ishlamaydi'}</div>
                     </div>
                     <div className="relative" style={{ height: ((END - START) / ROW) * PX }}>

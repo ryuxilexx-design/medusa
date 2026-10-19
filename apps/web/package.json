@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource-variable/golos-text": "5.3.0",
     "@meduza/contracts": "*",
     "@tanstack/react-query": "5.104.3",
     "lucide-react": "0.468.0",

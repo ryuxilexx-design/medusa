@@ -21,7 +21,8 @@ try {
   await clickText(d, 'Berish va saqlash', '[role=dialog] button');
   await waitText(d, 'Kamida bitta dori');
   check(true, 'Bo‘sh retsept berilmaydi — xato ko‘rsatildi');
-  const row = { name: 'Amlodipin', form: 'tabletka', dose: '5 mg', frequency: 'kuniga 1 marta, ertalab', duration: '30 kun' };
+  // aria-labels name each cell in words («1-dori: Dori»), as a screen reader announces it
+  const row = { Dori: 'Amlodipin', Shakli: 'tabletka', Doza: '5 mg', 'Qabul tartibi': 'kuniga 1 marta, ertalab', Muddati: '30 kun' };
   for (const [k, v] of Object.entries(row)) await setInput(d, `[role=dialog] input[aria-label="1-dori: ${k}"]`, v);
   await shot(d, 'doc-01-prescription-form');
   await clickText(d, 'Berish va saqlash', '[role=dialog] button');

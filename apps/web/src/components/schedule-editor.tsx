@@ -115,7 +115,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
             <p>Qabullar o‘chirilmaydi va bekor qilinmaydi. Saqlasangiz, registrator ularni boshqa vaqtga ko‘chiradi yoki bemor bilan kelishib bekor qiladi.</p>
             <ul className="mt-2 max-h-40 divide-y divide-amber-200 overflow-y-auto rounded border border-amber-200 bg-white/60">
               {conflicts.map((c) => (
-                <li key={c.appointment_id} className="flex flex-wrap gap-x-3 px-2 py-1 text-[13px]">
+                <li key={c.appointment_id} className="flex flex-wrap gap-x-3 px-2 py-1 text-[0.8125rem]">
                   <span className="tabular-nums">{fmtDate(c.date)} {c.time}</span><span className="font-medium">{c.patient}</span><span className="text-slate-600">{c.service_name}</span><span className="ml-auto text-amber-800">{c.reason}</span>
                 </li>
               ))}
@@ -139,20 +139,20 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
                     {!r.on && <span className="ml-6 text-xs">Dam olish</span>}
                   </td>
                   {r.on ? <>
-                    <td className="px-1 py-1.5"><Select aria-label={`${WEEKDAYS[wd]}: filial`} className="h-8 text-[13px]" value={r.branch_id} onChange={(ev) => set(wd, 'branch_id', ev.target.value)} invalid={!!errors[`${wd}.branch_id`]}>
+                    <td className="px-1 py-1.5"><Select aria-label={`${WEEKDAYS[wd]}: filial`} className="h-8 text-[0.8125rem]" value={r.branch_id} onChange={(ev) => set(wd, 'branch_id', ev.target.value)} invalid={!!errors[`${wd}.branch_id`]}>
                       {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </Select></td>
-                    <td className="px-1 py-1.5"><Select aria-label={`${WEEKDAYS[wd]}: xona`} className="h-8 text-[13px]" value={r.room_id} onChange={(ev) => set(wd, 'room_id', ev.target.value)} invalid={!!errors[`${wd}.room_id`]}>
+                    <td className="px-1 py-1.5"><Select aria-label={`${WEEKDAYS[wd]}: xona`} className="h-8 text-[0.8125rem]" value={r.room_id} onChange={(ev) => set(wd, 'room_id', ev.target.value)} invalid={!!errors[`${wd}.room_id`]}>
                       <option value="">— xonasiz —</option>
                       {branchRooms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                     </Select></td>
                     <td className="px-1 py-1.5"><div className="flex items-center gap-1">
-                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: boshlanish`} className="h-8 w-[104px] text-[13px]" value={r.start} onChange={(ev) => set(wd, 'start', ev.target.value)} invalid={!!errors[`${wd}.start`]} />–
-                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: tugash`} className="h-8 w-[104px] text-[13px]" value={r.end} onChange={(ev) => set(wd, 'end', ev.target.value)} invalid={!!errors[`${wd}.end`]} />
+                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: boshlanish`} className="h-8 w-[104px] text-[0.8125rem]" value={r.start} onChange={(ev) => set(wd, 'start', ev.target.value)} invalid={!!errors[`${wd}.start`]} />–
+                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: tugash`} className="h-8 w-[104px] text-[0.8125rem]" value={r.end} onChange={(ev) => set(wd, 'end', ev.target.value)} invalid={!!errors[`${wd}.end`]} />
                     </div></td>
                     <td className="px-1 py-1.5"><div className="flex items-center gap-1">
-                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: tanaffus boshi`} className="h-8 w-[104px] text-[13px]" value={r.break_start} onChange={(ev) => set(wd, 'break_start', ev.target.value)} invalid={!!errors[`${wd}.break_start`]} />–
-                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: tanaffus oxiri`} className="h-8 w-[104px] text-[13px]" value={r.break_end} onChange={(ev) => set(wd, 'break_end', ev.target.value)} invalid={!!errors[`${wd}.break_end`]} />
+                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: tanaffus boshi`} className="h-8 w-[104px] text-[0.8125rem]" value={r.break_start} onChange={(ev) => set(wd, 'break_start', ev.target.value)} invalid={!!errors[`${wd}.break_start`]} />–
+                      <Input type="time" step={300} aria-label={`${WEEKDAYS[wd]}: tanaffus oxiri`} className="h-8 w-[104px] text-[0.8125rem]" value={r.break_end} onChange={(ev) => set(wd, 'break_end', ev.target.value)} invalid={!!errors[`${wd}.break_end`]} />
                     </div>{e && <p className="mt-1 text-xs text-red-600" role="alert">{e}</p>}</td>
                   </> : <td colSpan={4} />}
                 </tr>

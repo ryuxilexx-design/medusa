@@ -39,7 +39,7 @@ export function ShiftPanel() {
           <div className="text-sm"><span className="text-slate-500">Kassada bo‘lishi kerak:</span> <b className="tabular-nums text-emerald-800">{formatSom(s.expected_cash)}</b></div>
           <div className="ml-auto flex flex-wrap gap-2">
             <Button size="sm" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setModal('expense')}>Kassadan xarajat</Button>
-            <Link href={`/print/shift/${s.id}`} target="_blank" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" />Hisobot</Link>
+            <Link href={`/print/shift/${s.id}`} target="_blank" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-[0.8125rem] font-medium text-slate-700 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" />Hisobot</Link>
             <Button size="sm" variant="primary" icon={<DoorClosed className="h-4 w-4" />} onClick={() => setModal('close')}>Smenani yopish</Button>
           </div>
         </> : <>

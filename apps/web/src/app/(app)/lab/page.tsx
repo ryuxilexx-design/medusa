@@ -152,7 +152,7 @@ function OrderDetail({ id }: { id: string }) {
               })}</tbody>
             </table>
             {Object.values(errors).filter(Boolean).length > 0 && <p className="mt-1 text-xs text-red-600">{Object.values(errors).join('; ')}</p>}
-            <div className="mt-3"><label className="text-[13px] font-medium text-slate-700" htmlFor="lab-comment">Izoh</label><Textarea id="lab-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
+            <div className="mt-3"><label className="text-[0.8125rem] font-medium text-slate-700" htmlFor="lab-comment">Izoh</label><Textarea id="lab-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
             <p className="mt-2 text-xs text-slate-500">Referens oraliqlar namunaviy — klinik foydalanishga tekshirilmagan. Natija o‘zi tashxis chiqarmaydi.</p>
             <div className="mt-3 flex flex-wrap justify-end gap-2">
               <Button icon={<Save className="h-4 w-4" />} loading={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>Qoralama saqlash</Button>

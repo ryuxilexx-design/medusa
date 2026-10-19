@@ -1,5 +1,5 @@
 import { createParamDecorator, ExecutionContext, SetMetadata } from '@nestjs/common';
-import type { Role } from '@meduza/contracts';
+import type { Locale, Role, TextSize } from '@meduza/contracts';
 
 export interface Ctx {
   membershipId: string;
@@ -18,6 +18,9 @@ export interface Ctx {
   authKind: 'demo' | 'password' | 'system';
   /** Temporary password still in use: only /me, /auth/password and /logout are reachable. */
   mustChangePassword: boolean;
+  /** Interface language and text size: the session's choice, else the staff account's, else Uzbek Latin / normal. */
+  locale: Locale;
+  textSize: TextSize;
 }
 
 export const PUBLIC_KEY = 'meduza:public';
@@ -29,3 +32,5 @@ export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 export const AllowDuringPasswordChange = () => SetMetadata(PASSWORD_CHANGE_OK_KEY, true);
 export const CurrentCtx = createParamDecorator((_: unknown, ec: ExecutionContext): Ctx => ec.switchToHttp().getRequest().ctx);
 export const SESSION_COOKIE = 'meduza_session';
+/** Language picked before signing in (login page); a UI preference only, copied into the new session. */
+export const LANG_COOKIE = 'meduza_lang';

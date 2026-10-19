@@ -57,7 +57,7 @@ class Turn {
   /** System actor for booking rules: registrar-level, all clinic branches, audited as «Telegram bot». */
   ctx(): Ctx {
     return { membershipId: '', userId: '', tenantId: this.chat.tenant_id, tenantName: this.clinic, role: 'registrar', name: 'Telegram bot', title: null,
-      branchIds: this.branchIds, doctorId: null, doctorSpecialty: null, requestId: randomUUID(), sessionHash: '', authKind: 'system', mustChangePassword: false };
+      branchIds: this.branchIds, doctorId: null, doctorSpecialty: null, requestId: randomUUID(), sessionHash: '', authKind: 'system', mustChangePassword: false, locale: 'uz', textSize: 'normal' };
   }
 }
 

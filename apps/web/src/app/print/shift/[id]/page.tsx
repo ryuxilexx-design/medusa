@@ -27,7 +27,7 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
         <button onClick={() => window.close()} className="text-sm text-slate-600 hover:underline">Yopish</button>
         <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-brand-700"><Printer className="h-4 w-4" />Chop etish / PDF saqlash</button>
       </div>
-      <article className="mx-auto max-w-[210mm] bg-white p-[14mm] text-[13px] leading-relaxed text-slate-900 shadow-lg print:max-w-none print:p-0 print:shadow-none">
+      <article className="mx-auto max-w-[210mm] bg-white p-[14mm] text-[0.8125rem] leading-relaxed text-slate-900 shadow-lg print:max-w-none print:p-0 print:shadow-none">
         <header className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
           <div className="flex items-center gap-3"><BrandMark compact className="h-10 w-10" /><div><BrandWordmark className="text-lg" /><div className="text-xs text-slate-600">{me.data?.clinic_name} · {s.branch_name}</div></div></div>
           <div className="text-right text-xs">{me.data?.demo && <div className="font-bold text-red-700">DEMO — SUN’IY MA’LUMOT</div>}<div>Smena №{s.number}</div><div>{closed ? 'Yakuniy hisobot' : `Oraliq hisobot · ${fmtDateTime(demoNow.toISOString())}`}</div></div>
@@ -56,17 +56,17 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
           </section>
         </div>
         <h2 className="mt-6 text-xs font-bold uppercase text-slate-500">To‘lovlar ({s.payments.length})</h2>
-        <table className="mt-1 w-full border-collapse text-[12px]">
+        <table className="mt-1 w-full border-collapse text-[0.75rem]">
           <thead><tr className="border-b border-slate-400 text-left"><th className="py-0.5">Vaqt</th><th>Qayd №</th><th>Hisob</th><th>Bemor</th><th>Usul</th><th className="text-right">Summa</th></tr></thead>
           <tbody>{s.payments.map((p: any) => <tr key={p.id} className="border-b border-slate-100"><td className="py-0.5">{fmtTime(p.paid_at)}</td><td>{p.receipt_number}</td><td>№{p.invoice_number}</td><td>{fullName(p)} {pid(p.patient_number)}</td><td>{PAYMENT_METHOD_LABEL[p.method]}</td><td className="text-right tabular-nums">{formatSom(p.amount)}</td></tr>)}</tbody>
         </table>
         {s.refunds.length > 0 && <>
           <h2 className="mt-4 text-xs font-bold uppercase text-slate-500">Qaytarishlar ({s.refunds.length})</h2>
-          <table className="mt-1 w-full border-collapse text-[12px]"><tbody>{s.refunds.map((r: any) => <tr key={r.id} className="border-b border-slate-100"><td className="py-0.5">{fmtTime(r.refunded_at)}</td><td>№{r.refund_number}</td><td>Hisob №{r.invoice_number}</td><td>{REFUND_REASON_LABEL[r.reason_code]} ({r.approved_by_name})</td><td className="text-right tabular-nums">−{formatSom(r.amount)}</td></tr>)}</tbody></table>
+          <table className="mt-1 w-full border-collapse text-[0.75rem]"><tbody>{s.refunds.map((r: any) => <tr key={r.id} className="border-b border-slate-100"><td className="py-0.5">{fmtTime(r.refunded_at)}</td><td>№{r.refund_number}</td><td>Hisob №{r.invoice_number}</td><td>{REFUND_REASON_LABEL[r.reason_code]} ({r.approved_by_name})</td><td className="text-right tabular-nums">−{formatSom(r.amount)}</td></tr>)}</tbody></table>
         </>}
         {s.expenses.length > 0 && <>
           <h2 className="mt-4 text-xs font-bold uppercase text-slate-500">Kassadan xarajatlar</h2>
-          <table className="mt-1 w-full border-collapse text-[12px]"><tbody>{s.expenses.map((e: any) => <tr key={e.id} className={e.status === 'void' ? 'text-slate-400 line-through' : 'border-b border-slate-100'}><td className="py-0.5">{fmtTime(e.occurred_at)}</td><td>{e.category}</td><td>{e.note}</td><td>{e.created_by_name}</td><td className="text-right tabular-nums">−{formatSom(e.amount)}</td></tr>)}</tbody></table>
+          <table className="mt-1 w-full border-collapse text-[0.75rem]"><tbody>{s.expenses.map((e: any) => <tr key={e.id} className={e.status === 'void' ? 'text-slate-400 line-through' : 'border-b border-slate-100'}><td className="py-0.5">{fmtTime(e.occurred_at)}</td><td>{e.category}</td><td>{e.note}</td><td>{e.created_by_name}</td><td className="text-right tabular-nums">−{formatSom(e.amount)}</td></tr>)}</tbody></table>
         </>}
         <footer className="mt-10 grid grid-cols-2 gap-8 border-t border-slate-300 pt-3 text-xs text-slate-600">
           <div>Kassir: ______________________</div><div>Qabul qildi (rahbar): ______________________</div>

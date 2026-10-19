@@ -1,5 +1,6 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { isLocale, localizeServerText, type Locale } from '@meduza/contracts';
 
 export class AppError extends Error {
   constructor(public status: number, public code: string, message: string, public fields?: Record<string, string>, public extra?: Record<string, unknown>) {
@@ -17,7 +18,7 @@ export class ErrorFilter implements ExceptionFilter {
   private log = new Logger('Error');
   catch(err: any, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
-    const req = host.switchToHttp().getRequest<Request & { requestId?: string }>();
+    const req = host.switchToHttp().getRequest<Request & { requestId?: string; ctx?: { locale?: Locale } }>();
     const request_id = req.requestId;
     let status = 500, code = 'INTERNAL', message = 'Kutilmagan xatolik. Qayta urinib ko‘ring.', fields: Record<string, string> | undefined, extra: any;
     if (err instanceof AppError) {
@@ -38,6 +39,13 @@ export class ErrorFilter implements ExceptionFilter {
       status = 422; code = 'VALIDATION'; message = 'Noto‘g‘ri qiymat yuborildi.';
     }
     if (status >= 500) this.log.error(`${request_id} ${req.method} ${req.url}: ${err?.stack || err}`);
+    // the person's language: their session, else the language picked on the login page; messages are written in Uzbek
+    const cookieLang = req.cookies?.meduza_lang;
+    const locale: Locale = req.ctx?.locale ?? (isLocale(cookieLang) ? cookieLang : 'uz');
+    if (locale !== 'uz') {
+      message = localizeServerText(locale, message);
+      if (fields) fields = Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, localizeServerText(locale, v)]));
+    }
     res.status(status).json({ error: { code, message, ...(fields ? { fields } : {}), ...(extra ? { details: extra } : {}) }, request_id });
   }
 }

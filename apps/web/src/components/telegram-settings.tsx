@@ -42,7 +42,7 @@ export function TelegramSettings() {
       <div className="space-y-5">
         <section>
           <h3 className="text-sm font-semibold text-slate-900">Klinika boti</h3>
-          <p className="mt-1 text-[13px] text-slate-600">Bemorlar bot orqali qabulga yoziladi, qabullarini ko‘radi, ko‘chiradi yoki bekor qiladi. Bot qabuldan bir kun va 2 soat oldin eslatma, tahlil tayyor bo‘lganda xabar (qiymatlarsiz) yuboradi. Qabuldan oldin bemor 3 ta savolga javob beradi — javoblar faqat shu qabul shifokoriga ko‘rinadi.</p>
+          <p className="mt-1 text-[0.8125rem] text-slate-600">Bemorlar bot orqali qabulga yoziladi, qabullarini ko‘radi, ko‘chiradi yoki bekor qiladi. Bot qabuldan bir kun va 2 soat oldin eslatma, tahlil tayyor bo‘lganda xabar (qiymatlarsiz) yuboradi. Qabuldan oldin bemor 3 ta savolga javob beradi — javoblar faqat shu qabul shifokoriga ko‘rinadi.</p>
           {s.bot ? (
             <div className="mt-3 rounded-lg border border-slate-200 p-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -61,7 +61,7 @@ export function TelegramSettings() {
           ) : null}
           {!active && (
             <div className="mt-3 space-y-3 rounded-lg border border-dashed border-slate-300 p-3">
-              <ol className="list-decimal space-y-1 pl-5 text-[13px] text-slate-700">
+              <ol className="list-decimal space-y-1 pl-5 text-[0.8125rem] text-slate-700">
                 <li>Telegram’da <b>@BotFather</b> ni oching → <code>/newbot</code> → botga nom va <code>…_bot</code> bilan tugaydigan manzil bering.</li>
                 <li>BotFather bergan tokenni quyiga qo‘ying. Token serverda shifrlangan holda saqlanadi va qayta ko‘rsatilmaydi.</li>
               </ol>
@@ -87,7 +87,7 @@ export function TelegramSettings() {
           <p className="mt-1 text-xs text-slate-500">Bog‘langan chatlar — haqiqiy bot bo‘yicha. Simulyatordagi sinovlar yozilish va xabarlar soniga qo‘shiladi.</p>
         </section>
 
-        <section className="text-[13px] text-slate-600">
+        <section className="text-[0.8125rem] text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">Qanday ishlaydi</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             <li>Bemor telefon raqamini Telegram orqali ulashadi (faqat o‘z raqamini) — shu raqamli bemor kartalari topiladi. Karta bo‘lmasa, bemor familiya, ism va tug‘ilgan sanani kiritadi.</li>
@@ -194,13 +194,13 @@ function Simulator() {
             <div key={m.id} className="text-center"><span className="rounded-full bg-slate-700/70 px-2 py-0.5 text-2xs text-white">{m.text}</span></div>
           ) : (
             <div key={m.id} className={cx('flex flex-col', m.direction === 'in' ? 'items-end' : 'items-start')}>
-              <div className={cx('max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-1.5 text-[13px] leading-snug shadow-sm', m.direction === 'in' ? 'rounded-br-sm bg-[#effdde] text-slate-900' : 'rounded-bl-sm bg-white text-slate-900')}>{m.text}</div>
+              <div className={cx('max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-1.5 text-[0.8125rem] leading-snug shadow-sm', m.direction === 'in' ? 'rounded-br-sm bg-[#effdde] text-slate-900' : 'rounded-bl-sm bg-white text-slate-900')}>{m.text}</div>
               {m.markup?.inline_keyboard && (
                 <div className="mt-1 flex w-[85%] flex-col gap-1">
                   {m.markup.inline_keyboard.map((row: any[], i: number) => (
                     <div key={i} className="flex gap-1">
                       {row.map((b) => <button key={b.callback_data} type="button" disabled={busy} onClick={() => send({ callback_data: b.callback_data, label: b.text })}
-                        className="flex-1 truncate rounded-md bg-white/70 px-2 py-1.5 text-[12px] font-medium text-[#3a6d99] shadow-sm hover:bg-white disabled:opacity-60">{b.text}</button>)}
+                        className="flex-1 truncate rounded-md bg-white/70 px-2 py-1.5 text-[0.75rem] font-medium text-[#3a6d99] shadow-sm hover:bg-white disabled:opacity-60">{b.text}</button>)}
                     </div>
                   ))}
                 </div>
@@ -211,7 +211,7 @@ function Simulator() {
         {contactOpen && (
           <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!phone.trim()) return; setContactOpen(false); void send({ contact_phone: phone.trim() }); }}>
             <Phone className="h-4 w-4 shrink-0 text-slate-500" />
-            <Input aria-label="Ulashiladigan telefon raqami" className="h-8 text-[13px]" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" autoFocus />
+            <Input aria-label="Ulashiladigan telefon raqami" className="h-8 text-[0.8125rem]" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" autoFocus />
             <Button size="sm" type="button" variant="ghost" onClick={() => void demoPhone()} title="Demo bazadagi tasodifiy bemor raqami">Demo</Button>
             <Button size="sm" type="submit" variant="primary">Ulashish</Button>
           </form>
@@ -221,14 +221,14 @@ function Simulator() {
             {replyKb.map((row, i) => (
               <div key={i} className="flex gap-1">
                 {row.map((b) => <button key={b.text} type="button" disabled={busy} onClick={() => (b.request_contact ? setContactOpen(true) : void send({ text: b.text }))}
-                  className="flex-1 truncate rounded-md bg-white px-2 py-1.5 text-[12px] text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">{b.text}</button>)}
+                  className="flex-1 truncate rounded-md bg-white px-2 py-1.5 text-[0.75rem] text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">{b.text}</button>)}
               </div>
             ))}
           </div>
         )}
         <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; const t = text.trim(); setText(''); void send({ text: t }); }}>
           <input aria-label="Xabar" value={text} onChange={(e) => setText(e.target.value)} placeholder="Xabar yozing…" maxLength={2000}
-            className="h-9 flex-1 rounded-full bg-slate-100 px-3 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#517da2]" />
+            className="h-9 flex-1 rounded-full bg-slate-100 px-3 text-[0.8125rem] focus:outline-none focus:ring-2 focus:ring-[#517da2]" />
           <button type="submit" disabled={busy || !text.trim()} aria-label="Yuborish" className="rounded-full p-2 text-[#517da2] hover:bg-slate-100 disabled:opacity-40"><Send className="h-4 w-4" /></button>
         </form>
       </div>

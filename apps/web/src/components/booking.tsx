@@ -138,7 +138,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
           </div>
           <div className="md:col-span-3">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[13px] font-medium text-slate-700">Bo‘sh vaqtlar <span className="text-red-600">*</span></span>
+              <span className="text-[0.8125rem] font-medium text-slate-700">Bo‘sh vaqtlar <span className="text-red-600">*</span></span>
               <span className="text-xs text-slate-500">{longDate(date)}</span>
             </div>
             {!doctorId ? <p className="rounded-md border border-dashed p-6 text-center text-sm text-slate-500">Shifokor va sanani tanlang</p>
@@ -155,7 +155,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
                       return (
                         <button key={s.time} type="button" disabled={disabled} onClick={() => { setTime(s.time); setErrors((x) => ({ ...x, start_time: '' })); }}
                           title={!s.free ? 'Band' : s.past ? 'O‘tgan vaqt' : 'Bo‘sh'}
-                          className={cx('h-8 rounded-md border text-[13px] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                          className={cx('h-8 rounded-md border text-[0.8125rem] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
                             time === s.time ? 'border-brand-600 bg-brand-600 text-white' : !s.free ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 line-through' : s.past ? 'cursor-not-allowed border-slate-100 text-slate-300' : 'border-slate-300 bg-white hover:border-brand-500 hover:bg-brand-50')}>
                           {s.time}
                         </button>

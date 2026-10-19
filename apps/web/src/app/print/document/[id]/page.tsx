@@ -44,7 +44,7 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
       </>}
 
       {d.kind === 'prescription' && <>
-        <table className="print-avoid-break mb-3 w-full border-collapse text-[13px]">
+        <table className="print-avoid-break mb-3 w-full border-collapse text-[0.8125rem]">
           <thead><tr className="border-b border-slate-400 text-left"><th className="py-1 pr-2">№</th><th className="py-1 pr-2">Dori</th><th className="py-1 pr-2">Doza</th><th className="py-1 pr-2">Qabul tartibi</th><th className="py-1 pr-2">Muddati</th><th className="py-1">Ko‘rsatma</th></tr></thead>
           <tbody>{(b.items as any[]).map((it, i) => (
             <tr key={i} className="border-b border-slate-200 align-top"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2"><b>{it.name}</b>{it.form ? `, ${it.form}` : ''}</td><td className="py-1 pr-2">{it.dose}</td><td className="py-1 pr-2">{it.frequency}</td><td className="py-1 pr-2">{it.duration}</td><td className="py-1">{it.instructions ?? ''}</td></tr>

@@ -1,12 +1,12 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Put, Req, Res } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response } from 'express';
-import { loginSchema } from '@meduza/contracts';
+import { isLocale, loginSchema, preferencesSchema } from '@meduza/contracts';
 import { AiClient } from '../ai/ai-client';
 import { assertDatabaseName, RealTenantsPresentError, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
 import { Db } from '../core/db';
 import { config } from '../core/config';
-import { AllowDuringPasswordChange, Ctx, CurrentCtx, Public, Roles, SESSION_COOKIE } from '../core/context';
+import { AllowDuringPasswordChange, Ctx, CurrentCtx, LANG_COOKIE, Public, Roles, SESSION_COOKIE } from '../core/context';
 import { AppError, conflict, forbidden } from '../core/errors';
 import { hashToken } from '../core/guard';
 import { parse } from '../core/validate';
@@ -21,8 +21,10 @@ export async function startSession(db: Db, req: Request, res: Response, membersh
   const old = req.cookies?.[SESSION_COOKIE];
   if (old) await db.rows(`DELETE FROM sessions WHERE token_hash = $1`, [hashToken(old)]);
   const token = randomBytes(32).toString('base64url');
-  await db.rows(`INSERT INTO sessions (token_hash, membership_id, tenant_id, expires_at, kind) VALUES ($1,$2,$3, now() + make_interval(hours => $4), $5)`,
-    [hashToken(token), membershipId, tenantId, config.sessionTtlHours, kind]);
+  // the language chosen on the login page carries over; an unknown value is ignored (falls back to the account's)
+  const lang = req.cookies?.[LANG_COOKIE];
+  await db.rows(`INSERT INTO sessions (token_hash, membership_id, tenant_id, expires_at, kind, locale) VALUES ($1,$2,$3, now() + make_interval(hours => $4), $5, $6)`,
+    [hashToken(token), membershipId, tenantId, config.sessionTtlHours, kind, isLocale(lang) ? lang : null]);
   res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, path: '/', maxAge: config.sessionTtlHours * 3600_000 });
 }
 
@@ -76,8 +78,21 @@ export class SessionController {
         membership_id: ctx.membershipId, name: ctx.name, title: ctx.title, role: ctx.role, tenant_id: ctx.tenantId, clinic_name: ctx.tenantName,
         doctor_id: ctx.doctorId, doctor_specialty: ctx.doctorSpecialty, branches, auth_kind: ctx.authKind, must_change_password: ctx.mustChangePassword,
         today: today(), now: now().toISOString(), demo: config.demoEnabled, clock_reason: (await this.db.one(`SELECT set_reason FROM demo_clock WHERE id = 1`))?.set_reason ?? null, ai_mode: this.ai.clinicalMode(ctx.tenantId), ai_off_reason: this.ai.clinicalOffReason(ctx.tenantId),
+        locale: ctx.locale, text_size: ctx.textSize,
       },
     };
+  }
+
+  /** Language and text size. Always for this session; a staff account also keeps them for its next sign-ins. */
+  @AllowDuringPasswordChange() @Put('me/preferences')
+  async preferences(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+    const p = parse(preferencesSchema, body);
+    await this.db.tx(async (c) => {
+      await c.query(`UPDATE sessions SET locale = COALESCE($2, locale), text_size = COALESCE($3, text_size) WHERE token_hash = $1`, [ctx.sessionHash, p.locale ?? null, p.text_size ?? null]);
+      if (ctx.authKind === 'password')
+        await c.query(`UPDATE users SET locale = COALESCE($2, locale), text_size = COALESCE($3, text_size) WHERE id = $1`, [ctx.userId, p.locale ?? null, p.text_size ?? null]);
+    });
+    return { data: { locale: p.locale ?? ctx.locale, text_size: p.text_size ?? ctx.textSize } };
   }
 
   @Public() @Post('logout') @HttpCode(200)

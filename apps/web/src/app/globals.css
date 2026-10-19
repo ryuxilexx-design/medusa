@@ -3,10 +3,13 @@
 @tailwind utilities;
 
 :root { color-scheme: light; }
-html, body { background: #f4f6f8; color: #0f172a; }
+/* Text size is a per-person setting (Sozlama → Matn): every rem-based size and spacing follows the root. */
+html { font-size: 112.5%; }
+html[data-text-size='large'] { font-size: 125%; }
+html, body { background: #f3f6fa; color: #1a2233; }
 body { font-feature-settings: 'tnum' 0; -webkit-font-smoothing: antialiased; }
 .tabular { font-variant-numeric: tabular-nums; }
-:focus-visible { outline-color: #4a86d6; }
+:focus-visible { outline-color: #f2b33d; }
 
 @media print {
   @page { size: A4; margin: 14mm 14mm 16mm; }

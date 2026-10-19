@@ -68,7 +68,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 <thead><tr><Th>Qayd №</Th><Th>Vaqt</Th><Th>Usul</Th><Th>Kassir</Th><Th right>Summa</Th><Th right>Hujjat</Th></tr></thead>
                 <tbody>{inv.payments.map((p: any) => (
                   <tr key={p.id}><Td className="tabular-nums">{p.receipt_number}</Td><Td>{fmtDateTime(p.paid_at)}</Td><Td>{PAYMENT_METHOD_LABEL[p.method]}</Td><Td>{p.cashier_name}</Td><Td right className="font-medium">{formatSom(p.amount)}</Td>
-                    <Td right><Link href={`/print/payment/${p.id}`} target="_blank" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-700 hover:underline"><Printer className="h-3.5 w-3.5" />Ichki qayd</Link></Td></tr>
+                    <Td right><Link href={`/print/payment/${p.id}`} target="_blank" className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-700 hover:underline"><Printer className="h-3.5 w-3.5" />Ichki qayd</Link></Td></tr>
                 ))}</tbody>
               </Table>
             )}

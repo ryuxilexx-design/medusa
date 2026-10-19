@@ -80,6 +80,12 @@ export const noteFieldsSchema = z.object({
 });
 export const noteDraftSchema = noteFieldsSchema.extend({ version: z.number().int() });
 export const noteSignSchema = noteDraftSchema;
+/** Personal display settings: interface language and text size (at least one). */
+export const preferencesSchema = z.object({
+  locale: z.enum(['uz', 'uz-Cyrl', 'ru']).optional(),
+  text_size: z.enum(['normal', 'large']).optional(),
+}).strict().refine((p) => p.locale !== undefined || p.text_size !== undefined, { message: 'Til yoki matn o‘lchamini tanlang' });
+
 export const REQUIRED_FOR_SIGN = ['complaints', 'examination', 'diagnosis', 'recommendations'] as const;
 
 export const ordersCreateSchema = z.object({ service_ids: z.array(uuid).min(1, 'Kamida bitta tekshiruv tanlang').max(10) });

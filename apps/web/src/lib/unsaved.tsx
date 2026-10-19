@@ -2,6 +2,7 @@
 import { useEffect, useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, Modal } from '@/components/ui';
+import { useT } from '@/lib/i18n';
 
 // Registry of screens that currently hold unsaved input. Kept outside React so link clicks can consult it synchronously.
 const dirty = new Set<string>();
@@ -27,6 +28,7 @@ export function confirmLeave(go: () => void) {
 
 /** Mounted once in the app shell: intercepts internal link clicks while some screen is dirty. */
 export function NavigationGuard() {
+  const t = useT();
   const router = useRouter();
   const [pending, setPending] = useState<null | (() => void)>(null);
   useEffect(() => {
@@ -44,10 +46,10 @@ export function NavigationGuard() {
     return () => { document.removeEventListener('click', onClick, true); ask = null; };
   }, [router]);
   return (
-    <Modal open={!!pending} onClose={() => setPending(null)} title="Saqlanmagan o‘zgarishlar bor"
-      footer={<><Button variant="primary" onClick={() => setPending(null)}>Sahifada qolish</Button>
-        <Button variant="danger" onClick={() => { const go = pending; dirty.clear(); setPending(null); go?.(); }}>Saqlamasdan chiqish</Button></>}>
-      <p className="text-sm text-slate-700">Bu sahifada saqlanmagan matn bor. Chiqsangiz, u o‘chadi. Avval «Qoralamani saqlash» ni bosing yoki sahifada qoling.</p>
+    <Modal open={!!pending} onClose={() => setPending(null)} title={t('state.unsavedTitle')}
+      footer={<><Button variant="primary" onClick={() => setPending(null)}>{t('state.unsavedStay')}</Button>
+        <Button variant="danger" onClick={() => { const go = pending; dirty.clear(); setPending(null); go?.(); }}>{t('state.unsavedLeave')}</Button></>}>
+      <p className="text-base text-slate-800">{t('state.unsavedText')}</p>
     </Modal>
   );
 }

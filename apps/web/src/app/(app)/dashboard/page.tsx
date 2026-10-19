@@ -30,10 +30,10 @@ export default function DashboardPage() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex rounded-md border border-slate-300 bg-white p-0.5 shadow-sm" role="group" aria-label="Davr">
               {([['today', 'Bugun'], ['7d', 'Oxirgi 7 kun'], ['30d', 'Oxirgi 30 kun'], ['custom', 'Oraliq']] as [Period, string][]).map(([v, l]) => (
-                <button key={v} onClick={() => setPeriod(v)} aria-pressed={period === v} className={cx('rounded px-3 py-1 text-[13px] font-medium', period === v ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50')}>{l}</button>
+                <button key={v} onClick={() => setPeriod(v)} aria-pressed={period === v} className={cx('rounded px-3 py-1 text-[0.8125rem] font-medium', period === v ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-50')}>{l}</button>
               ))}
             </div>
-            {period === 'custom' && <><Input type="date" aria-label="Boshlanish" className="h-8 w-[145px] text-[13px]" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /><span className="text-slate-400">–</span><Input type="date" aria-label="Tugash" className="h-8 w-[145px] text-[13px]" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></>}
+            {period === 'custom' && <><Input type="date" aria-label="Boshlanish" className="h-8 w-[145px] text-[0.8125rem]" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /><span className="text-slate-400">–</span><Input type="date" aria-label="Tugash" className="h-8 w-[145px] text-[0.8125rem]" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></>}
           </div>
         } />
       {q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : (
@@ -88,7 +88,7 @@ export default function DashboardPage() {
 function Kpi({ icon, label, value, sub, href, loading, accent, danger }: { icon: React.ReactNode; label: string; value?: React.ReactNode; sub?: React.ReactNode; href?: string; loading?: boolean; accent?: boolean; danger?: boolean }) {
   const body = (
     <div className={cx('h-full rounded-lg border bg-white p-3.5 shadow-sm transition', href && 'hover:border-brand-300 hover:shadow', accent ? 'border-brand-200' : 'border-slate-200')}>
-      <div className="flex items-center gap-2 text-[13px] font-medium text-slate-600"><span className={cx('[&>svg]:h-4 [&>svg]:w-4', danger ? 'text-red-600' : 'text-brand-600')}>{icon}</span>{label}</div>
+      <div className="flex items-center gap-2 text-[0.8125rem] font-medium text-slate-600"><span className={cx('[&>svg]:h-4 [&>svg]:w-4', danger ? 'text-red-600' : 'text-brand-600')}>{icon}</span>{label}</div>
       {loading ? <Skeleton className="mt-2 h-7 w-24" /> : <div className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-slate-900">{value}</div>}
       {loading ? <Skeleton className="mt-1.5 h-3 w-32" /> : <div className="mt-0.5 text-xs text-slate-500">{sub}</div>}
     </div>
@@ -158,7 +158,7 @@ function ServiceBars({ rows, href }: { rows: any[]; href: string }) {
       {list.map((r) => (
         <li key={r.service_id}>
           <Link href={href} className="group block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" title={`${r.service_name}: ${formatSom(r.value)}, ${r.count} ta`}>
-            <div className="mb-0.5 flex justify-between gap-2 text-[13px]"><span className="truncate text-slate-700">{r.service_name} {r.category && <span className="text-slate-400">· {SERVICE_CATEGORY_LABEL[r.category]}</span>}</span><span className="shrink-0 tabular-nums font-medium text-slate-800">{formatSom(r.value)}</span></div>
+            <div className="mb-0.5 flex justify-between gap-2 text-[0.8125rem]"><span className="truncate text-slate-700">{r.service_name} {r.category && <span className="text-slate-400">· {SERVICE_CATEGORY_LABEL[r.category]}</span>}</span><span className="shrink-0 tabular-nums font-medium text-slate-800">{formatSom(r.value)}</span></div>
             <div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-brand-500 group-hover:bg-brand-700" style={{ width: `${Math.max(2, (r.value / max) * 100)}%` }} /></div>
           </Link>
         </li>
@@ -173,9 +173,9 @@ function Utilization({ rows }: { rows: any[] }) {
     <ul className="divide-y divide-slate-100">
       {rows.map((r) => (
         <li key={r.doctor_id}><Link href={`/staff?doctor=${r.doctor_id}`} className="flex items-center gap-3 px-4 py-2 hover:bg-slate-50">
-          <div className="w-40 min-w-0"><div className="truncate text-[13px] font-medium">{r.name}</div><div className="truncate text-2xs text-slate-500">{r.specialty}</div></div>
+          <div className="w-40 min-w-0"><div className="truncate text-[0.8125rem] font-medium">{r.name}</div><div className="truncate text-2xs text-slate-500">{r.specialty}</div></div>
           <div className="flex-1"><div className="h-2 rounded-full bg-slate-100">{r.utilization != null && <div className="h-2 rounded-full bg-brand-500" style={{ width: `${Math.min(100, r.utilization)}%` }} />}</div></div>
-          <div className="w-28 text-right text-[13px] tabular-nums"><b>{r.utilization == null ? '—' : `${r.utilization}%`}</b> <span className="text-xs text-slate-500">· {r.appointments} qabul</span></div>
+          <div className="w-28 text-right text-[0.8125rem] tabular-nums"><b>{r.utilization == null ? '—' : `${r.utilization}%`}</b> <span className="text-xs text-slate-500">· {r.appointments} qabul</span></div>
         </Link></li>
       ))}
       <li className="px-4 py-2 text-2xs text-slate-500">Bandlik = band qabul daqiqalari / tanaffussiz ish daqiqalari. Ish vaqti 0 bo‘lsa «—».</li>

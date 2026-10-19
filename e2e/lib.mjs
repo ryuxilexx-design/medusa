@@ -21,7 +21,7 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function login(page, roleLabel, doctorText) {
   await page.goto(BASE + '/login', { waitUntil: 'networkidle0' });
   if (doctorText) {
-    await page.evaluate((t) => { const s = document.querySelector('select[aria-label="Shifokorni tanlang"]'); const o = [...s.options].find((o) => o.text.includes(t)); s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); }, doctorText);
+    await page.evaluate((t) => { const s = document.querySelector('select[data-testid="doctor-pick"]'); const o = [...s.options].find((o) => o.text.includes(t)); s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); }, doctorText);
   }
   await page.evaluate((label) => {
     const card = [...document.querySelectorAll('h2')].find((h) => h.textContent === label).parentElement;

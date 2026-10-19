@@ -7,40 +7,43 @@ import {
   BarChart3, Banknote, Boxes, CalendarDays, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
   Stethoscope, Users, UsersRound, Wallet,
 } from 'lucide-react';
-import { ROLE_LABEL, type Role } from '@meduza/contracts';
+import type { MessageKey, Role } from '@meduza/contracts';
 import { SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
 import { fmtTime, localDate, longDate } from '@/lib/format';
+import { useI18n, useT } from '@/lib/i18n';
 import { cx, Modal, Select } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
+import { LanguagePicker, TextSizeToggle } from '@/components/prefs';
 import { confirmLeave, NavigationGuard } from '@/lib/unsaved';
 import { BrandLockup } from '@/components/logo';
 
-type Item = { href: string; label: string; icon: React.ElementType; roles: Role[] };
+type Item = { href: string; label: MessageKey; icon: React.ElementType; roles: Role[] };
 // Menu order follows the TZ; each role only sees what it can use. The server enforces the same rules.
 const MENU: Item[] = [
-  { href: '/dashboard', label: 'Umumiy ko‘rinish', icon: Gauge, roles: ['manager'] },
-  { href: '/patients', label: 'Bemorlar', icon: Users, roles: ['manager', 'registrar', 'doctor', 'cashier'] },
-  { href: '/schedule', label: 'Qabul jadvali', icon: CalendarDays, roles: ['manager', 'registrar', 'doctor'] },
-  { href: '/queue', label: 'Navbat', icon: ListOrdered, roles: ['manager', 'registrar', 'doctor', 'cashier'] },
-  { href: '/doctor', label: 'Shifokor kabineti', icon: Stethoscope, roles: ['doctor'] },
-  { href: '/lab', label: 'Laboratoriya', icon: FlaskConical, roles: ['lab', 'manager', 'registrar'] },
-  { href: '/diagnostics', label: 'Diagnostika (UZI)', icon: ScanLine, roles: ['doctor'] },
-  { href: '/cashier', label: 'Kassa', icon: Wallet, roles: ['cashier', 'manager', 'registrar'] },
-  { href: '/finance', label: 'Moliya', icon: Banknote, roles: ['manager', 'cashier'] },
-  { href: '/staff', label: 'Xodimlar', icon: UsersRound, roles: ['manager'] },
-  { href: '/inventory', label: 'Ombor', icon: Boxes, roles: ['manager'] },
-  { href: '/reports', label: 'Hisobotlar', icon: BarChart3, roles: ['manager', 'doctor'] },
-  { href: '/settings', label: 'Sozlamalar', icon: Settings, roles: ['manager'] },
+  { href: '/dashboard', label: 'nav.dashboard', icon: Gauge, roles: ['manager'] },
+  { href: '/patients', label: 'nav.patients', icon: Users, roles: ['manager', 'registrar', 'doctor', 'cashier'] },
+  { href: '/schedule', label: 'nav.schedule', icon: CalendarDays, roles: ['manager', 'registrar', 'doctor'] },
+  { href: '/queue', label: 'nav.queue', icon: ListOrdered, roles: ['manager', 'registrar', 'doctor', 'cashier'] },
+  { href: '/doctor', label: 'nav.doctor', icon: Stethoscope, roles: ['doctor'] },
+  { href: '/lab', label: 'nav.lab', icon: FlaskConical, roles: ['lab', 'manager', 'registrar'] },
+  { href: '/diagnostics', label: 'nav.diagnostics', icon: ScanLine, roles: ['doctor'] },
+  { href: '/cashier', label: 'nav.cashier', icon: Wallet, roles: ['cashier', 'manager', 'registrar'] },
+  { href: '/finance', label: 'nav.finance', icon: Banknote, roles: ['manager', 'cashier'] },
+  { href: '/staff', label: 'nav.staff', icon: UsersRound, roles: ['manager'] },
+  { href: '/inventory', label: 'nav.inventory', icon: Boxes, roles: ['manager'] },
+  { href: '/reports', label: 'nav.reports', icon: BarChart3, roles: ['manager', 'doctor'] },
+  { href: '/settings', label: 'nav.settings', icon: Settings, roles: ['manager'] },
 ];
-const LABEL_OVERRIDE: Partial<Record<Role, Record<string, string>>> = {
-  cashier: { '/finance': 'Mening to‘lovlarim' },
-  doctor: { '/reports': 'Mening faoliyatim', '/schedule': 'Mening jadvalim', '/patients': 'Mening bemorlarim' },
+const LABEL_OVERRIDE: Partial<Record<Role, Record<string, MessageKey>>> = {
+  cashier: { '/finance': 'nav.myPayments' },
+  doctor: { '/reports': 'nav.myActivity', '/schedule': 'nav.mySchedule', '/patients': 'nav.myPatients' },
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const qc = useQueryClient();
   const me = useMeQuery();
+  const { sync, t } = useI18n();
   useEffect(() => {
     const onUnauth = () => { qc.clear(); router.replace('/login'); };
     window.addEventListener('meduza:unauthorized', onUnauth);
@@ -52,7 +55,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('meduza:password-change', onChange);
   }, [qc]);
   useEffect(() => { if (me.isError) router.replace('/login'); }, [me.isError, router]);
-  if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Yuklanmoqda…</div>;
+  // the person's saved language and text size win over whatever the browser had
+  useEffect(() => { if (me.data) sync(me.data.locale, me.data.text_size); }, [me.data?.locale, me.data?.text_size, sync]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-base text-slate-600"><Loader2 className="h-5 w-5 animate-spin" /> {t('common.loading')}</div>;
   if (me.data.must_change_password) return <ForcedPasswordChange name={me.data.name} />;
   return <SessionProvider me={me.data}><Shell>{children}</Shell></SessionProvider>;
 }
@@ -61,15 +66,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 function ForcedPasswordChange({ name }: { name: string }) {
   const qc = useQueryClient();
   const logout = useLogout();
+  const t = useT();
   return (
-    <main className="flex min-h-screen items-start justify-center bg-gradient-to-b from-white to-slate-100 px-4 pt-[10vh]">
+    <main className="flex min-h-screen items-start justify-center bg-slate-100 px-4 pt-[8vh]">
       <div className="w-full max-w-md">
-        <BrandLockup size="lg" />
-        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h1 className="text-lg font-semibold text-slate-900">Yangi parol o‘rnating</h1>
-          <p className="mt-1 text-sm text-slate-600">{name}, siz vaqtinchalik parol bilan kirdingiz. Davom etish uchun faqat o‘zingiz biladigan parol o‘rnating.</p>
-          <PasswordForm className="mt-5" submitLabel="Parolni saqlash va davom etish" onDone={() => qc.invalidateQueries({ queryKey: ['me'] })} />
-          <button onClick={logout} className="mt-4 text-[13px] text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline">Chiqish</button>
+        <div className="flex items-center justify-between gap-3"><BrandLockup size="lg" /><LanguagePicker signedIn /></div>
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
+          <h1 className="text-xl font-bold text-slate-900">{t('password.forcedTitle')}</h1>
+          <p className="mt-1 text-base text-slate-700">{t('password.forcedText', { name })}</p>
+          <PasswordForm className="mt-5" submitLabel={t('password.forcedSubmit')} onDone={() => qc.invalidateQueries({ queryKey: ['me'] })} />
+          <button onClick={logout} className="mt-4 text-sm font-semibold text-brand-700 underline-offset-2 hover:underline">{t('shell.logout')}</button>
         </div>
       </div>
     </main>
@@ -79,13 +85,15 @@ function ForcedPasswordChange({ name }: { name: string }) {
 /** Shows the server's demo clock (same source as appointments, payments and audit), ticking locally. */
 function DemoClock() {
   const { demoNow } = useSession();
-  const [t, setT] = useState(() => demoNow());
-  useEffect(() => { const i = setInterval(() => setT(demoNow()), 15_000); return () => clearInterval(i); }, [demoNow]);
-  return <span className="text-2xs text-slate-500" title="Demo vaqti: demo sanasi va soati. Faqat «Demo ma’lumotlarini tiklash» uni boshlang‘ich nuqtaga qaytaradi.">Demo vaqti · {longDate(localDate(t))}, {fmtTime(t)}</span>;
+  const t = useT();
+  const [now, setNow] = useState(() => demoNow());
+  useEffect(() => { const i = setInterval(() => setNow(demoNow()), 15_000); return () => clearInterval(i); }, [demoNow]);
+  return <span className="text-[0.8125rem] text-slate-600" title={t('shell.demoClockTitle')}>{t('shell.demoClock', { date: longDate(localDate(now)), time: fmtTime(now) })}</span>;
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
   const { me, branchId, setBranchId } = useSession();
+  const t = useT();
   const pathname = usePathname();
   const router = useRouter();
   const logout = useLogout();
@@ -97,69 +105,74 @@ function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => setNavOpen(false), [pathname]);
 
   return (
-    <div className="min-h-screen lg:pl-56">
-      <aside className={cx('fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-slate-200 bg-white transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full')}>
-        <Link href="/" className="flex h-14 items-center border-b border-slate-100 px-4" aria-label="Med.uz.ai — bosh sahifa"><BrandLockup /></Link>
-        <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Asosiy menyu">
+    <div className="min-h-screen lg:pl-60">
+      <aside className={cx('fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-slate-200 bg-white transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full')}>
+        <Link href="/" className="flex h-16 items-center border-b border-slate-100 px-4" aria-label={t('nav.home')}><BrandLockup /></Link>
+        <nav className="flex-1 overflow-y-auto px-2.5 py-3" aria-label={t('nav.menu')}>
           {items.map((it) => {
             const active = pathname === it.href || pathname.startsWith(it.href + '/');
             const Icon = it.icon;
             return (
               <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined}
-                className={cx('mb-0.5 flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500', active ? 'bg-brand-50 text-brand-800' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900')}>
-                <Icon className={cx('h-4 w-4', active ? 'text-brand-600' : 'text-slate-400')} />{LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label}
+                className={cx('mb-1 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+                  active ? 'bg-brand-50 text-brand-800 shadow-[inset_3px_0_0_#2d64bd]' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}>
+                <Icon className={cx('h-5 w-5 shrink-0', active ? 'text-brand-600' : 'text-slate-500')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
               </Link>
             );
           })}
         </nav>
-        <div className="border-t border-slate-100 p-3 text-2xs text-slate-400">Med.uz.ai · demo reliz 0.1</div>
+        {/* personal display settings stay in sight on every screen, without crowding the header */}
+        <div className="space-y-2.5 border-t border-slate-100 p-3">
+          <LanguagePicker signedIn className="w-full [&>select]:flex-1" />
+          <TextSizeToggle showLabel className="w-full [&>button]:flex-1" />
+          <div className="text-2xs text-slate-600">{t('shell.release')}</div>
+        </div>
       </aside>
       {navOpen && <div className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" onClick={() => setNavOpen(false)} />}
 
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur print:hidden">
-        <button className="rounded p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden" onClick={() => setNavOpen(true)} aria-label="Menyuni ochish"><Menu className="h-5 w-5" /></button>
+      <header className="sticky top-0 z-20 flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur print:hidden">
+        <button className="rounded-lg p-2 text-slate-700 hover:bg-slate-100 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')}><Menu className="h-6 w-6" /></button>
         <div className="hidden min-w-0 flex-col leading-tight md:flex">
-          <span className="truncate text-sm font-semibold text-slate-800">{me.clinic_name}</span>
+          <span className="truncate text-[0.9375rem] font-bold text-slate-900">{me.clinic_name}</span>
           <DemoClock />
         </div>
         {me.branches.length > 1 ? (
-          <Select aria-label="Filial" className="h-8 w-auto max-w-[180px] text-[13px]" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-            <option value="">Barcha filiallar</option>
+          <Select aria-label={t('shell.branch')} className="h-10 w-auto max-w-[200px] text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+            <option value="">{t('shell.allBranches')}</option>
             {me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
-        ) : <span className="rounded-md bg-slate-100 px-2 py-1 text-[13px] text-slate-700">{me.branches[0]?.name}</span>}
+        ) : <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm text-slate-800">{me.branches[0]?.name}</span>}
         {canSearch && (
-          <form className="relative ml-1 hidden max-w-xs flex-1 sm:block" role="search" onSubmit={(e) => { e.preventDefault(); router.push(`/patients?search=${encodeURIComponent(q.trim())}`); }}>
-            <Search className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Bemor: ism, telefon yoki ID" aria-label="Bemor qidirish"
-              className="h-8 w-full rounded-md border border-slate-300 bg-slate-50 pl-8 pr-2 text-[13px] focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <form className="relative ml-1 hidden min-w-[10rem] max-w-[16rem] flex-1 sm:block" role="search" onSubmit={(e) => { e.preventDefault(); router.push(`/patients?search=${encodeURIComponent(q.trim())}`); }}>
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-slate-500" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('shell.search')} aria-label={t('shell.searchLabel')}
+              className="h-10 w-full rounded-lg border-2 border-slate-300 bg-slate-50 pl-10 pr-2 text-sm placeholder:text-slate-500 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100" />
           </form>
         )}
-        <div className="ml-auto flex items-center gap-3">
-          {me.demo && <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-800 xl:inline">Demo muhit · Sun’iy ma’lumotlar</span>}
+        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+          {me.demo && <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-900 2xl:inline">{t('common.demoEnv')}</span>}
           <div className="text-right leading-tight">
-            <div className="text-[13px] font-medium text-slate-800">{me.name}</div>
-            <div className="text-2xs text-slate-500">{ROLE_LABEL[me.role]}{me.doctor_specialty ? ` · ${me.doctor_specialty}` : ''}</div>
+            <div className="text-sm font-semibold text-slate-900">{me.name}</div>
+            <div className="text-[0.8125rem] text-slate-600">{t(`role.${me.role}` as MessageKey)}{me.doctor_specialty ? `, ${me.doctor_specialty}` : ''}</div>
           </div>
           {me.auth_kind === 'password' && (
-            <button onClick={() => setPwOpen(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" title="Parolni o‘zgartirish" aria-label="Parolni o‘zgartirish">
-              <KeyRound className="h-4 w-4" />
+            <button onClick={() => setPwOpen(true)} className="rounded-lg p-2.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" title={t('password.change')} aria-label={t('password.change')}>
+              <KeyRound className="h-5 w-5" />
             </button>
           )}
-          <button onClick={() => confirmLeave(logout)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" title={me.auth_kind === 'demo' ? 'Chiqish / rolni almashtirish' : 'Chiqish'} aria-label="Chiqish">
-            <LogOut className="h-4 w-4" />
+          <button onClick={() => confirmLeave(logout)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" title={me.auth_kind === 'demo' ? t('shell.logoutDemo') : t('shell.logout')}>
+            <LogOut className="h-5 w-5" /><span className="hidden xl:inline">{t('shell.logout')}</span><span className="sr-only xl:hidden">{t('shell.logout')}</span>
           </button>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-[1500px] px-4 py-4 lg:px-5">
-        {me.demo && <span className="mb-2 inline-block rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-800 xl:hidden print:hidden">Demo muhit · Sun’iy ma’lumotlar</span>}
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-5 lg:px-6">
+        {me.demo && <span className="mb-2 inline-block rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-900 2xl:hidden print:hidden">{t('common.demoEnv')}</span>}
         {children}
       </div>
-      <Modal open={pwOpen} onClose={() => setPwOpen(false)} title="Parolni o‘zgartirish">
-        <PasswordForm submitLabel="Saqlash" onDone={() => setPwOpen(false)} />
+      <Modal open={pwOpen} onClose={() => setPwOpen(false)} title={t('password.change')}>
+        <PasswordForm submitLabel={t('common.save')} onDone={() => setPwOpen(false)} />
       </Modal>
       <NavigationGuard />
     </div>
   );
 }
-

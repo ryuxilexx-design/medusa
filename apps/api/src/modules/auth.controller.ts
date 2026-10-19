@@ -31,7 +31,7 @@ function ipFail(req: Request) {
 /** Audit context for events that happen before a session exists. */
 const actor = (m: { membership_id: string; user_id: string; tenant_id: string; tenant_name: string; role: any; full_name: string }, req: any): Ctx => ({
   membershipId: m.membership_id, userId: m.user_id, tenantId: m.tenant_id, tenantName: m.tenant_name, role: m.role, name: m.full_name, title: null,
-  branchIds: [], doctorId: null, doctorSpecialty: null, requestId: req.requestId, sessionHash: '', authKind: 'password', mustChangePassword: false,
+  branchIds: [], doctorId: null, doctorSpecialty: null, requestId: req.requestId, sessionHash: '', authKind: 'password', mustChangePassword: false, locale: 'uz', textSize: 'normal',
 });
 
 @Controller('auth')

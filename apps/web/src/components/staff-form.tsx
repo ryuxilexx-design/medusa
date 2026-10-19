@@ -160,7 +160,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
         </div>
 
         <fieldset disabled={!!staff?.is_self}>
-          <legend className="text-[13px] font-medium text-slate-700">Filiallar <span className="text-red-600">*</span></legend>
+          <legend className="text-[0.8125rem] font-medium text-slate-700">Filiallar <span className="text-red-600">*</span></legend>
           <div className="mt-1 flex flex-wrap gap-2">
             {me.branches.map((b) => (
               <label key={b.id} className={cx('flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm', v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 text-brand-900' : 'border-slate-300')}>
@@ -182,7 +182,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
               </Field>
             </div>
             <div>
-              <div className="text-[13px] font-medium text-slate-700">Bajaradigan xizmatlari <span className="font-normal text-slate-500">· {v.service_ids.length} ta tanlangan</span></div>
+              <div className="text-[0.8125rem] font-medium text-slate-700">Bajaradigan xizmatlari <span className="font-normal text-slate-500">· {v.service_ids.length} ta tanlangan</span></div>
               {services.isLoading ? <p className="mt-1 text-xs text-slate-500">Yuklanmoqda…</p> : (
                 <div className="mt-1 max-h-56 space-y-2 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
                   {Object.entries(grouped).map(([cat, list]) => (
@@ -190,7 +190,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
                       <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">{SERVICE_CATEGORY_LABEL[cat] ?? cat}</div>
                       <div className="mt-1 grid grid-cols-1 gap-x-3 sm:grid-cols-2">
                         {list.map((s) => (
-                          <label key={s.id} className="flex cursor-pointer items-center gap-2 py-0.5 text-[13px]">
+                          <label key={s.id} className="flex cursor-pointer items-center gap-2 py-0.5 text-[0.8125rem]">
                             <input type="checkbox" className="accent-brand-600" checked={v.service_ids.includes(s.id)} onChange={() => toggle('service_ids', s.id)} />
                             <span className="truncate">{s.name}</span>
                           </label>
@@ -220,7 +220,7 @@ export function TempPasswordModal({ issued, onClose }: { issued: Issued | null; 
   return (
     <Modal open onClose={onClose} title="Vaqtinchalik parol" footer={<Button variant="primary" onClick={onClose}>Tushunarli, yopish</Button>}>
       <p className="text-sm text-slate-700">{issued.name} uchun kirish ma’lumotlari:</p>
-      <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-[15px]">
+      <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-[0.9375rem]">
         <div><span className="text-slate-500">Login: </span>{loginView(issued.login)}</div>
         <div><span className="text-slate-500">Parol: </span><span className="select-all font-semibold tracking-wider text-slate-900">{issued.temp_password}</span></div>
       </div>

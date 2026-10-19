@@ -13,7 +13,7 @@ export default function PrintPayment({ params }: { params: Promise<{ id: string 
   const p = q.data;
   return (
     <PrintDoc title="Ichki to‘lov qaydi — fiskal chek emas" number={`T-${p.receipt_number}`} date={p.paid_at} branch={p.branch_name} patient={p} responsible={`${p.cashier_name}, kassir`} status="Qayd etilgan">
-      <table className="print-avoid-break w-full text-[13px]">
+      <table className="print-avoid-break w-full text-[0.8125rem]">
         <thead><tr className="border-b border-slate-400 text-left text-xs uppercase text-slate-500"><th className="py-1">Xizmat (hisob №{p.invoice_number})</th><th className="py-1 text-right">Miqdor</th><th className="py-1 text-right">Summa</th></tr></thead>
         <tbody>{(p.items ?? []).map((it: any, i: number) => <tr key={i} className="border-b border-slate-200"><td className="py-1">{it.description}</td><td className="py-1 text-right">{it.quantity}</td><td className="py-1 text-right tabular-nums">{formatSom(it.line_total)}</td></tr>)}</tbody>
       </table>
