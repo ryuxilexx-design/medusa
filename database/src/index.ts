@@ -51,7 +51,7 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
 const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
   'doctor_services', 'patients', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
-  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'payments', 'expenses',
+  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'expenses',
   'inventory_items', 'inventory_movements', 'audit_logs',
 ];
 

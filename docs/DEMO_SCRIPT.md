@@ -84,6 +84,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 > «Natija qayta ko‘chirib yozilmaydi; kim va qachon tasdiqlagani saqlanadi.»
 
 ### 6. Kassir — to‘lov (6:00–7:00) · Oyna 4
+0. **Kassa** sahifasining yuqorisida smena paneli. «Smena yopiq» bo‘lsa (jonli demo reset’dan keyin smenalar ochiq bo‘ladi): **Smenani ochish** → `500000` → **Ochish**.
 1. **Kassa** → qidiruvga `Abdullayev` → **To‘lash**. Hisobda 2 xizmat: konsultatsiya 150 000 + UQT 60 000 = **210 000 so‘m**.
 2. Summa `100000`, usul **Naqd** → **To‘lovni qayd qilish** → «Qisman to‘langan», qoldiq 110 000.
 3. *(Ko‘rsatish uchun)* Summa `999999999` → **To‘lovni qayd qilish** → maydon yonida «qoldiqdan oshmasligi kerak».
@@ -129,6 +130,15 @@ Agar mehmon boshqa matn yozib ko‘rmoqchi bo‘lsa, tizim «Namunaviy rejimda f
 3. O‘ng tomonda **«Bugun sohangizda»**: shifokor sohasi bo‘yicha oxirgi tadqiqotlar, o‘zbekcha qisqa mazmun va PubMed havolasi bilan. Jonli AI bo‘lmasa, asl sarlavha ko‘rsatiladi.
 
 Ayting: «AI faqat qoralama va taklif beradi, imzo shifokorda. Bemorning ismi va telefoni AI’ga yuborilmaydi. Har bir AI so‘rovining narxi rahbar sahifasida ko‘rinadi.»
+
+## Kassa nazorati (1 daqiqa, Rahbar va Kassir oynalarida)
+
+1. Kassir: **Kassadan xarajat** → `25000`, «Ichimlik suvi» → panelda «Kassada bo‘lishi kerak» kamayadi.
+2. Rahbar: to‘langan hisob → **Pulni qaytarish** → summa, **Naqd**, kassa avtomatik tanlanadi, izoh → **Qaytarish**. Hisob kamayadi, qarz paydo bo‘lmaydi.
+3. Kassir: **Smenani yopish** → sanalgan pulni 1 000 kam yozing → farq chiqadi, izohsiz yopilmaydi → izoh → **Yopish** → smena hisoboti.
+4. Rahbar: **Moliya** → yuqorida sof natija; **Kassa smenalari** → farq bilan yopilgan smena.
+
+Ayting: «Kassir o‘ziga pul qaytara olmaydi — faqat rahbar. Har kuni kassa sanab yopiladi, farq izohsiz o‘tmaydi. Hech narsa o‘chirilmaydi, faqat sabab bilan bekor qilinadi.»
 
 ## Hujjatlar (1 daqiqa, Shifokor oynasida)
 

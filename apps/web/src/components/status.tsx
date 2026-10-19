@@ -22,7 +22,7 @@ export function AppointmentStatus({ status }: { status: string }) {
   return <Badge tone={tone} icon={icon}>{APPOINTMENT_STATUS_LABEL[status as keyof typeof APPOINTMENT_STATUS_LABEL] ?? status}</Badge>;
 }
 export function InvoiceStatus({ status }: { status: string }) {
-  const map: Record<string, Tone> = { unpaid: 'red', partially_paid: 'yellow', paid: 'green', void: 'gray' };
+  const map: Record<string, Tone> = { unpaid: 'red', partially_paid: 'yellow', paid: 'green', refunded: 'blue', void: 'gray' };
   return <Badge tone={map[status] ?? 'gray'} icon={status === 'paid' ? <CheckCircle2 className={ic} /> : status === 'void' ? <Ban className={ic} /> : <Wallet className={ic} />}>{INVOICE_STATUS_LABEL[status as keyof typeof INVOICE_STATUS_LABEL] ?? status}</Badge>;
 }
 export function LabStatus({ status, short }: { status: string; short?: boolean }) {

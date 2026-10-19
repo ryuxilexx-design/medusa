@@ -64,8 +64,13 @@ export class InvoicesController {
     const items = await this.db.rows(
       `SELECT it.id, it.description, it.quantity, it.unit_price, it.line_subtotal, it.discount_share, it.line_total, o.category, o.status AS order_status, o.ordered_at
          FROM invoice_items it JOIN service_orders o ON o.id = it.order_id WHERE it.invoice_id = $1 ORDER BY it.position`, [id]);
-    const payments = await this.db.rows(`SELECT id, receipt_number, amount, method, cashier_name, paid_at, note FROM payments WHERE invoice_id = $1 ORDER BY paid_at`, [id]);
-    return { data: { ...inv, items, payments } };
+    const payments = await this.db.rows(
+      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.paid_at, pm.note,
+              (pm.amount - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.payment_id = pm.id), 0))::bigint AS refundable
+         FROM payments pm WHERE pm.invoice_id = $1 ORDER BY pm.paid_at`, [id]);
+    const refunds = await this.db.rows(
+      `SELECT r.id, r.refund_number, r.payment_id, r.amount, r.method, r.reason_code, r.reason, r.approved_by_name, r.refunded_at FROM refunds r WHERE r.invoice_id = $1 ORDER BY r.refunded_at`, [id]);
+    return { data: { ...inv, items, payments: payments.map((p) => ({ ...p, refundable: Math.min(Number(p.refundable), Number(inv.paid_amount)) })), refunds } };
   }
 
   /** Discount: manager only, mandatory reason, percent or fixed amount, only before any payment. */
@@ -106,11 +111,15 @@ export class InvoicesController {
       const due = Number(inv.total) - Number(inv.paid_amount);
       if (due <= 0) throw conflict('INVOICE_PAID', 'Hisob to‘liq to‘langan');
       if (input.amount > due) throw invalid({ amount: `Summa qoldiqdan (${som(due)} so‘m) oshmasligi kerak` });
+      // money is taken only in an open shift of this branch (FOR SHARE: a concurrent close waits for this payment)
+      const shift = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE cashier_membership_id = $1 AND status = 'open' FOR SHARE`, [ctx.membershipId])).rows[0];
+      if (!shift) throw conflict('SHIFT_REQUIRED', 'To‘lov qabul qilish uchun avval kassa smenasini oching');
+      if (shift.branch_id !== inv.branch_id) throw conflict('SHIFT_OTHER_BRANCH', 'Smenangiz boshqa filialda ochilgan. Shu filial hisobiga to‘lov olish uchun smenani yopib, shu filialda oching.');
       const receipt = (await c.query(`UPDATE tenants SET receipt_seq = receipt_seq + 1 WHERE id = $1 RETURNING receipt_seq`, [ctx.tenantId])).rows[0].receipt_seq;
       const payment = (await c.query(
-        `INSERT INTO payments (id, tenant_id, branch_id, invoice_id, receipt_number, amount, method, cashier_membership_id, cashier_name, paid_at, note, idempotency_key, request_hash)
-         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-        [ctx.tenantId, inv.branch_id, id, receipt, input.amount, input.method, ctx.membershipId, ctx.name, now(), input.note, key, hash])).rows[0];
+        `INSERT INTO payments (id, tenant_id, branch_id, invoice_id, receipt_number, amount, method, cashier_membership_id, cashier_name, paid_at, note, idempotency_key, request_hash, shift_id)
+         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+        [ctx.tenantId, inv.branch_id, id, receipt, input.amount, input.method, ctx.membershipId, ctx.name, now(), input.note, key, hash, shift.id])).rows[0];
       const paid = Number(inv.paid_amount) + input.amount;
       await c.query(`UPDATE invoices SET paid_amount = $2, status = $3, version = version + 1, updated_at = demo_now() WHERE id = $1`,
         [id, paid, paid >= Number(inv.total) ? 'paid' : 'partially_paid']);

@@ -8,15 +8,18 @@ import { PAYMENT_METHOD_LABEL } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Badge, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, Table, Tabs, Td, Th, DemoTag } from '@/components/ui';
+import { Badge, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, Table, Tabs, Td, Th } from '@/components/ui';
 import { InvoiceStatus } from '@/components/status';
+import { ExpenseActions, ExpenseModal, ExpenseRowActions, expenseStatusCell, FinanceSummary, RefundsTab, ShiftsTab } from '@/components/finance-extra';
 
+type Tab = 'payments' | 'refunds' | 'debts' | 'expenses' | 'shifts';
 export default function FinancePage() { return <Suspense><Finance /></Suspense>; }
 
 function Finance() {
   const { me, branchId } = useSession();
   const sp = useSearchParams();
-  const [tab, setTab] = useState<'payments' | 'debts' | 'expenses'>((sp.get('tab') as any) ?? 'payments');
+  const [tab, setTab] = useState<Tab>((sp.get('tab') as any) ?? 'payments');
+  const [adding, setAdding] = useState(false);
   const [from, setFrom] = useState(sp.get('from') ?? me.today);
   const [to, setTo] = useState(sp.get('to') ?? me.today);
   const [method, setMethod] = useState('');
@@ -27,14 +30,16 @@ function Finance() {
   const pays = useQuery({ queryKey: ['payments', filters, page], queryFn: () => api(`/payments${qs({ ...filters, page, page_size: 20 })}`), enabled: tab === 'payments', placeholderData: (p) => p });
   const debts = useQuery({ queryKey: ['invoices', 'debts', branchId, page], queryFn: () => api(`/invoices${qs({ debt: 1, branch_id: branchId, page, page_size: 20 })}`), enabled: tab === 'debts', placeholderData: (p) => p });
   const expenses = useQuery({ queryKey: ['expenses', from, to, branchId], queryFn: () => api(`/expenses${qs({ from, to, branch_id: branchId })}`), enabled: tab === 'expenses' && me.role === 'manager' });
-  const tabs: { value: 'payments' | 'debts' | 'expenses'; label: string }[] = [{ value: 'payments', label: me.role === 'cashier' ? 'Mening to‘lovlarim' : 'To‘lovlar registri' }];
-  if (me.role === 'manager') tabs.push({ value: 'debts' as const, label: 'Qarzdor hisoblar' }, { value: 'expenses' as const, label: 'Xarajatlar' });
+  const tabs: { value: Tab; label: string }[] = [{ value: 'payments', label: me.role === 'cashier' ? 'Mening to‘lovlarim' : 'To‘lovlar registri' }];
+  if (me.role === 'manager') tabs.push({ value: 'refunds', label: 'Qaytarishlar' }, { value: 'debts', label: 'Qarzdor hisoblar' }, { value: 'expenses', label: 'Xarajatlar' });
+  tabs.push({ value: 'shifts', label: me.role === 'cashier' ? 'Mening smenalarim' : 'Kassa smenalari' });
   const setRange = (d: number) => { setFrom(addDays(me.today, -d)); setTo(me.today); };
 
   return (
     <>
-      <PageHeader title={me.role === 'cashier' ? 'Mening to‘lovlarim' : 'Moliya'} subtitle="Tushum to‘lov vaqti bo‘yicha hisoblanadi (xizmat sanasi bo‘yicha emas)" />
+      <PageHeader title={me.role === 'cashier' ? 'Mening to‘lovlarim' : 'Moliya'} subtitle="Tushum to‘lov vaqti bo‘yicha hisoblanadi (xizmat sanasi bo‘yicha emas); qaytarishlar qaytarilgan kuni ayriladi" />
       <Card padded={false}>
+        {me.role === 'manager' && tab !== 'debts' && <FinanceSummary from={from} to={to} branchId={branchId} />}
         <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
         {tab !== 'debts' && (
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
@@ -87,16 +92,24 @@ function Finance() {
         ))}
         {tab === 'expenses' && (expenses.isLoading ? <LoadingRows /> : expenses.isError ? <ErrorState error={expenses.error} onRetry={() => expenses.refetch()} /> : (
           <>
-            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-2 text-sm"><span>Jami xarajat: <b className="tabular-nums">{formatSom(expenses.data.meta.total)}</b></span><DemoTag /><span className="text-xs text-slate-500">Xarajat qo‘shish formasi keyingi relizda; sof foyda ko‘rsatilmaydi.</span></div>
+            <div className="flex items-center gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-2 text-sm"><span>Jami xarajat (bekor qilinganlarsiz): <b className="tabular-nums">{formatSom(expenses.data.meta.total)}</b></span><ExpenseActions onAdd={() => setAdding(true)} /></div>
             {!expenses.data.data.length ? <EmptyState title="Bu davrda xarajat yo‘q" text="Sanani kengaytiring (masalan, 30 kun)." /> : (
               <Table>
-                <thead><tr><Th>Sana</Th><Th>Kategoriya</Th><Th>Filial</Th><Th>Izoh</Th><Th right>Summa</Th></tr></thead>
-                <tbody>{expenses.data.data.map((e: any) => <tr key={e.id}><Td>{fmtDate(e.occurred_at)}</Td><Td><Badge>{e.category}</Badge></Td><Td>{e.branch_name}</Td><Td>{e.note}</Td><Td right>{formatSom(e.amount)}</Td></tr>)}</tbody>
+                <thead><tr><Th>Sana</Th><Th>Kategoriya</Th><Th>Filial</Th><Th>Izoh</Th><Th>Holat</Th><Th right>Summa</Th><Th /></tr></thead>
+                <tbody>{expenses.data.data.map((e: any) => (
+                  <tr key={e.id} className={e.status === 'void' ? 'text-slate-400' : undefined}>
+                    <Td>{fmtDate(e.occurred_at)}</Td><Td><Badge>{e.category}</Badge></Td><Td>{e.branch_name}</Td><Td>{e.note}</Td><Td>{expenseStatusCell(e)}</Td>
+                    <Td right className={e.status === 'void' ? 'line-through' : undefined}>{formatSom(e.amount)}</Td><Td right><ExpenseRowActions e={e} /></Td>
+                  </tr>
+                ))}</tbody>
               </Table>
             )}
           </>
         ))}
+        {tab === 'refunds' && <RefundsTab from={from} to={to} branchId={branchId} />}
+        {tab === 'shifts' && <ShiftsTab from={from} to={to} branchId={branchId} />}
       </Card>
+      {adding && <ExpenseModal onClose={() => setAdding(false)} />}
     </>
   );
 }

@@ -165,7 +165,8 @@ export class AiController {
     const t = today();
     let facts: Record<string, unknown>; let text: string; let link: string;
     if (question === 'revenue_today') {
-      const r = (await this.db.one(`SELECT coalesce(sum(amount),0)::bigint AS s, count(*)::int AS n FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4`,
+      const r = (await this.db.one(`SELECT (coalesce(sum(amount),0) - coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0))::bigint AS s,
+              count(*)::int AS n FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4`,
         [ctx.tenantId, branches, dayStart(t), dayStart(addDays(t, 1))]))!;
       facts = { date: t, revenue: Number(r.s), payments: r.n };
       text = r.n ? `${t} kuni ${r.n} ta to‘lov qayd etilgan, jami ${formatSom(Number(r.s))}.` : `${t} kuni hali to‘lov qayd etilmagan.`;

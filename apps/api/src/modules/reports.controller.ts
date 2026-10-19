@@ -47,10 +47,11 @@ export class ReportsController {
   async expenses(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const r = range(q);
     const rows = await this.db.rows(
-      `SELECT e.id, e.category, e.amount, e.occurred_at, e.note, b.name AS branch_name FROM expenses e JOIN branches b ON b.id = e.branch_id
+      `SELECT e.id, e.category, e.amount, e.occurred_at, e.note, e.status, e.paid_from, e.shift_id, e.created_by_name, e.void_reason, e.voided_by_name,
+              b.name AS branch_name, s.number AS shift_number, s.status AS shift_status FROM expenses e JOIN branches b ON b.id = e.branch_id LEFT JOIN cash_shifts s ON s.id = e.shift_id
         WHERE e.tenant_id = $1 AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4 ORDER BY e.occurred_at DESC`,
       [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
-    return { data: rows, meta: { from: r.from, to: r.to, total: rows.reduce((a, b) => a + Number(b.amount), 0) } };
+    return { data: rows, meta: { from: r.from, to: r.to, total: rows.filter((x) => x.status === 'active').reduce((a, b) => a + Number(b.amount), 0) } };
   }
 
   @Roles('manager') @Get('staff')

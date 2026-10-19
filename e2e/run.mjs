@@ -2,7 +2,7 @@
 import { startStack, resetTestData, stopStack, WEB } from './stack.mjs';
 process.env.E2E_BASE_URL = WEB;
 const which = process.argv.slice(2);
-const suites = which.length ? which : ['demo', 'errors', 'auth', 'schedule', 'telegram', 'ai', 'documents'];
+const suites = which.length ? which : ['demo', 'errors', 'auth', 'schedule', 'telegram', 'ai', 'documents', 'cash'];
 let failed = false;
 try {
   console.log('Izolyatsiyalangan stek ishga tushirilmoqda (web :3100, API :4100, baza meduza_test)…');

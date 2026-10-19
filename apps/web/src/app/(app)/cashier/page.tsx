@@ -11,6 +11,7 @@ import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, Table, Td, Th } from '@/components/ui';
 import { InvoiceStatus } from '@/components/status';
+import { ShiftPanel } from '@/components/cash-shift';
 
 export default function CashierPage() { return <Suspense><Cashier /></Suspense>; }
 
@@ -32,6 +33,7 @@ function Cashier() {
   return (
     <>
       <PageHeader title="Kassa" subtitle={me.role === 'cashier' ? 'Hisoblar va to‘lovlarni qayd qilish' : 'Hisoblar (ko‘rish)'} />
+      {me.role === 'cashier' && <ShiftPanel />}
       <Card padded={false}>
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
           <div className="relative min-w-[220px] flex-1"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Bemor, bemor ID yoki hisob №" aria-label="Qidirish" /></div>

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizePhone } from './money';
+import { EXPENSE_CATEGORIES } from './labels';
 
 const trimmed = (min: number, max: number, label: string) =>
   z.string({ required_error: `${label} kiritilishi shart` })
@@ -258,3 +259,29 @@ export const documentVoidSchema = z.object({ reason: trimmed(3, 300, 'Bekor qili
 export const DOCUMENT_KIND_LABEL: Record<'referral' | 'certificate' | 'prescription', string> = {
   referral: 'Yo‘llanma', certificate: 'Tibbiy ma’lumotnoma', prescription: 'Retsept (dori tavsiyasi)',
 };
+
+// ---------- Cash desk: shifts, refunds, expenses ----------
+const tiyin = (label: string) => z.number({ invalid_type_error: `${label} kiritilishi shart` }).int(`${label} tiyinda butun son bo‘lsin`);
+
+export const shiftOpenSchema = z.object({ branch_id: uuid, opening_cash: tiyin('Boshlang‘ich naqd pul').min(0, 'Manfiy bo‘lmasin').max(100_000_000_000) });
+export const shiftCloseSchema = z.object({ counted_cash: tiyin('Sanalgan naqd pul').min(0, 'Manfiy bo‘lmasin').max(100_000_000_000), note: optionalText(500) });
+
+export const refundCreateSchema = z.object({
+  payment_id: uuid,
+  amount: tiyin('Summa').positive('Summa 0 dan katta bo‘lsin'),
+  method: z.enum(['cash', 'card', 'transfer'], { errorMap: () => ({ message: 'Qaytarish usulini tanlang' }) }),
+  reason_code: z.enum(['service_not_provided', 'appointment_cancelled', 'patient_complaint', 'other'], { errorMap: () => ({ message: 'Sababni tanlang' }) }),
+  reason: trimmed(3, 500, 'Izoh'),
+  shift_id: uuid.optional(),
+});
+
+export const expenseCreateSchema = z.object({
+  branch_id: uuid.optional(),
+  category: z.enum(EXPENSE_CATEGORIES, { errorMap: () => ({ message: 'Kategoriyani tanlang' }) }),
+  amount: tiyin('Summa').positive('Summa 0 dan katta bo‘lsin').max(100_000_000_000),
+  occurred_on: isoDate.optional(),
+  paid_from: z.enum(['cash_drawer', 'bank', 'card', 'other']).default('bank'),
+  note: optionalText(300),
+  shift_id: uuid.optional(),
+});
+export const expenseVoidSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });

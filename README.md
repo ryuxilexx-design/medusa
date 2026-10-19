@@ -44,9 +44,9 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (57 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (63 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
-| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10 + hujjatlar) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
+| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10 + hujjatlar + kassa) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
 | `npm run db:create-clinic -- --name … --branch … --manager-name … --manager-login … [--catalog demo]` | Haqiqiy klinikani ochish: tenant, birinchi filial va rahbar akkaunti. Vaqtinchalik parol terminalda **bir marta** chiqadi. Real klinika uchun alohida, `APP_MODE=production` muhitida ishlating |
 | `npm run db:import-icd10 -- fayl.csv [--replace]` | Rasmiy MKB-10 ro‘yxatini yuklash (ustunlar: `code;title_ru;title_uz`). `--replace` boshlang‘ich ro‘yxatdagi, faylda yo‘q kodlarni olib tashlaydi. Qaydlardagi kodlar o‘z nomi bilan saqlangan, buzilmaydi |
@@ -112,6 +112,18 @@ Qoidalar:
 - **MKB-10:** AI faqat klinika jadvalidagi kodlardan tanlaydi, server har bir kodni tekshiradi. Qaydga kodni shifokor o‘zi qo‘shadi. Bazada boshlang‘ich ro‘yxat bor (~130 ta ko‘p uchraydigan ambulator tashxis), rasmiy ro‘yxat `db:import-icd10` bilan yuklanadi.
 - **Yangiliklar:** PubMed’dan oxirgi 30 kundagi RCT, meta-tahlil, tizimli sharh va tavsiyalar olinadi, har bir mutaxassislik uchun kuniga 5 tagacha. AI o‘zbekcha qisqa mazmunni faqat annotatsiyadan yozadi. Saqlanadi: sarlavha, AI qisqa mazmuni, havola. Annotatsiyaning o‘zi saqlanmaydi.
 - **Testlar:** AI soxta Claude va soxta PubMed serverlari bilan sinaladi, haqiqiy model chaqirilmaydi va pul sarflanmaydi.
+
+## Kassa: smena, qaytarish, xarajat
+
+- **Smena.** Kassir **Kassa** sahifasida smenani boshlang‘ich naqd pul bilan ochadi. To‘lov faqat ochiq smenada va shu filialda qabul qilinadi (server tekshiradi). Yopishda kassadagi pul sanab kiritiladi: «kassada bo‘lishi kerak» = boshlang‘ich + naqd to‘lovlar − naqd qaytarishlar − kassadan xarajatlar. Farq bo‘lsa, izoh majburiy. Yopilgan smena o‘zgarmaydi. Hisobot chop etiladi; u ichki hujjat, fiskal Z-hisobot emas.
+- **Pulni qaytarish.** Faqat rahbar qaytaradi, hisob sahifasidagi **«Pulni qaytarish»** orqali:
+  - qaysi to‘lovdan, qancha, qanday usulda va qanday sabab bilan qaytarilishi tanlanadi;
+  - naqd pul ochiq smena kassasidan chiqadi;
+  - qaytarilgan summa hisobdan ham ayriladi, shuning uchun qarz paydo bo‘lmaydi; to‘liq qaytarilgan hisob «Qaytarilgan» holatida bo‘ladi;
+  - ikki marta bosilsa, ikki marta qaytarilmaydi.
+- **Xarajatlar.** Rahbar **Moliya → Xarajatlar** bo‘limida qo‘shadi (bank, karta yoki kassadan; o‘tgan sana bilan ham). Kassir faqat o‘z kassasidan xarajat yozadi. Xato kiritilgan xarajat sabab bilan bekor qilinadi.
+- **Sof natija.** Moliya sahifasining yuqorisida: tushum − qaytarishlar = sof tushum; − xarajatlar = sof natija. Dashboard tushumi ham qaytarishlarni ayiradi.
+- **Demo:** demo reset ikkala kassirga bugungi ochiq smenani tayyorlaydi.
 
 ## Qabul hujjatlari
 

@@ -36,16 +36,22 @@ export class DashboardController {
               count(*) FILTER (WHERE status IN ('arrived','in_progress'))::int AS in_clinic,
               count(DISTINCT patient_id) FILTER (WHERE status IN ('arrived','in_progress','completed'))::int AS arrived_patients
          FROM appointments WHERE tenant_id = $1 AND branch_id = ANY($2) AND starts_at >= $3 AND starts_at < $4`, P))!;
+    // revenue is cash basis and net of refunds made in the same period
     const rev = (await this.db.one(
-      `SELECT coalesce(sum(amount),0)::bigint AS revenue, count(*)::int AS payments FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4`, P))!;
+      `SELECT (coalesce((SELECT sum(amount) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4),0)
+             - coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0))::bigint AS revenue,
+              (SELECT count(*) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4)::int AS payments,
+              coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0)::bigint AS refunds`, P))!;
     const debt = (await this.db.one(
       `SELECT coalesce(sum(total - paid_amount),0)::bigint AS debt, count(*)::int AS invoices FROM invoices
         WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`, [ctx.tenantId, branches]))!;
     const daily = await this.db.rows(
-      `SELECT d::date AS date, coalesce(sum(p.amount),0)::bigint AS revenue, count(p.id)::int AS payments
+      `SELECT d::date AS date,
+              (coalesce((SELECT sum(p.amount) FROM payments p WHERE p.tenant_id = $1 AND p.branch_id = ANY($2) AND (p.paid_at AT TIME ZONE 'Asia/Tashkent')::date = d::date),0)
+             - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND (r.refunded_at AT TIME ZONE 'Asia/Tashkent')::date = d::date),0))::bigint AS revenue,
+              (SELECT count(*) FROM payments p WHERE p.tenant_id = $1 AND p.branch_id = ANY($2) AND (p.paid_at AT TIME ZONE 'Asia/Tashkent')::date = d::date)::int AS payments
          FROM generate_series($3::timestamptz AT TIME ZONE 'Asia/Tashkent', ($4::timestamptz AT TIME ZONE 'Asia/Tashkent') - interval '1 day', interval '1 day') d
-         LEFT JOIN payments p ON p.tenant_id = $1 AND p.branch_id = ANY($2) AND (p.paid_at AT TIME ZONE 'Asia/Tashkent')::date = d::date
-        GROUP BY 1 ORDER BY 1`, P);
+        ORDER BY 1`, P);
     const byService = await this.db.rows(
       `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(it.line_total)::bigint AS value
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
@@ -69,7 +75,7 @@ export class DashboardController {
     return {
       data: {
         range: { from: r.from, to: r.to, branch_ids: branches },
-        kpi: { ...appt, revenue: Number(rev.revenue), payments: rev.payments, debt: Number(debt.debt), debt_invoices: debt.invoices },
+        kpi: { ...appt, revenue: Number(rev.revenue), payments: rev.payments, refunds: Number(rev.refunds), debt: Number(debt.debt), debt_invoices: debt.invoices },
         daily: daily.map((d) => ({ ...d, revenue: Number(d.revenue) })),
         by_service: byService.map((s) => ({ ...s, value: Number(s.value) })),
         doctors,

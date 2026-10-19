@@ -2,14 +2,16 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Ban, CheckCircle2, Percent, Printer, Wallet } from 'lucide-react';
-import { PAYMENT_METHOD_LABEL, SERVICE_CATEGORY_LABEL } from '@meduza/contracts';
+import { ArrowLeft, Ban, CheckCircle2, Percent, Printer, Undo2, Wallet } from 'lucide-react';
+import { REFUND_REASON_LABEL, PAYMENT_METHOD_LABEL, SERVICE_CATEGORY_LABEL } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey } from '@/lib/api';
 import { fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
 import { Alert, Badge, Button, Card, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, Select, Table, Td, Textarea, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus } from '@/components/status';
+import { useCurrentShift } from '@/components/cash-shift';
+import { RefundModal } from '@/components/refund-modal';
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -17,6 +19,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const q = useQuery({ queryKey: ['invoices', 'one', id], queryFn: () => api(`/invoices/${id}`).then((r) => r.data) });
   const [discount, setDiscount] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  const [refunding, setRefunding] = useState(false);
   if (q.isLoading) return <Card><LoadingRows /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   const inv = q.data;
@@ -30,6 +33,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             actions={<>
               {me.role === 'manager' && inv.status === 'unpaid' && inv.paid_amount === 0 && <Button size="sm" icon={<Percent className="h-3.5 w-3.5" />} onClick={() => setDiscount(true)}>Chegirma</Button>}
               {(me.role === 'manager' || me.role === 'cashier') && inv.status === 'unpaid' && inv.paid_amount === 0 && <Button size="sm" variant="danger" icon={<Ban className="h-3.5 w-3.5" />} onClick={() => setVoiding(true)}>Bekor qilish</Button>}
+              {me.role === 'manager' && inv.status !== 'void' && Number(inv.paid_amount) > 0 && <Button size="sm" variant="danger" icon={<Undo2 className="h-3.5 w-3.5" />} onClick={() => setRefunding(true)}>Pulni qaytarish</Button>}
             </>}>
             <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
               <div className="divide-y divide-slate-100">
@@ -43,7 +47,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 {inv.discount_amount > 0 && <KeyVal k="Chegirma" v={`${inv.discount_type === 'percent' ? inv.discount_value + '%' : formatSom(inv.discount_value)} · ${inv.discount_reason} (${inv.discount_approved_by_name})`} />}
               </div>
             </div>
-            {inv.appointment_status === 'cancelled' && <div className="mt-3"><Alert>Qabul bekor qilingan. {inv.paid_amount > 0 ? 'Hisobda to‘lov bor — pul avtomatik qaytarilmaydi, alohida ko‘rib chiqing (qaytarish moduli keyingi relizda).' : 'To‘lov bo‘lmasa, hisobni sabab bilan bekor qilish mumkin.'}</Alert></div>}
+            {inv.appointment_status === 'cancelled' && <div className="mt-3"><Alert>Qabul bekor qilingan. {inv.paid_amount > 0 ? 'Hisobda to‘lov bor — pul avtomatik qaytarilmaydi. Rahbar «Pulni qaytarish» orqali qaytaradi.' : 'To‘lov bo‘lmasa, hisobni sabab bilan bekor qilish mumkin.'}</Alert></div>}
             {inv.status === 'void' && <div className="mt-3"><Alert tone="blue">Bekor qilingan hisob: {inv.void_reason}</Alert></div>}
           </Card>
           <Card title="Xizmatlar" padded={false}>
@@ -70,24 +74,46 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             )}
             <p className="px-4 py-2 text-xs text-slate-500">To‘lov yozuvlari o‘chirilmaydi (append-only). Chop etiladigan hujjat — ichki to‘lov qaydi, fiskal chek emas.</p>
           </Card>
+          {inv.refunds?.length > 0 && (
+            <Card title="Qaytarishlar" padded={false}>
+              <Table>
+                <thead><tr><Th>№</Th><Th>Vaqt</Th><Th>Usul</Th><Th>Sabab</Th><Th>Tasdiqladi</Th><Th right>Summa</Th></tr></thead>
+                <tbody>{inv.refunds.map((r: any) => (
+                  <tr key={r.id}><Td className="tabular-nums">{r.refund_number}</Td><Td>{fmtDateTime(r.refunded_at)}</Td><Td>{PAYMENT_METHOD_LABEL[r.method]}</Td>
+                    <Td>{REFUND_REASON_LABEL[r.reason_code]}<span className="block text-xs text-slate-500">{r.reason}</span></Td><Td>{r.approved_by_name}</Td><Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td></tr>
+                ))}</tbody>
+              </Table>
+            </Card>
+          )}
         </div>
         <div className="space-y-4">
           <Card>
             <div className="space-y-1">
+              {Number(inv.credit_amount) > 0 && <KeyVal k="Qaytarilgan (hisobdan ayrilgan)" v={<span className="text-red-700">−{formatSom(inv.credit_amount)}</span>} />}
               <KeyVal k="Hisob jami" v={formatSom(inv.total)} />
               <KeyVal k="To‘langan" v={<span className="text-emerald-700">{formatSom(inv.paid_amount)}</span>} />
               <div className="flex items-baseline justify-between border-t border-slate-100 pt-2"><span className="text-sm text-slate-600">Qoldiq</span><span className="text-2xl font-semibold tabular-nums text-slate-900">{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
             </div>
           </Card>
-          {me.role === 'cashier' && open && <PaymentForm inv={inv} />}
+          {me.role === 'cashier' && open && <CashierPay inv={inv} />}
           {me.role === 'cashier' && inv.status === 'paid' && <Alert tone="green" title="Hisob to‘liq to‘langan">Yangi xizmat buyurilsa, u alohida hisobga tushadi.</Alert>}
           {me.role !== 'cashier' && open && <Alert tone="blue">To‘lovni kassir qayd qiladi. Rahbar kuzatadi va chegirmani tasdiqlaydi.</Alert>}
         </div>
       </div>
       {discount && <DiscountModal inv={inv} onClose={() => setDiscount(false)} />}
       {voiding && <VoidModal inv={inv} onClose={() => setVoiding(false)} />}
+      {refunding && <RefundModal inv={inv} onClose={() => setRefunding(false)} />}
     </>
   );
+}
+
+/** Payment is taken only in the cashier's open shift of this invoice's branch (the server enforces it too). */
+function CashierPay({ inv }: { inv: any }) {
+  const shift = useCurrentShift();
+  if (shift.isLoading) return null;
+  if (!shift.data) return <Alert tone="yellow" title="Smena yopiq">To‘lov qabul qilish uchun <Link href="/cashier" className="font-medium underline">Kassa</Link> sahifasida smenani oching.</Alert>;
+  if (shift.data.branch_id !== inv.branch_id) return <Alert tone="yellow" title="Smena boshqa filialda">Smenangiz «{shift.data.branch_name}» filialida. Bu hisob «{inv.branch_name}» filialiga tegishli.</Alert>;
+  return <PaymentForm inv={inv} />;
 }
 
 function PaymentForm({ inv }: { inv: any }) {

@@ -8,9 +8,9 @@ export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
   scheduled: 'Rejalashtirilgan', arrived: 'Keldi', in_progress: 'Qabulda', completed: 'Yakunlangan', cancelled: 'Bekor qilingan', no_show: 'Kelmadi',
 };
 
-export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'void';
+export type InvoiceStatus = 'unpaid' | 'partially_paid' | 'paid' | 'refunded' | 'void';
 export const INVOICE_STATUS_LABEL: Record<InvoiceStatus, string> = {
-  unpaid: 'To‘lanmagan', partially_paid: 'Qisman to‘langan', paid: 'To‘langan', void: 'Bekor qilingan',
+  unpaid: 'To‘lanmagan', partially_paid: 'Qisman to‘langan', paid: 'To‘langan', refunded: 'Qaytarilgan', void: 'Bekor qilingan',
 };
 
 export type OrderStatus = 'ordered' | 'sample_collected' | 'draft_result' | 'verified' | 'completed' | 'cancelled';
@@ -26,3 +26,9 @@ export const SEX_LABEL: Record<string, string> = { male: 'Erkak', female: 'Ayol'
 export const ALLERGY_LABEL: Record<string, string> = {
   known: 'Ma’lum allergiya qayd etilgan', denied: 'Bemor inkor etadi', unknown: 'Ma’lumot kiritilmagan',
 };
+
+export const REFUND_REASON_LABEL: Record<string, string> = {
+  service_not_provided: 'Xizmat ko‘rsatilmadi', appointment_cancelled: 'Qabul bekor qilindi', patient_complaint: 'Bemor shikoyati', other: 'Boshqa sabab',
+};
+export const EXPENSE_CATEGORIES = ['Ijara', 'Maosh', 'Kommunal', 'Reagentlar', 'Tibbiy sarf materiallari', 'Xo‘jalik', 'Ta’mirlash', 'IT xizmatlari', 'Marketing', 'Soliq va to‘lovlar', 'Boshqa'] as const;
+export const EXPENSE_PAID_FROM_LABEL: Record<string, string> = { cash_drawer: 'Kassadan (naqd)', bank: 'Bank hisobidan', card: 'Korporativ karta', other: 'Boshqa' };

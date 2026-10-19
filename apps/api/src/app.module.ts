@@ -21,6 +21,7 @@ import { AuthController } from './modules/auth.controller';
 import { StaffController } from './modules/staff.controller';
 import { TelegramController } from './telegram/telegram.controller';
 import { DocumentsController } from './modules/documents.controller';
+import { CashController } from './modules/cash.controller';
 import { BotEngine } from './telegram/engine';
 import { BotRegistry, Notifier } from './telegram/notifier';
 import { TelegramWorkers } from './telegram/workers';
@@ -32,7 +33,7 @@ import { NewsWorker } from './ai/news-worker';
 @Module({
   controllers: [SessionController, ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, TelegramController, DocumentsController],
+    AuthController, StaffController, TelegramController, DocumentsController, CashController],
   providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
 })
 export class AppModule implements NestModule {

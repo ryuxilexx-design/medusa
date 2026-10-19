@@ -50,6 +50,14 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
 }
 
 /** Recomputes subtotal, discount allocation (proportional, remainder on the last line) and total. Only valid before any payment. */
+/** One rule for invoice status everywhere (payments, refunds, recalculation). paid is net of refunds. */
+export function invoiceStatus(inv: { status?: string; total: number; paid: number; credit: number; hasItems: boolean }) {
+  if (inv.status === 'void') return 'void';
+  if (inv.credit > 0 && inv.total === 0) return 'refunded';
+  if (inv.paid === 0) return inv.total === 0 && inv.hasItems ? 'paid' : 'unpaid';
+  return inv.paid >= inv.total ? 'paid' : 'partially_paid';
+}
+
 export async function recalcInvoice(q: Q, invoiceId: string) {
   const inv = (await q.query(`SELECT * FROM invoices WHERE id = $1`, [invoiceId])).rows[0];
   const items = (await q.query(`SELECT id, line_subtotal FROM invoice_items WHERE invoice_id = $1 ORDER BY position, id`, [invoiceId])).rows;
@@ -64,9 +72,10 @@ export async function recalcInvoice(q: Q, invoiceId: string) {
     allocated += share;
     await q.query(`UPDATE invoice_items SET discount_share = $2, line_total = line_subtotal - $2 WHERE id = $1`, [it.id, share]);
   }
-  const total = subtotal - discount;
+  const credit = Number(inv.credit_amount ?? 0);
+  const total = subtotal - discount - credit; // refunds (credit) keep reducing the invoice when services are added later
   const paid = Number(inv.paid_amount);
-  const status = inv.status === 'void' ? 'void' : paid === 0 ? (total === 0 && items.length ? 'paid' : 'unpaid') : paid >= total ? 'paid' : 'partially_paid';
+  const status = invoiceStatus({ status: inv.status, total, paid, credit, hasItems: items.length > 0 });
   await q.query(`UPDATE invoices SET subtotal = $2, discount_amount = $3, total = $4, status = $5, version = version + 1, updated_at = demo_now() WHERE id = $1`,
     [invoiceId, subtotal, discount, total, status]);
 }

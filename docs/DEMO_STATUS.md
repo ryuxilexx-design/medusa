@@ -1,8 +1,23 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.5 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.6 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich + qabul hujjatlari + kassa: smena, qaytarish, xarajat)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 00000. 0.6 relizda nima qo‘shildi: kassa (smena, qaytarish, xarajat, sof natija)
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Kassir smenasi: ochish (boshlang‘ich naqd), yopish (sanalgan naqd, farq, izoh), hisobot | Ishlaydi | API test: kutilgan = boshlang‘ich + naqd to‘lov − naqd qaytarish − kassadan xarajat; farq bo‘lsa izoh majburiy; yopilgan smena baza triggeri bilan o‘zgarmaydi; bir vaqtda ikki ochish — bittasi. E2E: xarajat → farq bilan yopish → hisobot |
+| To‘lov faqat ochiq smenada va shu filialda | Ishlaydi | API test (SHIFT_REQUIRED, SHIFT_OTHER_BRANCH); **poyga sinovi**: smena yopilayotganda to‘lov — yoki smenaga kiradi, yoki rad etiladi, hisobot doim bazaga mos |
+| Pulni qaytarish (faqat rahbar) | Ishlaydi | API test: to‘lovga bog‘lanadi, ortig‘i 422, hisob kamayadi va qarz paydo bo‘lmaydi, to‘liq qaytarilsa «Qaytarilgan», naqd — ochiq smenadan, takror so‘rov bitta (Idempotency-Key), kassir — 403. E2E: naqd qaytarish → kassir panelida chiqim |
+| Xarajat kiritish va bekor qilish | Ishlaydi | API test: kassir faqat o‘z kassasidan; rahbar bank/karta, o‘tgan sana bilan; kelajak sana 422; bekor qilish sabab bilan; yopilgan smenadagi xarajat bekor qilinmaydi; baza triggeri |
+| Sof natija (tushum − qaytarish − xarajat) | Ishlaydi | API test: xulosa SQL bilan teng; **dashboard tushumi sof tushumga teng** (qaytarishlar ayiriladi) |
+
+Cheklovlar:
+- **Qaytarish butun hisob darajasida.** Xizmatlar hisobotida (accrual) qaytarilgan xizmat qiymati qolishi mumkin; kassa hisobotlari (cash) to‘g‘ri.
+- **Fiskal emas:** smena hisoboti fiskal Z-hisobot emas, fiskal chek integratsiyasi keyingi bosqichda.
+- **Haqiqiy kassada sinalmagan:** jonli demo bazasida ochiq smena yo‘q (u faqat demo reset’da yaratiladi). Shuning uchun uchrashuvda kassir avval smenani ochadi.
 
 ## 0000. 0.5 relizda nima qo‘shildi: qabul hujjatlari
 
@@ -95,7 +110,7 @@ Oldingi hisobotdagi «P0 to‘liq» da’vosi qayta tekshirildi. Natija: **P0 ya
 | Navbat | Ishlaydi | |
 | Shifokor qabuli | Ishlaydi | Tasdiqlangan qaydni tuzatish (versiya) P1 — **Rejada** |
 | Bazaviy tahlil buyurtmasi va natijasi | Ishlaydi | |
-| Hisob / to‘lov | Ishlaydi | Pulni qaytarish P1 — **Rejada** (faol tugma yo‘q) |
+| Hisob / to‘lov | Ishlaydi | 0.6: pulni qaytarish (rahbar), kassa smenasi |
 | Bog‘langan dashboard | Ishlaydi | |
 | Print | **Qisman** | Brauzer print/PDF ishlaydi; A4 sig‘ishi headless Chrome PDF’da tekshirilgan. **Haqiqiy printerda chop etib ko‘rilmagan** |
 | Seed / reset | Ishlaydi | Deterministik; reset ma’lumot va demo vaqtini birga tiklaydi |
@@ -180,8 +195,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 | M-07 Shifokor kabineti | Ishlaydi | Tuzatish versiyasi — Rejada |
 | M-08 Laboratoriya | Ishlaydi | Apparat integratsiyasi, barcode — Rejada |
 | M-09 UZI | Ishlaydi (P1) | DICOM/PACS, rasm yuklash — Rejada |
-| M-10 Kassa | Ishlaydi | Qaytarish — Rejada; chegirma oqimi soddalashtirilgan (1.3) |
-| M-11 Moliya | Ishlaydi | Xarajatlar — Demo ma’lumoti (faqat ko‘rish); smena, sof natija — Rejada |
+| M-10 Kassa | Ishlaydi | 0.6: smena va qaytarish; chegirma oqimi soddalashtirilgan (1.3) |
+| M-11 Moliya | Ishlaydi | 0.6: xarajat kiritish/bekor qilish, smenalar, qaytarishlar, sof natija |
 | M-12 Xodimlar, ulush | Ishlaydi (P1) | 0.2: xodim qo‘shish/tahrirlash/parol tiklash/faolsizlantirish. 0.2: haftalik jadvalni tahrirlash. Bir martalik istisnolar (ta’til), payroll — Rejada |
 | M-13 Ombor | Ishlaydi (P1) | Avtomatik yechish, partiya — Rejada |
 | M-14 Sozlamalar | Ishlaydi | Logotip, shablon maydonlari, modul ko‘rinishi — Rejada |
@@ -194,8 +209,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 57/57 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar, 5 ta qabul hujjatlari testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 77/77: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 + 7 qabul hujjatlari |
+| `npm test` (meduza_test) | 63/63 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar, 5 ta qabul hujjatlari, 6 ta kassa testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 89/89: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 + 7 qabul hujjatlari + 12 kassa |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |
@@ -211,4 +226,4 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 6. Tenant izolyatsiyasi ilova darajasida (`tenant_id` + composite FK); PostgreSQL RLS, MFA, monitoring — production oldidan alohida bosqich (TZ §16).
 9. Login butun tizim bo‘yicha yagona: bitta telefon raqami bilan faqat bitta akkaunt. Bir odam ikki klinikada ishlasa, kirishda klinikani tanlash imkoni API’da bor, lekin uni yaratadigan UI hali yo‘q.
 7. Seed telefon raqamlari tasodifiy generatsiya qilingan. Hech qayerga yuborilmaydi, lekin haqiqiy raqamga to‘g‘ri kelishi mumkin.
-8. Bekor qilingan qabulda to‘lov bo‘lsa, pulni qaytarish moduli yo‘q. Ogohlantirish chiqadi va hisob qo‘lda ko‘rib chiqiladi.
+8. Bekor qilingan qabulda to‘lov bo‘lsa, pul avtomatik qaytarilmaydi: rahbar «Pulni qaytarish» orqali qaytaradi (0.6).

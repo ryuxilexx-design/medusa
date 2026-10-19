@@ -17,7 +17,7 @@ export interface SeedData {
   schedules: Row[]; services: Row[]; service_prices: Row[]; doctor_services: Row[]; patients: Row[];
   appointments: Row[]; queue_counters: Row[]; queue_tickets: Row[]; encounters: Row[]; clinical_notes: Row[];
   service_orders: Row[]; lab_results: Row[]; diagnostic_reports: Row[]; invoices: Row[]; invoice_items: Row[];
-  payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[];
+  payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[]; cash_shifts: Row[];
 }
 
 export function sid(key: string): string {
@@ -85,7 +85,7 @@ export function buildSeed(demoDate: string): SeedData {
     tenants: [], branches: [], users: [], memberships: [], doctors: [], rooms: [], schedules: [], services: [],
     service_prices: [], doctor_services: [], patients: [], appointments: [], queue_counters: [], queue_tickets: [],
     encounters: [], clinical_notes: [], service_orders: [], lab_results: [], diagnostic_reports: [], invoices: [],
-    invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [],
+    invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [], cash_shifts: [],
   };
 
   // ---------- tenant, branches ----------
@@ -681,7 +681,7 @@ export function buildSeed(demoDate: string): SeedData {
     invoiceTimeline.push({ inv, v });
     for (const o of v.orders) data.service_orders.push(o);
   }
-  data.tenants.push({ id: T, name: 'Med.uz.ai Demo Clinic', status: 'active', patient_seq: 1100, invoice_seq: 10000 + invoiceSeq, receipt_seq: 50000 + receiptSeq, created_at: createdBase, updated_at: createdBase });
+  data.tenants.push({ id: T, name: 'Med.uz.ai Demo Clinic', status: 'active', patient_seq: 1100, invoice_seq: 10000 + invoiceSeq, receipt_seq: 50000 + receiptSeq, shift_seq: 2, refund_seq: 0, created_at: createdBase, updated_at: createdBase });
 
   // patient creation audit (the 30 most recent)
   patients.slice(-30).forEach((p) => audit(p.created_at, BC, M.registrar, 'Malika Yusupova', 'registrar', 'patient.create', 'patient', p.id, `Bemor #${p.patient_number} yaratildi`));
@@ -737,7 +737,7 @@ export function buildSeed(demoDate: string): SeedData {
 
   // ---------- second tenant (isolation test) ----------
   const T2 = SEED_IDS.tenant2;
-  data.tenants.push({ id: T2, name: 'Izolyatsiya Test Klinikasi', status: 'active', patient_seq: 3, invoice_seq: 0, receipt_seq: 0, created_at: createdBase, updated_at: createdBase });
+  data.tenants.push({ id: T2, name: 'Izolyatsiya Test Klinikasi', status: 'active', patient_seq: 3, invoice_seq: 0, receipt_seq: 0, shift_seq: 0, refund_seq: 0, created_at: createdBase, updated_at: createdBase });
   data.branches.push({ id: SEED_IDS.branchTenant2, tenant_id: T2, name: 'Test filiali', code: 'TST', address: 'Demo manzil', timezone: 'Asia/Tashkent', created_at: createdBase });
   addStaff('t2rahbar', M.tenant2Manager, 'Test Rahbar (2-tenant)', 'manager', [SEED_IDS.branchTenant2], 'Klinika rahbari', true, T2);
   [['Boshqa', 'Bemor', '1990-01-01'], ['Izolyatsiya', 'Sinov', '1975-06-15'], ['Ikkinchi', 'Tenant', '2001-09-09']].forEach(([l, f, b], i) =>
@@ -746,5 +746,23 @@ export function buildSeed(demoDate: string): SeedData {
 
   data.audit_logs.sort((a, b) => (a.occurred_at as Date).getTime() - (b.occurred_at as Date).getTime());
   // memberships must exist before doctors (FK): already true by insertion order in resetDemo.
+  // ---------- cash shifts (today): both cashiers opened their drawer before the first payment ----------
+  // No RNG is used here, so the seeded KPIs stay exactly as before.
+  const shiftOpen = at(demoDate, hm('07:00'));
+  const SHIFTS = [
+    { id: sid('shift:central'), branch: BC, cashierId: M.cashier, name: 'Nodira Aliyeva', opening: 500_000 },
+    { id: sid('shift:yunusobod'), branch: BY, cashierId: M.cashier2, name: 'Jasur Toshmatov', opening: 300_000 },
+  ];
+  SHIFTS.forEach((sh, i) => {
+    data.cash_shifts.push({ id: sh.id, tenant_id: T, branch_id: sh.branch, cashier_membership_id: sh.cashierId, cashier_name: sh.name,
+      number: i + 1, status: 'open', opened_at: shiftOpen, opening_cash: sh.opening * SO });
+    audit(shiftOpen, sh.branch, sh.cashierId, sh.name, 'cashier', 'cash_shift.open', 'cash_shift', sh.id, `Smena №${i + 1} ochildi, kassada ${sh.opening.toLocaleString('ru-RU')} so‘m`);
+  });
+  const dayStart = at(demoDate, 0), dayEnd = at(addDays(demoDate, 1), 0);
+  for (const pm of data.payments) {
+    const sh = SHIFTS.find((x) => x.branch === pm.branch_id && x.cashierId === pm.cashier_membership_id);
+    pm.shift_id = sh && pm.paid_at >= dayStart && pm.paid_at < dayEnd ? sh.id : null;
+  }
+
   return data;
 }
