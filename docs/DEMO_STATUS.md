@@ -1,8 +1,28 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 17-oktabr 2026 (kechqurun) · Demo sanasi: 18-oktabr 2026 · Reliz: 0.1 (demo MVP)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.2 (demo MVP + haqiqiy xodim kirishi)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 0. 0.2 relizda nima qo‘shildi: haqiqiy xodim kirishi
+
+Klinikaga qo‘yish uchun birinchi qadam: demo kartalardan tashqari, har bir xodim o‘z login va paroli bilan kiradi.
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Parol bilan kirish (telefon yoki login) | Ishlaydi | API test; brauzer E2E |
+| Parol saqlanishi | Ishlaydi | scrypt (N=2¹⁵), har birida alohida salt. API test: bazada ochiq parol yo‘q, xodimlar ro‘yxatida ham yo‘q |
+| Xato javobi login bor-yo‘qligini oshkor qilmaydi | Ishlaydi | API test: bor va yo‘q login uchun bir xil xabar |
+| 5 xato → 15 daqiqa blok, audit yozuvi; IP bo‘yicha cheklov | Ishlaydi | API test. IP cheklovi xotirada — server qayta ishga tushsa nolga tushadi |
+| Vaqtinchalik parol → birinchi kirishda majburiy almashtirish | Ishlaydi | API test (boshqa barcha so‘rov 403); E2E (menyu ochilmaydi, almashtirgach ish joyi ochiladi) |
+| Rahbar: xodim qo‘shish / tahrirlash / parolni tiklash / faolsizlantirish | Ishlaydi | API test; E2E. Faolsizlantirish sessiyani darhol yopadi |
+| Shifokor qo‘shish: mutaxassislik, ulush, bajaradigan xizmatlar | Ishlaydi | API test. **Jadval kiritish UI yo‘q** — yangi shifokorga hozircha qabul yozib bo‘lmaydi (keyingi qadam) |
+| Himoya: o‘zini, oxirgi rahbarni, demo kartani o‘chirib bo‘lmaydi; boshqa klinika xodimi → 404; begona filial → 422 | Ishlaydi | API test, jumladan ikki rahbar bir vaqtda bir-birini o‘chirish poygasi (bittasi qoladi) |
+| Demo kartalar faqat demo klinikani ochadi | Ishlaydi | API test: demo bo‘lmagan klinika a’zosi `demo_card` bo‘lsa ham 403 |
+| Demo reset haqiqiy klinika bor bazada rad etiladi | Ishlaydi | API test (409 `REAL_CLINIC_PRESENT`); CLI’da qo‘lda tekshirildi |
+| `db:create-clinic` CLI: klinika + filial + rahbar (+ demo xizmatlar katalogi) | Ishlaydi | Vaqtinchalik bazada qo‘lda sinaldi: 30 xizmat narxi bilan, band login rad etildi; baza o‘chirildi |
+
+Hali yo‘q (klinikaga qo‘yishdan oldin kerak): shifokor jadvalini tahrirlash, ikki bosqichli tasdiq (MFA), SMS orqali parol tiklash, sessiyalar ro‘yxati, O‘zbekistondagi hosting va zaxira nusxa rejasi.
 
 ## 1. «P0 to‘liqmi?» — TZ bilan banddan-band solishtirish
 
@@ -12,7 +32,7 @@ Oldingi hisobotdagi «P0 to‘liq» da’vosi qayta tekshirildi. Natija: **P0 ya
 
 | P0 band | Holat | Izoh |
 |---|---|---|
-| Demo kirish / rollar | Ishlaydi | 5 rol kartasi, HttpOnly cookie sessiya, ruxsatlar serverda |
+| Demo kirish / rollar | Ishlaydi | 5 rol kartasi + parol bilan xodim kirishi (0-bo‘lim), HttpOnly cookie sessiya, ruxsatlar serverda |
 | Filial filtri | Ishlaydi | Yuqori panelda; jadval, ro‘yxat va statistika qayta yuklanadi; ruxsatsiz filial → 403 |
 | Bemorlar | Ishlaydi | Ro‘yxat, qidiruv, yaratish, tahrirlash, dublikat ogohlantirishi, profil |
 | Jadval | Ishlaydi | Kunlik grid va ro‘yxat; haftalik ko‘rinish P1 — **Rejada** |
@@ -96,7 +116,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Modul | Holat | Izoh |
 |---|---|---|
-| M-01 Kirish, rollar, reset | Ishlaydi | |
+| M-01 Kirish, rollar, reset | Ishlaydi | 0.2: parol bilan kirish, majburiy parol almashtirish, blok (0-bo‘lim) |
 | M-02 Rahbar dashboardi | Ishlaydi | Har bir KPI va grafik ustuni filtrlangan ro‘yxatga olib boradi |
 | M-03/M-04 Bemorlar, profil | Ishlaydi | Allergiyaning 3 holati alohida |
 | M-05 Qabul jadvali | Ishlaydi | Qabul yaratish idempotent (javob yo‘qolsa qayta yuborish dublikat bermaydi). Haftalik ko‘rinish, drag-and-drop — Rejada |
@@ -106,7 +126,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 | M-09 UZI | Ishlaydi (P1) | DICOM/PACS, rasm yuklash — Rejada |
 | M-10 Kassa | Ishlaydi | Qaytarish — Rejada; chegirma oqimi soddalashtirilgan (1.3) |
 | M-11 Moliya | Ishlaydi | Xarajatlar — Demo ma’lumoti (faqat ko‘rish); smena, sof natija — Rejada |
-| M-12 Xodimlar, ulush | Ishlaydi (P1) | Jadvalni tahrirlash, payroll — Rejada |
+| M-12 Xodimlar, ulush | Ishlaydi (P1) | 0.2: xodim qo‘shish/tahrirlash/parol tiklash/faolsizlantirish. Jadvalni tahrirlash, payroll — Rejada |
 | M-13 Ombor | Ishlaydi (P1) | Avtomatik yechish, partiya — Rejada |
 | M-14 Sozlamalar | Ishlaydi | Logotip, shablon maydonlari, modul ko‘rinishi — Rejada |
 | AI-01 qaydni tartiblash | Namunaviy AI | `AI_MODE=sample` (standart): faqat demo matni. `live` rejim kodda bor, **haqiqiy kalit bilan sinalmagan** |
@@ -117,8 +137,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 19/19 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 35/35: 19 asosiy yo‘l + 16 xato holati |
+| `npm test` (meduza_test) | 27/27 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik testi, 8 ta xodim kirishi testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 46/46: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |
@@ -132,5 +152,6 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 4. **Bir brauzer = bitta sessiya** — bir nechta rol uchun alohida brauzer profillari kerak.
 5. **Demo vaqti reset’dan keyin real vaqtda yuradi.** Reset juda erta qilinsa (masalan 6 soat oldin), tushdan keyingi bo‘sh slotlar ham «o‘tgan» bo‘lib qoladi. Reset uchrashuvdan 10–30 daqiqa oldin qilinadi.
 6. Tenant izolyatsiyasi ilova darajasida (`tenant_id` + composite FK); PostgreSQL RLS, MFA, monitoring — production oldidan alohida bosqich (TZ §16).
+9. Login butun tizim bo‘yicha yagona: bitta telefon raqami bilan faqat bitta akkaunt. Bir odam ikki klinikada ishlasa, kirishda klinikani tanlash imkoni API’da bor, lekin uni yaratadigan UI hali yo‘q.
 7. Seed telefon raqamlari tasodifiy generatsiya qilingan. Hech qayerga yuborilmaydi, lekin haqiqiy raqamga to‘g‘ri kelishi mumkin.
 8. Bekor qilingan qabulda to‘lov bo‘lsa, pulni qaytarish moduli yo‘q. Ogohlantirish chiqadi va hisob qo‘lda ko‘rib chiqiladi.

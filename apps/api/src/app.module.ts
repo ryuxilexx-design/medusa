@@ -17,10 +17,13 @@ import { ReportsController } from './modules/reports.controller';
 import { InventoryController } from './modules/inventory.controller';
 import { DiagnosticsController } from './modules/diagnostics.controller';
 import { AiController } from './modules/ai.controller';
+import { AuthController } from './modules/auth.controller';
+import { StaffController } from './modules/staff.controller';
 
 @Module({
   controllers: [SessionController, ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
-    LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController],
+    LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
+    AuthController, StaffController],
   providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
 })
 export class AppModule implements NestModule {

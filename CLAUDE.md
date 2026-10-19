@@ -12,7 +12,7 @@ Product name in every UI text, document and export: **Med.uz.ai** (old name "Med
 
 ## Commands
 
-`npm run db:up` · `npm run start` (prod build, web :3000 / API :4000) · `npm run dev` · `npm run build` · `npm run typecheck` · `npm test` (19 API tests) · `npm run e2e` · `npm run db:reset` (wipes live demo data — needs explicit user intent) · `npm run db:backup` / `db:restore -- <file>` · `npm run db:readonly-role`.
+`npm run db:up` · `npm run start` (prod build, web :3000 / API :4000) · `npm run dev` · `npm run build` · `npm run typecheck` · `npm test` (27 API tests) · `npm run e2e` · `npm run db:reset` (wipes live demo data — needs explicit user intent) · `npm run db:backup` / `db:restore -- <file>` · `npm run db:readonly-role` · `npm run db:create-clinic -- …` (onboard a real clinic; prints a one-time temp password).
 Project skills: `meduza-run`, `meduza-demo-reset`, `meduza-deploy`, `meduza-verify` — use them for those tasks.
 
 ## Rules that are easy to break
@@ -25,6 +25,8 @@ Project skills: `meduza-run`, `meduza-demo-reset`, `meduza-deploy`, `meduza-veri
 - **Clinical data is doctor-only** (managers, cashiers and registrars never read clinical notes or result values). Lab values are visible to doctors only after verification.
 - **No clinical or financial data in localStorage** — only UI preferences (selected branch).
 - **Errors:** API returns `{error:{code,message,fields?},request_id}`; UI keeps the user's input on failure, shows the error, and never shows a success toast for an action that did not complete.
+- **Auth:** staff sign in with `/auth/login` (phone or username + scrypt-hashed password; lockout after 5 failures; temp passwords force a change — the guard returns 403 `PASSWORD_CHANGE_REQUIRED` except on routes marked `@AllowDuringPasswordChange()`). Demo role cards (`/demo/login`) only open the seed tenants. Never log, return twice, or store a password in clear text; a temp password is shown exactly once.
+- **Demo reset truncates every table** and refuses to run when a non-seed tenant exists. Real clinics belong in a separate `APP_MODE=production` deployment.
 - **AI:** `AI_MODE=sample` returns a pre-written result only for the exact demo text and must be labelled «Namunaviy AI natijasi»; never present it as live AI. API keys stay server-side.
 
 ## Data & environments

@@ -2,10 +2,10 @@ import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common'
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response } from 'express';
 import { loginSchema } from '@meduza/contracts';
-import { assertDatabaseName, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
+import { assertDatabaseName, RealTenantsPresentError, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
 import { Db } from '../core/db';
 import { config } from '../core/config';
-import { Ctx, CurrentCtx, Public, Roles, SESSION_COOKIE } from '../core/context';
+import { AllowDuringPasswordChange, Ctx, CurrentCtx, Public, Roles, SESSION_COOKIE } from '../core/context';
 import { AppError, conflict, forbidden } from '../core/errors';
 import { hashToken } from '../core/guard';
 import { parse } from '../core/validate';
@@ -14,6 +14,16 @@ import { now, syncClock, today } from '../core/clock';
 
 /** Failed access-code attempts per client IP (in-memory; resets on restart). */
 const failures = new Map<string, { n: number; until: number }>();
+
+/** Issues a fresh session token (never reuses one from the request) and replaces any session the browser already had. */
+export async function startSession(db: Db, req: Request, res: Response, membershipId: string, tenantId: string, kind: 'demo' | 'password') {
+  const old = req.cookies?.[SESSION_COOKIE];
+  if (old) await db.rows(`DELETE FROM sessions WHERE token_hash = $1`, [hashToken(old)]);
+  const token = randomBytes(32).toString('base64url');
+  await db.rows(`INSERT INTO sessions (token_hash, membership_id, tenant_id, expires_at, kind) VALUES ($1,$2,$3, now() + make_interval(hours => $4), $5)`,
+    [hashToken(token), membershipId, tenantId, config.sessionTtlHours, kind]);
+  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, path: '/', maxAge: config.sessionTtlHours * 3600_000 });
+}
 
 const demoOnly = () => { if (!config.demoEnabled) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi'); };
 
@@ -49,22 +59,21 @@ export class SessionController {
       }
       failures.delete(ip);
     }
-    const m = await this.db.one(`SELECT id, tenant_id FROM memberships WHERE id = $1 AND status = 'active'`, [membership_id]);
+    // Role cards only ever open the synthetic demo clinics — never a real clinic created in the same database.
+    const m = await this.db.one(`SELECT id, tenant_id FROM memberships WHERE id = $1 AND status = 'active' AND tenant_id = ANY($2::uuid[])`,
+      [membership_id, [SEED_IDS.tenant, SEED_IDS.tenant2]]);
     if (!m) throw forbidden('Bu demo akkaunt mavjud emas');
-    const token = randomBytes(32).toString('base64url');
-    await this.db.rows(`INSERT INTO sessions (token_hash, membership_id, tenant_id, expires_at) VALUES ($1,$2,$3, now() + make_interval(hours => $4))`,
-      [hashToken(token), m.id, m.tenant_id, config.sessionTtlHours]);
-    res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, path: '/', maxAge: config.sessionTtlHours * 3600_000 });
+    await startSession(this.db, req, res, m.id, m.tenant_id, 'demo');
     return { data: { ok: true } };
   }
 
-  @Get('me')
+  @AllowDuringPasswordChange() @Get('me')
   async me(@CurrentCtx() ctx: Ctx) {
     const branches = await this.db.rows(`SELECT id, name, code FROM branches WHERE tenant_id = $1 AND id = ANY($2) ORDER BY code`, [ctx.tenantId, ctx.branchIds]);
     return {
       data: {
         membership_id: ctx.membershipId, name: ctx.name, title: ctx.title, role: ctx.role, tenant_id: ctx.tenantId, clinic_name: ctx.tenantName,
-        doctor_id: ctx.doctorId, doctor_specialty: ctx.doctorSpecialty, branches,
+        doctor_id: ctx.doctorId, doctor_specialty: ctx.doctorSpecialty, branches, auth_kind: ctx.authKind, must_change_password: ctx.mustChangePassword,
         today: today(), now: now().toISOString(), demo: config.demoEnabled, clock_reason: (await this.db.one(`SELECT set_reason FROM demo_clock WHERE id = 1`))?.set_reason ?? null, ai_mode: config.ai.mode === 'live' && !config.ai.apiKey ? 'off' : config.ai.mode,
       },
     };
@@ -91,6 +100,7 @@ export class SessionController {
       return { data: { ok: true, counts } };
     } catch (e) {
       if (e instanceof ResetInProgressError) throw conflict('RESET_IN_PROGRESS', 'Tiklash allaqachon bajarilmoqda. Biroz kuting.');
+      if (e instanceof RealTenantsPresentError) throw conflict('REAL_CLINIC_PRESENT', e.message);
       throw e;
     }
   }

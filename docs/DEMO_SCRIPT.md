@@ -124,6 +124,13 @@ Agar mehmon boshqa matn yozib ko‘rmoqchi bo‘lsa, tizim «Namunaviy rejimda f
 
 - Kassir oynasida klinik qayd hujjatini ochishga urinish (`/print/note/...`) → «ruxsat yo‘q». Rahbar ham klinik qaydni o‘qimaydi.
 - Shifokor qaydga yozib turib, menyudan boshqa bo‘limga o‘tmoqchi bo‘lsa → «Saqlanmagan o‘zgarishlar bor» ogohlantirishi.
+- **«Har bir xodim o‘z paroli bilan kiradimi?»** (1,5 daqiqa, ikki oyna):
+  1. Oyna 1 (Rahbar) → **Xodimlar** → **Xodim qo‘shish** → F.I.Sh. `Sinov Kassirov`, Rol **Kassir**, login `93 555 44 33`, filial belgilang → **Xodimni qo‘shish**.
+  2. Vaqtinchalik parol bir marta ko‘rsatiladi → **Nusxa olish**.
+  3. Boshqa brauzer profilida kirish sahifasi → «Xodim kirishi»: login va vaqtinchalik parol → **Kirish**. Tizim avval yangi parol o‘rnatishni talab qiladi, keyin kassir ish joyi ochiladi.
+  4. Oyna 1 → xodim qatoridagi qalam belgisi → **Faolsizlantirish** → **Ha**. Kassir oynasi keyingi bosishda kirish sahifasiga qaytadi.
+
+  Ayting: «Parol ochiq saqlanmaydi. 5 marta xato kiritilsa akkaunt 15 daqiqaga bloklanadi. Parolni unutgan xodimga rahbar yangi vaqtinchalik parol beradi.» Demo reset bu xodimni ham o‘chiradi.
 
 ## Aytilmaydigan narsalar
 

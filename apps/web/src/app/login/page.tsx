@@ -3,10 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Banknote, Briefcase, ClipboardList, FlaskConical, Stethoscope } from 'lucide-react';
-import type { Role } from '@meduza/contracts';
-import { api } from '@/lib/api';
+import { ROLE_LABEL, type Role } from '@meduza/contracts';
+import { api, ApiError } from '@/lib/api';
 import { HOME_BY_ROLE } from '@/lib/session';
-import { Button, ErrorState, Input, Select, Skeleton, useToast } from '@/components/ui';
+import { Alert, Button, ErrorState, Field, Input, Select, Skeleton, useToast } from '@/components/ui';
 import { BrandLockup } from '@/components/logo';
 
 type Account = { membership_id: string; role: Role; title: string; full_name: string; specialty: string | null };
@@ -22,7 +22,10 @@ export default function LoginPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const toast = useToast();
-  const accountsQ = useQuery({ queryKey: ['demo-accounts'], queryFn: () => api<{ data: Account[]; meta?: { access_code_required?: boolean } }>('/demo/accounts') });
+  // In production mode the server answers 404 here: then only the staff password form is shown.
+  const accountsQ = useQuery({ queryKey: ['demo-accounts'], retry: false,
+    queryFn: () => api<{ data: Account[]; meta?: { access_code_required?: boolean } }>('/demo/accounts').catch((e) => { if (e instanceof ApiError && e.status === 404) return null; throw e; }) });
+  const demoMode = accountsQ.data !== null;
   const accounts = { ...accountsQ, data: accountsQ.data?.data };
   const codeRequired = !!accountsQ.data?.meta?.access_code_required;
   const [code, setCode] = useState('');
@@ -45,22 +48,26 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-white to-slate-100">
       <div className="mx-auto flex max-w-5xl flex-col px-6 py-10">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <BrandLockup size="lg" />
-          <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Demo muhit · Sun’iy ma’lumotlar</span>
+          {demoMode && <span className="whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Demo muhit · Sun’iy ma’lumotlar</span>}
         </div>
-        <div className="mt-12 max-w-2xl">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Klinikaning bemor, xizmat va moliya jarayoni — bitta tizimda</h1>
-          <p className="mt-3 text-slate-600">Rolni tanlang. Har bir xodim o‘z vazifasiga mos ish joyini ko‘radi; ruxsatlar serverda tekshiriladi.</p>
+        <div className="mt-12 grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="max-w-2xl">
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-900">Klinikaning bemor, xizmat va moliya jarayoni — bitta tizimda</h1>
+            <p className="mt-3 text-slate-600">Har bir xodim o‘z vazifasiga mos ish joyini ko‘radi; ruxsatlar serverda tekshiriladi.</p>
+          </div>
+          <StaffLogin />
         </div>
-        {codeRequired && (
-          <div className="mt-8 max-w-sm">
+        {demoMode && <h2 className="mt-12 text-sm font-semibold uppercase tracking-wide text-slate-500">Demo: rolni tanlab kirish</h2>}
+        {demoMode && codeRequired && (
+          <div className="mt-4 max-w-sm">
             <label htmlFor="access-code" className="text-[13px] font-medium text-slate-700">Demo kirish kodi</label>
             <Input id="access-code" type="password" autoComplete="off" className="mt-1" value={code} onChange={(e) => setCode(e.target.value)} placeholder="Tashkilotchidan olingan kod" />
             <p className="mt-1 text-xs text-slate-500">Demo internetda ochiq, shuning uchun kirish kod bilan yopilgan.</p>
           </div>
         )}
-        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {demoMode && <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {accounts.isLoading && Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-48" />)}
           {accounts.isError && <div className="col-span-full rounded-lg border bg-white"><ErrorState error={accounts.error} onRetry={() => accountsQ.refetch()} /></div>}
           {accounts.data && CARDS.map((c) => {
@@ -79,9 +86,67 @@ export default function LoginPage() {
               </div>
             );
           })}
-        </div>
-        <p className="mt-10 text-xs text-slate-500">Barcha bemorlar, telefonlar va summalar sun’iy. Tashqi xabar yuborish o‘chirilgan. Bu sahifa faqat lokal/yopiq demo muhitida ishlaydi.</p>
+        </div>}
+        {demoMode && <p className="mt-10 text-xs text-slate-500">Demo klinikadagi barcha bemorlar, telefonlar va summalar sun’iy. Tashqi xabar yuborish o‘chirilgan.</p>}
       </div>
     </main>
+  );
+}
+
+type Choice = { membership_id: string; clinic_name: string; role: Role; title: string | null };
+
+/** Staff sign-in: phone or login + password. A person working in several clinics/roles picks one. */
+function StaffLogin() {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [choices, setChoices] = useState<Choice[] | null>(null);
+  const [membershipId, setMembershipId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!login.trim() || !password) { setError('Telefon yoki login va parolni kiriting'); return; }
+    setError(null); setBusy(true);
+    try {
+      await api('/auth/login', { method: 'POST', body: { login: login.trim(), password, membership_id: membershipId || undefined } });
+      qc.clear();
+      const me = await api<{ data: { role: Role } }>('/me');
+      router.replace(HOME_BY_ROLE[me.data.role]);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'CHOOSE_MEMBERSHIP') {
+        const opts = (err.details?.options ?? []) as Choice[];
+        setChoices(opts); setMembershipId(opts[0]?.membership_id ?? '');
+        setError(null);
+      } else setError(err instanceof Error ? err.message : 'Kirib bo‘lmadi');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="Xodim kirishi">
+      <h2 className="font-semibold text-slate-900">Xodim kirishi</h2>
+      <p className="mt-0.5 text-[13px] text-slate-500">Login va parolni klinika rahbari beradi.</p>
+      <div className="mt-4 space-y-3">
+        {error && <Alert tone="red">{error}</Alert>}
+        <Field label="Telefon yoki login">
+          {(id) => <Input id={id} autoComplete="username" inputMode="text" value={login} onChange={(e) => { setLogin(e.target.value); setChoices(null); setMembershipId(''); }} placeholder="+998 90 123 45 67" />}
+        </Field>
+        <Field label="Parol">
+          {(id) => <Input id={id} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
+        </Field>
+        {choices && (
+          <Field label="Klinika va rol" hint="Siz bir nechta klinika yoki rolda ishlaysiz">
+            {(id) => <Select id={id} value={membershipId} onChange={(e) => setMembershipId(e.target.value)}>
+              {choices.map((c) => <option key={c.membership_id} value={c.membership_id}>{c.clinic_name} · {ROLE_LABEL[c.role]}</option>)}
+            </Select>}
+          </Field>
+        )}
+        <Button type="submit" variant="primary" className="w-full" loading={busy}>Kirish</Button>
+        <p className="text-xs text-slate-500">Parolni unutdingizmi? Klinika rahbari yangi vaqtinchalik parol beradi.</p>
+      </div>
+    </form>
   );
 }

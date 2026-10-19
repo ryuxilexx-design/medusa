@@ -56,11 +56,13 @@ export class ReportsController {
   @Roles('manager') @Get('staff')
   async staff(@CurrentCtx() ctx: Ctx) {
     const rows = await this.db.rows(
-      `SELECT m.id AS membership_id, u.full_name, u.email, m.role, m.title, m.status, m.branch_ids,
+      `SELECT m.id AS membership_id, u.full_name, u.login, m.role, m.title, m.status, m.branch_ids, m.demo_card, (m.id = $2) AS is_self,
+              u.password_hash IS NOT NULL AS has_password, u.must_change_password, u.last_login_at, u.locked_until > now() AS locked,
+              (SELECT coalesce(array_agg(ds.service_id), '{}') FROM doctor_services ds WHERE ds.doctor_id = d.id) AS service_ids,
               (SELECT array_agg(b.name ORDER BY b.code) FROM branches b WHERE b.id = ANY(m.branch_ids)) AS branch_names,
               d.id AS doctor_id, d.specialty, d.default_share_percent
          FROM memberships m JOIN users u ON u.id = m.user_id LEFT JOIN doctors d ON d.membership_id = m.id
-        WHERE m.tenant_id = $1 ORDER BY array_position(ARRAY['manager','doctor','registrar','cashier','lab'], m.role), u.full_name`, [ctx.tenantId]);
+        WHERE m.tenant_id = $1 ORDER BY m.status, array_position(ARRAY['manager','doctor','registrar','cashier','lab'], m.role), u.full_name`, [ctx.tenantId, ctx.membershipId]);
     return { data: rows };
   }
 

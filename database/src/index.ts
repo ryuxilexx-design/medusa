@@ -1,7 +1,7 @@
 import { Pool, PoolClient, types } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildSeed, SeedData, DEMO_TIMEZONE_OFFSET_HOURS } from '../seed/build';
+import { buildSeed, SeedData, DEMO_TIMEZONE_OFFSET_HOURS, SEED_IDS } from '../seed/build';
 
 // bigint (int8) money values fit safely into JS numbers (< 2^53 tiyin).
 types.setTypeParser(20, (v) => Number(v));
@@ -112,12 +112,19 @@ export async function assertDatabaseName(q: Pick<PoolClient, 'query'>, expectSuf
   return name;
 }
 
+export class RealTenantsPresentError extends Error {
+  constructor(public count: number) { super(`Bazada ${count} ta demo bo‘lmagan klinika bor — demo reseti barcha jadvallarni tozalaydi, shuning uchun to‘xtatildi.`); }
+}
+
 export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string): Promise<{ counts: Record<string, number>; clock: DemoClock }> {
   const client = await pool.connect();
   let locked = false;
   try {
     locked = (await client.query('SELECT pg_try_advisory_lock(74002) AS ok')).rows[0].ok;
     if (!locked) throw new ResetInProgressError();
+    // A reset truncates every table. Never let it run on a database that also holds a real clinic.
+    const foreign = (await client.query(`SELECT count(*)::int AS n FROM tenants WHERE id <> ALL($1::uuid[])`, [[SEED_IDS.tenant, SEED_IDS.tenant2]])).rows[0].n;
+    if (foreign > 0) throw new RealTenantsPresentError(foreign);
     const seed = buildSeed(demoDate);
     await client.query('BEGIN');
     const sessions = (await client.query('SELECT * FROM sessions')).rows;
@@ -145,3 +152,5 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     client.release();
   }
 }
+
+export { hashPassword, verifyPassword, generateTempPassword } from './password';

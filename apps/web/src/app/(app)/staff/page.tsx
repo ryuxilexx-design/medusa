@@ -1,35 +1,56 @@
 'use client';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { Pencil, UserPlus } from 'lucide-react';
 import { ROLE_LABEL } from '@meduza/contracts';
 import { api } from '@/lib/api';
-import { addDays, fmtDateTime, formatSom, fullName, WEEKDAYS } from '@/lib/format';
+import { addDays, fmtDateTime, formatPhone, formatSom, fullName, WEEKDAYS } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Badge, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Table, Td, Th, DemoTag } from '@/components/ui';
+import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Table, Td, Th, DemoTag } from '@/components/ui';
 import { AppointmentStatus } from '@/components/status';
+import { StaffFormModal, TempPasswordModal, type StaffRow } from '@/components/staff-form';
 
 export default function StaffPage() { return <Suspense><Staff /></Suspense>; }
+
+/** How the person signs in — shown so the manager sees who still has a temporary password or is locked. */
+function AccessBadge({ s }: { s: StaffRow }) {
+  if (s.locked) return <Badge tone="red">Bloklangan</Badge>;
+  if (!s.has_password) return s.demo_card ? <Badge>Demo karta</Badge> : <Badge>Parol yo‘q</Badge>;
+  if (s.must_change_password) return <Badge tone="yellow">Vaqtinchalik parol</Badge>;
+  return <span className="text-xs text-slate-500">{s.last_login_at ? `Oxirgi kirish: ${fmtDateTime(s.last_login_at)}` : 'Hali kirmagan'}</span>;
+}
+
+const showLogin = (l: string | null) => (l ? (l.startsWith('+998') ? formatPhone(l) : l) : '');
 
 function Staff() {
   const sp = useSearchParams();
   const router = useRouter();
   const sel = sp.get('doctor');
-  const q = useQuery({ queryKey: ['staff'], queryFn: () => api('/staff').then((r) => r.data as any[]) });
+  const q = useQuery({ queryKey: ['staff'], queryFn: () => api('/staff').then((r) => r.data as StaffRow[]) });
+  const [editing, setEditing] = useState<StaffRow | 'new' | null>(null);
+  const [issued, setIssued] = useState<{ name: string; login: string; temp_password: string } | null>(null);
+  const rows = q.data?.filter((s) => s.membership_id) ?? [];
+  const active = rows.filter((s) => s.status === 'active');
   return (
     <>
-      <PageHeader title="Xodimlar" subtitle="8 shifokor va ma’muriy xodimlar · shifokorni tanlab jadval va ulushini ko‘ring" />
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <PageHeader title="Xodimlar"
+        subtitle={q.data ? `${active.filter((s) => s.role === 'doctor').length} shifokor, ${active.filter((s) => s.role !== 'doctor').length} boshqa xodim faol · shifokorni tanlab jadval va ulushini ko‘ring` : undefined}
+        actions={<Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setEditing('new')}>Xodim qo‘shish</Button>} />
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <Card padded={false}>
           {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : (
             <Table>
-              <thead><tr><Th>F.I.Sh.</Th><Th>Rol / mutaxassislik</Th><Th>Filial</Th><Th>Holat</Th></tr></thead>
-              <tbody>{q.data!.filter((s) => s.membership_id).map((s) => (
-                <tr key={s.membership_id} onClick={s.doctor_id ? () => router.replace(`/staff?doctor=${s.doctor_id}`) : undefined} className={cx(s.doctor_id && 'cursor-pointer hover:bg-slate-50', sel && sel === s.doctor_id && 'bg-brand-50')}>
-                  <Td className="font-medium">{s.full_name}</Td>
-                  <Td>{ROLE_LABEL[s.role as keyof typeof ROLE_LABEL]}{s.specialty ? <span className="text-slate-500"> · {s.specialty}</span> : ''}</Td>
+              <thead><tr><Th>F.I.Sh.</Th><Th>Rol / mutaxassislik</Th><Th>Filial</Th><Th>Kirish</Th><Th>Holat</Th><Th /></tr></thead>
+              <tbody>{rows.map((s) => (
+                <tr key={s.membership_id} onClick={s.doctor_id ? () => router.replace(`/staff?doctor=${s.doctor_id}`) : undefined} className={cx(s.doctor_id && 'cursor-pointer hover:bg-slate-50', sel && sel === s.doctor_id && 'bg-brand-50', s.status !== 'active' && 'text-slate-400')}>
+                  <Td className="font-medium">{s.full_name}{s.is_self && <span className="ml-1 text-xs font-normal text-slate-500">(siz)</span>}
+                    {s.login && <div className="text-xs font-normal text-slate-500">{showLogin(s.login)}</div>}</Td>
+                  <Td>{ROLE_LABEL[s.role]}{s.specialty ? <span className="text-slate-500"> · {s.specialty}</span> : ''}</Td>
                   <Td className="text-slate-600">{s.branch_names?.join(', ')}</Td>
+                  <Td><AccessBadge s={s} /></Td>
                   <Td>{s.status === 'active' ? <Badge tone="green">Faol</Badge> : <Badge>Nofaol</Badge>}</Td>
+                  <Td right><Button size="sm" variant="ghost" aria-label={`${s.full_name}: tahrirlash`} icon={<Pencil className="h-3.5 w-3.5" />} onClick={(e) => { e.stopPropagation(); setEditing(s); }} /></Td>
                 </tr>
               ))}</tbody>
             </Table>
@@ -37,6 +58,8 @@ function Staff() {
         </Card>
         {sel ? <DoctorDetail id={sel} /> : <Card><EmptyState title="Shifokorni tanlang" text="Jadval, bugungi qabullar va hisoblangan ulush ko‘rinadi." /></Card>}
       </div>
+      <StaffFormModal open={editing !== null} staff={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onIssued={setIssued} />
+      <TempPasswordModal issued={issued} onClose={() => setIssued(null)} />
     </>
   );
 }

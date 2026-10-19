@@ -44,10 +44,11 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (19 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (27 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
-| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
+| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
+| `npm run db:create-clinic -- --name … --branch … --manager-name … --manager-login … [--catalog demo]` | Haqiqiy klinikani ochish: tenant, birinchi filial va rahbar akkaunti. Vaqtinchalik parol terminalda **bir marta** chiqadi. Real klinika uchun alohida, `APP_MODE=production` muhitida ishlating |
 | `node e2e/visual.mjs` | Xuddi shu vizual o‘tish **ishlab turgan demo ilovada**, faqat o‘qish rejimida (hech narsa saqlanmaydi) → `docs/screenshots/` |
 
 ### Test va demo bazasini ajratish
@@ -70,10 +71,21 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 | `ANTHROPIC_API_KEY` | Faqat `AI_MODE=live` uchun. Faqat serverda o‘qiladi, frontendga yuborilmaydi. Repozitoriyaga qo‘ymang |
 | `AI_MODEL`, `AI_TIMEOUT_MS` | Model (standart `claude-opus-5-5`) va timeout (20 000 ms) |
 
-## Demo akkauntlari
+## Kirish
 
-Kirish sahifasida 5 ta rol kartasi bor (parolsiz, faqat demo rejimda): Rahbar — Dilnoza Karimova, Registrator — Malika Yusupova, Shifokor (8 shifokordan tanlanadi; standart: Terapevt Akmal Rasulov), Kassir — Nodira Aliyeva, Laboratoriya — Gulnora Saidova.
-Rol almashtirish server sessiyasini almashtiradi (chiqish tugmasi → kirish sahifasi).
+**Xodim kirishi (parol bilan).** Kirish sahifasining o‘ng tomonidagi forma. Login — telefon (`+998 …`, istalgan yozuvda) yoki lotin harflaridagi login (`dilnoza.k`).
+- Akkauntni rahbar yaratadi: **Xodimlar → Xodim qo‘shish**. Vaqtinchalik parol bir marta ko‘rsatiladi. Birinchi kirishda xodim o‘z parolini o‘rnatmaguncha boshqa sahifa ochilmaydi.
+- Parol talabi: kamida 8 belgi, harf va raqam. Saqlanishi: scrypt xesh, ochiq matn hech qayerda yo‘q.
+- 5 marta noto‘g‘ri parol → akkaunt 15 daqiqaga bloklanadi (audit jurnaliga yoziladi). Bitta IP’dan ko‘p urinish ham cheklanadi.
+- Unutilgan parol yoki blok: rahbar xodim kartasida **«Parolni tiklash»** ni bosadi.
+- Rahbar xodimni faolsizlantirsa, uning ochiq sessiyalari darhol yopiladi.
+- Rahbar o‘zini va klinikadagi oxirgi faol rahbarni o‘chira olmaydi.
+- Parolni o‘zgartirish: yuqori paneldagi kalit belgisi.
+
+**Demo kartalar** (parolsiz, faqat demo rejimda va faqat demo klinikaga): Rahbar — Dilnoza Karimova, Registrator — Malika Yusupova, Shifokor (8 shifokordan tanlanadi; standart: Terapevt Akmal Rasulov), Kassir — Nodira Aliyeva, Laboratoriya — Gulnora Saidova.
+- Rol almashtirish server sessiyasini almashtiradi (chiqish tugmasi → kirish sahifasi).
+- Demo kartadagi xodimni o‘chirib yoki rolini o‘zgartirib bo‘lmaydi, shunda demo hamma uchun ishlaydi.
+- `APP_MODE=production` da kartalar va demo yorlig‘i ko‘rinmaydi, faqat parol bilan kirish qoladi.
 
 ## Arxitektura qisqacha
 
@@ -85,6 +97,7 @@ Rol almashtirish server sessiyasini almashtiradi (chiqish tugmasi → kirish sah
 - **Pul** butun tiyinda (`bigint`) saqlanadi. Dashboard, registr va hisobotlar bir xil SQL agregatlaridan hisoblanadi; hardcode qilingan statistika yo‘q.
 - **Vaqt** bazada UTC, ekranda Asia/Tashkent. Sana filtri `[kun boshi, keyingi kun boshi)` oralig‘iga aylantiriladi.
 - localStorage faqat tanlangan filialni eslab qolish uchun ishlatiladi.
+- **Demo reset** barcha jadvallarni tozalaydi, shuning uchun bazada demo bo‘lmagan klinika bo‘lsa, reset rad etiladi (`REAL_CLINIC_PRESENT`).
 
 ## Muammolar bo‘lsa
 

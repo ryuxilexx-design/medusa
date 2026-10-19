@@ -121,3 +121,64 @@ export const uziReportSchema = z.object({
 
 export const aiNoteDraftSchema = z.object({ text: z.string().trim().min(10, 'Kamida 10 belgi kiriting').max(6000) });
 export const aiReportSchema = z.object({ question: z.enum(['revenue_today', 'top_services', 'debts']), branch_id: uuid.optional().nullable() });
+
+// ---------- Staff authentication ----------
+/**
+ * A login is either an Uzbek phone number (normalised to +998XXXXXXXXX) or a username
+ * (3–32 chars: a-z, 0-9, dot, underscore, dash), compared case-insensitively.
+ */
+export function normalizeLogin(input: string | null | undefined): string | null {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  const phone = normalizePhone(raw);
+  if (phone) return phone;
+  const u = raw.toLowerCase();
+  return /^[a-z][a-z0-9._-]{2,31}$/.test(u) ? u : null;
+}
+
+export const PASSWORD_RULE = 'Parol kamida 8 belgi, kamida bitta harf va bitta raqamdan iborat bo‘lsin';
+export const passwordSchema = z.string().min(8, PASSWORD_RULE).max(128, 'Parol 128 belgidan oshmasin')
+  .refine((p) => /[A-Za-zЀ-ӿ]/.test(p) && /\d/.test(p), PASSWORD_RULE);
+
+export const passwordLoginSchema = z.object({
+  login: z.string().trim().min(1, 'Telefon yoki loginni kiriting').max(64),
+  password: z.string().min(1, 'Parolni kiriting').max(128),
+  membership_id: uuid.optional(),
+});
+
+export const passwordChangeSchema = z.object({
+  current_password: z.string().min(1, 'Joriy parolni kiriting').max(128),
+  new_password: passwordSchema,
+}).refine((d) => d.current_password !== d.new_password, { message: 'Yangi parol eskisidan farq qilsin', path: ['new_password'] });
+
+const loginField = z.string().transform((s, ctx) => {
+  const l = normalizeLogin(s);
+  if (!l) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Telefon (+998 …) yoki lotin harflaridagi login (3–32 belgi) kiriting' }); return z.NEVER; }
+  return l;
+});
+
+export const staffDoctorSchema = z.object({
+  specialty: trimmed(2, 80, 'Mutaxassislik'),
+  share_percent: z.number().min(0, '0–100 oralig‘ida').max(100, '0–100 oralig‘ida').default(0),
+  service_ids: z.array(uuid).max(100).default([]),
+});
+
+export const staffCreateSchema = z.object({
+  full_name: trimmed(3, 120, 'F.I.Sh.'),
+  role: z.enum(['manager', 'registrar', 'doctor', 'cashier', 'lab'], { errorMap: () => ({ message: 'Rolni tanlang' }) }),
+  title: optionalText(80),
+  login: loginField,
+  branch_ids: z.array(uuid).min(1, 'Kamida bitta filialni tanlang'),
+  doctor: staffDoctorSchema.optional(),
+}).refine((d) => d.role !== 'doctor' || !!d.doctor, { message: 'Shifokor uchun mutaxassislikni kiriting', path: ['doctor.specialty'] });
+
+export const staffUpdateSchema = z.object({
+  full_name: trimmed(3, 120, 'F.I.Sh.').optional(),
+  role: z.enum(['manager', 'registrar', 'cashier', 'lab']).optional(), // doctor role is fixed at creation (linked doctor record)
+  title: optionalText(80),
+  login: loginField.optional(),
+  branch_ids: z.array(uuid).min(1, 'Kamida bitta filialni tanlang').optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+  doctor: staffDoctorSchema.partial().optional(),
+});

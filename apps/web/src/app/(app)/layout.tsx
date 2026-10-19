@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Banknote, Boxes, CalendarDays, FlaskConical, Gauge, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
+  BarChart3, Banknote, Boxes, CalendarDays, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
   Stethoscope, Users, UsersRound, Wallet,
 } from 'lucide-react';
 import { ROLE_LABEL, type Role } from '@meduza/contracts';
 import { SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
 import { fmtTime, localDate, longDate } from '@/lib/format';
-import { cx, Select } from '@/components/ui';
+import { cx, Modal, Select } from '@/components/ui';
+import { PasswordForm } from '@/components/password-form';
 import { confirmLeave, NavigationGuard } from '@/lib/unsaved';
 import { BrandLockup } from '@/components/logo';
 
@@ -45,9 +46,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     window.addEventListener('meduza:unauthorized', onUnauth);
     return () => window.removeEventListener('meduza:unauthorized', onUnauth);
   }, [qc, router]);
+  useEffect(() => {
+    const onChange = () => qc.invalidateQueries({ queryKey: ['me'] });
+    window.addEventListener('meduza:password-change', onChange);
+    return () => window.removeEventListener('meduza:password-change', onChange);
+  }, [qc]);
   useEffect(() => { if (me.isError) router.replace('/login'); }, [me.isError, router]);
   if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Yuklanmoqda…</div>;
+  if (me.data.must_change_password) return <ForcedPasswordChange name={me.data.name} />;
   return <SessionProvider me={me.data}><Shell>{children}</Shell></SessionProvider>;
+}
+
+/** First sign-in with a temporary password: nothing else opens until the person sets their own password. */
+function ForcedPasswordChange({ name }: { name: string }) {
+  const qc = useQueryClient();
+  const logout = useLogout();
+  return (
+    <main className="flex min-h-screen items-start justify-center bg-gradient-to-b from-white to-slate-100 px-4 pt-[10vh]">
+      <div className="w-full max-w-md">
+        <BrandLockup size="lg" />
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h1 className="text-lg font-semibold text-slate-900">Yangi parol o‘rnating</h1>
+          <p className="mt-1 text-sm text-slate-600">{name}, siz vaqtinchalik parol bilan kirdingiz. Davom etish uchun faqat o‘zingiz biladigan parol o‘rnating.</p>
+          <PasswordForm className="mt-5" submitLabel="Parolni saqlash va davom etish" onDone={() => qc.invalidateQueries({ queryKey: ['me'] })} />
+          <button onClick={logout} className="mt-4 text-[13px] text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline">Chiqish</button>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 /** Shows the server's demo clock (same source as appointments, payments and audit), ticking locally. */
@@ -65,6 +91,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const logout = useLogout();
   const [q, setQ] = useState('');
   const [navOpen, setNavOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const items = MENU.filter((m) => m.roles.includes(me.role));
   const canSearch = ['manager', 'registrar', 'doctor', 'cashier'].includes(me.role);
   useEffect(() => setNavOpen(false), [pathname]);
@@ -109,20 +136,28 @@ function Shell({ children }: { children: React.ReactNode }) {
           </form>
         )}
         <div className="ml-auto flex items-center gap-3">
-          <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-800 xl:inline">Demo muhit · Sun’iy ma’lumotlar</span>
+          {me.demo && <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-800 xl:inline">Demo muhit · Sun’iy ma’lumotlar</span>}
           <div className="text-right leading-tight">
             <div className="text-[13px] font-medium text-slate-800">{me.name}</div>
             <div className="text-2xs text-slate-500">{ROLE_LABEL[me.role]}{me.doctor_specialty ? ` · ${me.doctor_specialty}` : ''}</div>
           </div>
-          <button onClick={() => confirmLeave(logout)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" title="Chiqish / rolni almashtirish" aria-label="Chiqish">
+          {me.auth_kind === 'password' && (
+            <button onClick={() => setPwOpen(true)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" title="Parolni o‘zgartirish" aria-label="Parolni o‘zgartirish">
+              <KeyRound className="h-4 w-4" />
+            </button>
+          )}
+          <button onClick={() => confirmLeave(logout)} className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" title={me.auth_kind === 'demo' ? 'Chiqish / rolni almashtirish' : 'Chiqish'} aria-label="Chiqish">
             <LogOut className="h-4 w-4" />
           </button>
         </div>
       </header>
       <div className="mx-auto w-full max-w-[1500px] px-4 py-4 lg:px-5">
-        <span className="mb-2 inline-block rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-800 xl:hidden print:hidden">Demo muhit · Sun’iy ma’lumotlar</span>
+        {me.demo && <span className="mb-2 inline-block rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-800 xl:hidden print:hidden">Demo muhit · Sun’iy ma’lumotlar</span>}
         {children}
       </div>
+      <Modal open={pwOpen} onClose={() => setPwOpen(false)} title="Parolni o‘zgartirish">
+        <PasswordForm submitLabel="Saqlash" onDone={() => setPwOpen(false)} />
+      </Modal>
       <NavigationGuard />
     </div>
   );

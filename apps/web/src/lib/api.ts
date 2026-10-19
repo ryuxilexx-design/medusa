@@ -27,7 +27,8 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   try { json = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
   if (!res.ok) {
     const e = json?.error;
-    if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('/demo/login')) window.dispatchEvent(new Event('meduza:unauthorized'));
+    if (res.status === 401 && typeof window !== 'undefined' && !path.startsWith('/demo/login') && !path.startsWith('/auth/')) window.dispatchEvent(new Event('meduza:unauthorized'));
+    if (e?.code === 'PASSWORD_CHANGE_REQUIRED' && typeof window !== 'undefined') window.dispatchEvent(new Event('meduza:password-change'));
     throw new ApiError(res.status, e?.code ?? 'HTTP_' + res.status, e?.message ?? (res.status >= 500 ? 'Server xatosi. Qayta urinib ko‘ring.' : 'So‘rov bajarilmadi'), e?.fields, e?.details, json?.request_id);
   }
   return json as T;
