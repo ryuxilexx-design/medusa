@@ -5,6 +5,7 @@ import { invalid } from '../core/errors';
 import { isDate } from '../core/validate';
 import { addDays, dayStart, today, toMinutes, weekday } from '../core/clock';
 import { branchScope } from '../core/scope';
+import { NET_LINE } from './billing';
 
 export function range(q: any) {
   const t = today();
@@ -46,14 +47,17 @@ export class DashboardController {
       `SELECT coalesce(sum(total - paid_amount),0)::bigint AS debt, count(*)::int AS invoices FROM invoices
         WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`, [ctx.tenantId, branches]))!;
     const daily = await this.db.rows(
-      `SELECT d::date AS date,
-              (coalesce((SELECT sum(p.amount) FROM payments p WHERE p.tenant_id = $1 AND p.branch_id = ANY($2) AND (p.paid_at AT TIME ZONE 'Asia/Tashkent')::date = d::date),0)
-             - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND (r.refunded_at AT TIME ZONE 'Asia/Tashkent')::date = d::date),0))::bigint AS revenue,
-              (SELECT count(*) FROM payments p WHERE p.tenant_id = $1 AND p.branch_id = ANY($2) AND (p.paid_at AT TIME ZONE 'Asia/Tashkent')::date = d::date)::int AS payments
+      // one indexed range scan per table, grouped by local day (not a subquery per day)
+      `WITH pay AS (SELECT (paid_at AT TIME ZONE 'Asia/Tashkent')::date AS day, sum(amount) AS s, count(*) AS n FROM payments
+                     WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4 GROUP BY 1),
+            ref AS (SELECT (refunded_at AT TIME ZONE 'Asia/Tashkent')::date AS day, sum(amount) AS s FROM refunds
+                     WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4 GROUP BY 1)
+       SELECT d::date AS date, (coalesce(pay.s,0) - coalesce(ref.s,0))::bigint AS revenue, coalesce(pay.n,0)::int AS payments
          FROM generate_series($3::timestamptz AT TIME ZONE 'Asia/Tashkent', ($4::timestamptz AT TIME ZONE 'Asia/Tashkent') - interval '1 day', interval '1 day') d
+         LEFT JOIN pay ON pay.day = d::date LEFT JOIN ref ON ref.day = d::date
         ORDER BY 1`, P);
     const byService = await this.db.rows(
-      `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(it.line_total)::bigint AS value
+      `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(${NET_LINE})::bigint AS value
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
         WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND o.status IN ('completed','verified') AND i.status <> 'void'
         GROUP BY 1,2,3 ORDER BY value DESC`, P);

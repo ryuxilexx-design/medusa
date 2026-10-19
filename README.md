@@ -44,7 +44,7 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (63 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (65 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
 | `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10 + hujjatlar + kassa) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
@@ -120,7 +120,9 @@ Qoidalar:
   - qaysi to‘lovdan, qancha, qanday usulda va qanday sabab bilan qaytarilishi tanlanadi;
   - naqd pul ochiq smena kassasidan chiqadi;
   - qaytarilgan summa hisobdan ham ayriladi, shuning uchun qarz paydo bo‘lmaydi; to‘liq qaytarilgan hisob «Qaytarilgan» holatida bo‘ladi;
-  - ikki marta bosilsa, ikki marta qaytarilmaydi.
+  - ikki marta bosilsa, ikki marta qaytarilmaydi;
+  - qaytarilgan summa shifokor ulushi va xizmatlar hisobotidan ham mutanosib ayriladi.
+- **Kassada yo‘q pul berilmaydi:** naqd qaytarish yoki kassadan xarajat kassadagi summadan oshsa, rad etiladi.
 - **Xarajatlar.** Rahbar **Moliya → Xarajatlar** bo‘limida qo‘shadi (bank, karta yoki kassadan; o‘tgan sana bilan ham). Kassir faqat o‘z kassasidan xarajat yozadi. Xato kiritilgan xarajat sabab bilan bekor qilinadi.
 - **Sof natija.** Moliya sahifasining yuqorisida: tushum − qaytarishlar = sof tushum; − xarajatlar = sof natija. Dashboard tushumi ham qaytarishlarni ayiradi.
 - **Demo:** demo reset ikkala kassirga bugungi ochiq smenani tayyorlaydi.

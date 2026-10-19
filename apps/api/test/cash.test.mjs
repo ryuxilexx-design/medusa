@@ -186,3 +186,59 @@ test('moliya xulosasi: to‘lov − qaytarish − xarajat; dashboard tushumi xul
   assert.equal(dash.kpi.revenue, s.net_revenue); assert.equal(dash.kpi.refunds, refs);
   assert.equal((await cashier.get(`/finance/summary?from=${today}&to=${today}`)).status, 403);
 });
+
+test('qaytarishdan keyin: chegirma 409 (500 emas); to‘liq qaytarilgan xizmat shifokor ulushi va xizmatlar hisobotidan chiqadi; AI matni', async () => {
+  // a partly paid invoice whose payment is refunded is "unpaid" again but carries a credit
+  const inv = await unpaid(central, 20_000_00);
+  const sh = (await cashier.get('/cash-shifts/current')).body.data ?? (await cashier.post('/cash-shifts', { branch_id: central, opening_cash: 0 }), (await cashier.get('/cash-shifts/current')).body.data);
+  if (sh.branch_id !== central) { await cashier.post(`/cash-shifts/${sh.id}/close`, { counted_cash: sh.expected_cash }); await cashier.post('/cash-shifts', { branch_id: central, opening_cash: 0 }); }
+  const pay = (await cashier.post(`/invoices/${inv.id}/payments`, { amount: 10_000_00, method: 'card' }, key())).body.data.payment;
+  assert.equal((await manager.post(`/invoices/${inv.id}/refunds`, { payment_id: pay.id, amount: 10_000_00, method: 'card', reason_code: 'other', reason: 'Bemor rad etdi' }, key())).status, 201);
+  const back = (await manager.get(`/invoices/${inv.id}`)).body.data;
+  assert.equal(back.status, 'unpaid'); assert.ok(Number(back.credit_amount) > 0);
+  const disc = await manager.post(`/invoices/${inv.id}/discount`, { type: 'percent', value: 100, reason: 'Sinov' });
+  assert.equal(disc.status, 409, disc.text); assert.equal(disc.body.error.code, 'INVOICE_LOCKED');
+
+  // a completed, paid service refunded in full: the doctor's share for it drops to zero
+  const row = (await pool.query(
+    `SELECT i.id AS invoice_id, o.performer_doctor_id AS doctor_id, (o.performed_at AT TIME ZONE 'Asia/Tashkent')::date::text AS day,
+            sum(it.line_total) OVER (PARTITION BY i.id, o.performer_doctor_id) AS lines
+       FROM invoices i JOIN invoice_items it ON it.invoice_id = i.id JOIN service_orders o ON o.id = it.order_id
+      WHERE i.tenant_id = $1 AND i.status = 'paid' AND i.credit_amount = 0 AND o.status = 'completed' AND o.performer_doctor_id IS NOT NULL
+        AND (SELECT count(*) FROM payments p WHERE p.invoice_id = i.id) = 1 AND (SELECT count(DISTINCT o2.performer_doctor_id) FROM invoice_items it2 JOIN service_orders o2 ON o2.id = it2.order_id WHERE it2.invoice_id = i.id) = 1
+      LIMIT 1`, [SEED_IDS.tenant])).rows[0];
+  assert.ok(row, 'seed’da bitta shifokorli to‘langan hisob bor');
+  const doc = async () => (await manager.get(`/reports/doctors?from=${row.day}&to=${row.day}`)).body.data.find((d) => d.doctor_id === row.doctor_id);
+  const before = await doc();
+  const full = (await manager.get(`/invoices/${row.invoice_id}`)).body.data;
+  const r = await manager.post(`/invoices/${row.invoice_id}/refunds`, { payment_id: full.payments[0].id, amount: Number(full.paid_amount), method: 'transfer', reason_code: 'patient_complaint', reason: 'Shikoyat bo‘yicha to‘liq qaytarildi' }, key());
+  assert.equal(r.status, 201, r.text);
+  const after = await doc();
+  assert.equal(before.value - after.value, Number(row.lines), 'qaytarilgan xizmat qiymati ulush hisobidan chiqdi');
+  assert.ok(after.share < before.share);
+  const ai = await manager.post('/ai/report-explanation', { question: 'revenue_today' });
+  assert.match(ai.body.data.text, /qaytarish/); assert.match(ai.body.data.text, /Sof tushum/);
+  assert.equal(ai.body.data.facts.revenue, ai.body.data.facts.payments_total - ai.body.data.facts.refunds_total);
+});
+
+test('poyga: xarajatni bekor qilish va smenani yopish bir vaqtda — yopilgan smena hisobi bazaga mos', async () => {
+  // a fresh drawer with cash in it
+  const prev = (await cashier.get('/cash-shifts/current')).body.data;
+  if (prev) await cashier.post(`/cash-shifts/${prev.id}/close`, { counted_cash: Math.max(prev.expected_cash, 0), note: 'sinov' });
+  assert.equal((await cashier.post('/cash-shifts', { branch_id: central, opening_cash: 100_000_00 })).status, 201);
+  // more cash than the drawer holds cannot leave it
+  const tooMuch = await cashier.post('/expenses', { category: 'Boshqa', amount: 100_000_01, note: 'Ortiqcha' });
+  assert.equal(tooMuch.status, 409); assert.equal(tooMuch.body.error.code, 'INSUFFICIENT_CASH');
+  const e = (await cashier.post('/expenses', { category: 'Boshqa', amount: 7_000_00, note: 'Poyga sinovi' })).body.data;
+  const cur = (await cashier.get('/cash-shifts/current')).body.data;
+  const [v, c] = await Promise.all([
+    manager.post(`/expenses/${e.id}/void`, { reason: 'Poyga' }),
+    cashier.post(`/cash-shifts/${cur.id}/close`, { counted_cash: cur.expected_cash, note: 'poyga sinovi' }),
+  ]);
+  assert.equal(c.status, 200, c.text);
+  assert.ok([200, 409].includes(v.status), v.text);
+  const s = (await pool.query(`SELECT totals FROM cash_shifts WHERE id = $1`, [cur.id])).rows[0];
+  const active = Number((await pool.query(`SELECT coalesce(sum(amount),0)::bigint AS s FROM expenses WHERE shift_id = $1 AND status = 'active' AND paid_from = 'cash_drawer'`, [cur.id])).rows[0].s);
+  assert.equal(s.totals.cash_expenses.sum, active, 'smena hisobotidagi xarajat bazadagi faol xarajatga teng');
+  if (v.status === 409) assert.equal(v.body.error.code, 'SHIFT_CLOSED');
+});

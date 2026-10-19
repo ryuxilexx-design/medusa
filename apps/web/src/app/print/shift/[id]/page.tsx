@@ -17,6 +17,8 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
   if (q.isLoading) return <div className="flex h-screen items-center justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /></div>;
   if (q.isError) return <div className="mx-auto mt-20 max-w-md rounded-lg border bg-white"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div>;
   const s = q.data, t = s.totals;
+  // business time is the demo clock (server "now" + time elapsed since /me was fetched), never the browser date
+  const demoNow = me.data ? new Date(Date.parse(me.data.now) + (Date.now() - me.data.fetched_at)) : new Date(s.opened_at);
   const closed = s.status === 'closed';
   const row = (k: string, v: string, strong = false) => <tr className={strong ? 'border-t border-slate-400 font-semibold' : ''}><td className="py-0.5 pr-4">{k}</td><td className="py-0.5 text-right tabular-nums">{v}</td></tr>;
   return (
@@ -28,7 +30,7 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
       <article className="mx-auto max-w-[210mm] bg-white p-[14mm] text-[13px] leading-relaxed text-slate-900 shadow-lg print:max-w-none print:p-0 print:shadow-none">
         <header className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
           <div className="flex items-center gap-3"><BrandMark compact className="h-10 w-10" /><div><BrandWordmark className="text-lg" /><div className="text-xs text-slate-600">{me.data?.clinic_name} · {s.branch_name}</div></div></div>
-          <div className="text-right text-xs">{me.data?.demo && <div className="font-bold text-red-700">DEMO — SUN’IY MA’LUMOT</div>}<div>Smena №{s.number}</div><div>{closed ? 'Yakuniy hisobot' : `Oraliq hisobot · ${fmtDateTime(new Date().toISOString())}`}</div></div>
+          <div className="text-right text-xs">{me.data?.demo && <div className="font-bold text-red-700">DEMO — SUN’IY MA’LUMOT</div>}<div>Smena №{s.number}</div><div>{closed ? 'Yakuniy hisobot' : `Oraliq hisobot · ${fmtDateTime(demoNow.toISOString())}`}</div></div>
         </header>
         <h1 className="mt-4 text-xl font-bold">Kassa smenasi hisoboti {closed ? '' : <span className="ml-2 rounded border-2 border-amber-500 px-2 text-base uppercase text-amber-600">Smena ochiq</span>}</h1>
         <p className="mt-1 text-slate-600">Kassir: <b className="text-slate-900">{s.cashier_name}</b> · Ochildi: {fmtDateTime(s.opened_at)}{closed && <> · Yopildi: {fmtDateTime(s.closed_at)} ({s.closed_by_name})</>}</p>

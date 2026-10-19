@@ -15,7 +15,8 @@ Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server teks
 | Sof natija (tushum − qaytarish − xarajat) | Ishlaydi | API test: xulosa SQL bilan teng; **dashboard tushumi sof tushumga teng** (qaytarishlar ayiriladi) |
 
 Cheklovlar:
-- **Qaytarish butun hisob darajasida.** Xizmatlar hisobotida (accrual) qaytarilgan xizmat qiymati qolishi mumkin; kassa hisobotlari (cash) to‘g‘ri.
+- **Qaytarish butun hisob darajasida** va hisobdagi xizmatlarga mutanosib taqsimlanadi (shifokor ulushi, xizmatlar hisoboti, dashboard). Qaysi xizmat aynan qaytarilganini tanlash imkoni hali yo‘q.
+- **Kod tekshiruvidan keyin (0.6.1):** xarajatni bekor qilish va smena yopish poygasi, qaytarishdan keyin chegirma (500 xato), smena yopish oynasida eski summa, oraliq hisobot sanasi, kassadan ortiqcha pul chiqishi tuzatildi; har biriga test bor.
 - **Fiskal emas:** smena hisoboti fiskal Z-hisobot emas, fiskal chek integratsiyasi keyingi bosqichda.
 - **Haqiqiy kassada sinalmagan:** jonli demo bazasida ochiq smena yo‘q (u faqat demo reset’da yaratiladi). Shuning uchun uchrashuvda kassir avval smenani ochadi.
 
@@ -209,7 +210,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 63/63 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar, 5 ta qabul hujjatlari, 6 ta kassa testi |
+| `npm test` (meduza_test) | 65/65 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar, 5 ta qabul hujjatlari, 8 ta kassa testi |
 | `npm run e2e` (izolyatsiyalangan stek) | 89/89: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 + 7 qabul hujjatlari + 12 kassa |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |

@@ -80,8 +80,11 @@ function OpenShiftModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-export function CloseShiftModal({ shift, onClose }: { shift: Shift; onClose: () => void }) {
+export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onClose: () => void }) {
   const qc = useQueryClient();
+  // live numbers: a payment may arrive while the modal is open (the server recomputes on close anyway)
+  const live = useQuery({ queryKey: ['cash-shift', initial.id], queryFn: () => api<{ data: Shift }>(`/cash-shifts/${initial.id}`).then((r) => r.data), refetchInterval: 10_000 });
+  const shift = live.data ?? initial;
   const toast = useToast();
   const [counted, setCounted] = useState('');
   const [note, setNote] = useState('');
@@ -92,7 +95,11 @@ export function CloseShiftModal({ shift, onClose }: { shift: Shift; onClose: () 
   const m = useMutation({
     mutationFn: () => api<{ data: { difference: number } }>(`/cash-shifts/${shift.id}/close`, { method: 'POST', body: { counted_cash: tiyin, note: note.trim() || null } }),
     onSuccess: (r) => { invalidate(qc); toast.success(r.data.difference ? `Smena yopildi, farq ${formatSom(r.data.difference)}` : 'Smena yopildi, kassa mos'); onClose(); window.open(`/print/shift/${shift.id}`, '_blank', 'noopener'); },
-    onError: (e) => { if (e instanceof ApiError && e.fields) setErrors(e.fields); else setErr((e as Error).message); },
+    onError: (e) => {
+      // a field error the form does not show (e.g. the expected cash changed meanwhile) must still be visible
+      if (e instanceof ApiError && e.fields) { setErrors(e.fields); setErr(e.fields.counted_cash || e.fields.note ? null : e.message); live.refetch(); }
+      else setErr((e as Error).message);
+    },
   });
   const t = shift.totals;
   return (
@@ -111,7 +118,7 @@ export function CloseShiftModal({ shift, onClose }: { shift: Shift; onClose: () 
           {(id) => <Input id={id} inputMode="decimal" className="w-48" value={counted} onChange={(e) => { setCounted(e.target.value); setErrors({}); }} autoFocus />}
         </Field>
         {diff != null && <Alert tone={diff === 0 ? 'green' : 'yellow'} title={diff === 0 ? 'Kassa mos' : `Farq: ${diff > 0 ? '+' : ''}${formatSom(diff)}`}>{diff === 0 ? 'Sanalgan pul kutilgan summaga teng.' : diff > 0 ? 'Kassada ortiqcha pul bor.' : 'Kassada pul yetmayapti.'}</Alert>}
-        {diff != null && diff !== 0 && (
+        {diff != null && (diff !== 0 || errors.note) && (
           <Field label="Farq sababi" required error={errors.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Masalan: qaytim xatosi" />}</Field>
         )}
         <p className="text-xs text-slate-500">Yopilgan smena o‘zgartirilmaydi. Hisobot yangi oynada ochiladi.</p>

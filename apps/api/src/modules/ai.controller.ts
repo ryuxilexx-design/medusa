@@ -13,6 +13,7 @@ import { AiClient } from '../ai/ai-client';
 import { Icd10Service } from '../ai/icd10';
 import { NewsService, SPECIALTIES, specialtyByKey, specialtyOf } from '../ai/news';
 import { PatientIdentity, redact } from '../ai/redact';
+import { NET_LINE } from './billing';
 
 /** The single demo text that sample mode recognises. Any other text is rejected in sample mode (no fake "AI" answers). */
 export const SAMPLE_NOTE_TEXT =
@@ -165,14 +166,16 @@ export class AiController {
     const t = today();
     let facts: Record<string, unknown>; let text: string; let link: string;
     if (question === 'revenue_today') {
-      const r = (await this.db.one(`SELECT (coalesce(sum(amount),0) - coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0))::bigint AS s,
-              count(*)::int AS n FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4`,
-        [ctx.tenantId, branches, dayStart(t), dayStart(addDays(t, 1))]))!;
-      facts = { date: t, revenue: Number(r.s), payments: r.n };
-      text = r.n ? `${t} kuni ${r.n} ta to‘lov qayd etilgan, jami ${formatSom(Number(r.s))}.` : `${t} kuni hali to‘lov qayd etilmagan.`;
+      const P = [ctx.tenantId, branches, dayStart(t), dayStart(addDays(t, 1))];
+      const p = (await this.db.one(`SELECT coalesce(sum(amount),0)::bigint AS s, count(*)::int AS n FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4`, P))!;
+      const r = (await this.db.one(`SELECT coalesce(sum(amount),0)::bigint AS s, count(*)::int AS n FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4`, P))!;
+      const net = Number(p.s) - Number(r.s);
+      facts = { date: t, payments_total: Number(p.s), payments: p.n, refunds_total: Number(r.s), refunds: r.n, revenue: net };
+      text = (p.n ? `${t} kuni ${p.n} ta to‘lov qayd etilgan, jami ${formatSom(Number(p.s))}.` : `${t} kuni hali to‘lov qayd etilmagan.`)
+        + (r.n ? ` ${r.n} ta qaytarish: ${formatSom(Number(r.s))}. Sof tushum: ${formatSom(net)}.` : '');
       link = `/finance?from=${t}&to=${t}`;
     } else if (question === 'top_services') {
-      const rows = await this.db.rows(`SELECT o.service_name, sum(it.line_total)::bigint AS v FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
+      const rows = await this.db.rows(`SELECT o.service_name, sum(${NET_LINE})::bigint AS v FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
         WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND o.status IN ('completed','verified') AND i.status <> 'void'
         GROUP BY 1 ORDER BY v DESC LIMIT 3`, [ctx.tenantId, branches, dayStart(addDays(t, -29)), dayStart(addDays(t, 1))]);
       facts = { from: addDays(t, -29), to: t, top: rows.map((r) => ({ service: r.service_name, value: Number(r.v) })) };

@@ -5,6 +5,7 @@ import { forbidden, notFound } from '../core/errors';
 import { isUuid, pageParams } from '../core/validate';
 import { branchScope } from '../core/scope';
 import { range } from './dashboard.controller';
+import { NET_LINE } from './billing';
 
 // Performed services = consultations completed / lab verified / ultrasound & procedures completed, on non-void invoices.
 const PERFORMED = `o.status IN ('completed','verified') AND i.status <> 'void'`;
@@ -17,7 +18,7 @@ export class ReportsController {
   async services(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const r = range(q);
     const rows = await this.db.rows(
-      `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(it.line_subtotal)::bigint AS gross, sum(it.discount_share)::bigint AS discount, sum(it.line_total)::bigint AS value
+      `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(it.line_subtotal)::bigint AS gross, sum(it.discount_share)::bigint AS discount, sum(it.line_total - ${NET_LINE})::bigint AS refunded, sum(${NET_LINE})::bigint AS value
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
         WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND ${PERFORMED}
         GROUP BY 1,2,3 ORDER BY value DESC`, [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
@@ -33,8 +34,8 @@ export class ReportsController {
     if (ctx.role === 'doctor') { params.push(ctx.doctorId); docFilter = `AND d.id = $${params.length}`; }
     const rows = await this.db.rows(
       `SELECT d.id AS doctor_id, d.display_name AS name, d.specialty,
-              count(o.id)::int AS services, coalesce(sum(it.line_total),0)::bigint AS value,
-              coalesce(sum(round(it.line_total * o.share_percent_snapshot / 100)),0)::bigint AS share
+              count(o.id)::int AS services, coalesce(sum(${NET_LINE}),0)::bigint AS value,
+              coalesce(sum(round(${NET_LINE} * o.share_percent_snapshot / 100)),0)::bigint AS share
          FROM doctors d
          LEFT JOIN service_orders o ON o.performer_doctor_id = d.id AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND o.status IN ('completed','verified')
          LEFT JOIN invoice_items it ON it.order_id = o.id LEFT JOIN invoices i ON i.id = it.invoice_id
@@ -81,7 +82,7 @@ export class ReportsController {
               to_char(s.break_end,'HH24:MI') AS break_end, b.name AS branch_name, r.name AS room_name
          FROM schedules s JOIN branches b ON b.id = s.branch_id LEFT JOIN rooms r ON r.id = s.room_id WHERE s.doctor_id = $1 ORDER BY (s.weekday + 6) % 7`, [id]);
     const services = await this.db.rows(
-      `SELECT o.id, o.service_name, o.category, o.performed_at, it.line_total, o.share_percent_snapshot, round(it.line_total * o.share_percent_snapshot / 100)::bigint AS share,
+      `SELECT o.id, o.service_name, o.category, o.performed_at, ${NET_LINE} AS line_total, o.share_percent_snapshot, round(${NET_LINE} * o.share_percent_snapshot / 100)::bigint AS share,
               p.patient_number, p.last_name, p.first_name
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id JOIN patients p ON p.id = o.patient_id
         WHERE o.performer_doctor_id = $1 AND o.performed_at >= $2 AND o.performed_at < $3 AND ${PERFORMED} AND o.branch_id = ANY($4)

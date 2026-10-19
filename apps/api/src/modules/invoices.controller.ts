@@ -9,7 +9,7 @@ import { isDate, isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { addDays, dayStart, now, TZ_OFFSET_MS } from '../core/clock';
 import { branchScope } from '../core/scope';
-import { recalcInvoice } from './billing';
+import { invoiceStatus, recalcInvoice } from './billing';
 
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
 
@@ -79,7 +79,7 @@ export class InvoicesController {
     const input = parse(discountSchema, body);
     return this.db.tx(async (c) => {
       const inv = await lockInvoice(c, ctx, id);
-      if (inv.status !== 'unpaid' || Number(inv.paid_amount) > 0) throw conflict('INVOICE_LOCKED', 'To‘lov qayd etilgan yoki bekor qilingan hisobga chegirma qo‘llanmaydi');
+      if (inv.status !== 'unpaid' || Number(inv.paid_amount) > 0 || Number(inv.credit_amount) > 0) throw conflict('INVOICE_LOCKED', 'To‘lov yoki qaytarish bo‘lgan, yoxud bekor qilingan hisobga chegirma qo‘llanmaydi');
       const value = input.type === 'amount' ? Math.round(input.value) : input.value; // amount in tiyin
       if (input.type === 'amount' && value > Number(inv.subtotal)) throw invalid({ value: 'Chegirma hisob summasidan oshmasligi kerak' });
       await c.query(`UPDATE invoices SET discount_type = $2, discount_value = $3, discount_reason = $4, discount_approved_by_name = $5 WHERE id = $1`, [id, input.type, value, input.reason, ctx.name]);
@@ -112,7 +112,7 @@ export class InvoicesController {
       if (due <= 0) throw conflict('INVOICE_PAID', 'Hisob to‘liq to‘langan');
       if (input.amount > due) throw invalid({ amount: `Summa qoldiqdan (${som(due)} so‘m) oshmasligi kerak` });
       // money is taken only in an open shift of this branch (FOR SHARE: a concurrent close waits for this payment)
-      const shift = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE cashier_membership_id = $1 AND status = 'open' FOR SHARE`, [ctx.membershipId])).rows[0];
+      const shift = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' FOR SHARE`, [ctx.tenantId, ctx.membershipId])).rows[0];
       if (!shift) throw conflict('SHIFT_REQUIRED', 'To‘lov qabul qilish uchun avval kassa smenasini oching');
       if (shift.branch_id !== inv.branch_id) throw conflict('SHIFT_OTHER_BRANCH', 'Smenangiz boshqa filialda ochilgan. Shu filial hisobiga to‘lov olish uchun smenani yopib, shu filialda oching.');
       const receipt = (await c.query(`UPDATE tenants SET receipt_seq = receipt_seq + 1 WHERE id = $1 RETURNING receipt_seq`, [ctx.tenantId])).rows[0].receipt_seq;
@@ -122,7 +122,7 @@ export class InvoicesController {
         [ctx.tenantId, inv.branch_id, id, receipt, input.amount, input.method, ctx.membershipId, ctx.name, now(), input.note, key, hash, shift.id])).rows[0];
       const paid = Number(inv.paid_amount) + input.amount;
       await c.query(`UPDATE invoices SET paid_amount = $2, status = $3, version = version + 1, updated_at = demo_now() WHERE id = $1`,
-        [id, paid, paid >= Number(inv.total) ? 'paid' : 'partially_paid']);
+        [id, paid, invoiceStatus({ status: inv.status, total: Number(inv.total), paid, credit: Number(inv.credit_amount), hasItems: true })]);
       await audit(c, ctx, 'payment.create', 'invoice', id, `To‘lov: ${som(input.amount)} so‘m (${PAYMENT_METHOD_LABEL[input.method]}), qayd №${receipt}`, inv.branch_id);
       res.status(201);
       return { data: { payment, invoice: await this.invoiceState(c, id), replayed: false } };

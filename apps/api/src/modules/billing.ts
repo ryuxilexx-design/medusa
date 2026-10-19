@@ -33,7 +33,7 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
       o.doctorId, o.performerDoctorId, at, ctx.membershipId])).rows[0].id;
 
   let invoice = o.appointmentId ? (await q.query(
-    `SELECT id FROM invoices WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'unpaid' AND paid_amount = 0 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+    `SELECT id FROM invoices WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'unpaid' AND paid_amount = 0 AND credit_amount = 0 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
     [o.appointmentId, ctx.tenantId])).rows[0] : undefined;
   if (!invoice) {
     const num = await nextInvoiceNumber(q, ctx.tenantId);
@@ -50,6 +50,13 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
 }
 
 /** Recomputes subtotal, discount allocation (proportional, remainder on the last line) and total. Only valid before any payment. */
+/**
+ * Line value after refunds (SQL, needs aliases `it` = invoice_items and `i` = invoices). A refund reduces the whole
+ * invoice (credit), so each line keeps its share: line_total × total / (subtotal − discount). Without refunds the
+ * value is exactly line_total. Used for service revenue, doctor share and service rankings.
+ */
+export const NET_LINE = `(CASE WHEN i.credit_amount = 0 THEN it.line_total ELSE coalesce(round(it.line_total * i.total::numeric / NULLIF(i.subtotal - i.discount_amount, 0)), 0) END)`;
+
 /** One rule for invoice status everywhere (payments, refunds, recalculation). paid is net of refunds. */
 export function invoiceStatus(inv: { status?: string; total: number; paid: number; credit: number; hasItems: boolean }) {
   if (inv.status === 'void') return 'void';
