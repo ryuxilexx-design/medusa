@@ -1,4 +1,4 @@
-// Starts an ISOLATED Meduza stack for browser tests: API :4100 + web :3100 on the *_test database.
+// Starts an ISOLATED Med.uz.ai stack for browser tests: API :4100 + web :3100 on the *_test database.
 // The demo database and the demo servers (:3000/:4000) are never touched.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';

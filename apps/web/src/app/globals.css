@@ -6,7 +6,7 @@
 html, body { background: #f4f6f8; color: #0f172a; }
 body { font-feature-settings: 'tnum' 0; -webkit-font-smoothing: antialiased; }
 .tabular { font-variant-numeric: tabular-nums; }
-:focus-visible { outline-color: #17958c; }
+:focus-visible { outline-color: #4a86d6; }
 
 @media print {
   @page { size: A4; margin: 14mm 14mm 16mm; }

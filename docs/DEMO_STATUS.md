@@ -1,4 +1,4 @@
-# Meduza demo — holat va tekshiruv natijalari
+# Med.uz.ai demo — holat va tekshiruv natijalari
 
 Yangilangan: 17-oktabr 2026 (kechqurun) · Demo sanasi: 18-oktabr 2026 · Reliz: 0.1 (demo MVP)
 
@@ -29,7 +29,7 @@ Oldingi hisobotdagi «P0 to‘liq» da’vosi qayta tekshirildi. Natija: **P0 ya
 
 | Mezon | Natija | Qanday tekshirildi |
 |---|---|---|
-| Barcha mahsulot nomlari Meduza, «Clinic OS» yo‘q | O‘tdi | Manba kodi va hujjatlarda «clinic os» qidiruvi — topilmadi |
+| Barcha mahsulot nomlari Med.uz.ai, «Clinic OS» yo‘q | O‘tdi | Manba kodi va hujjatlarda «clinic os» qidiruvi — topilmadi |
 | 5 rol o‘z menyusi bilan kiradi, sessiya serverda | O‘tdi | API test; brauzer o‘tishi (5 rol) |
 | 100 seed bemor, demo kunida jadval/navbat bo‘sh emas | O‘tdi | API test; demo bazada SQL: bugun 30 qabul, navbatda 20 ta |
 | Yangi bemor qidiruvda topiladi va refreshdan keyin qoladi | O‘tdi | API test; brauzer E2E; DB va API restartidan keyin |

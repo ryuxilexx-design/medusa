@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * Deterministic synthetic demo data for Meduza.
+ * Deterministic synthetic demo data for Med.uz.ai.
  *
  * Everything is derived from the demo date and a fixed PRNG seed, and every id is a
  * stable hash of a fixture key, so running the seed twice yields identical rows.
@@ -681,7 +681,7 @@ export function buildSeed(demoDate: string): SeedData {
     invoiceTimeline.push({ inv, v });
     for (const o of v.orders) data.service_orders.push(o);
   }
-  data.tenants.push({ id: T, name: 'Meduza Demo Clinic', status: 'active', patient_seq: 1100, invoice_seq: 10000 + invoiceSeq, receipt_seq: 50000 + receiptSeq, created_at: createdBase, updated_at: createdBase });
+  data.tenants.push({ id: T, name: 'Med.uz.ai Demo Clinic', status: 'active', patient_seq: 1100, invoice_seq: 10000 + invoiceSeq, receipt_seq: 50000 + receiptSeq, created_at: createdBase, updated_at: createdBase });
 
   // patient creation audit (the 30 most recent)
   patients.slice(-30).forEach((p) => audit(p.created_at, BC, M.registrar, 'Malika Yusupova', 'registrar', 'patient.create', 'patient', p.id, `Bemor #${p.patient_number} yaratildi`));

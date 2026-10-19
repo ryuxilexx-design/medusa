@@ -41,7 +41,7 @@ function Clinic() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <div className="space-y-3">
-        <Field label="Klinika nomi" hint="Haqiqiy klinika nomi berilsa shu yerda almashtiriladi. Mahsulot nomi — Meduza.">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
+        <Field label="Klinika nomi" hint="Haqiqiy klinika nomi berilsa shu yerda almashtiriladi. Mahsulot nomi — Med.uz.ai.">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
         <Button variant="primary" disabled={!name.trim() || name === s.data?.name} loading={m.isPending} onClick={() => m.mutate()}>Saqlash</Button>
         <h3 className="pt-4 text-sm font-semibold">Filiallar</h3>
         <ul className="divide-y rounded-md border text-sm">{b.data?.map((x) => <li key={x.id} className="px-3 py-2"><b>{x.name}</b> <span className="text-slate-500">· {x.code} · {x.address} · {x.timezone}</span></li>)}</ul>

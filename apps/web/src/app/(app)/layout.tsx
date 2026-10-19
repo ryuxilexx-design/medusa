@@ -12,7 +12,7 @@ import { SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/sessio
 import { fmtTime, localDate, longDate } from '@/lib/format';
 import { cx, Select } from '@/components/ui';
 import { confirmLeave, NavigationGuard } from '@/lib/unsaved';
-import { MeduzaMark } from '@/components/logo';
+import { BrandLockup } from '@/components/logo';
 
 type Item = { href: string; label: string; icon: React.ElementType; roles: Role[] };
 // Menu order follows the TZ; each role only sees what it can use. The server enforces the same rules.
@@ -72,7 +72,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:pl-56">
       <aside className={cx('fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-slate-200 bg-white transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full')}>
-        <Link href="/" className="flex h-14 items-center gap-2 border-b border-slate-100 px-4"><MeduzaMark /><span className="text-[17px] font-semibold tracking-tight">Meduza</span></Link>
+        <Link href="/" className="flex h-14 items-center border-b border-slate-100 px-4" aria-label="Med.uz.ai — bosh sahifa"><BrandLockup /></Link>
         <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Asosiy menyu">
           {items.map((it) => {
             const active = pathname === it.href || pathname.startsWith(it.href + '/');
@@ -85,7 +85,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="border-t border-slate-100 p-3 text-2xs text-slate-400">Meduza · demo reliz 0.1</div>
+        <div className="border-t border-slate-100 p-3 text-2xs text-slate-400">Med.uz.ai · demo reliz 0.1</div>
       </aside>
       {navOpen && <div className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" onClick={() => setNavOpen(false)} />}
 

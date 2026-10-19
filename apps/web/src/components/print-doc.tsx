@@ -2,10 +2,10 @@
 import { Loader2, Printer } from 'lucide-react';
 import { useMeQuery } from '@/lib/session';
 import { fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
-import { MeduzaMark } from './logo';
+import { BrandMark, BrandWordmark } from './logo';
 import { ErrorState } from './ui';
 
-/** A4 document shell: Meduza + clinic/branch, patient ID, document number, date, responsible person, status and the DEMO mark. */
+/** A4 document shell: Med.uz.ai + clinic/branch, patient ID, document number, date, responsible person, status and the DEMO mark. */
 export function PrintDoc({ title, number, date, branch, patient, responsible, status, draft, children }: {
   title: string; number: string; date: string | Date; branch?: string; patient: any; responsible: string; status: string; draft?: boolean; children: React.ReactNode;
 }) {
@@ -22,7 +22,7 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
         </div>
         <div className="relative">
           <header className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
-            <div className="flex items-center gap-3"><MeduzaMark className="h-10 w-10" /><div><div className="text-lg font-bold">Meduza</div><div className="text-xs text-slate-600">{me.data?.clinic_name ?? '…'}{branch ? ` · ${branch}` : ''}</div></div></div>
+            <div className="flex items-center gap-3"><BrandMark compact className="h-11 w-11" /><div><div className="text-lg leading-tight"><BrandWordmark className="text-lg" /></div><div className="text-xs text-slate-600">{me.data?.clinic_name ?? '…'}{branch ? ` · ${branch}` : ''}</div></div></div>
             <div className="text-right text-xs"><div className="font-bold text-red-700">DEMO — SUN’IY MA’LUMOT</div><div>Hujjat № {number}</div><div>Sana: {fmtDateTime(date)}</div></div>
           </header>
           <div className="mt-4 flex items-center justify-between gap-4">
@@ -38,7 +38,7 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
           <div className="mt-4">{children}</div>
           <footer className="print-avoid-break mt-10 flex items-end justify-between border-t border-slate-300 pt-3 text-xs text-slate-600">
             <div>Mas’ul: <b className="text-slate-800">{responsible}</b><div className="mt-6">Imzo: ______________________</div></div>
-            <div className="max-w-[60%] text-right">«Tasdiqlangan» holati tizimdagi ish jarayoni belgisi, huquqiy elektron raqamli imzo emas.<br />Meduza demo muhiti — barcha ma’lumotlar sun’iy.</div>
+            <div className="max-w-[60%] text-right">«Tasdiqlangan» holati tizimdagi ish jarayoni belgisi, huquqiy elektron raqamli imzo emas.<br />Med.uz.ai demo muhiti — barcha ma’lumotlar sun’iy.</div>
           </footer>
         </div>
       </article>

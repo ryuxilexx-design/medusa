@@ -7,7 +7,7 @@ import type { Role } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { HOME_BY_ROLE } from '@/lib/session';
 import { Button, ErrorState, Input, Select, Skeleton, useToast } from '@/components/ui';
-import { MeduzaWordmark } from '@/components/logo';
+import { BrandLockup } from '@/components/logo';
 
 type Account = { membership_id: string; role: Role; title: string; full_name: string; specialty: string | null };
 const CARDS: { role: Role; label: string; text: string; icon: React.ReactNode }[] = [
@@ -46,7 +46,7 @@ export default function LoginPage() {
     <main className="min-h-screen bg-gradient-to-b from-white to-slate-100">
       <div className="mx-auto flex max-w-5xl flex-col px-6 py-10">
         <div className="flex items-center justify-between">
-          <MeduzaWordmark />
+          <BrandLockup size="lg" />
           <span className="rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">Demo muhit · Sun’iy ma’lumotlar</span>
         </div>
         <div className="mt-12 max-w-2xl">

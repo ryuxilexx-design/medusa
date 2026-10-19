@@ -1,4 +1,4 @@
-# Meduza — namoyish ssenariysi (8–10 daqiqa)
+# Med.uz.ai — namoyish ssenariysi (8–10 daqiqa)
 
 ## Uchrashuvdan oldin
 
@@ -41,7 +41,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 
 ## Ochilish (0:00)
 
-> «Meduza’da bemor bir marta ro‘yxatdan o‘tadi. Registratura, shifokor, laboratoriya va kassa uning xizmatlari ustida bir tizimda ishlaydi. Siz esa natijani rahbar panelida kuzatasiz.»
+> «Med.uz.ai’da bemor bir marta ro‘yxatdan o‘tadi. Registratura, shifokor, laboratoriya va kassa uning xizmatlari ustida bir tizimda ishlaydi. Siz esa natijani rahbar panelida kuzatasiz.»
 
 ## Qadamlar
 

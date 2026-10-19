@@ -1,4 +1,4 @@
-# Meduza — klinika boshqaruv platformasi (demo MVP)
+# Med.uz.ai — klinika boshqaruv platformasi (demo MVP)
 
 Registratura, shifokor, laboratoriya, kassa va rahbariyat bitta ma’lumot bilan ishlaydigan ko‘p tarmoqli klinika uchun demo.
 Barcha ma’lumotlar sun’iy. Texnik topshiriq: [`docs/MVP_TZ.md`](docs/MVP_TZ.md).

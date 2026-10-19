@@ -184,7 +184,7 @@ export class PaymentsController {
     const lines = [['Qayd №', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Usul', 'Summa (so‘m)', 'Kassir', 'Izoh'].map(cell).join(';')];
     for (const r of rows) lines.push([r.receipt_number, fmt(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], (Number(r.amount) / 100).toFixed(2), r.cashier_name, r.note].map(cell).join(';'));
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="meduza-tolovlar-${q.from || 'all'}-${q.to || ''}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="meduzai-tolovlar-${q.from || 'all'}-${q.to || ''}.csv"`);
     res.send('﻿' + lines.join('\r\n'));
   }
 

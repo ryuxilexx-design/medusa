@@ -128,7 +128,7 @@ function RevenueChart({ data }: { data: { date: string; revenue: number; payment
                   onClick={() => router.push(`/finance?from=${x.date}&to=${x.date}`)} onKeyDown={(e) => { if (e.key === 'Enter') router.push(`/finance?from=${x.date}&to=${x.date}`); }}
                   tabIndex={0} role="link" aria-label={`${fmtDate(x.date)}: ${formatSom(x.revenue)}`} className="cursor-pointer focus:outline-none">
                   <rect x={pad + step * i} y={0} width={step} height={H} fill="transparent" />
-                  {x.revenue > 0 && <path d={`M${cxp - bw / 2},${H} v${-Math.max(h - 4, 0)} q0,-4 4,-4 h${bw - 8} q4,0 4,4 v${Math.max(h - 4, 0)} z`} fill={hover === i ? '#11605c' : '#17958c'} />}
+                  {x.revenue > 0 && <path d={`M${cxp - bw / 2},${H} v${-Math.max(h - 4, 0)} q0,-4 4,-4 h${bw - 8} q4,0 4,4 v${Math.max(h - 4, 0)} z`} fill={hover === i ? '#25519c' : '#4a86d6'} />}
                   {showLabel && <text x={cxp} y={H + 16} textAnchor="middle" fontSize={10} fill="#64748b">{x.date.slice(8)}.{x.date.slice(5, 7)}</text>}
                 </g>
               );
