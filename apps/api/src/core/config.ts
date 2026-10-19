@@ -36,8 +36,8 @@ export const config = {
     /** Gemini free tier lets Google use prompts to improve its products: no patient text there in production. */
     geminiPaid: process.env.GEMINI_PAID === '1',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 20000),
-    /** Only for tests/proxies; empty = the provider's own API. */
-    baseUrl: process.env.AI_BASE_URL || '',
+    /** Only for tests/proxies; empty = the provider's own API. Per provider, so a key never goes to the other one's proxy. */
+    baseUrl: (aiProvider === 'gemini' ? process.env.GEMINI_BASE_URL : process.env.AI_BASE_URL) || '',
   },
   news: {
     /** Daily specialty news for doctors (PubMed + AI summary). off = no fetching. */

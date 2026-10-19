@@ -195,7 +195,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     if (Object.keys(e).length) { setSaveError('Tasdiqlash uchun shikoyat, ko‘rik, tashxis/xulosa va tavsiyalar to‘ldirilishi kerak (demo forma qoidasi).'); return; }
     setConfirmSign(true);
   }
-  const aiDisabledReason = me.ai_mode === 'off' ? 'AI o‘chirilgan yoki kalit sozlanmagan' : null;
+  const aiDisabledReason = me.ai_mode === 'off' ? (me.ai_off_reason ?? 'AI o‘chirilgan yoki kalit sozlanmagan').replace(/\.$/, '') : null;
 
   return (
     <>

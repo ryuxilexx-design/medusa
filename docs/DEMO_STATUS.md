@@ -9,9 +9,9 @@ Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server teks
 | Imkoniyat | Holat | Qanday tekshirildi |
 |---|---|---|
 | `AI_PROVIDER=gemini`: o‘sha AI funksiyalari Gemini orqali (standart `gemini-3.5-flash-lite`) | Ishlaydi | API test (soxta Gemini serveri): so‘rov shakli (`responseJsonSchema`, `thinkingLevel`), ism va telefon yuborilmaydi, token va narx hisobi (kesh va «o‘ylash» tokenlari bilan). **Haqiqiy Gemini kaliti bilan, test bazasida, sun’iy matnda:** qayd tartiblash ~1,2 s, MKB-10 taklifi ~1 s (I10, R51), 8 soha yangiliklari 52 s |
-| Xatolar: rad etish, kesilgan javob, noto‘g‘ri kalit, limit, «model band» (503 — bir marta qayta so‘raladi) | Ishlaydi | API test: tushunarli xato, kalit javobda yo‘q, har biri `ai_usage`da |
-| Bepul tarif himoyasi | Ishlaydi | API test: `APP_MODE=production` va `GEMINI_PAID≠1` bo‘lsa qayd va MKB-10 so‘rovi Gemini’ga umuman ketmaydi (MKB-10 so‘z bo‘yicha qidiradi), Sozlamalar → AI’da qizil ogohlantirish. Demoda ma’lumot sun’iy, shuning uchun ruxsat |
-| O‘zbekcha apostroflar | Ishlaydi | Model yozgan `o'`, `g'` → `o‘`, `g‘`; `ma'lumot` → `ma’lumot` (API test) |
+| Xatolar: rad etish, kesilgan javob, noto‘g‘ri kalit, limit, «model band» (503 — vaqt yetsa bir marta qayta so‘raladi), javob tanasi kechiksa — vaqt tugadi | Ishlaydi | API test: tushunarli xato, kalit javobda yo‘q, har biri `ai_usage`da |
+| Bepul tarif himoyasi | Ishlaydi | API test: `GEMINI_PAID≠1` bo‘lsa qayd va MKB-10 so‘rovi faqat demo klinikalardan (sun’iy ma’lumot, `APP_MODE≠production`) ketadi. Haqiqiy klinika — demo serverda ham — Gemini’ga hech narsa yubormaydi: shifokor tugmasi sababi bilan o‘chadi, MKB-10 so‘z bo‘yicha qidiradi, Sozlamalar → AI’da qizil ogohlantirish. Bepul tarifda narx 0 |
+| O‘zbekcha apostroflar | Ishlaydi | Model yozgan `o'`, `g'` → `o‘`, `g‘`; `ma'lumot` → `ma’lumot`; inglizcha `Hodgkin's` → `Hodgkin’s` (API test) |
 
 Cheklovlar:
 - **`gemini-3.8-flash` bepul tarifda sekin** (11–20 s) va tez-tez «band» javobini beradi, shuning uchun standart model `gemini-3.5-flash-lite`. Sifati qayd va MKB-10 uchun yetarli ko‘rindi, lekin shifokor bilan baholanmagan.

@@ -52,7 +52,7 @@ export function AiSettings() {
           <Alert tone={u.clinical_allowed ? 'yellow' : 'red'} title="Gemini bepul tarifi">
             Google bepul tarifdagi so‘rovlardan o‘z mahsulotlarini yaxshilash uchun foydalanishi mumkin.{' '}
             {u.clinical_allowed
-              ? 'Demoda ma’lumotlar sun’iy, shuning uchun ruxsat berilgan. Haqiqiy klinikada (APP_MODE=production) qayd va MKB-10 so‘rovlari bepul tarifga yuborilmaydi.'
+              ? 'Demo klinikada ma’lumotlar sun’iy, shuning uchun ruxsat berilgan. Haqiqiy klinikaning qayd va MKB-10 so‘rovlari bepul tarifga yuborilmaydi.'
               : 'Shuning uchun qaydni tartiblash va MKB-10 taklifi o‘chirilgan (so‘z bo‘yicha qidiruv ishlaydi). Yangiliklar — ochiq maqolalar, ular ishlaydi.'}
           </Alert>
         )}
@@ -73,7 +73,7 @@ export function AiSettings() {
               </Table>
             </div>
           )}
-          <p className="mt-1 text-xs text-slate-500">Narx — {pv.name} pullik tarifi narxlari bo‘yicha taxmin{u.gemini_free ? ' (bepul tarifda to‘lov olinmaydi)' : ''}; aniq hisob {pv.console}’da. So‘rov matni va javoblar saqlanmaydi, faqat token soni.</p>
+          <p className="mt-1 text-xs text-slate-500">{u.gemini_free ? 'Bepul tarif: to‘lov olinmaydi, narx 0 deb yoziladi.' : `Narx — ${pv.name} narxlari bo‘yicha taxmin.`} Aniq hisob {pv.console}’da. So‘rov matni va javoblar saqlanmaydi, faqat token soni.</p>
         </section>
         <section className="text-[13px] text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">MKB-10 ro‘yxati</h3>

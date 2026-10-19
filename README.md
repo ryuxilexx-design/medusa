@@ -75,7 +75,7 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 | `AI_PROVIDER` | `anthropic` (standart, Claude) yoki `gemini`. Almashtirish uchun shu qator va tegishli kalit yetarli |
 | `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` | Faqat `AI_MODE=live` uchun. Faqat serverda o‘qiladi, frontendga yuborilmaydi. Repozitoriyaga qo‘ymang |
 | `AI_MODEL`, `GEMINI_MODEL`, `AI_TIMEOUT_MS` | Claude modeli (standart `claude-opus-5-5`), Gemini modeli (standart `gemini-3.5-flash-lite`) va timeout (20 000 ms) |
-| `GEMINI_PAID` | `1` — pullik Gemini tarifi. Bepul tarifda Google so‘rovlardan mahsulotini yaxshilash uchun foydalanishi mumkin, shuning uchun `APP_MODE=production`da qayd tartiblash va MKB-10 taklifi bepul tarifga yuborilmaydi (yangiliklar ishlaydi) |
+| `GEMINI_PAID` | `1` — pullik Gemini tarifi. Bepul tarifda Google so‘rovlardan mahsulotini yaxshilash uchun foydalanishi mumkin, shuning uchun qayd tartiblash va MKB-10 taklifi bepul tarifga faqat demo klinikalar (sun’iy ma’lumot, `APP_MODE≠production`) uchun yuboriladi. Haqiqiy klinika uchun ular o‘chadi, demo serverda ham (yangiliklar ishlaydi). Bepul tarifda narx 0 deb yoziladi |
 
 ## Kirish
 

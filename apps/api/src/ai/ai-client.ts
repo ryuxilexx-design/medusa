@@ -7,11 +7,16 @@ import type { ZodType } from 'zod';
 import { Db } from '../core/db';
 import { config } from '../core/config';
 import { AppError } from '../core/errors';
+import { SEED_IDS } from '@meduza/db';
 
 export type AiMode = 'off' | 'sample' | 'live';
 export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary';
-/** Routes that carry (de-identified) clinical text. News summaries only carry public PubMed abstracts. */
-const CLINICAL_ROUTES = new Set<AiRoute>(['note_draft', 'icd10_suggest']);
+/** Routes that carry only public text (PubMed abstracts). Every other route — including any new one — counts as clinical. */
+const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary']);
+const SEED_TENANTS = new Set<string>([SEED_IDS.tenant, SEED_IDS.tenant2]);
+/** The single refusal for clinical text on the Gemini free tier (status reason, note draft and json() all use it). */
+export const FREE_TIER_MESSAGE = 'Bepul Gemini tarifiga haqiqiy klinika ma’lumoti yuborilmaydi. Pullik kalit yoki Claude ulang; qaydni qo‘lda davom ettiring.';
+export const freeTierError = () => new AppError(503, 'AI_NOT_ALLOWED', FREE_TIER_MESSAGE);
 
 /**
  * USD per 1M tokens, paid tier. Unknown models are metered without a cost. Gemini bills thinking tokens as output;
@@ -21,7 +26,7 @@ const PRICES: Record<string, { input: number; output: number; cacheRead: number;
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
-  // ai.google.dev/gemini-api/docs/pricing, checked 2026-10-19 (3.8 Flash doubles on 2027-01-01)
+  // ai.google.dev/gemini-api/docs/pricing, checked 2026-10-19 (3.8 Flash doubles on 2027-01-01). Free tier: billed 0.
   'gemini-3.8-flash': { input: 0.75, output: 3.75, cacheRead: 0.075, cacheWrite: 0 },
   'gemini-3.5-flash-lite': { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0 },
   'gemini-2.5-flash': { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0 },
@@ -56,8 +61,11 @@ const ERR = {
   api: [502, 'AI_ERROR', 'AI xizmatida xato. Qo‘lda davom ettiring.'],
   unexpected: [500, 'AI_ERROR', 'AI so‘rovida kutilmagan xato.'],
 } as const;
-/** Models often write Uzbek with ASCII apostrophes; the UI uses o‘ g‘ and ’ (ma’lumot). Applied to every string answered. */
-export const uzQuotes = (s: string) => s.replace(/([oOgG])['`ʻ]/g, '$1‘').replace(/(\p{L})['`ʼ](?=\p{L})/gu, '$1’');
+/**
+ * Models often write Uzbek with ASCII apostrophes; the UI uses o‘ g‘ and ’ (ma’lumot). Applied to every string answered.
+ * An English possessive ('s at a word end: Hodgkin's, dog's) keeps the plain right quote ’.
+ */
+export const uzQuotes = (s: string) => s.replace(/([oOgG])['`ʻʼ‘’](?!s\b)/g, '$1‘').replace(/(\p{L})['`ʼ](?=\p{L})/gu, '$1’');
 const mapStrings = (v: unknown): unknown =>
   typeof v === 'string' ? uzQuotes(v) : Array.isArray(v) ? v.map(mapStrings)
   : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, mapStrings(x)])) : v;
@@ -79,24 +87,32 @@ export class AiClient {
   }
 
   /**
-   * May clinical text (even de-identified) go to the current provider? Not to the Gemini free tier in a real clinic:
-   * Google may use free-tier prompts to improve its products. Demo data is synthetic, so the demo may use it.
+   * May clinical text (even de-identified) of this tenant go to the current provider? Not to the Gemini free tier
+   * unless it is synthetic: a seed demo tenant on a non-production deployment. Google may use free-tier prompts to
+   * improve its products, and a real clinic can be onboarded on a demo deployment too.
    */
-  clinicalAllowed(): boolean {
-    return config.ai.provider !== 'gemini' || config.ai.geminiPaid || config.mode !== 'production';
+  clinicalAllowed(tenantId: string | null): boolean {
+    if (config.ai.provider !== 'gemini' || config.ai.geminiPaid) return true;
+    return config.mode !== 'production' && !!tenantId && SEED_TENANTS.has(tenantId);
   }
 
-  /** The mode clinical features see: a provider that may not receive clinical text counts as off. */
-  clinicalMode(): AiMode {
+  /** The mode clinical features see: a provider that may not receive this tenant's clinical text counts as off. */
+  clinicalMode(tenantId: string | null): AiMode {
     const m = this.mode();
-    return m === 'live' && !this.clinicalAllowed() ? 'off' : m;
+    return m === 'live' && !this.clinicalAllowed(tenantId) ? 'off' : m;
+  }
+
+  /** Why clinical AI is off for this tenant, for the doctor's screen. */
+  clinicalOffReason(tenantId: string | null): string | null {
+    if (this.clinicalMode(tenantId) !== 'off') return null;
+    if (this.mode() === 'live') return FREE_TIER_MESSAGE;
+    return config.ai.mode === 'live' ? 'AI kaliti sozlanmagan' : 'AI o‘chirilgan (AI_MODE=off)';
   }
 
   /** One structured request. Throws AppError (AI_*) the UI can show; the caller keeps the user's own text. */
   async json<T>(c: JsonCall<T>): Promise<{ value: T; model: string }> {
     if (this.mode() !== 'live') throw new AppError(503, 'AI_OFF', 'AI ulanmagan.');
-    if (CLINICAL_ROUTES.has(c.route) && !this.clinicalAllowed())
-      throw new AppError(503, 'AI_NOT_ALLOWED', 'Bepul Gemini tarifiga bemor ma’lumoti yuborilmaydi. Pullik kalit yoki Claude ulang.');
+    if (!PUBLIC_ROUTES.has(c.route) && !this.clinicalAllowed(c.tenantId)) throw freeTierError();
     const started = Date.now();
     const meter: Meter = { model: config.ai.model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     try {
@@ -180,37 +196,44 @@ export class AiClient {
         responseMimeType: 'application/json',
         responseJsonSchema: c.schema,
         maxOutputTokens: c.maxTokens ?? 4000,
-        // Gemini 3+ thinks at "high" by default (~30 s for a note); the call's effort keeps it within the timeout.
-        ...(/^gemini-2\./.test(model) ? {} : { thinkingConfig: { thinkingLevel: c.effort } }),
+        // Gemini 3+ thinks at "high" by default (~30 s for a note); "low" keeps it within the timeout. Older and
+        // non-Gemini models (2.x, gemma, tuned) reject thinkingLevel, so it is sent only to gemini-3 and later.
+        ...(/^gemini-([3-9]|\d{2,})/.test(model) ? { thinkingConfig: { thinkingLevel: c.effort === 'low' ? 'low' : 'high' } } : {}),
       },
     };
-    // one time budget for the whole call, including the single retry of a 503 ("model overloaded")
+    // one time budget for the whole call (headers and body), including the single retry of a 503 ("model overloaded")
+    const deadline = Date.now() + config.ai.timeoutMs;
     const signal = AbortSignal.timeout(config.ai.timeoutMs);
     let res!: Response;
-    let json: any;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let raw = '';
+    for (let attempt = 0; ; attempt++) {
       try {
-        if (attempt) await new Promise((r) => setTimeout(r, 1000));
         res = await fetch(`${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-goog-api-key': config.ai.apiKey },
           body: JSON.stringify(body),
           signal,
         });
-        json = await res.json().catch(() => null);
+        raw = await res.text();
       } catch (e) {
         const name = (e as Error).name;
         throw new ProviderError(name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'unreachable', name);
       }
-      if (res.status !== 503) break;
+      // retry once, and only if a real call still fits in the budget (1 s pause + ~3 s answer)
+      if (res.status !== 503 || attempt > 0 || deadline - Date.now() < 4000) break;
+      await new Promise((r) => setTimeout(r, 1000));
     }
+    let json: any;
+    try { json = JSON.parse(raw); } catch { json = null; }
     if (!res.ok) {
       const reason = json?.error?.details?.find((d: any) => d?.reason)?.reason ?? json?.error?.status ?? '';
       const kind = res.status === 429 || res.status === 503 ? 'busy'
         : res.status === 401 || res.status === 403 || /API_KEY/.test(reason) ? 'key'
         : 'api';
-      throw new ProviderError(kind, `HTTP ${res.status} ${reason}`);
+      // Google's message names the bad field (e.g. an unsupported thinking level); it never contains the key
+      throw new ProviderError(kind, `HTTP ${res.status} ${reason} ${String(json?.error?.message ?? '').slice(0, 200)}`);
     }
+    if (!json) throw new ProviderError('api', `HTTP ${res.status} non-JSON body`);
     const u = json?.usageMetadata ?? {};
     meter.model = json?.modelVersion ?? model;
     meter.cacheRead = u.cachedContentTokenCount ?? 0;
@@ -225,8 +248,10 @@ export class AiClient {
   }
 
   private async record(c: JsonCall<unknown>, m: Meter, started: number, outcome: string, errorCode: string | null) {
-    const p = PRICES[m.model] ?? PRICES[m.model.replace(/-\d{8}$/, '')];
-    const cost = p ? (m.input * p.input + m.output * p.output + m.cacheRead * p.cacheRead + m.cacheWrite * p.cacheWrite) / 1e6 : null;
+    // dated or versioned names (claude-…-20261001, gemini-…-001, gemini-…-preview-09-2026) price as their base model
+    const p = PRICES[m.model] ?? PRICES[m.model.replace(/-\d{8}$|-\d{3}$|-preview(-\d{2}-\d{4})?$/, '')];
+    const freeTier = config.ai.provider === 'gemini' && !config.ai.geminiPaid;
+    const cost = freeTier ? 0 : p ? (m.input * p.input + m.output * p.output + m.cacheRead * p.cacheRead + m.cacheWrite * p.cacheWrite) / 1e6 : null;
     await this.db.rows(
       `INSERT INTO ai_usage (tenant_id, membership_id, route, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, latency_ms, outcome, error_code)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
