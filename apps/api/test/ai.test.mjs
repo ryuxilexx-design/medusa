@@ -60,7 +60,7 @@ function startClaude() {
 }
 
 // ---------- fake PubMed ----------
-const pubmed = { server: null, url: '', calls: [] };
+const pubmed = { server: null, url: '', calls: [], throttleNext: 0 };
 const ABSTRACT_MARK = 'UNIQUEABSTRACTSENTENCE';
 const xmlArticle = (pmid, title) => `<PubmedArticle><MedlineCitation><PMID Version="1">${pmid}</PMID><Article><Journal><Title>Test Journal of Medicine</Title><JournalIssue><PubDate><Year>2026</Year><Month>Oct</Month><Day>2</Day></PubDate></JournalIssue></Journal>
   <ArticleTitle>${title} &amp; outcomes</ArticleTitle><Abstract><AbstractText Label="BACKGROUND">Background ${ABSTRACT_MARK} text.</AbstractText><AbstractText Label="RESULTS">HR 0.8 (95% CI 0.7&#8211;0.9).</AbstractText></Abstract></Article></MedlineCitation></PubmedArticle>`;
@@ -68,6 +68,7 @@ function startPubmed() {
   return new Promise((resolve) => {
     pubmed.server = http.createServer((req, res) => {
       pubmed.calls.push(req.url);
+      if (pubmed.throttleNext > 0) { pubmed.throttleNext--; res.writeHead(429, { 'retry-after': '0' }); return res.end('Too Many Requests'); }
       if (req.url.startsWith('/esearch.fcgi')) { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ esearchresult: { idlist: ['40000001', '40000002'] } })); }
       if (req.url.startsWith('/efetch.fcgi')) { res.setHeader('content-type', 'text/xml'); return res.end(`<?xml version="1.0"?><PubmedArticleSet>${xmlArticle('40000001', 'Statins in older adults')}${xmlArticle('40000002', 'Salt reduction trial')}</PubmedArticleSet>`); }
       res.statusCode = 404; res.end();
@@ -220,6 +221,14 @@ test('yangiliklar: PubMed → AI o‘zbekcha qisqa mazmun; annotatsiya saqlanmay
   assert.equal(await news.refreshSpecialty('internal'), 0, 'bugun allaqachon yangilangan');
   const usage = (await pool.query(`SELECT tenant_id, outcome FROM ai_usage WHERE route = 'news_summary' ORDER BY id DESC LIMIT 1`)).rows[0];
   assert.equal(usage.tenant_id, null); assert.equal(usage.outcome, 'ok');
+});
+
+test('PubMed 429 (limit): kutib qayta so‘raladi va maqolalar baribir olinadi', async () => {
+  await pool.query(`DELETE FROM news_items WHERE specialty_key = 'neurology'`);
+  pubmed.throttleNext = 2; // esearch: 429, 429, then OK
+  const calls = pubmed.calls.length;
+  assert.equal(await news.refreshSpecialty('neurology'), 2);
+  assert.equal(pubmed.calls.slice(calls).filter((u) => u.startsWith('/esearch')).length, 3, 'ikki marta kutib, uchinchisida oldi');
 });
 
 test('yangiliklar AI o‘chiq: faqat asl sarlavha va havola; rahbar yangilashi 10 daqiqada bir marta', async () => {

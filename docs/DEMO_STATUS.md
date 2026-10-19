@@ -182,7 +182,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 51/51 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 7 ta AI/MKB-10/yangiliklar testi |
+| `npm test` (meduza_test) | 52/52 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 8 ta AI/MKB-10/yangiliklar testi |
 | `npm run e2e` (izolyatsiyalangan stek) | 70/70: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |

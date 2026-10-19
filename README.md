@@ -44,7 +44,7 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (51 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (52 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
 | `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |

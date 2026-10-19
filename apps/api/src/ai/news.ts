@@ -80,11 +80,17 @@ export class NewsService {
   private log = new Logger('News');
   constructor(private db: Db, private ai: AiClient) {}
 
+  /** GET with NCBI etiquette: on 429 (shared cloud IPs hit the 3 req/s limit) wait and retry, up to 3 attempts. */
   private async get(url: string, timeoutMs = 15_000): Promise<string> {
-    const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { 'user-agent': 'Med.uz.ai news (clinic software)' } });
-    if (!res.ok) throw new Error(`PubMed ${res.status}`);
-    return res.text();
+    for (let attempt = 1; ; attempt++) {
+      const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers: { 'user-agent': 'Med.uz.ai news (clinic software)' } });
+      if (res.ok) return res.text();
+      if (res.status !== 429 || attempt >= 3) throw new Error(`PubMed ${res.status}`);
+      const wait = Number(res.headers.get('retry-after')) * 1000 || attempt * 1500;
+      await new Promise((r) => setTimeout(r, Math.min(wait, 10_000)));
+    }
   }
+  private pause() { return new Promise((r) => setTimeout(r, config.news.ncbiKey ? 120 : 400)); }
 
   private eutils(path: string, params: Record<string, string>) {
     const q = new URLSearchParams({ ...params, tool: 'meduzai', ...(config.news.ncbiKey ? { api_key: config.news.ncbiKey } : {}) });
@@ -103,6 +109,7 @@ export class NewsService {
     })));
     const ids: string[] = (search?.esearchresult?.idlist ?? []).filter((x: unknown) => typeof x === 'string' && /^\d+$/.test(x));
     if (!ids.length) return 0;
+    await this.pause();
     const known = new Set((await this.db.rows(`SELECT external_id FROM news_items WHERE specialty_key = $1 AND external_id = ANY($2)`, [sp.key, ids])).map((r) => r.external_id));
     const fresh = ids.filter((id) => !known.has(id)).slice(0, PER_DAY);
     if (!fresh.length) return 0;
@@ -145,7 +152,7 @@ export class NewsService {
     for (const key of await this.activeSpecialties(tenantId)) {
       try { out.push({ specialty: key, added: await this.refreshSpecialty(key) }); }
       catch (e) { this.log.warn(`news ${key}: ${(e as Error).message}`); out.push({ specialty: key, added: 0, error: (e as Error).message.slice(0, 200) }); }
-      await new Promise((r) => setTimeout(r, config.news.ncbiKey ? 120 : 400)); // stay under the NCBI rate limit
+      await this.pause(); // stay under the NCBI rate limit
     }
     return out;
   }
