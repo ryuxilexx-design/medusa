@@ -120,6 +120,17 @@ Agar mehmon boshqa matn yozib ko‘rmoqchi bo‘lsa, tizim «Namunaviy rejimda f
 - Agar ilova umuman ochilmasa (noutbuk qayta yoqilgan bo‘lsa): `npm run db:up` → `npm run start` (build qayta kerak emas).
 - Favqulodda zaxira: `docs/screenshots/` dagi skrinshotlar — ularni «oldindan olingan ekranlar» deb ko‘rsating.
 
+## Telegram bot (2 daqiqa, Rahbar oynasida)
+
+**Sozlamalar → Telegram bot**. O‘ngda simulyator bor: haqiqiy bot mantig‘i, faqat Telegram’siz.
+1. `/start` → «📱 Telefon raqamni ulashish» → **Demo** (tasodifiy demo bemor raqami) → **Ulashish** → bot bemorni ismi bilan topadi.
+2. «📅 Qabulga yozilish» → xizmat → shifokor → kun → vaqt → **✅ Tasdiqlash** → «Qabulga yozildingiz».
+3. «📝 Ha, to‘ldiraman» → shikoyat yozing → **Yo‘q** → dorilar yozing.
+4. **Qabul jadvali** → o‘sha kun → qabulda «TG» belgisi. Shifokor oynasida bemorning javoblari tayyor turadi.
+5. *(Ixtiyoriy)* Simulyatordagi **Eslatmalar** tugmasi eslatma va xabarlarni darhol yuboradi. Odatda bu har daqiqada avtomatik bo‘ladi.
+
+Ayting: «Bemor 24/7 o‘zi yoziladi, registrator qo‘ng‘iroqqa vaqt sarflamaydi. Bir kun oldin eslatma «Kelaman» tugmasi bilan boradi, kelmay qolish kamayadi. Tahlil qiymatlari Telegram’ga yuborilmaydi — faqat «natija tayyor».» Haqiqiy botni ulash uchun BotFather tokeni kerak.
+
 ## Savol bo‘lsa ko‘rsatish mumkin
 
 - Kassir oynasida klinik qayd hujjatini ochishga urinish (`/print/note/...`) → «ruxsat yo‘q». Rahbar ham klinik qaydni o‘qimaydi.

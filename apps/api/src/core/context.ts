@@ -14,8 +14,8 @@ export interface Ctx {
   doctorSpecialty: string | null;
   requestId: string;
   sessionHash: string;
-  /** 'demo' = role card login, 'password' = real staff login. */
-  authKind: 'demo' | 'password';
+  /** 'demo' = role card login, 'password' = real staff login, 'system' = server-side actor (Telegram bot), no session. */
+  authKind: 'demo' | 'password' | 'system';
   /** Temporary password still in use: only /me, /auth/password and /logout are reachable. */
   mustChangePassword: boolean;
 }

@@ -12,7 +12,7 @@ Product name in every UI text, document and export: **Med.uz.ai** (old name "Med
 
 ## Commands
 
-`npm run db:up` · `npm run start` (prod build, web :3000 / API :4000) · `npm run dev` · `npm run build` · `npm run typecheck` · `npm test` (31 API tests) · `npm run e2e` · `npm run db:reset` (wipes live demo data — needs explicit user intent) · `npm run db:backup` / `db:restore -- <file>` · `npm run db:readonly-role` · `npm run db:create-clinic -- …` (onboard a real clinic; prints a one-time temp password).
+`npm run db:up` · `npm run start` (prod build, web :3000 / API :4000) · `npm run dev` · `npm run build` · `npm run typecheck` · `npm test` (44 API tests) · `npm run e2e` · `npm run db:reset` (wipes live demo data — needs explicit user intent) · `npm run db:backup` / `db:restore -- <file>` · `npm run db:readonly-role` · `npm run db:create-clinic -- …` (onboard a real clinic; prints a one-time temp password).
 Project skills: `meduza-run`, `meduza-demo-reset`, `meduza-deploy`, `meduza-verify` — use them for those tasks.
 
 ## Rules that are easy to break
@@ -26,6 +26,7 @@ Project skills: `meduza-run`, `meduza-demo-reset`, `meduza-deploy`, `meduza-veri
 - **No clinical or financial data in localStorage** — only UI preferences (selected branch).
 - **Errors:** API returns `{error:{code,message,fields?},request_id}`; UI keeps the user's input on failure, shows the error, and never shows a success toast for an action that did not complete.
 - **Auth:** staff sign in with `/auth/login` (phone or username + scrypt-hashed password; lockout after 5 failures; temp passwords force a change — the guard returns 403 `PASSWORD_CHANGE_REQUIRED` except on routes marked `@AllowDuringPasswordChange()`). Demo role cards (`/demo/login`) only open the seed tenants. Never log, return twice, or store a password in clear text; a temp password is shown exactly once.
+- **Telegram bot** (`apps/api/src/telegram/*`): booking rules live in `modules/booking.ts` and are shared with the staff API — never duplicate them in the bot. Patient notices go through the `notifications` outbox (`enqueueNotice` inside the event's transaction). Never send lab values, clinical text or another patient's data to Telegram; a chat sees only patients with its verified phone. Bot tokens are stored only encrypted (`core/secrets.ts`, `APP_SECRET_KEY`). Test the bot through the simulator transport or the fake Bot API in `test/telegram.test.mjs` — no real Telegram in tests.
 - **Demo reset truncates every table** and refuses to run when a non-seed tenant exists. Real clinics belong in a separate `APP_MODE=production` deployment.
 - **AI:** `AI_MODE=sample` returns a pre-written result only for the exact demo text and must be labelled «Namunaviy AI natijasi»; never present it as live AI. API keys stay server-side.
 

@@ -1,8 +1,18 @@
 import { APPOINTMENT_STATUS_LABEL, INVOICE_STATUS_LABEL, LAB_STATUS_LABEL } from '@meduza/contracts';
-import { Ban, CheckCircle2, CircleDashed, Clock, FlaskConical, Hourglass, PlayCircle, UserCheck, UserX, Wallet } from 'lucide-react';
+import { Ban, CheckCheck, CheckCircle2, CircleDashed, Clock, FlaskConical, Hourglass, PlayCircle, Send, UserCheck, UserX, Wallet } from 'lucide-react';
 import { Badge, Tone } from './ui';
 
 const ic = 'h-3 w-3';
+/** Booked through Telegram / patient confirmed they will come (from a reminder). */
+export function SourceMark({ appt }: { appt: { source?: string; patient_confirmed_at?: string | null; status?: string } }) {
+  if (appt.source !== 'telegram' && !appt.patient_confirmed_at) return null;
+  return (
+    <span className="ml-1 inline-flex items-center gap-1 align-middle">
+      {appt.source === 'telegram' && <span title="Bemor Telegram bot orqali yozilgan" aria-label="Telegram orqali" className="inline-flex items-center rounded bg-sky-50 px-1 py-px text-[10px] font-semibold text-sky-700 ring-1 ring-inset ring-sky-200"><Send className="mr-0.5 h-2.5 w-2.5" />TG</span>}
+      {appt.patient_confirmed_at && appt.status === 'scheduled' && <span title="Bemor eslatmada «Kelaman» deb tasdiqlagan" aria-label="Bemor kelishini tasdiqlagan" className="inline-flex text-emerald-600"><CheckCheck className="h-3.5 w-3.5" /></span>}
+    </span>
+  );
+}
 export function AppointmentStatus({ status }: { status: string }) {
   const map: Record<string, [Tone, React.ReactNode]> = {
     scheduled: ['blue', <Clock key="i" className={ic} />], arrived: ['yellow', <UserCheck key="i" className={ic} />], in_progress: ['violet', <PlayCircle key="i" className={ic} />],

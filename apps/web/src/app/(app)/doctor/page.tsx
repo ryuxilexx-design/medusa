@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, fmtTime, formatSom, fullName, longDate, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
+import { IntakePanel } from '@/components/intake-panel';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
@@ -102,15 +103,16 @@ function Workspace({ appt }: { appt: any }) {
     </div>
   );
 
-  if (appt.status === 'scheduled') return <div className="space-y-4">{header}<Card><EmptyState title="Bemor hali kelmagan" text="Registratura «Keldi» belgilagach, qabulni boshlash mumkin bo‘ladi." /></Card></div>;
+  const intake = <IntakePanel appointmentId={appt.id} />;
+  if (appt.status === 'scheduled') return <div className="space-y-4">{header}{intake}<Card><EmptyState title="Bemor hali kelmagan" text="Registratura «Keldi» belgilagach, qabulni boshlash mumkin bo‘ladi." /></Card></div>;
   if (appt.status === 'no_show' || appt.status === 'cancelled') return <div className="space-y-4">{header}<Card><EmptyState title="Bu qabul bo‘lib o‘tmadi" /></Card></div>;
-  if (appt.status === 'arrived') return <div className="space-y-4">{header}<Card><EmptyState icon={<PlayCircle className="h-8 w-8" />} title="Bemor navbatda kutmoqda" text={`Navbat №${appt.queue_number ?? '—'}. «Qabulni boshlash» qabul yozuvini ochadi: bemor, sana, shifokor va xizmat avtomatik olinadi.`} /></Card>
+  if (appt.status === 'arrived') return <div className="space-y-4">{header}{intake}<Card><EmptyState icon={<PlayCircle className="h-8 w-8" />} title="Bemor navbatda kutmoqda" text={`Navbat №${appt.queue_number ?? '—'}. «Qabulni boshlash» qabul yozuvini ochadi: bemor, sana, shifokor va xizmat avtomatik olinadi.`} /></Card>
     <div className="xl:hidden"><HistoryPanel patientId={appt.patient_id} /></div></div>;
   if (!appt.encounter_id) return <div className="space-y-4">{header}<Card><LoadingRows /></Card></div>;
-  return <div className="space-y-4">{header}<Encounter encounterId={appt.encounter_id} /><div className="xl:hidden"><HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} /></div></div>;
+  return <div className="space-y-4">{header}<Encounter encounterId={appt.encounter_id} appointmentId={appt.id} /><div className="xl:hidden"><HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} /></div></div>;
 }
 
-function Encounter({ encounterId }: { encounterId: string }) {
+function Encounter({ encounterId, appointmentId }: { encounterId: string; appointmentId: string }) {
   const { me } = useSession();
   const qc = useQueryClient();
   const toast = useToast();
@@ -195,6 +197,11 @@ function Encounter({ encounterId }: { encounterId: string }) {
         <div className="space-y-3 p-4">
           {saveError && <Alert tone="red">{saveError}</Alert>}
           {signed && <Alert tone="blue">Tasdiqlangan qayd o‘zgartirilmaydi. Tuzatish (alohida versiya) keyingi relizda.</Alert>}
+          <IntakePanel appointmentId={appointmentId} onUseComplaints={signed ? undefined : (text) => {
+            setForm((f) => ({ ...f!, complaints: f!.complaints.trim() ? `${f!.complaints.trim()}\n${text}` : text }));
+            setErrors((x) => ({ ...x, complaints: '' }));
+            toast.info('Bemor yozgan shikoyat qoralamaga qo‘shildi — tekshirib, saqlang');
+          }} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Field label="Sistolik bosim (mm sim. ust.)" error={errors.bp_sys}>{(id) => <Input id={id} inputMode="numeric" value={form.bp_sys} onChange={set('bp_sys')} disabled={signed} placeholder="—" />}</Field>
             <Field label="Diastolik (mm sim. ust.)" error={errors.bp_dia}>{(id) => <Input id={id} inputMode="numeric" value={form.bp_dia} onChange={set('bp_dia')} disabled={signed} placeholder="—" />}</Field>

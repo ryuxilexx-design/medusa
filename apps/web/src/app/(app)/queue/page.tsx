@@ -8,7 +8,7 @@ import { api, qs } from '@/lib/api';
 import { duration, fmtTime, fullName, longDate, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { Badge, Button, Card, EmptyState, ErrorState, LoadingRows, PageHeader, Select, Table, Td, Th } from '@/components/ui';
-import { AppointmentStatus } from '@/components/status';
+import { AppointmentStatus, SourceMark } from '@/components/status';
 import { useAppointmentAction } from '@/components/appointment-dialog';
 
 export default function QueuePage() {
@@ -69,7 +69,7 @@ export default function QueuePage() {
                 {q.data.expected.map((a: any) => (
                   <li key={a.appointment_id} className="flex items-center gap-3 px-4 py-2">
                     <span className="w-11 text-sm font-semibold tabular-nums">{fmtTime(a.starts_at)}</span>
-                    <div className="min-w-0 flex-1 leading-tight"><div className="truncate text-sm font-medium">{fullName(a)}</div><div className="truncate text-xs text-slate-500">{a.doctor_name} · {a.service_name}</div></div>
+                    <div className="min-w-0 flex-1 leading-tight"><div className="truncate text-sm font-medium">{fullName(a)}</div><div className="truncate text-xs text-slate-500">{a.doctor_name} · {a.service_name}<SourceMark appt={a} /></div></div>
                     {staff && <Button size="sm" variant="primary" icon={<UserCheck className="h-3.5 w-3.5" />} loading={act.isPending && act.variables?.id === a.appointment_id}
                       onClick={() => act.mutate({ id: a.appointment_id, action: 'check-in', body: { version: a.version } })}>Keldi</Button>}
                   </li>

@@ -44,9 +44,9 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (31 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (44 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
-| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
+| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
 | `npm run db:create-clinic -- --name … --branch … --manager-name … --manager-login … [--catalog demo]` | Haqiqiy klinikani ochish: tenant, birinchi filial va rahbar akkaunti. Vaqtinchalik parol terminalda **bir marta** chiqadi. Real klinika uchun alohida, `APP_MODE=production` muhitida ishlating |
 | `node e2e/visual.mjs` | Xuddi shu vizual o‘tish **ishlab turgan demo ilovada**, faqat o‘qish rejimida (hech narsa saqlanmaydi) → `docs/screenshots/` |
@@ -68,6 +68,8 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 | `DEMO_DATE` | Demo «bugun» sanasi (Toshkent). Asosiy preset: `2026-10-18`. Seed va demo vaqti shu sanaga nisbatan quriladi. O‘zgartirgandan keyin `npm run db:reset` qiling (API ishga tushganda nomuvofiqlik bo‘lsa ogohlantiradi) |
 | `DEMO_TIME` | Demo soatining boshlanishi (`HH:MM`, standart `11:30`). **Demo vaqti bazada saqlanadi** (`demo_clock` jadvali, `demo_now()`): oxirgi reset paytidagi `DEMO_DATE + DEMO_TIME` dan real vaqtda yuradi. API qayta ishga tushsa vaqt orqaga qaytmaydi; uni faqat demo reset boshlang‘ich nuqtaga qaytaradi. Qabul, navbat, to‘lov, audit va dashboard filtrlari shu bitta manbadan foydalanadi. 11:30 da seed’dagi barcha ertalabki yozuvlar o‘tmishda qoladi va tushdan keyingi slotlar bo‘sh bo‘ladi. Bo‘sh qoldirilsa, reset paytidagi real Toshkent soati olinadi |
 | `AI_MODE` | `sample` (standart): faqat tayyor demo matni uchun oldindan yozilgan natija, «Namunaviy AI natijasi» deb belgilangan. `live`: server orqali Claude API. `off`: tugma o‘chiq va sababi ko‘rsatiladi |
+| `APP_SECRET_KEY` | Saqlanadigan sirlarni (Telegram bot tokeni) shifrlash kaliti: 32 tasodifiy bayt, base64 (`openssl rand -base64 32`). Bo‘lmasa haqiqiy botni ulab bo‘lmaydi (simulyator ishlaydi). Kalit almashsa, botni qayta ulash kerak. Repozitoriyaga qo‘ymang |
+| `TELEGRAM_WORKERS` | `on` (standart) / `off`. Fon jarayonlari: Telegram’dan xabarlarni o‘qish (long polling), eslatmalarni rejalashtirish va yuborish. Testlarda avtomatik o‘chadi |
 | `ANTHROPIC_API_KEY` | Faqat `AI_MODE=live` uchun. Faqat serverda o‘qiladi, frontendga yuborilmaydi. Repozitoriyaga qo‘ymang |
 | `AI_MODEL`, `AI_TIMEOUT_MS` | Model (standart `claude-opus-5-5`) va timeout (20 000 ms) |
 
@@ -86,6 +88,26 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 - Rol almashtirish server sessiyasini almashtiradi (chiqish tugmasi → kirish sahifasi).
 - Demo kartadagi xodimni o‘chirib yoki rolini o‘zgartirib bo‘lmaydi, shunda demo hamma uchun ishlaydi.
 - `APP_MODE=production` da kartalar va demo yorlig‘i ko‘rinmaydi, faqat parol bilan kirish qoladi.
+
+## Telegram bot (bemorlar uchun)
+
+**Sozlamalar → Telegram bot.** Klinika o‘z botini ulaydi: @BotFather’da bot yaratiladi va token shu yerga qo‘yiladi. Token Telegram’da tekshiriladi va serverda AES-256-GCM bilan shifrlanib saqlanadi. U qayta ko‘rsatilmaydi va API javobida qaytmaydi.
+
+Bemor botda nima qila oladi:
+- **Telefonini ulashadi.** Faqat o‘z raqami qabul qilinadi, uni Telegram tasdiqlagan bo‘ladi. Shu raqamli bemor kartalari topiladi (oila a’zolari ham). Karta yo‘q bo‘lsa, familiya, ism va tug‘ilgan sana bilan ro‘yxatdan o‘tadi.
+- **Qabulga yoziladi:** xizmat → shifokor → kun → vaqt → tasdiq. Faqat jadvali bor shifokorlarning bo‘sh vaqtlari taklif qilinadi (kamida 30 daqiqa keyingi). Qabul saytdagi bilan bir xil qoidalar bilan yoziladi va jadvalda «TG» belgisi bilan ko‘rinadi.
+- **«Mening qabullarim»:** qabulni ko‘chiradi, bekor qiladi yoki so‘rovnomani to‘ldiradi.
+- **Qabuldan oldingi so‘rovnoma:** shikoyat, allergiya, ichayotgan dorilar. Javoblarni faqat shu qabul shifokori ko‘radi va bir bosishda qaydga qo‘shishi mumkin.
+- **Eslatmalar:** qabuldan bir kun oldin «Kelaman / Ko‘chirish / Bekor qilish» tugmalari bilan, 2 soat oldin qisqa eslatma.
+- **Klinikadan xabarlar:** klinika qabulni bekor qilsa yoki ko‘chirsa, bemorga xabar boradi. Tahlil tayyor bo‘lsa ham xabar boradi, lekin **qiymatlar Telegram’ga hech qachon yuborilmaydi**.
+- **Til:** o‘zbek va rus.
+
+Ishonchlilik:
+- Har bir Telegram xabari bir marta qayta ishlanadi. Javoblar faqat bazaga yozilgandan keyin yuboriladi.
+- Bildirishnomalar outbox jadvali orqali bir martadan ko‘p yuborilmaydi va xatoda qayta urinadi.
+- Bitta chat daqiqasiga 30 tadan ko‘p xabar yubora olmaydi.
+
+Demo rejimida **simulyator** bor: haqiqiy bot mantig‘i ekranda, Telegram’siz. Uchrashuvda ko‘rsatish va sinov uchun.
 
 ## Arxitektura qisqacha
 

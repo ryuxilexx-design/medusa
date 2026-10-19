@@ -6,6 +6,6 @@ export async function audit(q: Q, ctx: Ctx, action: string, resourceType: string
   await q.query(
     `INSERT INTO audit_logs (tenant_id, branch_id, actor_membership_id, actor_name, actor_role, action, resource_type, resource_id, summary, request_id)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-    [ctx.tenantId, branchId, ctx.membershipId, ctx.name, ctx.role, action, resourceType, resourceId, summary, ctx.requestId],
+    [ctx.tenantId, branchId, ctx.membershipId || null, ctx.name, ctx.authKind === 'system' ? 'system' : ctx.role, action, resourceType, resourceId, summary, ctx.requestId],
   );
 }

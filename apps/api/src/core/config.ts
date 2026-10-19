@@ -17,6 +17,13 @@ export const config = {
   cookieSecure: process.env.COOKIE_SECURE === '1' || mode === 'production',
   /** Seed the demo data automatically when the database is empty (first deploy). */
   autoSeed: process.env.AUTO_SEED === '1',
+  /** 32-byte key (base64) for encrypting stored secrets such as Telegram bot tokens. Without it a real bot cannot be connected. */
+  secretKey: process.env.APP_SECRET_KEY || '',
+  telegram: {
+    /** Background workers (Telegram polling, reminders, outbox). Off in tests: tests drive them directly. */
+    workers: process.env.TELEGRAM_WORKERS !== 'off' && process.env.MEDUZA_TEST !== '1',
+    apiBase: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org',
+  },
   ai: {
     mode: (process.env.AI_MODE || 'sample') as 'off' | 'sample' | 'live',
     apiKey: process.env.ANTHROPIC_API_KEY || '',

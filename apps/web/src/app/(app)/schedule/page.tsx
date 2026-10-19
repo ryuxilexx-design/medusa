@@ -8,7 +8,7 @@ import { api, qs } from '@/lib/api';
 import { addDays, fmtTime, fullName, localDate, longDate, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Select, Table, Td, Th } from '@/components/ui';
-import { AppointmentStatus } from '@/components/status';
+import { AppointmentStatus, SourceMark } from '@/components/status';
 import { AppointmentDialog } from '@/components/appointment-dialog';
 import { BookingInit, BookingModal } from '@/components/booking';
 
@@ -83,7 +83,7 @@ function Schedule() {
                 <tr key={a.id} className="hover:bg-slate-50">
                   <Td className="whitespace-nowrap tabular-nums font-medium">{fmtTime(a.starts_at)}–{fmtTime(a.ends_at)}</Td>
                   <Td>{fullName(a)} <span className="text-slate-500">{pid(a.patient_number)}</span></Td>
-                  <Td>{a.doctor_name}</Td><Td>{a.service_name}</Td><Td>{a.branch_name}</Td><Td><AppointmentStatus status={a.status} /></Td>
+                  <Td>{a.doctor_name}</Td><Td>{a.service_name}</Td><Td>{a.branch_name}</Td><Td><AppointmentStatus status={a.status} /><SourceMark appt={a} /></Td>
                   <Td right><Button size="sm" variant="ghost" onClick={() => setSelected(a)}>Ochish</Button></Td>
                 </tr>
               ))}</tbody>
@@ -125,7 +125,7 @@ function Schedule() {
                             style={{ top: ((st - START) / ROW) * PX + 1, height: Math.max(((en - st) / ROW) * PX - 2, 22) }}>
                             <div className="flex items-center justify-between gap-1"><span className="font-semibold tabular-nums">{fmtTime(a.starts_at)}</span><span className="truncate text-slate-600">{APPOINTMENT_STATUS_LABEL[a.status as keyof typeof APPOINTMENT_STATUS_LABEL]}</span></div>
                             <div className="truncate font-medium text-slate-800">{fullName(a)}</div>
-                            <div className="truncate text-slate-500">{a.service_name}</div>
+                            <div className="truncate text-slate-500">{a.service_name}<SourceMark appt={a} /></div>
                           </button>
                         );
                       })}

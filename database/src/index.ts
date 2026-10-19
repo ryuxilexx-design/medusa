@@ -128,6 +128,10 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     const seed = buildSeed(demoDate);
     await client.query('BEGIN');
     const sessions = (await client.query('SELECT * FROM sessions')).rows;
+    // A connected Telegram bot and its chats survive a demo reset (only the conversation state starts over).
+    const hasTelegram = (await client.query(`SELECT to_regclass('telegram_bots') IS NOT NULL AS ok`)).rows[0].ok;
+    const bots = hasTelegram ? (await client.query('SELECT * FROM telegram_bots')).rows : [];
+    const chats = hasTelegram ? (await client.query(`SELECT * FROM telegram_chats`)).rows.map((r) => ({ ...r, state: '{}' })) : [];
     const all = ['sessions', ...TABLES_IN_INSERT_ORDER].reverse();
     await client.query(`TRUNCATE ${all.join(', ')} RESTART IDENTITY CASCADE`);
     const counts: Record<string, number> = {};
@@ -137,6 +141,11 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     }
     const membershipIds = new Set(seed.memberships.map((m) => m.id));
     await insertRows(client, 'sessions', sessions.filter((s) => membershipIds.has(s.membership_id)));
+    const tenantIds = new Set(seed.tenants.map((t) => t.id));
+    const keptBots = bots.filter((b) => tenantIds.has(b.tenant_id));
+    await insertRows(client, 'telegram_bots', keptBots);
+    const keptBotIds = new Set(keptBots.map((b) => b.id));
+    await insertRows(client, 'telegram_chats', chats.filter((c) => keptBotIds.has(c.bot_id)));
     // Data and clock are reset together: the demo starts again at DEMO_DATE + DEMO_TIME.
     await client.query(`INSERT INTO demo_clock (id, demo_anchor, real_anchor, set_reason) VALUES (1, $1, clock_timestamp(), 'reset')
       ON CONFLICT (id) DO UPDATE SET demo_anchor = EXCLUDED.demo_anchor, real_anchor = EXCLUDED.real_anchor, set_reason = 'reset', set_at = clock_timestamp()`,

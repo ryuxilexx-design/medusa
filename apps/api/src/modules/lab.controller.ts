@@ -5,6 +5,7 @@ import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { conflict, forbidden, invalid, notFound } from '../core/errors';
 import { isDate, isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
+import { enqueueNotice } from '../telegram/outbox';
 import { addDays, dayStart, now } from '../core/clock';
 import { branchScope } from '../core/scope';
 
@@ -122,6 +123,8 @@ export class LabController {
       await c.query(`UPDATE lab_results SET status = 'verified', verified_by = $2, verified_by_name = $3, verified_at = $4 WHERE order_id = $1`, [id, ctx.membershipId, ctx.name, t]);
       await c.query(`UPDATE service_orders SET status = 'verified', performed_at = $2 WHERE id = $1`, [id, t]);
       await audit(c, ctx, 'lab_result.verify', 'order', id, `${o.service_name} tasdiqlandi`, o.branch_id);
+      // patient gets "your result is ready" (never the values) if their Telegram is linked
+      await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'result_ready', patientId: o.patient_id, orderId: id, dedupeKey: `result:${id}` });
       return { data: { id, verified_at: t } };
     });
   }

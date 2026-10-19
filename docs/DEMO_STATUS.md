@@ -1,8 +1,34 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.2 (demo MVP + haqiqiy xodim kirishi + shifokor jadvali)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.3 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 00. 0.3 relizda nima qo‘shildi: bemorlar uchun Telegram bot
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Botni ulash (token shifrlanadi, javobda qaytmaydi) | Ishlaydi | API test: soxta Telegram serveri bilan getMe, deleteWebhook; noto‘g‘ri token 422; `APP_SECRET_KEY` yo‘q bo‘lsa 409; bazada faqat shifrlangan matn |
+| Long polling (Telegram’dan xabarlarni o‘qish) | Ishlaydi | API test: soxta Bot API’dan kelgan xabarga javob ketdi, offset saqlandi. **Haqiqiy Telegram bilan sinalmagan** (token yo‘q) |
+| Telefon orqali bog‘lanish | Ishlaydi | Faqat o‘z kontakti (Telegram tasdiqlagan). Begona kontakt va guruh chatlari rad etiladi; +998 dan boshqa raqam — xabar |
+| Yozilish: xizmat → shifokor → kun → vaqt → tasdiq | Ishlaydi | API test va brauzer E2E (simulyator). Saytdagi bilan bir xil qoidalar (umumiy `booking.ts`); audit’da «Telegram bot» |
+| Ikki marta kelgan xabar, eski tugma, band bo‘lgan vaqt | Ishlaydi | API test: dublikat yo‘q; tasdiq oldidan registrator vaqtni band qilsa — «band qildi» va yangi vaqtlar |
+| Yangi bemor ro‘yxatdan o‘tishi | Ishlaydi | API test: noto‘g‘ri sana rad etiladi, takroriy karta ochilmaydi, bir raqamga 6 tadan ortiq karta yo‘q |
+| Qabuldan oldingi so‘rovnoma → shifokor | Ishlaydi | API test: faqat shu qabul shifokori o‘qiydi (boshqa shifokor, rahbar, registrator — 403); matn audit’ga tushmaydi. E2E: shifokor oynasida ko‘rinadi |
+| Ko‘chirish / bekor qilish botdan | Ishlaydi | API test; soxta qabul ID’si bilan begona qabulga tegib bo‘lmaydi |
+| Eslatmalar (1 kun va 2 soat oldin), «Kelaman» | Ishlaydi | API test: bir marta navbatga qo‘yiladi va yuboriladi; tugma bosilganda belgilanadi, jadvalda ✓ |
+| Klinika bekor qilsa/ko‘chirsa, natija tayyor | Ishlaydi | API test: xabar boradi, natija qiymatlari va birliklari yo‘q |
+| Bitta chatdan spam | Ishlaydi | Daqiqasiga 30 ta xabar (API test). Cheklov xotirada — server qayta ishga tushsa nolga tushadi |
+| Demo reset | Ishlaydi | Ulangan bot va chatlar saqlanadi, suhbat holati tozalanadi |
+
+Hali yo‘q yoki sinalmagan:
+- haqiqiy Telegram bilan uchdan-uchgacha sinov (BotFather tokeni kerak);
+- webhook (hozir long polling — bitta server uchun yetarli);
+- bemor tilini profilda saqlash;
+- shifokor yoki xizmat bo‘yicha qidiruv;
+- to‘lov botda.
+
+Oila bitta telefondan foydalansa, chat o‘sha raqamdagi barcha kartalarni ko‘radi. Bu ataylab qilingan: ota-ona bolalarini yozadi.
 
 ## 0. 0.2 relizda nima qo‘shildi: haqiqiy xodim kirishi
 
@@ -133,14 +159,15 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 | M-14 Sozlamalar | Ishlaydi | Logotip, shablon maydonlari, modul ko‘rinishi — Rejada |
 | AI-01 qaydni tartiblash | Namunaviy AI | `AI_MODE=sample` (standart): faqat demo matni. `live` rejim kodda bor, **haqiqiy kalit bilan sinalmagan** |
 | AI-02 rahbar savollari | Ishlaydi (AI emas) | SQL natijasidan shablon; ekranda «bu AI emas» deb yozilgan |
-| Rus tili, mobil workflow, SMS/Telegram, DMED, Payme/Click | Rejada | Menyuda yo‘q |
+| Telegram bot (bemorlar) | Ishlaydi (0.3) | 00-bo‘lim. Haqiqiy Telegram tokeni bilan hali sinalmagan |
+| Rus tili (xodimlar interfeysi), mobil workflow, SMS, DMED, Payme/Click | Rejada | Menyuda yo‘q. Bot o‘zbek va rus tilida |
 
 ## 6. Bajarilgan tekshiruvlar (oxirgi natija)
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 31/31 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik testi, 8 ta xodim kirishi, 4 ta shifokor jadvali testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 54/54: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali |
+| `npm test` (meduza_test) | 44/44 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 63/63: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |

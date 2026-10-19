@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ban, CalendarClock, PlayCircle, UserCheck, UserX } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
-import { fmtDate, fmtTime, formatPhone, formatSom, fullName, pid, localDate } from '@/lib/format';
+import { fmtDate, fmtDateTime, fmtTime, formatPhone, formatSom, fullName, pid, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { Alert, Button, Field, KeyVal, Modal, Textarea, useToast } from './ui';
-import { AppointmentStatus, InvoiceStatus } from './status';
+import { AppointmentStatus, InvoiceStatus, SourceMark } from './status';
 import { BookingModal } from './booking';
 
 export function useAppointmentAction() {
@@ -62,6 +62,7 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
             <KeyVal k="Bemor" v={<span>{fullName(appt, true)} <span className="text-slate-500">{pid(appt.patient_number)}</span></span>} />
             {appt.phone !== undefined && <KeyVal k="Telefon" v={formatPhone(appt.phone)} />}
             <KeyVal k="Xizmat" v={appt.service_name} />
+            {(appt.source === 'telegram' || appt.patient_confirmed_at) && <KeyVal k="Telegram" v={<span>{appt.source === 'telegram' ? 'Bemor bot orqali yozilgan' : 'Registratura yozgan'}{appt.patient_confirmed_at ? ` · kelishini tasdiqlagan (${fmtDateTime(appt.patient_confirmed_at)})` : ''}</span>} />}
             <KeyVal k="Shifokor" v={`${appt.doctor_name} · ${appt.specialty}`} />
           </div>
           <div className="divide-y divide-slate-100">

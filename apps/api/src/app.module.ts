@@ -19,12 +19,16 @@ import { DiagnosticsController } from './modules/diagnostics.controller';
 import { AiController } from './modules/ai.controller';
 import { AuthController } from './modules/auth.controller';
 import { StaffController } from './modules/staff.controller';
+import { TelegramController } from './telegram/telegram.controller';
+import { BotEngine } from './telegram/engine';
+import { BotRegistry, Notifier } from './telegram/notifier';
+import { TelegramWorkers } from './telegram/workers';
 
 @Module({
   controllers: [SessionController, ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController],
-  providers: [Db, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
+    AuthController, StaffController, TelegramController],
+  providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

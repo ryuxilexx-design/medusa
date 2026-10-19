@@ -5,6 +5,7 @@ import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { notFound, invalid } from '../core/errors';
 import { isDate, isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
+import { availability } from './booking';
 import { addDays, fromMinutes, localToUtc, now, toMinutes, weekday, localTime, localDate } from '../core/clock';
 
 export const PRICE_SQL = `(SELECT sp.amount FROM service_prices sp WHERE sp.service_id = s.id AND (sp.branch_id IS NULL OR sp.branch_id = $BRANCH)
@@ -106,25 +107,7 @@ export class ReferenceController {
       const s = await this.db.one(`SELECT duration_min FROM services WHERE id = $1 AND tenant_id = $2`, [q.service_id, ctx.tenantId]);
       if (s && !q.duration_min) duration = s.duration_min;
     }
-    const sch = await this.db.one(
-      `SELECT s.branch_id, b.name AS branch_name, to_char(s.start_time,'HH24:MI') AS start, to_char(s.end_time,'HH24:MI') AS "end",
-              to_char(s.break_start,'HH24:MI') AS break_start, to_char(s.break_end,'HH24:MI') AS break_end, r.name AS room_name
-         FROM schedules s JOIN branches b ON b.id = s.branch_id LEFT JOIN rooms r ON r.id = s.room_id WHERE s.doctor_id = $1 AND s.weekday = $2`, [q.doctor_id, weekday(q.date)]);
-    if (!sch) return { data: { working: false, slots: [], busy: [] } };
     const exclude = isUuid(q.exclude_appointment_id) ? q.exclude_appointment_id : null;
-    const busy = await this.db.rows(
-      `SELECT id, starts_at, ends_at FROM appointments WHERE doctor_id = $1 AND status NOT IN ('cancelled','no_show')
-          AND starts_at < $3 AND ends_at > $2 AND ($4::uuid IS NULL OR id <> $4)`, [q.doctor_id, localToUtc(q.date, '00:00'), localToUtc(addDays(q.date, 1), '00:00'), exclude]);
-    const busyMin = busy.map((b) => [toMinutes(localTime(b.starts_at)), toMinutes(localTime(b.ends_at))]);
-    const s0 = toMinutes(sch.start), e0 = toMinutes(sch.end);
-    const bs = sch.break_start ? toMinutes(sch.break_start) : -1, be = sch.break_end ? toMinutes(sch.break_end) : -1;
-    const nowLocal = localDate(now()) === q.date ? toMinutes(localTime(now())) : localDate(now()) > q.date ? 24 * 60 : -1;
-    const slots: { time: string; free: boolean; past: boolean }[] = [];
-    for (let t = s0; t + duration <= e0; t += 15) {
-      if (bs >= 0 && t < be && bs < t + duration) continue;
-      const free = !busyMin.some(([a, b]) => t < b && a < t + duration);
-      slots.push({ time: fromMinutes(t), free, past: t < nowLocal });
-    }
-    return { data: { working: true, ...sch, duration_min: duration, slots, busy: busy.map((b) => ({ start: localTime(b.starts_at), end: localTime(b.ends_at) })) } };
+    return { data: await availability(this.db.pool, ctx.tenantId, q.doctor_id, q.date, duration, exclude) };
   }
 }

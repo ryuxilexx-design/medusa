@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, FileText, Pencil, Phone, Printer, ShieldAlert } from 'lucide-react';
+import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert } from 'lucide-react';
 import { ALLERGY_LABEL, SEX_LABEL } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -50,6 +50,8 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
               <span>{SEX_LABEL[pt.sex]}</span>
               {pt.phone !== undefined && <span className="inline-flex items-center gap-1 tabular-nums"><Phone className="h-3.5 w-3.5" />{formatPhone(pt.phone)}</span>}
               {pt.balance_due > 0 && <Badge tone="red">Qarzdorlik: {formatSom(pt.balance_due)}</Badge>}
+              {pt.telegram_linked && <Badge tone="blue" icon={<Send className="h-3 w-3" />}>Telegram ulangan — eslatmalar boradi</Badge>}
+              {pt.source === 'telegram' && <span className="text-xs text-slate-500">Karta Telegram bot orqali ochilgan</span>}
             </div>
             {role === 'doctor' && (
               <div className="mt-2 flex items-center gap-2 text-sm">
