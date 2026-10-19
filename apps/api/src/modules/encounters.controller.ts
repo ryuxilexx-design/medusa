@@ -8,6 +8,7 @@ import { audit } from '../core/audit';
 import { now } from '../core/clock';
 import { completeInTx } from './appointments.controller';
 import { createBilledOrder } from './billing';
+import { Icd10Service } from '../ai/icd10';
 
 const FIELD_LABEL: Record<string, string> = { complaints: 'Shikoyatlar', examination: 'Ko‘rik', diagnosis: 'Tashxis / xulosa', recommendations: 'Tavsiyalar' };
 
@@ -24,7 +25,15 @@ async function loadEncounter(q: Q, ctx: Ctx, id: string, lock = false) {
 
 @Controller('encounters')
 export class EncountersController {
-  constructor(private db: Db) {}
+  constructor(private db: Db, private icd: Icd10Service) {}
+
+  /** undefined = keep the stored codes; otherwise every code must exist in the ICD-10 table. */
+  private async icdSnapshot(c: Q, codes: string[] | undefined) {
+    if (codes === undefined) return null;
+    const snap = await this.icd.snapshot(c, codes);
+    if (!snap) throw invalid({ icd10: 'MKB-10 kodi ro‘yxatda topilmadi' });
+    return JSON.stringify(snap);
+  }
 
   @Get(':id')
   async get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
@@ -52,10 +61,11 @@ export class EncountersController {
       if (e.note_status === 'signed') throw conflict('IMMUTABLE', 'Tasdiqlangan qaydni o‘zgartirib bo‘lmaydi');
       if (e.note_version !== input.version) throw conflict('STALE_STATE', 'Qayd boshqa oynada o‘zgartirilgan. Sahifani yangilang (matningiz nusxasini saqlab qo‘ying).');
       const savedAt = now();
+      const icd = await this.icdSnapshot(c, input.icd10);
       const r = (await c.query(
         `UPDATE clinical_notes SET complaints = $2, anamnesis = $3, examination = $4, diagnosis = $5, recommendations = $6, follow_up_date = $7, vitals = $8,
-                version = version + 1, saved_at = $9 WHERE encounter_id = $1 RETURNING version, saved_at`,
-        [id, input.complaints, input.anamnesis, input.examination, input.diagnosis, input.recommendations, input.follow_up_date ?? null, JSON.stringify(input.vitals ?? {}), savedAt])).rows[0];
+                icd10 = COALESCE($10::jsonb, icd10), version = version + 1, saved_at = $9 WHERE encounter_id = $1 RETURNING version, saved_at`,
+        [id, input.complaints, input.anamnesis, input.examination, input.diagnosis, input.recommendations, input.follow_up_date ?? null, JSON.stringify(input.vitals ?? {}), savedAt, icd])).rows[0];
       return { data: { version: r.version, saved_at: r.saved_at } };
     });
   }
@@ -72,11 +82,14 @@ export class EncountersController {
       if (e.note_status === 'signed') throw conflict('IMMUTABLE', 'Qayd allaqachon tasdiqlangan');
       if (e.note_version !== input.version) throw conflict('STALE_STATE', 'Qayd boshqa oynada o‘zgartirilgan. Sahifani yangilang.');
       const t = now();
-      await c.query(
+      const icd = await this.icdSnapshot(c, input.icd10);
+      const signed = (await c.query(
         `UPDATE clinical_notes SET complaints = $2, anamnesis = $3, examination = $4, diagnosis = $5, recommendations = $6, follow_up_date = $7, vitals = $8,
-                version = version + 1, saved_at = $9, status = 'signed', signed_by = $10, signed_by_name = $11, signed_at = $9 WHERE encounter_id = $1`,
-        [id, input.complaints, input.anamnesis, input.examination, input.diagnosis, input.recommendations, input.follow_up_date ?? null, JSON.stringify(input.vitals ?? {}), t, ctx.membershipId, ctx.name]);
-      await audit(c, ctx, 'clinical_note.sign', 'encounter', id, 'Klinik qayd tasdiqlandi', e.branch_id);
+                icd10 = COALESCE($12::jsonb, icd10), version = version + 1, saved_at = $9, status = 'signed', signed_by = $10, signed_by_name = $11, signed_at = $9
+          WHERE encounter_id = $1 RETURNING icd10`,
+        [id, input.complaints, input.anamnesis, input.examination, input.diagnosis, input.recommendations, input.follow_up_date ?? null, JSON.stringify(input.vitals ?? {}), t, ctx.membershipId, ctx.name, icd])).rows[0];
+      const codes = (signed.icd10 as { code: string }[]).map((x) => x.code);
+      await audit(c, ctx, 'clinical_note.sign', 'encounter', id, `Klinik qayd tasdiqlandi${codes.length ? ` (MKB-10: ${codes.join(', ')})` : ''}`, e.branch_id);
       const appt = (await c.query(`SELECT status FROM appointments WHERE id = $1`, [e.appointment_id])).rows[0];
       if (appt.status === 'in_progress') await completeInTx(c, ctx, e.appointment_id);
       return { data: { ok: true, signed_at: t } };

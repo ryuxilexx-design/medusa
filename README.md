@@ -44,11 +44,12 @@ Ishlab chiqish rejimi (hot reload): `npm run dev`.
 | `npm run db:backup` | Demo bazaning tiklanadigan nusxasi → `backups/meduza-<vaqt>.dump` |
 | `npm run db:restore -- backups/<fayl>.dump` | Nusxadan tiklash (avval ilovani to‘xtating) |
 | `npm run build` / `npm run start` | Production build / ishga tushirish |
-| `npm test` | API integratsion testlari (44 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
+| `npm test` | API integratsion testlari (51 ta). **Faqat `meduza_test` bazasida** ishlaydi, demo bazaga tegmaydi |
 | `npm run typecheck` | Barcha paketlar tip tekshiruvi |
-| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
+| `npm run e2e` | Brauzer testlari (asosiy demo yo‘li + xato holatlari + xodim kirishi + shifokor jadvali + Telegram bot + AI/MKB-10) **alohida stekda**: web :3100, API :4100, `meduza_test`. Demo serverlar va demo baza ishlatilmaydi. Skrinshotlar `e2e/shots/` ga |
 | `node e2e/run.mjs visual` | Asosiy ekranlar va modallarning 1366×768 skrinshotlari (test stekda) |
 | `npm run db:create-clinic -- --name … --branch … --manager-name … --manager-login … [--catalog demo]` | Haqiqiy klinikani ochish: tenant, birinchi filial va rahbar akkaunti. Vaqtinchalik parol terminalda **bir marta** chiqadi. Real klinika uchun alohida, `APP_MODE=production` muhitida ishlating |
+| `npm run db:import-icd10 -- fayl.csv [--replace]` | Rasmiy MKB-10 ro‘yxatini yuklash (ustunlar: `code;title_ru;title_uz`). `--replace` boshlang‘ich ro‘yxatdagi, faylda yo‘q kodlarni olib tashlaydi. Qaydlardagi kodlar o‘z nomi bilan saqlangan, buzilmaydi |
 | `node e2e/visual.mjs` | Xuddi shu vizual o‘tish **ishlab turgan demo ilovada**, faqat o‘qish rejimida (hech narsa saqlanmaydi) → `docs/screenshots/` |
 
 ### Test va demo bazasini ajratish
@@ -67,6 +68,7 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 | `APP_MODE` | `demo` / `development` — demo kirish va reset yoqilgan. `production` — ular o‘chadi (404) |
 | `DEMO_DATE` | Demo «bugun» sanasi (Toshkent). Asosiy preset: `2026-10-18`. Seed va demo vaqti shu sanaga nisbatan quriladi. O‘zgartirgandan keyin `npm run db:reset` qiling (API ishga tushganda nomuvofiqlik bo‘lsa ogohlantiradi) |
 | `DEMO_TIME` | Demo soatining boshlanishi (`HH:MM`, standart `11:30`). **Demo vaqti bazada saqlanadi** (`demo_clock` jadvali, `demo_now()`): oxirgi reset paytidagi `DEMO_DATE + DEMO_TIME` dan real vaqtda yuradi. API qayta ishga tushsa vaqt orqaga qaytmaydi; uni faqat demo reset boshlang‘ich nuqtaga qaytaradi. Qabul, navbat, to‘lov, audit va dashboard filtrlari shu bitta manbadan foydalanadi. 11:30 da seed’dagi barcha ertalabki yozuvlar o‘tmishda qoladi va tushdan keyingi slotlar bo‘sh bo‘ladi. Bo‘sh qoldirilsa, reset paytidagi real Toshkent soati olinadi |
+| `NEWS_ENABLED`, `NCBI_API_KEY` | Shifokorlar uchun kundalik yangiliklar (PubMed). `off` — o‘chiq. NCBI kaliti ixtiyoriy (so‘rov limitini oshiradi) |
 | `AI_MODE` | `sample` (standart): faqat tayyor demo matni uchun oldindan yozilgan natija, «Namunaviy AI natijasi» deb belgilangan. `live`: server orqali Claude API. `off`: tugma o‘chiq va sababi ko‘rsatiladi |
 | `APP_SECRET_KEY` | Saqlanadigan sirlarni (Telegram bot tokeni) shifrlash kaliti: 32 tasodifiy bayt, base64 (`openssl rand -base64 32`). Bo‘lmasa haqiqiy botni ulab bo‘lmaydi (simulyator ishlaydi). Kalit almashsa, botni qayta ulash kerak. Repozitoriyaga qo‘ymang |
 | `TELEGRAM_WORKERS` | `on` (standart) / `off`. Fon jarayonlari: Telegram’dan xabarlarni o‘qish (long polling), eslatmalarni rejalashtirish va yuborish. Testlarda avtomatik o‘chadi |
@@ -88,6 +90,28 @@ Demo reset’ni ilova ichidan ham qilish mumkin: **Rahbar → Sozlamalar → Dem
 - Rol almashtirish server sessiyasini almashtiradi (chiqish tugmasi → kirish sahifasi).
 - Demo kartadagi xodimni o‘chirib yoki rolini o‘zgartirib bo‘lmaydi, shunda demo hamma uchun ishlaydi.
 - `APP_MODE=production` da kartalar va demo yorlig‘i ko‘rinmaydi, faqat parol bilan kirish qoladi.
+
+## AI (1-bosqich)
+
+Barcha AI chaqiruvlari bitta joydan o‘tadi (`apps/api/src/ai/ai-client.ts`, rasmiy Anthropic SDK, standart model `claude-opus-5-5`).
+
+Har bir chaqiruvda:
+- javob JSON sxemasi bo‘yicha tekshiriladi;
+- AI rad etsa, xato yoki noto‘liq javob bersa, foydalanuvchiga tushunarli xato chiqadi va qo‘lda ishlash davom etadi;
+- `ai_usage` jadvaliga token soni, taxminiy narx ($) va natija yoziladi. So‘rov matni va javob yozilmaydi.
+
+| Funksiya | Qayerda | AI o‘chiq yoki namunaviy rejimda |
+|---|---|---|
+| **Qaydni tartiblash** | Shifokor → «AI bilan tartiblash» | Faqat demo matni uchun namunaviy natija |
+| **MKB-10 kodi** | Shifokor → tashxis ostida: qidiruv + «Kod taklif qilish» | Qidiruv ishlaydi; taklif so‘zlar mosligi bo‘yicha |
+| **Kundalik yangiliklar** | Shifokor sahifasida «Bugun sohangizda»; Sozlamalar → AI | Asl inglizcha sarlavha va PubMed havolasi |
+| **AI sarfi** | Sozlamalar → AI: 30 kunlik so‘rov, token, ~$ | — |
+
+Qoidalar:
+- **Anonimlashtirish:** AI’ga yuborishdan oldin bemorning ismi, familiyasi (qo‘shimchalari bilan), telefoni, tug‘ilgan sanasi va ID raqami olib tashlanadi.
+- **MKB-10:** AI faqat klinika jadvalidagi kodlardan tanlaydi, server har bir kodni tekshiradi. Qaydga kodni shifokor o‘zi qo‘shadi. Bazada boshlang‘ich ro‘yxat bor (~130 ta ko‘p uchraydigan ambulator tashxis), rasmiy ro‘yxat `db:import-icd10` bilan yuklanadi.
+- **Yangiliklar:** PubMed’dan oxirgi 30 kundagi RCT, meta-tahlil, tizimli sharh va tavsiyalar olinadi, har bir mutaxassislik uchun kuniga 5 tagacha. AI o‘zbekcha qisqa mazmunni faqat annotatsiyadan yozadi. Saqlanadi: sarlavha, AI qisqa mazmuni, havola. Annotatsiyaning o‘zi saqlanmaydi.
+- **Testlar:** AI soxta Claude va soxta PubMed serverlari bilan sinaladi, haqiqiy model chaqirilmaydi va pul sarflanmaydi.
 
 ## Telegram bot (bemorlar uchun)
 

@@ -68,6 +68,8 @@ export const noteFieldsSchema = z.object({
   diagnosis: optionalText(2000),
   recommendations: optionalText(4000),
   follow_up_date: isoDate.optional().nullable(),
+  /** ICD-10 (MKB-10) codes chosen by the doctor; titles are snapshotted on the server. */
+  icd10: z.array(z.string().regex(/^[A-Z][0-9]{2}(\.[0-9]{1,2})?$/, 'Noto‘g‘ri MKB-10 kodi')).max(5, 'Ko‘pi bilan 5 ta kod').optional(),
   vitals: z.object({
     bp_sys: vitalNum(50, 260, 'Sistolik bosim'),
     bp_dia: vitalNum(30, 160, 'Diastolik bosim'),
@@ -119,7 +121,9 @@ export const uziReportSchema = z.object({
   conclusion: optionalText(2000),
 });
 
-export const aiNoteDraftSchema = z.object({ text: z.string().trim().min(10, 'Kamida 10 belgi kiriting').max(6000) });
+export const aiNoteDraftSchema = z.object({ text: z.string().trim().min(10, 'Kamida 10 belgi kiriting').max(6000), encounter_id: uuid.optional() });
+export const icd10SuggestSchema = z.object({ text: z.string().trim().min(3, 'Tashxis matnini kiriting').max(2000), encounter_id: uuid.optional() });
+export const newsFeedbackSchema = z.object({ useful: z.boolean() });
 export const aiReportSchema = z.object({ question: z.enum(['revenue_today', 'top_services', 'debts']), branch_id: uuid.optional().nullable() });
 
 // ---------- Staff authentication ----------

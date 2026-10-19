@@ -1,8 +1,24 @@
 # Med.uz.ai demo — holat va tekshiruv natijalari
 
-Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.3 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot)
+Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.4 (demo MVP + xodim kirishi + shifokor jadvali + Telegram bot + AI 1-bosqich)
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
+
+## 000. 0.4 relizda nima qo‘shildi: AI 1-bosqich (shifokor vaqtini tejash)
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Barcha AI chaqiruvlari bitta mijoz orqali: JSON sxema, rad etish va xatolar, sarf hisobi | Ishlaydi | API test, soxta Claude serveri bilan: SDK so‘rovi (model, `fallbacks: "default"`, json_schema), rad etish → 502, buzuq javob → 502, noto‘g‘ri kalit → 503; har biri `ai_usage`da |
+| Anonimlashtirish | Ishlaydi | API test: AI’ga ketgan matnda bemor ismi va telefoni yo‘q, o‘rnida `[bemor]` va `[telefon]` |
+| Qaydni tartiblash (jonli) | Ishlaydi (soxta serverda) | **Haqiqiy Claude bilan hali sinalmagan.** API kaliti 26-oktabrdan keyin (Max tarifidagi kredit) |
+| MKB-10: qidiruv, taklif, qaydga saqlash, chop etish | Ishlaydi | API test: to‘qilgan va takror kod olib tashlanadi, noma’lum kod 422, tasdiqlashda audit’ga kodlar yoziladi. E2E: qidiruv → tanlash → saqlash → yangilangandan keyin ham bor |
+| Shifokorlar uchun kundalik yangiliklar (PubMed + AI) | Ishlaydi (soxta serverlarda) | API test: annotatsiya bazaga yozilmaydi, so‘ralmagan PMID olinmaydi, kuniga bir marta, baho. **Haqiqiy PubMed va haqiqiy AI bilan hali ishga tushirilmagan** |
+| AI sarfi (rahbar) | Ishlaydi | API test; E2E: Sozlamalar → AI |
+
+Cheklovlar:
+- **MKB-10 ro‘yxati boshlang‘ich**, ~130 kod. O‘zbekcha nomlarni tibbiyot mutaxassisi tekshirishi kerak; rasmiy ro‘yxat yuklanguncha shu ro‘yxat ishlaydi.
+- **Narx taxminiy:** Anthropic narxlar jadvaliga asoslangan. Aniq hisob Console’da.
+- **Ovozli qayd va hujjatlar:** ovozli qayd keyingi bosqichda. Hujjatlarni avtomatik yaratish (yo‘llanma, ma’lumotnoma) hali yo‘q, faqat xulosada MKB-10 chiqadi.
 
 ## 00. 0.3 relizda nima qo‘shildi: bemorlar uchun Telegram bot
 
@@ -166,8 +182,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 44/44 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 63/63: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori |
+| `npm test` (meduza_test) | 51/51 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 7 ta AI/MKB-10/yangiliklar testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 70/70: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |

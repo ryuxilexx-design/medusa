@@ -12,8 +12,8 @@ Proof means commands that ran and passed, not "it should work". Report exactly w
 | Changed | Run |
 |---|---|
 | Any TypeScript | `npm run typecheck` |
-| API, database, money/time logic, permissions | `npm test` (44 tests: P0, P1, demo clock, safety, staff auth, doctor schedule, Telegram bot) |
-| UI flows, forms, error handling | `npm run e2e` (isolated stack: web :3100, API :4100, DB `meduza_test`) — 19 happy-path + 16 error-state + 11 staff-login + 8 doctor-schedule + 9 Telegram-simulator checks |
+| API, database, money/time logic, permissions | `npm test` (51 tests: P0, P1, demo clock, safety, staff auth, doctor schedule, Telegram bot, AI/ICD-10/news) |
+| UI flows, forms, error handling | `npm run e2e` (isolated stack: web :3100, API :4100, DB `meduza_test`) — 19 happy-path + 16 error-state + 11 staff-login + 8 doctor-schedule + 9 Telegram-simulator + 7 AI/ICD-10 checks |
 | Layout / visuals | `node e2e/run.mjs visual` (test stack) → screenshots in `e2e/shots/visual/`; open the PNGs and actually look |
 | Print documents | `node e2e/print.mjs` against a running app → A4 PDFs in `e2e/shots/` (a PDF check is not a printer check — say so) |
 

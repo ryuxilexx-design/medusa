@@ -1,0 +1,238 @@
+// AI phase 1 against a fake Claude Messages API and a fake PubMed (no real model calls, no cost):
+// request shape, de-identification, refusal/bad output/auth errors, usage metering, ICD-10 search/suggest/save,
+// daily specialty news.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { createRequire } from 'node:module';
+import { bootTestApp, db } from './_helpers.mjs';
+const require = createRequire(import.meta.url);
+const { SEED_IDS } = db;
+const M = SEED_IDS.membership;
+let app, base, pool, config, news;
+
+function session() {
+  let cookie = '';
+  const req = async (method, path, body) => {
+    const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
+    const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t; }
+    return { status: r.status, body: j, text: t };
+  };
+  return { get: (p) => req('GET', p), post: (p, b = {}) => req('POST', p, b), put: (p, b) => req('PUT', p, b), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }) };
+}
+
+// ---------- fake Claude API ----------
+const claude = { calls: [], next: null, server: null, url: '' };
+const msg = (obj, extra = {}) => ({
+  id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn', stop_sequence: null,
+  content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj) }],
+  usage: { input_tokens: 1200, output_tokens: 300, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, ...extra,
+});
+function answerFor(body) {
+  const sys = JSON.stringify(body.system);
+  if (sys.includes('hujjat tartiblovchisan')) return msg({ complaints: 'Bosh og‘rig‘i 2 kundan beri.', anamnesis: 'Kiritilmagan', examination: 'AQB 150/95.', diagnosis: 'Arterial gipertenziya.', recommendations: 'Kuzatuv.' });
+  if (sys.includes('MKB-10')) return msg({ suggestions: [
+    { code: 'I10', confidence: 'high', reason_uz: 'Birlamchi gipertenziya.' },
+    { code: 'X99.9', confidence: 'low', reason_uz: 'To‘qib chiqarilgan kod.' },
+    { code: 'I10', confidence: 'high', reason_uz: 'Takror.' }] });
+  if (sys.includes('maqolalarni qisqa')) {
+    const items = JSON.parse(body.messages[0].content);
+    return msg({ items: [...items.map((i) => ({ pmid: i.pmid, title_uz: `Tarjima: ${i.title}`, summary_uz: `Randomizatsiyalangan tadqiqot qisqa mazmuni (${i.pmid}).`, takeaway_uz: 'Dastlabki natija.' })),
+      { pmid: '999999', title_uz: 'Kiritilmagan maqola', summary_uz: 'Bu ro‘yxatda yo‘q edi.', takeaway_uz: '-' }] });
+  }
+  return msg({});
+}
+function startClaude() {
+  return new Promise((resolve) => {
+    claude.server = http.createServer(async (req, res) => {
+      let raw = ''; for await (const ch of req) raw += ch;
+      const body = raw ? JSON.parse(raw) : {};
+      claude.calls.push({ url: req.url, headers: req.headers, body });
+      const send = (status, obj, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(obj)); };
+      const next = claude.next; claude.next = null;
+      if (next === 'refusal') return send(200, { ...msg(''), content: [], stop_reason: 'refusal', stop_details: { type: 'refusal', category: null, explanation: 'test' } });
+      if (next === 'garbage') return send(200, msg('bu JSON emas'));
+      if (next === 'auth') return send(401, { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } });
+      return send(200, answerFor(body));
+    }).listen(0, '127.0.0.1', () => { claude.url = `http://127.0.0.1:${claude.server.address().port}`; resolve(); });
+  });
+}
+
+// ---------- fake PubMed ----------
+const pubmed = { server: null, url: '', calls: [] };
+const ABSTRACT_MARK = 'UNIQUEABSTRACTSENTENCE';
+const xmlArticle = (pmid, title) => `<PubmedArticle><MedlineCitation><PMID Version="1">${pmid}</PMID><Article><Journal><Title>Test Journal of Medicine</Title><JournalIssue><PubDate><Year>2026</Year><Month>Oct</Month><Day>2</Day></PubDate></JournalIssue></Journal>
+  <ArticleTitle>${title} &amp; outcomes</ArticleTitle><Abstract><AbstractText Label="BACKGROUND">Background ${ABSTRACT_MARK} text.</AbstractText><AbstractText Label="RESULTS">HR 0.8 (95% CI 0.7&#8211;0.9).</AbstractText></Abstract></Article></MedlineCitation></PubmedArticle>`;
+function startPubmed() {
+  return new Promise((resolve) => {
+    pubmed.server = http.createServer((req, res) => {
+      pubmed.calls.push(req.url);
+      if (req.url.startsWith('/esearch.fcgi')) { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ esearchresult: { idlist: ['40000001', '40000002'] } })); }
+      if (req.url.startsWith('/efetch.fcgi')) { res.setHeader('content-type', 'text/xml'); return res.end(`<?xml version="1.0"?><PubmedArticleSet>${xmlArticle('40000001', 'Statins in older adults')}${xmlArticle('40000002', 'Salt reduction trial')}</PubmedArticleSet>`); }
+      res.statusCode = 404; res.end();
+    }).listen(0, '127.0.0.1', () => { pubmed.url = `http://127.0.0.1:${pubmed.server.address().port}`; resolve(); });
+  });
+}
+
+let manager, doctor, other, encounter;
+before(async () => {
+  ({ app, base } = await bootTestApp());
+  pool = app.get(require('../dist/core/db.js').Db).pool;
+  config = require('../dist/core/config.js').config;
+  news = app.get(require('../dist/ai/news.js').NewsService);
+  await Promise.all([startClaude(), startPubmed()]);
+  config.ai.mode = 'live'; config.ai.apiKey = 'test-key'; config.ai.baseUrl = claude.url; config.ai.model = 'claude-opus-5-5';
+  config.news.pubmedBase = pubmed.url; config.news.ncbiKey = 'x'; // short pause between specialties in tests
+  manager = session(); await manager.demo(M.manager);
+  assert.equal((await manager.post('/demo/reset')).status, 200);
+  doctor = session(); await doctor.demo(M.doctor(0));
+  other = session(); await other.demo(M.doctor(1));
+  const today = (await doctor.get('/me')).body.data.today;
+  const appt = (await doctor.get(`/appointments?date=${today}`)).body.data.find((a) => a.status === 'in_progress' && a.encounter_id);
+  assert.ok(appt, 'seed’da shifokor 0 ning davom etayotgan qabuli bor');
+  encounter = (await doctor.get(`/encounters/${appt.encounter_id}`)).body.data;
+});
+after(async () => {
+  // fake articles must not leak into other suites (news is global, a demo reset does not clear it)
+  await pool?.query(`DELETE FROM news_items WHERE journal = 'Test Journal of Medicine'`).catch(() => undefined);
+  await app?.close(); claude.server?.close(); pubmed.server?.close();
+});
+
+test('qaydni tartiblash (jonli): SDK so‘rovi to‘g‘ri; bemor ismi va telefoni AI’ga ketmaydi; xarajat yoziladi', async () => {
+  const p = encounter.patient;
+  const text = `${p.last_name} ${p.first_name} 2 kundan beri bosh og‘rig‘idan shikoyat qiladi, tel +998 90 123 45 67. Ko‘rikda AQB 150/95. Gipertenziya.`;
+  const before = claude.calls.length;
+  const r = await doctor.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.body.data.mode, 'live');
+  assert.equal(r.body.data.draft.diagnosis, 'Arterial gipertenziya.');
+  const call = claude.calls[before];
+  assert.match(call.url, /^\/v1\/messages/);
+  assert.equal(call.headers['x-api-key'], 'test-key');
+  assert.match(String(call.headers['anthropic-beta']), /server-side-fallback-2026-07-01/);
+  assert.equal(call.body.model, 'claude-opus-5-5');
+  assert.equal(call.body.fallbacks, 'default');
+  assert.equal(call.body.output_config.format.type, 'json_schema');
+  const sent = JSON.stringify(call.body.messages);
+  assert.ok(!sent.includes(p.last_name) && !sent.includes(p.first_name), 'ism yuborilmadi');
+  assert.ok(!sent.includes('123 45 67') && sent.includes('[telefon]') && sent.includes('[bemor]'), sent);
+  const u = (await pool.query(`SELECT * FROM ai_usage WHERE route = 'note_draft' ORDER BY id DESC LIMIT 1`)).rows[0];
+  assert.equal(u.outcome, 'ok'); assert.equal(u.input_tokens, 1200); assert.equal(u.output_tokens, 300);
+  assert.equal(Number(u.cost_usd), (1200 * 4 + 300 * 20) / 1e6);
+  assert.equal(u.tenant_id, SEED_IDS.tenant);
+  const a = (await pool.query(`SELECT summary FROM audit_logs WHERE action = 'ai.note_draft' ORDER BY id DESC LIMIT 1`)).rows[0];
+  assert.ok(!a.summary.includes('bosh og‘rig‘i'), 'audit’da klinik matn yo‘q');
+});
+
+test('xatolar: boshqa shifokor qabuli 403; rad etish, buzuq javob, noto‘g‘ri kalit — tushunarli xato va hisobda qayd', async () => {
+  const text = 'Bemor 3 kundan beri yo‘taldan shikoyat qiladi, harorat 37.5.';
+  assert.equal((await other.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id })).status, 403);
+  claude.next = 'refusal';
+  let r = await doctor.post('/ai/note-draft', { text });
+  assert.equal(r.status, 502); assert.equal(r.body.error.code, 'AI_REFUSED');
+  claude.next = 'garbage';
+  r = await doctor.post('/ai/note-draft', { text });
+  assert.equal(r.status, 502); assert.equal(r.body.error.code, 'AI_BAD_OUTPUT');
+  claude.next = 'auth';
+  r = await doctor.post('/ai/note-draft', { text });
+  assert.equal(r.status, 503); assert.equal(r.body.error.code, 'AI_KEY');
+  const outcomes = (await pool.query(`SELECT outcome FROM ai_usage WHERE route = 'note_draft' ORDER BY id DESC LIMIT 3`)).rows.map((x) => x.outcome);
+  assert.deepEqual(outcomes, ['error', 'bad_output', 'refusal']);
+});
+
+test('MKB-10: qidiruv; AI faqat jadvaldagi kodni beradi (to‘qilgan va takror kod olib tashlanadi); AI o‘chiq bo‘lsa — so‘z bo‘yicha', async () => {
+  const s = (await doctor.get('/icd10?q=gipert')).body.data;
+  assert.ok(s.some((x) => x.code === 'I10'), JSON.stringify(s));
+  assert.ok((await doctor.get('/icd10?q=J0')).body.data.every((x) => x.code.startsWith('J0')));
+  assert.equal((await manager.get('/icd10?q=gipert')).status, 403);
+  const before = claude.calls.length;
+  const r = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya, birlamchi', encounter_id: encounter.encounter.id });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.body.data.mode, 'live');
+  assert.deepEqual(r.body.data.suggestions.map((x) => x.code), ['I10']);
+  assert.ok(r.body.data.suggestions[0].title.length > 3);
+  const call = claude.calls[before];
+  assert.equal(call.body.system[0].cache_control.type, 'ephemeral', 'kodlar ro‘yxati keshlanadi');
+  assert.ok(call.body.system[0].text.includes('I10 —'));
+  config.ai.mode = 'sample';
+  try {
+    const off = await doctor.post('/ai/icd10-suggest', { text: 'surunkali gastrit' });
+    assert.equal(off.body.data.mode, 'search');
+    assert.ok(off.body.data.suggestions.some((x) => x.code === 'K29.5'), JSON.stringify(off.body.data));
+    assert.equal(claude.calls.length, before + 1, 'namunaviy rejimda AI chaqirilmadi');
+  } finally { config.ai.mode = 'live'; }
+});
+
+test('MKB-10 qaydda: saqlanadi (nom bilan), noma’lum kod 422, tasdiqlashda audit’ga kodlar yoziladi', async () => {
+  const id = encounter.encounter.id;
+  let note = (await doctor.get(`/encounters/${id}`)).body.data.note;
+  const body = (v, icd10) => ({ version: v, complaints: 'Bosh og‘rig‘i', anamnesis: null, examination: 'AQB 150/95', diagnosis: 'Gipertenziya', recommendations: 'Kuzatuv', follow_up_date: null, vitals: {}, icd10 });
+  let r = await doctor.put(`/encounters/${id}/draft`, body(note.version, ['Z99.99']));
+  assert.equal(r.status, 422); assert.ok(r.body.error.fields.icd10);
+  r = await doctor.put(`/encounters/${id}/draft`, body(note.version, ['I10', 'R51']));
+  assert.equal(r.status, 200, r.text);
+  note = (await doctor.get(`/encounters/${id}`)).body.data.note;
+  assert.deepEqual(note.icd10.map((x) => x.code), ['I10', 'R51']);
+  assert.ok(note.icd10[0].title.toLowerCase().includes('gipertenziya'));
+  // codes omitted on the next save → kept
+  r = await doctor.put(`/encounters/${id}/draft`, { ...body(note.version), icd10: undefined });
+  assert.equal(r.status, 200);
+  note = (await doctor.get(`/encounters/${id}`)).body.data.note;
+  assert.equal(note.icd10.length, 2);
+  r = await doctor.post(`/encounters/${id}/sign`, body(note.version, ['I10']));
+  assert.equal(r.status, 200, r.text);
+  const a = (await pool.query(`SELECT summary FROM audit_logs WHERE action = 'clinical_note.sign' AND resource_id = $1`, [id])).rows[0];
+  assert.match(a.summary, /MKB-10: I10/);
+});
+
+test('AI sarfi: rahbar ko‘radi (marshrut, token, $), shifokor ko‘rmaydi', async () => {
+  const r = await manager.get('/ai/usage');
+  assert.equal(r.status, 200);
+  const note = r.body.data.by_route.find((x) => x.route === 'note_draft');
+  assert.ok(note.calls >= 4 && note.ok >= 1 && note.failed >= 3);
+  assert.ok(note.cost_usd > 0);
+  assert.equal(r.body.data.key_configured, true);
+  assert.ok(r.body.data.icd10.n >= 100);
+  assert.equal((await doctor.get('/ai/usage')).status, 403);
+});
+
+test('yangiliklar: PubMed → AI o‘zbekcha qisqa mazmun; annotatsiya saqlanmaydi; begona PMID olinmaydi; baho; kuniga bir marta', async () => {
+  await pool.query(`DELETE FROM news_items`);
+  const added = await news.refreshSpecialty('internal');
+  assert.equal(added, 2);
+  const term = decodeURIComponent(pubmed.calls.find((u) => u.startsWith('/esearch')).replace(/\+/g, ' '));
+  assert.match(term, /internal medicine/); assert.match(term, /randomized controlled trial/);
+  const list = (await doctor.get('/news')).body;
+  assert.equal(list.meta.specialty, 'internal', 'Terapevt → ichki kasalliklar');
+  assert.equal(list.data.length, 2);
+  const item = list.data.find((x) => x.url.endsWith('/40000001/'));
+  assert.equal(item.title, 'Statins in older adults & outcomes');
+  assert.match(item.title_uz, /^Tarjima:/); assert.ok(item.summary_uz && item.takeaway_uz);
+  assert.equal(item.journal, 'Test Journal of Medicine'); assert.equal(item.published, '2026 Oct 2');
+  const stored = JSON.stringify((await pool.query(`SELECT * FROM news_items`)).rows);
+  assert.ok(!stored.includes(ABSTRACT_MARK), 'annotatsiya bazada yo‘q');
+  assert.ok(!stored.includes('999999'), 'so‘ralmagan PMID saqlanmadi');
+  const sentToAi = JSON.stringify(claude.calls.at(-1).body.messages);
+  assert.ok(sentToAi.includes(ABSTRACT_MARK) && sentToAi.includes('0.7–0.9'), 'AI faqat annotatsiyadan ishlaydi (entity decode)');
+  assert.equal((await doctor.post(`/news/${item.id}/feedback`, { useful: true })).status, 200);
+  assert.equal((await doctor.get('/news')).body.data.find((x) => x.id === item.id).useful, true);
+  assert.equal(await news.refreshSpecialty('internal'), 0, 'bugun allaqachon yangilangan');
+  const usage = (await pool.query(`SELECT tenant_id, outcome FROM ai_usage WHERE route = 'news_summary' ORDER BY id DESC LIMIT 1`)).rows[0];
+  assert.equal(usage.tenant_id, null); assert.equal(usage.outcome, 'ok');
+});
+
+test('yangiliklar AI o‘chiq: faqat asl sarlavha va havola; rahbar yangilashi 10 daqiqada bir marta', async () => {
+  config.ai.mode = 'sample';
+  try {
+    const calls = claude.calls.length;
+    assert.equal(await news.refreshSpecialty('cardiology'), 2);
+    assert.equal(claude.calls.length, calls, 'AI chaqirilmadi');
+    const items = (await manager.get('/news?specialty=cardiology')).body.data;
+    assert.equal(items.length, 2);
+    assert.ok(items.every((x) => x.title && x.title_uz === null && x.summary_uz === null && x.url.startsWith('https://pubmed.ncbi.nlm.nih.gov/')));
+  } finally { config.ai.mode = 'live'; }
+  assert.equal((await manager.post('/news/refresh')).status, 200);
+  assert.equal((await manager.post('/news/refresh')).status, 429);
+  assert.equal((await doctor.post('/news/refresh')).status, 403);
+});

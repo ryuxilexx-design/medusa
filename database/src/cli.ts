@@ -70,12 +70,48 @@ async function createClinic(pool: ReturnType<typeof createPool>, a: Record<strin
   }
 }
 
+/**
+ * Loads the official ICD-10 (MKB-10) list: CSV/TSV with columns code;title_ru[;title_uz] (header optional).
+ * Existing codes are updated, new ones added; with --replace the starter codes missing from the file are removed
+ * (codes already used in notes stay valid because notes keep their own title snapshot).
+ */
+async function importIcd10(pool: ReturnType<typeof createPool>, argv: string[]) {
+  const file = argv.find((a) => !a.startsWith('--'));
+  if (!file) { console.error('Foydalanish: npm run db:import-icd10 -- <fayl.csv> [--replace]'); process.exit(2); }
+  const fs = await import('fs');
+  const lines = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim());
+  const sep = lines[0].includes(';') ? ';' : lines[0].includes('\t') ? '\t' : ',';
+  const unq = (v: string | undefined) => (v ?? '').trim().replace(/^"(.*)"$/, '$1').replace(/""/g, '"');
+  const rows: [string, string, string | null][] = [];
+  const bad: number[] = [];
+  lines.forEach((l, i) => {
+    const [c, ru, uz] = l.split(sep).map(unq);
+    const code = c.toUpperCase();
+    if (i === 0 && !/^[A-Z][0-9]{2}/.test(code)) return; // header
+    if (!/^[A-Z][0-9]{2}(\.[0-9]{1,2})?$/.test(code) || !ru) { bad.push(i + 1); return; }
+    rows.push([code, ru, uz || null]);
+  });
+  if (!rows.length) { console.error('Faylda yaroqli qator topilmadi'); process.exit(2); }
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    for (const [code, ru, uz] of rows)
+      await c.query(`INSERT INTO icd10_codes (code, title_ru, title_uz, source, updated_at) VALUES ($1,$2,$3,'official',now())
+                     ON CONFLICT (code) DO UPDATE SET title_ru = EXCLUDED.title_ru, title_uz = COALESCE(EXCLUDED.title_uz, icd10_codes.title_uz), source = 'official', updated_at = now()`, [code, ru, uz]);
+    let removed = 0;
+    if (argv.includes('--replace')) removed = (await c.query(`DELETE FROM icd10_codes WHERE source = 'starter' AND NOT (code = ANY($1))`, [rows.map((r) => r[0])])).rowCount ?? 0;
+    await c.query('COMMIT');
+    console.log(`MKB-10: ${rows.length} ta kod yuklandi${removed ? `, ${removed} ta boshlang‘ich kod olib tashlandi` : ''}${bad.length ? `; o‘tkazib yuborilgan qatorlar: ${bad.slice(0, 20).join(', ')}${bad.length > 20 ? '…' : ''}` : ''}`);
+  } catch (e) { await c.query('ROLLBACK').catch(() => undefined); throw e; } finally { c.release(); }
+}
+
 async function main() {
   const cmd = process.argv[2];
   const pool = createPool();
   try {
     await migrate(pool);
     if (cmd === 'create-clinic') await createClinic(pool, args(process.argv.slice(3)));
+    if (cmd === 'import-icd10') await importIcd10(pool, process.argv.slice(3));
     if (cmd === 'reset' || cmd === 'seed') {
       const demoDate = process.env.DEMO_DATE || '2026-10-18';
       const { counts, clock } = await resetDemo(pool, demoDate, process.env.DEMO_TIME);

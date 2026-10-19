@@ -18,7 +18,11 @@ export default function PrintNote({ params }: { params: Promise<{ id: string }> 
       responsible={`${a.doctor_name}, ${a.specialty}`} status={note.status === 'signed' ? 'Tasdiqlangan' : 'Qoralama'} draft={note.status !== 'signed'}>
       <p className="mb-3 text-slate-600">Xizmat: {a.service_name} · Qabul: {fmtDate(a.starts_at)} · {a.room_name ?? ''}</p>
       {vit && <div className="print-avoid-break mb-3"><h2 className="text-xs font-bold uppercase text-slate-500">Ko‘rsatkichlar</h2><p>{vit}</p></div>}
-      {rows.map(([k, t]) => <div key={k} className="print-avoid-break mb-3"><h2 className="text-xs font-bold uppercase text-slate-500">{k}</h2><p className="whitespace-pre-wrap">{t || 'Kiritilmagan'}</p></div>)}
+      {rows.map(([k, t]) => (
+        <div key={k} className="print-avoid-break mb-3"><h2 className="text-xs font-bold uppercase text-slate-500">{k}</h2><p className="whitespace-pre-wrap">{t || 'Kiritilmagan'}</p>
+          {k === 'Tashxis / xulosa' && note.icd10?.length > 0 && <p className="mt-1">MKB-10: {note.icd10.map((x: { code: string; title: string }) => `${x.code} — ${x.title}`).join('; ')}</p>}
+        </div>
+      ))}
       {note.follow_up_date && <p><b>Qayta qabul:</b> {fmtDate(note.follow_up_date)}</p>}
     </PrintDoc>
   );

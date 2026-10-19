@@ -28,7 +28,8 @@
     "db:backup": "node database/scripts/backup.mjs",
     "db:restore": "node database/scripts/restore.mjs",
     "db:readonly-role": "node database/scripts/readonly-role.mjs",
-    "db:create-clinic": "npm run build:packages && node database/dist/src/cli.js create-clinic"
+    "db:create-clinic": "npm run build:packages && node database/dist/src/cli.js create-clinic",
+    "db:import-icd10": "npm run build:packages && node database/dist/src/cli.js import-icd10"
   },
   "devDependencies": {
     "typescript": "5.9.3"

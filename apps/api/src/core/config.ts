@@ -19,9 +19,10 @@ export const config = {
   autoSeed: process.env.AUTO_SEED === '1',
   /** 32-byte key (base64) for encrypting stored secrets such as Telegram bot tokens. Without it a real bot cannot be connected. */
   secretKey: process.env.APP_SECRET_KEY || '',
+  /** Background workers (Telegram polling, reminders, outbox, daily news). Off in tests: tests drive them directly. */
+  workers: (process.env.BACKGROUND_WORKERS ?? process.env.TELEGRAM_WORKERS) !== 'off' && process.env.MEDUZA_TEST !== '1',
   telegram: {
-    /** Background workers (Telegram polling, reminders, outbox). Off in tests: tests drive them directly. */
-    workers: process.env.TELEGRAM_WORKERS !== 'off' && process.env.MEDUZA_TEST !== '1',
+    workers: (process.env.BACKGROUND_WORKERS ?? process.env.TELEGRAM_WORKERS) !== 'off' && process.env.MEDUZA_TEST !== '1',
     apiBase: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org',
   },
   ai: {
@@ -29,5 +30,14 @@ export const config = {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
     model: process.env.AI_MODEL || 'claude-opus-5-5',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 20000),
+    /** Only for tests/proxies; empty = Anthropic's API. */
+    baseUrl: process.env.AI_BASE_URL || '',
+  },
+  news: {
+    /** Daily specialty news for doctors (PubMed + AI summary). off = no fetching. */
+    enabled: process.env.NEWS_ENABLED !== 'off',
+    pubmedBase: process.env.PUBMED_BASE || 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
+    /** Optional NCBI key: raises the E-utilities limit from 3 to 10 requests/second. */
+    ncbiKey: process.env.NCBI_API_KEY || '',
   },
 };

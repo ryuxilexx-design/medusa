@@ -7,21 +7,23 @@ import { api, ApiError } from '@/lib/api';
 import { fmtDateTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { TelegramSettings } from '@/components/telegram-settings';
+import { AiSettings } from '@/components/ai-settings';
 import { Alert, Badge, Button, Card, ErrorState, Field, Input, LoadingRows, Modal, PageHeader, Pagination, Table, Tabs, Td, Th, useToast } from '@/components/ui';
 
-type Tab = 'clinic' | 'services' | 'telegram' | 'audit' | 'demo';
+type Tab = 'clinic' | 'services' | 'telegram' | 'ai' | 'audit' | 'demo';
 
 export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>('clinic');
   return (
     <>
-      <PageHeader title="Sozlamalar" subtitle="Klinika, xizmat katalogi, Telegram bot, audit va demo boshqaruvi" />
+      <PageHeader title="Sozlamalar" subtitle="Klinika, xizmat katalogi, Telegram bot, AI, audit va demo boshqaruvi" />
       <Card padded={false}>
-        <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={[{ value: 'clinic', label: 'Klinika va filiallar' }, { value: 'services', label: 'Xizmatlar katalogi' }, { value: 'telegram', label: 'Telegram bot' }, { value: 'audit', label: 'Audit jurnali' }, { value: 'demo', label: 'Demo boshqaruvi' }]} /></div>
+        <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={[{ value: 'clinic', label: 'Klinika va filiallar' }, { value: 'services', label: 'Xizmatlar katalogi' }, { value: 'telegram', label: 'Telegram bot' }, { value: 'ai', label: 'AI' }, { value: 'audit', label: 'Audit jurnali' }, { value: 'demo', label: 'Demo boshqaruvi' }]} /></div>
         <div className="p-4">
           {tab === 'clinic' && <Clinic />}
           {tab === 'services' && <Services />}
           {tab === 'telegram' && <TelegramSettings />}
+          {tab === 'ai' && <AiSettings />}
           {tab === 'audit' && <Audit />}
           {tab === 'demo' && <Demo />}
         </div>

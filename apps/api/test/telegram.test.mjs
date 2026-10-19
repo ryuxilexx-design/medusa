@@ -94,6 +94,10 @@ before(async () => {
   config = require('../dist/core/config.js').config;
   manager = session(); await manager.demo(M.manager);
   assert.equal((await manager.post('/demo/reset')).status, 200);
+  // chats deliberately survive demo resets; every run must start from unlinked phones (test database only)
+  await db.assertDatabaseName(pool, '_test');
+  await pool.query(`DELETE FROM telegram_chats`);
+  await pool.query(`DELETE FROM telegram_sim_messages`);
   registrar = session(); await registrar.demo(M.registrar);
   lab = session(); await lab.demo(M.lab);
   await startFake();

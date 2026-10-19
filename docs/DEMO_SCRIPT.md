@@ -120,6 +120,16 @@ Agar mehmon boshqa matn yozib ko‘rmoqchi bo‘lsa, tizim «Namunaviy rejimda f
 - Agar ilova umuman ochilmasa (noutbuk qayta yoqilgan bo‘lsa): `npm run db:up` → `npm run start` (build qayta kerak emas).
 - Favqulodda zaxira: `docs/screenshots/` dagi skrinshotlar — ularni «oldindan olingan ekranlar» deb ko‘rsating.
 
+## AI va MKB-10 (1 daqiqa, Shifokor oynasida)
+
+1. **Shifokor kabineti** → davom etayotgan qabul. «Tashxis / xulosa» ostida **MKB-10**: `gastrit` deb yozing → **K29.7** ni tanlang.
+2. **Kod taklif qilish**: tizim tashxis matni bo‘yicha kod taklif qiladi.
+   - Jonli AI ulanmagan bo‘lsa, «So‘z bo‘yicha moslik» deb ochiq yoziladi.
+   - Tanlovni har doim shifokor qiladi.
+3. O‘ng tomonda **«Bugun sohangizda»**: shifokor sohasi bo‘yicha oxirgi tadqiqotlar, o‘zbekcha qisqa mazmun va PubMed havolasi bilan. Jonli AI bo‘lmasa, asl sarlavha ko‘rsatiladi.
+
+Ayting: «AI faqat qoralama va taklif beradi, imzo shifokorda. Bemorning ismi va telefoni AI’ga yuborilmaydi. Har bir AI so‘rovining narxi rahbar sahifasida ko‘rinadi.»
+
 ## Telegram bot (2 daqiqa, Rahbar oynasida)
 
 **Sozlamalar → Telegram bot**. O‘ngda simulyator bor: haqiqiy bot mantig‘i, faqat Telegram’siz.

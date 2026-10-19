@@ -10,12 +10,15 @@ import { ageFrom, fmtDate, fmtDateTime, fmtTime, formatSom, fullName, longDate, 
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
 import { IntakePanel } from '@/components/intake-panel';
+import { IcdPicker, type Icd } from '@/components/icd-picker';
+import { NewsCard } from '@/components/news-card';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
 
-type NoteForm = { complaints: string; anamnesis: string; examination: string; diagnosis: string; recommendations: string; follow_up_date: string; bp_sys: string; bp_dia: string; pulse: string; temp: string };
-const FIELDS: { key: keyof NoteForm; label: string; rows: number; required?: boolean }[] = [
+type TextKey = 'complaints' | 'anamnesis' | 'examination' | 'diagnosis' | 'recommendations' | 'follow_up_date' | 'bp_sys' | 'bp_dia' | 'pulse' | 'temp';
+type NoteForm = Record<TextKey, string> & { icd10: Icd[] };
+const FIELDS: { key: TextKey; label: string; rows: number; required?: boolean }[] = [
   { key: 'complaints', label: 'Shikoyatlar', rows: 3, required: true },
   { key: 'anamnesis', label: 'Anamnez', rows: 3 },
   { key: 'examination', label: 'Ko‘rik', rows: 3, required: true },
@@ -25,11 +28,13 @@ const FIELDS: { key: keyof NoteForm; label: string; rows: number; required?: boo
 const toForm = (n: any): NoteForm => ({
   complaints: n?.complaints ?? '', anamnesis: n?.anamnesis ?? '', examination: n?.examination ?? '', diagnosis: n?.diagnosis ?? '', recommendations: n?.recommendations ?? '',
   follow_up_date: n?.follow_up_date ?? '', bp_sys: n?.vitals?.bp_sys?.toString() ?? '', bp_dia: n?.vitals?.bp_dia?.toString() ?? '', pulse: n?.vitals?.pulse?.toString() ?? '', temp: n?.vitals?.temp?.toString() ?? '',
+  icd10: Array.isArray(n?.icd10) ? n.icd10.map((x: Icd) => ({ code: x.code, title: x.title })) : [],
 });
 const toBody = (f: NoteForm, version: number) => {
   const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
   return { version, complaints: f.complaints, anamnesis: f.anamnesis, examination: f.examination, diagnosis: f.diagnosis, recommendations: f.recommendations,
-    follow_up_date: f.follow_up_date || null, vitals: { bp_sys: num(f.bp_sys), bp_dia: num(f.bp_dia), pulse: num(f.pulse), temp: num(f.temp) } };
+    follow_up_date: f.follow_up_date || null, vitals: { bp_sys: num(f.bp_sys), bp_dia: num(f.bp_dia), pulse: num(f.pulse), temp: num(f.temp) },
+    icd10: f.icd10.map((x) => x.code) };
 };
 
 export default function DoctorPage() { return <Suspense><Cabinet /></Suspense>; }
@@ -71,7 +76,8 @@ function Cabinet() {
       {!selectedId ? <Card><EmptyState icon={<Stethoscope className="h-8 w-8" />} title="Bemorni tanlang" /></Card>
         : !appt ? (single.isError ? <Card><ErrorState error={single.error} /></Card> : <Card><LoadingRows /></Card>)
         : <Workspace key={appt.id} appt={appt} />}
-      <div className="hidden xl:block">{appt && <HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} />}</div>
+      <div className="hidden space-y-4 xl:block"><NewsCard />{appt && <HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} />}</div>
+      <div className="lg:col-span-2 xl:hidden"><NewsCard /></div>
     </div>
   );
 }
@@ -180,7 +186,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   if (enc.isLoading || !form) return <Card><LoadingRows rows={8} /></Card>;
   if (enc.isError) return <Card><ErrorState error={enc.error} onRetry={() => enc.refetch()} /></Card>;
   const signed = enc.data.note.status === 'signed';
-  const set = (k: keyof NoteForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setForm((f) => ({ ...f!, [k]: e.target.value })); setErrors((x) => ({ ...x, [k]: '' })); };
+  const set = (k: TextKey) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setForm((f) => ({ ...f!, [k]: e.target.value })); setErrors((x) => ({ ...x, [k]: '' })); };
   function trySign() {
     const e: Record<string, string> = {};
     for (const k of REQUIRED_FOR_SIGN) if (!form![k].trim()) e[k] = 'Tasdiqlash uchun to‘ldiring';
@@ -210,9 +216,16 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
             <Field label="Qayta qabul sanasi" error={errors.follow_up_date}>{(id) => <Input id={id} type="date" min={me.today} value={form.follow_up_date} onChange={set('follow_up_date')} disabled={signed} />}</Field>
           </div>
           {FIELDS.map((f) => (
-            <Field key={f.key} label={f.label} required={f.required} error={errors[f.key]}>
-              {(id) => <Textarea id={id} rows={f.rows} value={form[f.key]} onChange={set(f.key)} disabled={signed} invalid={!!errors[f.key]} placeholder={signed ? '' : 'Kiritilmagan'} />}
-            </Field>
+            <div key={f.key} className="space-y-2">
+              <Field label={f.label} required={f.required} error={errors[f.key]}>
+                {(id) => <Textarea id={id} rows={f.rows} value={form[f.key]} onChange={set(f.key)} disabled={signed} invalid={!!errors[f.key]} placeholder={signed ? '' : 'Kiritilmagan'} />}
+              </Field>
+              {f.key === 'diagnosis' && (
+                <IcdPicker value={form.icd10} diagnosis={form.diagnosis} encounterId={encounterId} disabled={signed}
+                  onChange={(icd10) => { setForm((x) => ({ ...x!, icd10 })); setErrors((x) => ({ ...x, icd10: '' })); }} />
+              )}
+              {f.key === 'diagnosis' && errors.icd10 && <p className="text-xs text-red-600" role="alert">{errors.icd10}</p>}
+            </div>
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
@@ -244,7 +257,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
         )}
       </Card>
 
-      <AiModal open={aiOpen} onClose={() => setAiOpen(false)} onApply={(d) => { setForm((f) => ({ ...f!, ...d })); toast.info('AI loyihasi formaga qo‘llandi. Tekshirib, qoralamani saqlang.'); }} />
+      <AiModal open={aiOpen} encounterId={encounterId} onClose={() => setAiOpen(false)} onApply={(d) => { setForm((f) => ({ ...f!, ...d })); toast.info('AI loyihasi formaga qo‘llandi. Tekshirib, qoralamani saqlang.'); }} />
       <OrderModal open={orderOpen} onClose={() => setOrderOpen(false)} encounterId={encounterId} existing={enc.data.orders} />
       <Modal open={preview} onClose={() => setPreview(false)} width="max-w-2xl" title="Qaydni ko‘rib chiqish" footer={<Button onClick={() => setPreview(false)}>Yopish</Button>}>
         <NotePreview form={form} patient={enc.data.patient} appt={enc.data.appointment} status={enc.data.note.status} />
@@ -260,7 +273,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
 
 /** Compares note texts the way the server stores them (trimmed, numbers normalised). */
 function sameNote(a: NoteForm, b: NoteForm) {
-  const n = (f: NoteForm) => Object.entries(f).map(([k, v]) => [k, ['bp_sys', 'bp_dia', 'pulse', 'temp'].includes(k) && v.trim() ? String(Number(v.replace(',', '.'))) : v.trim()]);
+  const n = (f: NoteForm) => Object.entries(f).map(([k, v]) => [k, typeof v !== 'string' ? (v as Icd[]).map((x) => x.code).join(',') : ['bp_sys', 'bp_dia', 'pulse', 'temp'].includes(k) && v.trim() ? String(Number(v.replace(',', '.'))) : v.trim()]);
   return JSON.stringify(n(a)) === JSON.stringify(n(b));
 }
 function dirtyOf(a: NoteForm | null, b: NoteForm | null) { return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
@@ -275,17 +288,17 @@ function NotePreview({ form, patient, appt, status }: { form: NoteForm; patient:
       <p className="text-sm"><b>{fullName(patient, true)}</b> {pid(patient.patient_number)} · {fmtDate(patient.birth_date)} · {appt.service_name} · {appt.doctor_name}</p>
       <div className="mt-2 divide-y divide-slate-100">
         {vit && row('Ko‘rsatkichlar', vit)}
-        {FIELDS.map((f) => <div key={f.key}>{row(f.label, form[f.key])}</div>)}
+        {FIELDS.map((f) => <div key={f.key}>{row(f.label, form[f.key])}{f.key === 'diagnosis' && form.icd10.length > 0 && row('MKB-10', form.icd10.map((x) => `${x.code} — ${x.title}`).join('\n'))}</div>)}
         {form.follow_up_date && row('Qayta qabul', fmtDate(form.follow_up_date))}
       </div>
     </div>
   );
 }
 
-function AiModal({ open, onClose, onApply }: { open: boolean; onClose: () => void; onApply: (d: Partial<NoteForm>) => void }) {
+function AiModal({ open, onClose, onApply, encounterId }: { open: boolean; onClose: () => void; onApply: (d: Partial<NoteForm>) => void; encounterId: string }) {
   const status = useQuery({ queryKey: ['ai-status'], queryFn: () => api('/ai/status').then((r) => r.data), enabled: open });
   const [text, setText] = useState('');
-  const run = useMutation({ mutationFn: () => api('/ai/note-draft', { method: 'POST', body: { text } }).then((r) => r.data) });
+  const run = useMutation({ mutationFn: () => api('/ai/note-draft', { method: 'POST', body: { text, encounter_id: encounterId } }).then((r) => r.data) });
   useEffect(() => { if (!open) { run.reset(); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const d = run.data?.draft;
   const label = run.data?.mode === 'sample' ? 'Namunaviy AI natijasi — haqiqiy model chaqirilmagan' : 'AI loyihasi — shifokor tekshirishi kerak';
@@ -297,7 +310,7 @@ function AiModal({ open, onClose, onApply }: { open: boolean; onClose: () => voi
         <div>
           <div className="mb-1 flex items-center justify-between"><span className="text-[13px] font-medium text-slate-700">Asl matn (shifokor yozgan)</span>
             {status.data?.sample_text && !d && <button className="text-xs font-medium text-brand-700 hover:underline" onClick={() => setText(status.data.sample_text)}>Demo matnni qo‘yish</button>}</div>
-          <Textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} disabled={!!d} placeholder="Ko‘rik davomida erkin yozilgan matn. Bemor ismi yoki telefonini yozish shart emas." />
+          <Textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} disabled={!!d} placeholder="Ko‘rik davomida erkin yozilgan matn. Bemorning ismi, telefoni va tug‘ilgan sanasi AI’ga yuborilishidan oldin olib tashlanadi." />
           {status.data?.mode === 'sample' && <p className="mt-1 text-xs text-slate-500">Namunaviy rejimda faqat tayyor demo matni tartiblanadi; boshqa matnga sun’iy javob qaytarilmaydi.</p>}
         </div>
         <div>

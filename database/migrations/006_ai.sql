@@ -1,0 +1,193 @@
+-- AI phase 1: ICD-10 (MKB-10) coding, AI usage metering, daily specialty news for doctors.
+
+-- ICD-10 reference (global, not per clinic). The rows below are a STARTER list of common outpatient codes;
+-- load the official national list with `npm run db:import-icd10 -- <file.csv>` (columns: code;title_ru;title_uz).
+CREATE TABLE icd10_codes (
+  code text PRIMARY KEY CHECK (code ~ '^[A-Z][0-9]{2}(\.[0-9]{1,2})?$'),
+  title_ru text NOT NULL,
+  title_uz text,
+  source text NOT NULL DEFAULT 'starter' CHECK (source IN ('starter', 'official')),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX icd10_codes_title ON icd10_codes (lower(title_ru));
+
+-- Codes chosen by the doctor, with the title snapshot at the time of writing: [{"code":"I10","title":"…"}]
+ALTER TABLE clinical_notes ADD COLUMN icd10 jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+-- One row per AI call: who, which feature, tokens, estimated cost, outcome. Never the prompt or the answer text.
+CREATE TABLE ai_usage (
+  id bigserial PRIMARY KEY,
+  tenant_id uuid REFERENCES tenants(id),             -- NULL for clinic-independent jobs (news summaries)
+  membership_id uuid,
+  route text NOT NULL,                               -- note_draft | icd10_suggest | news_summary
+  model text,
+  input_tokens integer NOT NULL DEFAULT 0,
+  output_tokens integer NOT NULL DEFAULT 0,
+  cache_read_tokens integer NOT NULL DEFAULT 0,
+  cache_write_tokens integer NOT NULL DEFAULT 0,
+  cost_usd numeric(12,6),
+  latency_ms integer,
+  outcome text NOT NULL CHECK (outcome IN ('ok', 'refusal', 'bad_output', 'error')),
+  error_code text,
+  created_at timestamptz NOT NULL DEFAULT demo_now()
+);
+CREATE INDEX ai_usage_tenant ON ai_usage (tenant_id, created_at DESC);
+
+-- Daily specialty news. Public literature, shared by all clinics: one AI summary per specialty per article.
+-- Only the title, our own short summary and a link are kept — never the publisher's abstract.
+CREATE TABLE news_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  specialty_key text NOT NULL,
+  source text NOT NULL DEFAULT 'pubmed',
+  external_id text NOT NULL,                          -- PMID
+  title text NOT NULL,                                -- original title
+  title_uz text,                                      -- AI translation (NULL when AI is off)
+  summary_uz text,
+  takeaway_uz text,
+  journal text,
+  published text,                                     -- as given by the source ("2026 Oct 12")
+  url text NOT NULL,
+  fetched_on date NOT NULL,
+  model text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (specialty_key, source, external_id)
+);
+CREATE INDEX news_items_specialty ON news_items (specialty_key, fetched_on DESC);
+
+CREATE TABLE news_feedback (
+  item_id uuid NOT NULL REFERENCES news_items(id) ON DELETE CASCADE,
+  membership_id uuid NOT NULL,
+  useful boolean NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (item_id, membership_id)
+);
+
+INSERT INTO icd10_codes (code, title_ru, title_uz) VALUES
+('A08.4','Вирусная кишечная инфекция неуточненная','Virusli ichak infeksiyasi, aniqlanmagan'),
+('A09','Диарея и гастроэнтерит предположительно инфекционного происхождения','Taxminan infeksion kelib chiqishli diareya va gastroenterit'),
+('B01.9','Ветряная оспа без осложнений','Suvchechak, asoratsiz'),
+('B34.9','Вирусная инфекция неуточненная','Virusli infeksiya, aniqlanmagan'),
+('B35.1','Микоз ногтей','Tirnoq mikozi'),
+('B80','Энтеробиоз','Enterobioz'),
+('B86','Чесотка','Qo‘tir'),
+('D25.9','Лейомиома матки неуточненная','Bachadon leyomiomasi (miomasi), aniqlanmagan'),
+('D50.9','Железодефицитная анемия неуточненная','Temir tanqisligi anemiyasi, aniqlanmagan'),
+('D64.9','Анемия неуточненная','Anemiya, aniqlanmagan'),
+('E03.9','Гипотиреоз неуточненный','Gipotireoz, aniqlanmagan'),
+('E04.9','Нетоксический зоб неуточненный','Notoksik buqoq, aniqlanmagan'),
+('E05.9','Тиреотоксикоз неуточненный','Tireotoksikoz, aniqlanmagan'),
+('E06.3','Аутоиммунный тиреоидит','Autoimmun tireoidit'),
+('E10.9','Инсулинзависимый сахарный диабет без осложнений','1-tip qandli diabet, asoratsiz'),
+('E11.9','Инсулиннезависимый сахарный диабет без осложнений','2-tip qandli diabet, asoratsiz'),
+('E28.2','Синдром поликистоза яичников','Tuxumdonlar polikistozi sindromi'),
+('E55.9','Недостаточность витамина D неуточненная','D vitamini yetishmovchiligi'),
+('E66.9','Ожирение неуточненное','Semizlik, aniqlanmagan'),
+('E78.0','Чистая гиперхолестеринемия','Sof giperxolesterinemiya'),
+('E78.5','Гиперлипидемия неуточненная','Giperlipidemiya, aniqlanmagan'),
+('E86','Уменьшение объема жидкости (дегидратация)','Suvsizlanish (degidratatsiya)'),
+('F32.9','Депрессивный эпизод неуточненный','Depressiv epizod, aniqlanmagan'),
+('F41.1','Генерализованное тревожное расстройство','Generalizatsiyalangan xavotir buzilishi'),
+('F41.9','Тревожное расстройство неуточненное','Xavotir buzilishi, aniqlanmagan'),
+('F45.3','Соматоформная дисфункция вегетативной нервной системы','Vegetativ nerv tizimining somatoform disfunksiyasi'),
+('G40.9','Эпилепсия неуточненная','Epilepsiya, aniqlanmagan'),
+('G43.9','Мигрень неуточненная','Migren, aniqlanmagan'),
+('G44.2','Головная боль напряженного типа','Zo‘riqish tipidagi bosh og‘rig‘i'),
+('G47.0','Нарушения засыпания и поддержания сна (бессонница)','Uyqusizlik (insomniya)'),
+('G51.0','Паралич Белла','Bell falaji (yuz nervi nevropatiyasi)'),
+('G54.2','Поражения шейных корешков, не классифицированные в других рубриках','Bo‘yin nerv ildizchalari zararlanishi'),
+('G56.0','Синдром запястного канала','Bilak kanali sindromi'),
+('G62.9','Полиневропатия неуточненная','Polineyropatiya, aniqlanmagan'),
+('G90.8','Другие расстройства вегетативной нервной системы','Vegetativ nerv tizimining boshqa buzilishlari'),
+('H10.9','Конъюнктивит неуточненный','Kon’yunktivit, aniqlanmagan'),
+('H52.1','Миопия','Miopiya (yaqinni ko‘rish)'),
+('H65.9','Негнойный средний отит неуточненный','Yiringsiz o‘rta otit, aniqlanmagan'),
+('H66.9','Средний отит неуточненный','O‘rta otit, aniqlanmagan'),
+('I10','Эссенциальная (первичная) гипертензия','Essensial (birlamchi) gipertenziya'),
+('I11.9','Гипертензивная болезнь с преимущественным поражением сердца без (застойной) сердечной недостаточности','Yurak zararlanishi ustun gipertoniya kasalligi, yurak yetishmovchiligisiz'),
+('I20.8','Другие формы стенокардии','Stenokardiyaning boshqa shakllari'),
+('I20.9','Стенокардия неуточненная','Stenokardiya, aniqlanmagan'),
+('I25.1','Атеросклеротическая болезнь сердца','Yurakning aterosklerotik kasalligi'),
+('I48','Фибрилляция и трепетание предсердий','Bo‘lmachalar fibrillyatsiyasi va titrashi'),
+('I49.9','Нарушение сердечного ритма неуточненное','Yurak ritmi buzilishi, aniqlanmagan'),
+('I50.9','Сердечная недостаточность неуточненная','Yurak yetishmovchiligi, aniqlanmagan'),
+('I63.9','Инфаркт мозга неуточненный','Bosh miya infarkti, aniqlanmagan'),
+('I67.2','Церебральный атеросклероз','Serebral ateroskleroz'),
+('I69.4','Последствия инсульта, не уточненного как кровоизлияние или инфаркт мозга','Insult oqibatlari'),
+('I83.9','Варикозное расширение вен нижних конечностей без язвы или воспаления','Oyoq venalarining varikoz kengayishi, yara va yallig‘lanishsiz'),
+('I95.9','Гипотензия неуточненная','Gipotenziya, aniqlanmagan'),
+('J00','Острый назофарингит (насморк)','O‘tkir nazofaringit (tumov)'),
+('J01.9','Острый синусит неуточненный','O‘tkir sinusit, aniqlanmagan'),
+('J02.9','Острый фарингит неуточненный','O‘tkir faringit, aniqlanmagan'),
+('J03.9','Острый тонзиллит неуточненный','O‘tkir tonzillit (angina), aniqlanmagan'),
+('J04.0','Острый ларингит','O‘tkir laringit'),
+('J06.9','Острая инфекция верхних дыхательных путей неуточненная','Yuqori nafas yo‘llarining o‘tkir infeksiyasi, aniqlanmagan'),
+('J11.1','Грипп с другими респираторными проявлениями, вирус не идентифицирован','Gripp, boshqa respirator belgilar bilan, virus aniqlanmagan'),
+('J18.9','Пневмония неуточненная','Pnevmoniya, aniqlanmagan'),
+('J20.9','Острый бронхит неуточненный','O‘tkir bronxit, aniqlanmagan'),
+('J21.9','Острый бронхиолит неуточненный','O‘tkir bronxiolit, aniqlanmagan'),
+('J30.4','Аллергический ринит неуточненный','Allergik rinit, aniqlanmagan'),
+('J32.9','Хронический синусит неуточненный','Surunkali sinusit, aniqlanmagan'),
+('J35.0','Хронический тонзиллит','Surunkali tonzillit'),
+('J42','Хронический бронхит неуточненный','Surunkali bronxit, aniqlanmagan'),
+('J44.9','Хроническая обструктивная легочная болезнь неуточненная','O‘pkaning surunkali obstruktiv kasalligi, aniqlanmagan'),
+('J45.9','Астма неуточненная','Bronxial astma, aniqlanmagan'),
+('K21.0','Гастроэзофагеальный рефлюкс с эзофагитом','Ezofagit bilan gastroezofageal reflyuks'),
+('K21.9','Гастроэзофагеальный рефлюкс без эзофагита','Ezofagitsiz gastroezofageal reflyuks'),
+('K25.9','Язва желудка неуточненная как острая или хроническая без кровотечения или прободения','Oshqozon yarasi, qon ketish va teshilishsiz'),
+('K26.9','Язва двенадцатиперстной кишки неуточненная как острая или хроническая без кровотечения или прободения','O‘n ikki barmoqli ichak yarasi, qon ketish va teshilishsiz'),
+('K29.5','Хронический гастрит неуточненный','Surunkali gastrit, aniqlanmagan'),
+('K29.7','Гастрит неуточненный','Gastrit, aniqlanmagan'),
+('K30','Диспепсия','Dispepsiya'),
+('K52.9','Неинфекционный гастроэнтерит и колит неуточненный','Noinfeksion gastroenterit va kolit, aniqlanmagan'),
+('K58.9','Синдром раздраженного кишечника без диареи','Ta’sirlangan ichak sindromi, diareyasiz'),
+('K59.0','Запор','Qabziyat'),
+('K76.0','Жировая дегенерация печени, не классифицированная в других рубриках','Jigar yog‘li distrofiyasi'),
+('K80.2','Камни желчного пузыря без холецистита','O‘t pufagi toshlari, xoletsistitsiz'),
+('K81.1','Хронический холецистит','Surunkali xoletsistit'),
+('K86.1','Другие хронические панкреатиты','Surunkali pankreatit (boshqa)'),
+('L20.9','Атопический дерматит неуточненный','Atopik dermatit, aniqlanmagan'),
+('L30.9','Дерматит неуточненный','Dermatit, aniqlanmagan'),
+('L50.9','Крапивница неуточненная','Eshakyem (krapivnitsa), aniqlanmagan'),
+('L70.0','Угри обыкновенные','Oddiy husnbuzar (akne)'),
+('M06.9','Ревматоидный артрит неуточненный','Revmatoid artrit, aniqlanmagan'),
+('M10.9','Подагра неуточненная','Podagra, aniqlanmagan'),
+('M17.9','Гонартроз неуточненный','Gonartroz, aniqlanmagan'),
+('M19.9','Артроз неуточненный','Artroz, aniqlanmagan'),
+('M42.1','Остеохондроз позвоночника у взрослых','Kattalarda umurtqa pog‘onasi osteoxondrozi'),
+('M47.8','Другой спондилез','Spondilyozning boshqa turlari'),
+('M51.1','Поражения межпозвоночных дисков поясничного и других отделов с радикулопатией','Radikulopatiya bilan umurtqalararo disk zararlanishi'),
+('M54.2','Цервикалгия','Servikalgiya (bo‘yin og‘rig‘i)'),
+('M54.4','Люмбаго с ишиасом','Ishias bilan lyumbago'),
+('M54.5','Боль внизу спины','Bel og‘rig‘i'),
+('M79.1','Миалгия','Mialgiya (mushak og‘rig‘i)'),
+('M81.9','Остеопороз неуточненный','Osteoporoz, aniqlanmagan'),
+('N10','Острый тубулоинтерстициальный нефрит','O‘tkir tubulointerstitsial nefrit (o‘tkir pielonefrit)'),
+('N11.9','Хронический тубулоинтерстициальный нефрит неуточненный','Surunkali tubulointerstitsial nefrit (surunkali pielonefrit)'),
+('N18.9','Хроническая болезнь почки неуточненная','Surunkali buyrak kasalligi, aniqlanmagan'),
+('N20.0','Камни почки','Buyrak toshlari'),
+('N30.0','Острый цистит','O‘tkir sistit'),
+('N39.0','Инфекция мочевыводящих путей без установленной локализации','Siydik yo‘llari infeksiyasi, joyi aniqlanmagan'),
+('N40','Гиперплазия предстательной железы','Prostata bezi giperplaziyasi'),
+('N41.1','Хронический простатит','Surunkali prostatit'),
+('N60.1','Диффузная кистозная мастопатия','Diffuz kistoz mastopatiya'),
+('N70.1','Хронический сальпингит и оофорит','Surunkali salpingit va ooforit'),
+('N76.0','Острый вагинит','O‘tkir vaginit'),
+('N80.0','Эндометриоз матки','Bachadon endometriozi'),
+('N83.2','Другие и неуточненные кисты яичника','Tuxumdon kistalari (boshqa va aniqlanmagan)'),
+('N91.2','Аменорея неуточненная','Amenoreya, aniqlanmagan'),
+('N92.0','Обильные и частые менструации при регулярном цикле','Muntazam siklda ko‘p va tez-tez hayz'),
+('N94.6','Дисменорея неуточненная','Dismenoreya, aniqlanmagan'),
+('N95.1','Менопаузное и климактерическое состояние у женщины','Ayollarda menopauza va klimakterik holat'),
+('N97.9','Женское бесплодие неуточненное','Ayollar bepushtligi, aniqlanmagan'),
+('O21.0','Рвота беременных легкая или умеренная','Homiladorlarning yengil yoki o‘rtacha qusishi'),
+('R05','Кашель','Yo‘tal'),
+('R10.4','Другие и неуточненные боли в области живота','Qorin og‘rig‘i (boshqa va aniqlanmagan)'),
+('R42','Головокружение и нарушение устойчивости','Bosh aylanishi va muvozanat buzilishi'),
+('R50.9','Лихорадка неуточненная','Isitma, aniqlanmagan'),
+('R51','Головная боль','Bosh og‘rig‘i'),
+('R53','Недомогание и утомляемость','Holsizlik va charchoq'),
+('T78.4','Аллергия неуточненная','Allergiya, aniqlanmagan'),
+('Z00.0','Общий медицинский осмотр','Umumiy tibbiy ko‘rik'),
+('Z00.1','Рутинное обследование состояния здоровья ребенка','Bolaning muntazam sog‘liq ko‘rigi'),
+('Z01.4','Гинекологическое обследование (общее) (рутинное)','Ginekologik ko‘rik (umumiy, muntazam)'),
+('Z34.9','Наблюдение за течением нормальной беременности неуточненное','Normal homiladorlik kuzatuvi');

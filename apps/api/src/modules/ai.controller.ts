@@ -1,14 +1,18 @@
-import { Body, Controller, Get, HttpCode, Logger, Post } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
-import { aiNoteDraftSchema, aiReportSchema, formatSom } from '@meduza/contracts';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { z } from 'zod';
+import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, newsFeedbackSchema } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { config } from '../core/config';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError } from '../core/errors';
-import { parse } from '../core/validate';
+import { AppError, forbidden, notFound } from '../core/errors';
+import { isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { addDays, dayStart, today } from '../core/clock';
 import { branchScope } from '../core/scope';
+import { AiClient } from '../ai/ai-client';
+import { Icd10Service } from '../ai/icd10';
+import { NewsService, SPECIALTIES, specialtyByKey, specialtyOf } from '../ai/news';
+import { PatientIdentity, redact } from '../ai/redact';
 
 /** The single demo text that sample mode recognises. Any other text is rejected in sample mode (no fake "AI" answers). */
 export const SAMPLE_NOTE_TEXT =
@@ -40,27 +44,36 @@ Qoidalar: faqat matnda bor ma’lumotni qayta tartibla va imloni tuzat. Yangi ta
 Matnda biror bo‘limga tegishli ma’lumot bo‘lmasa, o‘sha bo‘limga aynan "Kiritilmagan" deb yoz. Bemorning ismi yoki telefonini yozma.`;
 
 const normalize = (s: string) => s.toLowerCase().replace(/[‘’ʻʼ'`]/g, '').replace(/\s+/g, ' ').trim();
+const noteZ = z.object({ complaints: z.string(), anamnesis: z.string(), examination: z.string(), diagnosis: z.string(), recommendations: z.string() });
+let lastNewsRefresh = 0;
 
-@Controller('ai')
+@Controller()
 export class AiController {
-  private log = new Logger('AI');
-  private client = config.ai.mode === 'live' && config.ai.apiKey ? new Anthropic({ apiKey: config.ai.apiKey, timeout: config.ai.timeoutMs, maxRetries: 1 }) : null;
-  constructor(private db: Db) {}
+  constructor(private db: Db, private ai: AiClient, private icd: Icd10Service, private news: NewsService) {}
 
-  private get mode(): 'off' | 'sample' | 'live' { return config.ai.mode === 'live' && !this.client ? 'off' : config.ai.mode; }
+  /** The patient of an encounter the doctor is treating (for de-identification). Anything else → 404/403. */
+  private async patientOf(ctx: Ctx, encounterId?: string): Promise<PatientIdentity | null> {
+    if (!encounterId) return null;
+    const e = await this.db.one(
+      `SELECT e.doctor_id, p.last_name, p.first_name, p.middle_name, p.birth_date, p.patient_number, p.phone
+         FROM encounters e JOIN patients p ON p.id = e.patient_id WHERE e.id = $1 AND e.tenant_id = $2`, [encounterId, ctx.tenantId]);
+    if (!e) throw notFound('Qabul yozuvi');
+    if (e.doctor_id !== ctx.doctorId) throw forbidden('Klinik yozuvni faqat davolovchi shifokor ko‘radi');
+    return e;
+  }
 
-  @Get('status')
+  @Get('ai/status')
   status() {
-    const m = this.mode;
-    return { data: { mode: m, sample_text: m === 'sample' ? SAMPLE_NOTE_TEXT : null,
+    const m = this.ai.mode();
+    return { data: { mode: m, model: m === 'live' ? config.ai.model : null, sample_text: m === 'sample' ? SAMPLE_NOTE_TEXT : null,
       reason: m === 'off' ? (config.ai.mode === 'live' ? 'AI kaliti sozlanmagan' : 'AI o‘chirilgan (AI_MODE=off)') : null } };
   }
 
-  /** AI-01: draft restructuring of the doctor's own text. Never saves or signs anything; the doctor applies it to the draft. */
-  @Roles('doctor') @Post('note-draft') @HttpCode(200)
+  /** AI-01: draft restructuring of the doctor's own text. De-identified before sending; never saves or signs. */
+  @Roles('doctor') @Post('ai/note-draft') @HttpCode(200)
   async noteDraft(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
-    const { text } = parse(aiNoteDraftSchema, body);
-    const m = this.mode;
+    const { text, encounter_id } = parse(aiNoteDraftSchema, body);
+    const m = this.ai.mode();
     if (m === 'off') throw new AppError(503, 'AI_OFF', 'AI yordamchisi hozir o‘chirilgan. Qaydni qo‘lda davom ettiring.');
     if (m === 'sample') {
       if (normalize(text) !== normalize(SAMPLE_NOTE_TEXT))
@@ -68,33 +81,84 @@ export class AiController {
       await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, 'Namunaviy AI natijasi ko‘rsatildi');
       return { data: { mode: 'sample', draft: SAMPLE_RESULT } };
     }
-    try {
-      const response = await this.client!.beta.messages.create({
-        model: config.ai.model,
-        max_tokens: 4000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        output_config: { effort: 'low', format: { type: 'json_schema', schema: NOTE_SCHEMA } },
-        system: NOTE_SYSTEM,
-        messages: [{ role: 'user', content: text }],
-      } as any);
-      if (response.stop_reason === 'refusal') throw new AppError(502, 'AI_REFUSED', 'AI bu matnni qayta ishlamadi. Qaydni qo‘lda davom ettiring.');
-      const block = response.content.find((b: any) => b.type === 'text') as any;
-      const draft = JSON.parse(block?.text ?? '{}');
-      for (const k of Object.keys(SAMPLE_RESULT)) if (typeof draft[k] !== 'string') draft[k] = 'Kiritilmagan';
-      await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, `AI loyihasi yaratildi (${config.ai.model})`);
-      return { data: { mode: 'live', draft } };
-    } catch (e) {
-      if (e instanceof AppError) throw e;
-      const timeout = e instanceof Anthropic.APIConnectionTimeoutError;
-      this.log.warn(`AI xatosi: ${(e as Error).name}`);
-      throw new AppError(timeout ? 504 : 502, timeout ? 'AI_TIMEOUT' : 'AI_ERROR',
-        timeout ? 'AI javob bermadi (vaqt tugadi). Qoralama saqlangan, qo‘lda davom ettiring.' : 'AI xizmatida xato. Qoralama saqlangan, qo‘lda davom ettiring.');
-    }
+    const patient = await this.patientOf(ctx, encounter_id);
+    const { value, model } = await this.ai.json({
+      route: 'note_draft', system: NOTE_SYSTEM, user: redact(text, patient), schema: NOTE_SCHEMA, validate: noteZ,
+      effort: 'low', maxTokens: 4000, tenantId: ctx.tenantId, membershipId: ctx.membershipId,
+    });
+    await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, `AI loyihasi yaratildi (${model})`);
+    return { data: { mode: 'live', draft: value } };
+  }
+
+  // ---------- ICD-10 (MKB-10) ----------
+
+  @Roles('doctor') @Get('icd10')
+  async icdSearch(@Query('q') q?: string) {
+    return { data: await this.icd.search(String(q ?? '').slice(0, 100)) };
+  }
+
+  /** Suggested codes for the diagnosis text: AI over the code table when live, word matching otherwise. */
+  @Roles('doctor') @Post('ai/icd10-suggest') @HttpCode(200)
+  async icdSuggest(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+    const { text, encounter_id } = parse(icd10SuggestSchema, body);
+    const patient = await this.patientOf(ctx, encounter_id);
+    return { data: await this.icd.suggest(text, ctx, patient) };
+  }
+
+  // ---------- AI usage (manager) ----------
+
+  @Roles('manager') @Get('ai/usage')
+  async usage(@CurrentCtx() ctx: Ctx) {
+    const rows = await this.db.rows(
+      `SELECT route, count(*)::int AS calls, count(*) FILTER (WHERE outcome = 'ok')::int AS ok,
+              count(*) FILTER (WHERE outcome <> 'ok')::int AS failed,
+              coalesce(sum(input_tokens),0)::int AS input_tokens, coalesce(sum(output_tokens),0)::int AS output_tokens,
+              coalesce(sum(cache_read_tokens),0)::int AS cache_read_tokens, coalesce(sum(cost_usd),0)::float AS cost_usd,
+              round(avg(latency_ms))::int AS avg_latency_ms
+         FROM ai_usage WHERE (tenant_id = $1 OR tenant_id IS NULL) AND created_at >= demo_now() - interval '30 days'
+        GROUP BY route ORDER BY route`, [ctx.tenantId]);
+    const today = (await this.db.one(
+      `SELECT count(*)::int AS calls, coalesce(sum(cost_usd),0)::float AS cost_usd FROM ai_usage
+        WHERE tenant_id = $1 AND created_at >= date_trunc('day', demo_now() AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent'`, [ctx.tenantId]))!;
+    const icd = (await this.db.one(`SELECT count(*)::int AS n, count(*) FILTER (WHERE source = 'official')::int AS official FROM icd10_codes`))!;
+    return { data: { mode: this.ai.mode(), model: config.ai.model, key_configured: !!config.ai.apiKey, by_route: rows, today, icd10: icd } };
+  }
+
+  // ---------- Daily specialty news ----------
+
+  /** Latest articles for the doctor's specialty (managers may pick one). */
+  @Roles('doctor', 'manager') @Get('news')
+  async newsList(@CurrentCtx() ctx: Ctx, @Query('specialty') specialty?: string) {
+    const sp = ctx.role === 'doctor' && !specialty ? specialtyOf(ctx.doctorSpecialty) : specialtyByKey(specialty);
+    const items = await this.db.rows(
+      `SELECT n.id, n.title, n.title_uz, n.summary_uz, n.takeaway_uz, n.journal, n.published, n.url, n.fetched_on, n.model, f.useful
+         FROM news_items n LEFT JOIN news_feedback f ON f.item_id = n.id AND f.membership_id = $2
+        WHERE n.specialty_key = $1 ORDER BY n.fetched_on DESC, n.created_at DESC LIMIT 10`, [sp.key, ctx.membershipId]);
+    return { data: items, meta: { specialty: sp.key, label: sp.label, specialties: SPECIALTIES.map((s) => ({ key: s.key, label: s.label })), news_enabled: config.news.enabled, ai_mode: this.ai.mode() } };
+  }
+
+  @Roles('doctor') @Post('news/:id/feedback') @HttpCode(200)
+  async newsFeedback(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    if (!isUuid(id)) throw notFound('Maqola');
+    const { useful } = parse(newsFeedbackSchema, body);
+    const r = await this.db.rows(
+      `INSERT INTO news_feedback (item_id, membership_id, useful) SELECT id, $2, $3 FROM news_items WHERE id = $1
+       ON CONFLICT (item_id, membership_id) DO UPDATE SET useful = EXCLUDED.useful, created_at = now() RETURNING item_id`, [id, ctx.membershipId, useful]);
+    if (!r.length) throw notFound('Maqola');
+    return { data: { ok: true } };
+  }
+
+  /** Fetch today's articles now (the background job does this daily). At most once per 10 minutes. */
+  @Roles('manager') @Post('news/refresh') @HttpCode(200)
+  async newsRefresh(@CurrentCtx() ctx: Ctx) {
+    if (!config.news.enabled) throw new AppError(409, 'NEWS_OFF', 'Yangiliklar o‘chirilgan (NEWS_ENABLED=off).');
+    if (Date.now() - lastNewsRefresh < 10 * 60_000) throw new AppError(429, 'TOO_SOON', 'Yangiliklar yaqinda yangilandi. 10 daqiqadan keyin urinib ko‘ring.');
+    lastNewsRefresh = Date.now();
+    return { data: await this.news.refreshAll(ctx.tenantId) };
   }
 
   /** AI-02: the numbers always come from backend queries; the text only explains them. */
-  @Roles('manager') @Post('report-explanation') @HttpCode(200)
+  @Roles('manager') @Post('ai/report-explanation') @HttpCode(200)
   async report(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const { question, branch_id } = parse(aiReportSchema, body);
     const branches = branchScope(ctx, branch_id);
