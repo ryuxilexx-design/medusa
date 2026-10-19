@@ -1,0 +1,25 @@
+# Postgres MCP (dbhub) for Claude Code — LOCAL docker database only.
+# Connects as the SELECT-only role created by `npm run db:readonly-role`; writes are refused by PostgreSQL itself.
+# Sessions table is not readable. Never point this at Railway or any real patient database.
+
+[[sources]]
+id = "demo"
+description = "Local live demo database (meduza) — the data shown to clinics"
+dsn = "postgres://meduza_readonly:meduza_readonly_local@127.0.0.1:5433/meduza?sslmode=disable"
+
+[[sources]]
+id = "test"
+description = "Local test database (meduza_test) used by npm test / npm run e2e"
+dsn = "postgres://meduza_readonly:meduza_readonly_local@127.0.0.1:5433/meduza_test?sslmode=disable"
+
+[[tools]]
+name = "execute_sql"
+source = "demo"
+readonly = true
+max_rows = 500
+
+[[tools]]
+name = "execute_sql"
+source = "test"
+readonly = true
+max_rows = 500

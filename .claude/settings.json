@@ -1,0 +1,37 @@
+{
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "railway@claude-plugins-official": true,
+    "chrome-devtools-mcp@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": false
+  },
+  "permissions": {
+    "deny": [
+      "Bash(railway delete *)",
+      "Bash(railway down *)",
+      "Bash(railway down)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push * --force)",
+      "Bash(git push * -f)",
+      "Read(./.env)",
+      "Read(./.env.*.local)"
+    ],
+    "ask": [
+      "Bash(railway service delete *)",
+      "Bash(railway volume *)",
+      "Bash(railway environment delete *)",
+      "Bash(railway variables *)",
+      "Bash(railway variable *)",
+      "Bash(railway domain *)",
+      "Bash(npm run db:reset*)",
+      "Bash(npm run db:seed*)",
+      "Bash(npm run db:restore*)",
+      "Bash(docker compose down*)",
+      "Bash(docker volume rm *)"
+    ]
+  }
+}

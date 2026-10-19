@@ -26,7 +26,8 @@
     "e2e": "npm run build:packages && npm run build -w @meduza/api && cd e2e && npm install --no-audit --no-fund --silent && node run.mjs",
     "e2e:tour": "cd e2e && npm install --no-audit --no-fund --silent && node tour.mjs",
     "db:backup": "node database/scripts/backup.mjs",
-    "db:restore": "node database/scripts/restore.mjs"
+    "db:restore": "node database/scripts/restore.mjs",
+    "db:readonly-role": "node database/scripts/readonly-role.mjs"
   },
   "devDependencies": {
     "typescript": "5.9.3"

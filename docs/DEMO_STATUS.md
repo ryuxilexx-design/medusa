@@ -117,7 +117,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 20/20 o‘tdi: 11 P0, 6 P1, 2 demo vaqti, 1 xavfsizlik |
+| `npm test` (meduza_test) | 19/19 o‘tdi: 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik testi |
 | `npm run e2e` (izolyatsiyalangan stek) | 35/35: 19 asosiy yo‘l + 16 xato holati |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
