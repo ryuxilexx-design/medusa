@@ -285,3 +285,40 @@ test('yuzni tanish: multipart (JSON + rasm) — kod certificateNumber yoki ismda
   res = await push(path, Buffer.alloc(7 * 1024 * 1024, 0x41), 'application/octet-stream');
   assert.equal(res.status, 413);
 });
+
+test('tekshiruv tuzatishlari: filial doirasi, eski ochiq ogohlantirish, o‘chirilgan kamera, koddan oldingi kunlar, noto‘g‘ri qiymatlar', async () => {
+  const BY = SEED_IDS.branchYunusobod;
+  // a manager limited to Yunusobod cannot give or revoke the code of a central-branch doctor
+  const feruza = (await manager.get('/cameras/face-codes')).body.data.find((x) => x.membership_id === M.doctor(1));
+  await pool.query(`UPDATE memberships SET branch_ids = ARRAY[$2::uuid] WHERE id = $1`, [M.manager, BY]);
+  try {
+    assert.equal((await manager.post('/cameras/face-codes', { membership_id: M.doctor(1), consent_confirmed: true })).status, 404);
+    assert.equal((await manager.del(`/cameras/face-codes/${feruza.face_code_id}`)).status, 404);
+  } finally { await pool.query(`UPDATE memberships SET branch_ids = ARRAY[$2::uuid, $3::uuid] WHERE id = $1`, [M.manager, BC, BY]); }
+  // an unacknowledged alert from long ago is still listed (and counted)
+  const { ingestEvent } = require('../dist/cameras/ingest.js');
+  const store = (await pool.query(`SELECT * FROM cameras WHERE name = 'Dori ombori' AND tenant_id = $1`, [SEED_IDS.tenant])).rows[0];
+  const old = await ingestEvent(pool, store, { kind: 'tamper', occurredAt: new Date('2026-09-01T20:00:00Z'), sourceKey: 'old-alert' });
+  const sec = (await manager.get('/cameras/security?from=2026-10-12&to=2026-10-18&alerts_only=1')).body;
+  assert.ok(sec.data.some((r) => r.id === old.event_id), 'eski ochiq ogohlantirish ro‘yxatda');
+  assert.equal(sec.data.filter((r) => !r.acked_at).length, sec.meta.open_alerts);
+  // the simulator stores nothing for a switched-off camera
+  const off = await manager.post('/cameras', { branch_id: BC, name: 'O‘chirilgan', purposes: ['security'], security_mode: 'always' });
+  await manager.patch(`/cameras/${off.body.data.id}`, { status: 'disabled' });
+  assert.deepEqual((await manager.post(`/cameras/${off.body.data.id}/simulate`, { kind: 'intrusion' })).body.data, { stored: false, ignored: 'disabled' });
+  // no «absent» days before anyone could have been seen (a person whose first code is from today)
+  const fresh = (await pool.query(`SELECT m.id FROM memberships m WHERE m.tenant_id = $1 AND NOT EXISTS (SELECT 1 FROM face_codes f WHERE f.membership_id = m.id) LIMIT 1`, [SEED_IDS.tenant])).rows[0];
+  if (fresh) {
+    await manager.post('/cameras/face-codes', { membership_id: fresh.id, consent_confirmed: true });
+    const att = (await manager.get('/cameras/attendance?from=2026-10-12&to=2026-10-18')).body.data.filter((x) => x.membership_id === fresh.id);
+    assert.ok(att.every((x) => x.day >= '2026-10-18'), 'koddan oldingi kunlar yo‘q');
+  }
+  // values out of range from a camera are dropped instead of failing the request
+  const { parseIsapi } = require('../dist/cameras/isapi.js');
+  const bad = parseIsapi(Buffer.from(`<EventNotificationAlert><dateTime>2026-10-17T10:00:00+05:00</dateTime><eventType>PeopleCounting</eventType><eventState>active</eventState>
+    <peopleCounting><statisticalMethods>timeRange</statisticalMethods><TimeRange><startTime>2026-10-17T09:00:00+05:00</startTime><endTime>2026-10-17T10:00:00+05:00</endTime></TimeRange><enter>-1</enter><exit>abc</exit></peopleCounting></EventNotificationAlert>`), 'application/xml');
+  assert.equal(bad.events.length, 0);
+  const sim = parseIsapi(Buffer.from(JSON.stringify({ eventType: 'alarmResult', eventState: 'active', dateTime: '2026-10-17T10:00:00+05:00',
+    alarmResult: [{ faces: [{ identify: [{ candidate: [{ reserve_field: { certificateNumber: 'S-1' }, similarity: 250 }] }] }] }] })), 'application/json');
+  assert.equal(sim.events[0].similarity, null, '100 % dan katta o‘xshashlik tashlanadi');
+});

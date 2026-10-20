@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
-import { addDays, duration, fmtDate, fmtDateTime, fmtTime } from '@/lib/format';
+import { addDays, duration, fmtDate, fmtDateTime, fmtTime, localMinutes } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, StatCard, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
@@ -134,8 +134,9 @@ function Attendance({ p, period, onCodes }: { p: Period; period: React.ReactNode
 }
 
 /** Tashkent minutes since midnight of an ISO time. */
-const localMin = (iso: string) => { const d = new Date(iso); return (d.getUTCHours() * 60 + d.getUTCMinutes() + 300) % 1440; };
-const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(Math.round(min) % 60).padStart(2, '0')}`;
+const localMin = localMinutes;
+/** Rounded first, so 539.7 min reads 09:00 (not 08:00). */
+const hhmm = (min: number) => { const m = Math.round(min); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 
 /** One line per person for a period: days at work, late days (with total minutes), absences, average arrival and hours. */
 function AttSummary({ rows, onOpen }: { rows: AttRow[]; onOpen: (id: string) => void }) {

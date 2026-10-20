@@ -5,6 +5,7 @@
 // matched by local name only. Formats and sources: docs/HIKVISION_ISAPI_RESEARCH.md; setup: docs/HIKVISION.md.
 import { createHash } from 'crypto';
 import type { EventKind, NormalizedEvent } from './ingest';
+import { now } from '../core/clock';
 
 export type Parsed = { events: NormalizedEvent[]; heartbeat: boolean; unknown: string[] };
 
@@ -63,7 +64,10 @@ function xmlBlock(xml: string, name: string): string | null {
 }
 const decodeXml = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 const num = (s: unknown) => { const n = typeof s === 'number' ? s : typeof s === 'string' && s.trim() !== '' ? Number(s) : NaN; return Number.isFinite(n) ? n : null; };
-const similarityPct = (v: unknown) => { const n = num(v); return n === null ? null : Math.round((n <= 1 ? n * 100 : n) * 100) / 100; };
+/** A count from the camera: a non-negative integer, else nothing (a broken value must not reach the database). */
+const count = (s: unknown) => { const n = num(s); return n !== null && n >= 0 && n <= 1_000_000 ? Math.round(n) : null; };
+/** 0..1 (or 0..100) → percent; anything else is dropped. */
+const similarityPct = (v: unknown) => { const n = num(v); if (n === null || n < 0) return null; const p = n <= 1 ? n * 100 : n; return p <= 100 ? Math.round(p * 100) / 100 : null; };
 const target = (s: unknown): NormalizedEvent['target'] => (s === 'human' || s === 'vehicle' ? s : s ? 'other' : null);
 const minuteKey = (d: Date) => d.toISOString().slice(0, 16);
 const hash = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 16);
@@ -72,7 +76,7 @@ const hash = (s: string) => createHash('sha1').update(s).digest('hex').slice(0, 
 interface Envelope { type: string; state: string; time: Date | null; channel: string; uuid: string | null; retransmit: boolean }
 
 function securityEvent(kind: EventKind, env: Envelope, detectionTarget: unknown): NormalizedEvent {
-  const at = env.time ?? new Date();
+  const at = env.time ?? now();
   // durative alarms repeat with a growing activePostCount: one stored event per kind, channel and minute
   return { kind, occurredAt: at, target: kind === 'tamper' ? null : target(detectionTarget), sourceKey: `${kind}:${env.channel}:${minuteKey(at)}` };
 }
@@ -89,15 +93,15 @@ function fromXml(xml: string, out: Parsed) {
   if (env.state === 'inactive') return;
   if (kind === 'people_count') {
     const pc = xmlBlock(xml, 'peopleCounting') ?? xml;
-    const enter = num(xmlText(pc, 'enter')), exit = num(xmlText(pc, 'exit'));
+    const enter = count(xmlText(pc, 'enter')), exit = count(xmlText(pc, 'exit'));
     if (enter === null && exit === null) return;
     const method = (xmlText(pc, 'statisticalMethods') ?? 'realTime').toLowerCase();
     if (method === 'timerange') {
-      const end = parseCameraTime(xmlText(pc, 'endTime')) ?? env.time ?? new Date();
+      const end = parseCameraTime(xmlText(pc, 'endTime')) ?? env.time ?? now();
       const start = xmlText(pc, 'startTime') ?? '';
       out.events.push({ kind, occurredAt: end, enter: enter ?? 0, exit: exit ?? 0, sourceKey: `pc:range:${start}:${end.toISOString()}` });
     } else {
-      const at = parseCameraTime(xmlText(pc, 'time')) ?? env.time ?? new Date();
+      const at = parseCameraTime(xmlText(pc, 'time')) ?? env.time ?? now();
       // real-time counts are running totals since the camera's daily reset: ingest turns them into differences
       out.events.push({ kind, occurredAt: at, enter: enter ?? 0, exit: exit ?? 0, cumulative: true, sourceKey: `pc:rt:${at.toISOString()}:${enter}:${exit}` });
     }
@@ -106,7 +110,7 @@ function fromXml(xml: string, out: Parsed) {
   if (kind === 'face_match') {
     // XML form of a library match: look for our code in certificateNumber, then name
     const code = findCode(xmlText(xml, 'certificateNumber')) ?? findCode(xmlText(xml, 'name'));
-    const at = parseCameraTime(xmlText(xml, 'faceTime')) ?? env.time ?? new Date();
+    const at = parseCameraTime(xmlText(xml, 'faceTime')) ?? env.time ?? now();
     out.events.push({ kind, occurredAt: at, code, similarity: similarityPct(xmlText(xml, 'similarity') ?? xmlText(xml, 'maxsimilarity')), sourceKey: `face:${code}:${minuteKey(at)}` });
     return;
   }
@@ -143,19 +147,19 @@ function fromJson(o: any, out: Parsed) {
   if (env.state === 'inactive') return;
   if (kind === 'face_match') {
     const b = bestCandidate(o);
-    const at = b?.time ?? env.time ?? new Date();
+    const at = b?.time ?? env.time ?? now();
     out.events.push({ kind, occurredAt: at, code: b?.code ?? null, similarity: b?.similarity ?? null, sourceKey: `face:${b?.code}:${minuteKey(at)}` });
     return;
   }
   if (kind === 'people_count') {
     const pc = o.peopleCounting ?? o.PeopleCounting ?? o;
-    const enter = num(pc.enter), exit = num(pc.exit);
+    const enter = count(pc.enter), exit = count(pc.exit);
     if (enter === null && exit === null) return;
     if (String(pc.statisticalMethods ?? '').toLowerCase() === 'timerange') {
-      const end = parseCameraTime(pc.TimeRange?.endTime ?? pc.timeRange?.endTime) ?? env.time ?? new Date();
+      const end = parseCameraTime(pc.TimeRange?.endTime ?? pc.timeRange?.endTime) ?? env.time ?? now();
       out.events.push({ kind, occurredAt: end, enter: enter ?? 0, exit: exit ?? 0, sourceKey: `pc:range:${pc.TimeRange?.startTime ?? ''}:${end.toISOString()}` });
     } else {
-      const at = parseCameraTime(pc.RealTime?.time ?? pc.realTime?.time) ?? env.time ?? new Date();
+      const at = parseCameraTime(pc.RealTime?.time ?? pc.realTime?.time) ?? env.time ?? now();
       out.events.push({ kind, occurredAt: at, enter: enter ?? 0, exit: exit ?? 0, cumulative: true, sourceKey: `pc:rt:${at.toISOString()}:${enter}:${exit}` });
     }
     return;

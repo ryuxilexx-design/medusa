@@ -54,7 +54,8 @@ export async function ingestEvent(q: Q, cam: Camera, e: NormalizedEvent): Promis
   if (e.kind === 'face_match') {
     if (!has('attendance') && !has('patient_arrival')) return { stored: false, ignored: 'purpose' };
     if (!e.code || !/^[SP]-\d{1,9}$/.test(e.code)) return { stored: false, ignored: 'no_code' };
-    if (e.similarity != null && e.similarity < MIN_SIMILARITY) return { stored: false, ignored: 'low_similarity' };
+    // no similarity (or an impossible one, dropped by the parser) is as doubtful as a low one
+    if (e.similarity == null || e.similarity < MIN_SIMILARITY) return { stored: false, ignored: 'low_similarity' };
     const fc = (await q.query(
       `SELECT fc.id, fc.subject_type, fc.patient_id FROM face_codes fc WHERE fc.tenant_id = $1 AND fc.code = $2 AND fc.revoked_at IS NULL`,
       [cam.tenant_id, e.code])).rows[0];

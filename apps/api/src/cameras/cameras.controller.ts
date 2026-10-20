@@ -10,7 +10,7 @@ import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, conflict, notFound } from '../core/errors';
 import { isDate, isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
-import { addDays, dayStart, now, today } from '../core/clock';
+import { addDays, dayStart, localDate, now, today, toMinutes, weekday } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
 import { hashToken } from '../core/guard';
 import { checkInAppointment } from '../modules/appointments.controller';
@@ -131,7 +131,7 @@ export class CamerasController {
   async addFaceCode(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(staffFaceCodeSchema, body);
     return this.db.tx(async (c) => {
-      const m = (await c.query(`SELECT id FROM memberships WHERE id = $1 AND tenant_id = $2 AND status = 'active' FOR UPDATE`, [input.membership_id, ctx.tenantId])).rows[0];
+      const m = (await c.query(`SELECT id FROM memberships WHERE id = $1 AND tenant_id = $2 AND status = 'active' AND branch_ids && $3 FOR UPDATE`, [input.membership_id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!m) throw notFound('Xodim');
       const live = (await c.query(`SELECT code FROM face_codes WHERE tenant_id = $1 AND membership_id = $2 AND revoked_at IS NULL`, [ctx.tenantId, m.id])).rows[0];
       if (live) return { data: { code: live.code, already: true } };
@@ -148,8 +148,10 @@ export class CamerasController {
   async revokeFaceCode(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     if (!isUuid(id)) throw notFound('Kod');
     return this.db.tx(async (c) => {
-      const r = (await c.query(`UPDATE face_codes SET revoked_at = demo_now() WHERE id = $1 AND tenant_id = $2 AND subject_type = 'staff' AND revoked_at IS NULL RETURNING code, membership_id`,
-        [id, ctx.tenantId])).rows[0];
+      const r = (await c.query(
+        `UPDATE face_codes fc SET revoked_at = demo_now() FROM memberships m
+          WHERE fc.id = $1 AND fc.tenant_id = $2 AND fc.subject_type = 'staff' AND fc.revoked_at IS NULL AND m.id = fc.membership_id AND m.branch_ids && $3
+          RETURNING fc.code, fc.membership_id`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!r) throw notFound('Kod');
       await audit(c, ctx, 'camera.face_code_revoke', 'membership', r.membership_id, `Kamera kodi bekor qilindi: ${r.code}`);
       return { data: { id } };
@@ -170,7 +172,9 @@ export class CamerasController {
         WHERE e.tenant_id = $1 AND e.kind = 'face_match' AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4
         GROUP BY 1, 2`, [ctx.tenantId, branches, fromTs, toTs]);
     const staff = await this.db.rows(
-      `SELECT m.id AS membership_id, u.full_name, m.role, d.id AS doctor_id, d.specialty, fc.code
+      `SELECT m.id AS membership_id, u.full_name, m.role, d.id AS doctor_id, d.specialty, fc.code,
+              (SELECT min(x.created_at) FROM face_codes x WHERE x.tenant_id = m.tenant_id AND x.membership_id = m.id) AS code_since,
+              (SELECT min(c.created_at) FROM cameras c WHERE c.tenant_id = m.tenant_id AND c.branch_id = ANY($2) AND 'attendance' = ANY(c.purposes)) AS camera_since
          FROM memberships m JOIN users u ON u.id = m.user_id
          JOIN face_codes fc ON fc.membership_id = m.id AND fc.tenant_id = m.tenant_id AND fc.revoked_at IS NULL
          LEFT JOIN doctors d ON d.membership_id = m.id AND d.tenant_id = m.tenant_id
@@ -183,17 +187,20 @@ export class CamerasController {
     for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
     const rows: any[] = [];
     for (const s of staff) for (const day of days) {
-      const wd = new Date(day + 'T00:00:00Z').getUTCDay();
+      // before the person had a code (or before an attendance camera existed) nobody could have seen them
+      const since = [s.code_since, s.camera_since].filter(Boolean).map((x) => localDate(new Date(x))).sort().at(-1);
+      if (since && day < since) continue;
+      const wd = weekday(day);
       const plan = s.doctor_id ? sched.find((x) => x.doctor_id === s.doctor_id && x.weekday === wd) : undefined;
       const r = byKey.get(`${s.membership_id}|${day}`);
       if (!r && !plan) continue; // a day off with nobody seen says nothing
       let late_min: number | null = null;
       if (r && plan) {
-        const first = new Date(r.first_at), start = dayStart(day).getTime() + (Number(plan.start_time.slice(0, 2)) * 60 + Number(plan.start_time.slice(3, 5))) * 60_000;
+        const first = new Date(r.first_at), start = dayStart(day).getTime() + toMinutes(plan.start_time) * 60_000;
         const diff = Math.round((first.getTime() - start) / 60_000);
         late_min = diff > LATE_GRACE_MIN ? diff : 0;
       }
-      const future = day > today() || (day === today() && plan && !r && now() < new Date(dayStart(day).getTime() + (Number(plan.start_time.slice(0, 2)) * 60 + Number(plan.start_time.slice(3, 5)) + LATE_GRACE_MIN) * 60_000));
+      const future = day > today() || (day === today() && plan && !r && now() < new Date(dayStart(day).getTime() + (toMinutes(plan.start_time) + LATE_GRACE_MIN) * 60_000));
       rows.push({
         day, membership_id: s.membership_id, full_name: s.full_name, role: s.role, specialty: s.specialty, code: s.code,
         planned_start: plan?.start_time ?? null, planned_end: plan?.end_time ?? null,
@@ -237,7 +244,9 @@ export class CamerasController {
               k.acked_at, u.full_name AS acked_by_name
          FROM camera_events e JOIN cameras c ON c.id = e.camera_id JOIN branches b ON b.id = e.branch_id
          LEFT JOIN camera_event_acks k ON k.event_id = e.id LEFT JOIN memberships m ON m.id = k.acked_by LEFT JOIN users u ON u.id = m.user_id
-        WHERE e.tenant_id = $1 AND e.kind NOT IN ('face_match', 'people_count') AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4
+        WHERE e.tenant_id = $1 AND e.kind NOT IN ('face_match', 'people_count') AND e.branch_id = ANY($2)
+          -- an alert nobody has acknowledged stays on the list whatever the period (the dashboard counts it)
+          AND ((e.occurred_at >= $3 AND e.occurred_at < $4) OR (e.alert AND k.event_id IS NULL))
           AND ($5::boolean IS NOT TRUE OR e.alert)
         ORDER BY e.occurred_at DESC LIMIT 300`, [ctx.tenantId, branches, fromTs, toTs, q.alerts_only === '1']);
     const open = (await this.db.one(
@@ -313,8 +322,10 @@ export class CamerasController {
   @Roles('manager') @Post(':id/simulate') @HttpCode(200)
   async simulate(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     if (!config.demoEnabled) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi');
-    const cam = await this.camera(ctx, id) as Camera;
+    const cam = await this.camera(ctx, id) as Camera & { status: string };
     const input = parse(simulateSchema, body);
+    // a switched-off camera stores nothing, as on the real push address
+    if (cam.status !== 'active') return { data: { stored: false, ignored: 'disabled' } };
     const at = now();
     const r = await this.db.tx((c) => ingestEvent(c, cam, {
       kind: input.kind as EventKind, occurredAt: at, code: input.code ?? null, similarity: input.kind === 'face_match' ? 96 : null,

@@ -38,7 +38,8 @@ export class ErrorFilter implements ExceptionFilter {
     } else if (err?.code === '22P02' || err?.code === '22007' || err?.code === '22008') {
       status = 422; code = 'VALIDATION'; message = 'Noto‘g‘ri qiymat yuborildi.';
     }
-    if (status >= 500) this.log.error(`${request_id} ${req.method} ${req.url}: ${err?.stack || err}`);
+    // a camera's push address carries its secret token: never write it to the log
+    if (status >= 500) this.log.error(`${request_id} ${req.method} ${String(req.url).replace(/\/hik\/[^/?#]+/, '/hik/***')}: ${err?.stack || err}`);
     // the person's language: their session, else the language picked on the login page; messages are written in Uzbek
     const cookieLang = req.cookies?.meduza_lang;
     const locale: Locale = req.ctx?.locale ?? (isLocale(cookieLang) ? cookieLang : 'uz');

@@ -29,6 +29,8 @@ export function fmtDate(d: string | Date | null | undefined) {
 }
 export function fmtDateTime(d: string | Date | null | undefined) { return d ? `${fmtDate(d)} ${fmtTime(d)}` : '—'; }
 /** Local (Tashkent) calendar date of an instant, YYYY-MM-DD */
+/** Minutes since local (Tashkent) midnight. */
+export function localMinutes(d: string | Date) { const t = new Date(new Date(d).getTime() + 5 * 3600_000); return t.getUTCHours() * 60 + t.getUTCMinutes(); }
 export function localDate(d: string | Date) { return new Date(new Date(d).getTime() + 5 * 3600_000).toISOString().slice(0, 10); }
 export function longDate(date: string) {
   const [y, m, d] = date.split('-').map(Number);

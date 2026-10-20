@@ -113,7 +113,8 @@ export async function ensureDemoClock(q: Pick<PoolClient, 'query'>, demoDate: st
 export async function backfillSeedConsents(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
   const has = (await q.query('SELECT 1 FROM patient_consents WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
   if (has) return 0;
-  const rows = buildSeed(demoDate).patient_consents;
+  // only the data-processing forms: biometric consents come with their camera codes (backfillSeedCameras)
+  const rows = buildSeed(demoDate).patient_consents.filter((c) => c.kind === 'data_processing');
   const r = await q.query(
     `INSERT INTO patient_consents (id, tenant_id, patient_id, kind, granted, text_version, method, recorded_by, recorded_by_name, recorded_at)
      SELECT r.id, r.tenant_id, r.patient_id, r.kind, r.granted, r.text_version, r.method, r.recorded_by, r.recorded_by_name, p.created_at
@@ -131,12 +132,16 @@ export async function backfillSeedConsents(q: Pick<PoolClient, 'query'>, demoDat
  * they belong to the seed's own «today».
  */
 export async function backfillSeedCameras(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  // events are seeded up to the demo clock's «now» on the seed day (never the server's wall clock)
+  const clock = (await q.query(`SELECT to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS d, to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'HH24:MI') AS t`)).rows[0];
+  const demoTime = clock.d === demoDate ? clock.t : clock.d < demoDate ? '00:00' : '23:59';
   const seeded = (await q.query('SELECT 1 FROM tenants WHERE id = $1', [SEED_IDS.tenant])).rowCount;
   const has = (await q.query('SELECT 1 FROM cameras WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
   if (!seeded || has) return 0;
-  const seed = buildSeed(demoDate);
+  const seed = buildSeed(demoDate, demoTime);
   const patientIds = new Set((await q.query('SELECT id FROM patients WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
-  const bio = seed.patient_consents.filter((c) => c.kind === 'biometric' && patientIds.has(c.patient_id));
+  const existing = new Set((await q.query('SELECT id FROM patient_consents WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const bio = seed.patient_consents.filter((c) => c.kind === 'biometric' && patientIds.has(c.patient_id) && !existing.has(c.id));
   const codes = seed.face_codes.filter((f) => f.subject_type === 'staff' || patientIds.has(f.patient_id));
   const codeIds = new Set(codes.map((f) => f.id));
   const events = seed.camera_events.filter((e) => !e.face_code_id || codeIds.has(e.face_code_id));
