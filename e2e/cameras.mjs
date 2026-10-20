@@ -22,9 +22,10 @@ try {
   await shot(m, 'cam-02-traffic');
   await m.goto(BASE + '/cameras?tab=security', { waitUntil: 'networkidle0' }); await settle(m);
   const open = () => m.evaluate(() => [...document.querySelectorAll('button')].filter((x) => x.offsetParent !== null && x.textContent.includes('Ko‘rib chiqildi')).length);
-  check(await open() === 1, 'Xavfsizlik: bitta ko‘rib chiqilmagan tungi ogohlantirish');
+  check(await open() === 2, 'Xavfsizlik: ikkita ko‘rib chiqilmagan tungi ogohlantirish');
   await clickText(m, 'Ko‘rib chiqildi', 'button');
-  await m.waitForFunction(() => ![...document.querySelectorAll('button')].some((x) => x.offsetParent !== null && x.textContent.includes('Ko‘rib chiqildi')), { timeout: 10000 });
+  for (let i = 0; i < 40 && (await open()) !== 1; i++) await sleep(250);
+  check(await open() === 1, 'Bittasi ko‘rib chiqildi, bittasi qoldi');
   check((await m.evaluate(() => document.body.innerText)).includes('Ko‘rib chiqdi: Dilnoza Karimova'), 'Xavfsizlik: ko‘rib chiqildi, kim belgilagani ko‘rinadi');
   await shot(m, 'cam-03-security');
   await m.goto(BASE + '/cameras?tab=devices', { waitUntil: 'networkidle0' }); await settle(m);

@@ -58,6 +58,29 @@ Texnik tafsilotlar, namunaviy ISAPI xabarlari va manbalar: `docs/HIKVISION_ISAPI
 Kod: `apps/api/src/cameras/` (`isapi.ts` — xabarni o‘qish, `ingest.ts` — qoidalar, `cameras.controller.ts` — API,
 `hik.controller.ts` — kamera manzili). Testlar: `apps/api/test/cameras.test.mjs`.
 
+## Kamerasiz sinash: `tools/hik-replay.mjs`
+
+Kamera yuboradigan aynan shu formatdagi xabarlarni (XML, JSON, multipart) serverga yuboradi — o‘rnatilgan serverni
+kamera kelmasdan oxirigacha tekshirish uchun. Avval Med.uz.ai’da sinov kamerasi qo‘shing va manzilni oling.
+
+```bash
+node tools/hik-replay.mjs https://DOMEN/api/v1/hik/<token> all --codes S-1,S-2 --code P-1010
+node tools/hik-replay.mjs <manzil> staff --codes S-3 --time 2026-10-21T08:47:00+05:00   # ertalabki kelish
+node tools/hik-replay.mjs <manzil> night        # tungi kirish, chiziq, zona → ogohlantirishlar
+node tools/hik-replay.mjs <manzil> counting     # 3 soatlik odam sanash (davr rejimi)
+node tools/hik-replay.mjs <manzil> heartbeat --dry   # yubormasdan, xabarni ko‘rsatadi
+```
+
+Ssenariylar: `heartbeat`, `staff`, `patient`, `counting`, `counting-rt` (jamlangan), `night`, `all`. Yuz xabarida
+rasm o‘rniga kichik belgi yuboriladi. Faqat sinov serveri va sun’iy kodlar bilan ishlating.
+
+## Demo ma’lumotlari
+
+Demo’da 5 ta kamera va 30 kunlik tarix bor: xodimlar davomati (Bekzod Ergashev tez-tez kechikadi, Lola Abdullayeva
+3 kun ta’tilda, Sardor Nazarov ko‘pincha kech qoladi, Yunusobod kassiri ba’zan erta ketadi), hafta kuniga qarab
+o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va tungi xavfsizlik hodisalari (2 tasi
+ko‘rib chiqilmagan), bemor kelishi tarixi (tasdiqlangan va «bu emas») hamda bugungi takliflar. Hammasi sun’iy.
+
 ## Haqiqiy kamerada hali tekshirilmagan
 
 Hikvision’ning to‘liq hujjatlari hamkor parolini talab qiladi, shuning uchun quyidagilar birinchi kamerada

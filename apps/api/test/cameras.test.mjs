@@ -36,9 +36,9 @@ after(async () => { await app?.close(); });
 
 const seedCam = async (name) => (await manager.get('/cameras')).body.data.find((c) => c.name === name);
 
-test('seed: 4 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasviri hech qayerda yo‘q', async () => {
+test('seed: 5 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasviri hech qayerda yo‘q', async () => {
   const cams = (await manager.get('/cameras')).body.data;
-  assert.equal(cams.length, 4);
+  assert.equal(cams.length, 5);
   assert.ok(cams.every((c) => !('token_hash' in c)), 'token hash qaytarilmaydi');
   const codes = (await manager.get('/cameras/face-codes')).body;
   assert.equal(codes.data.filter((r) => r.code).length, 14, 'har bir xodimda S-kod');
@@ -49,7 +49,14 @@ test('seed: 4 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasvir
   const tr = (await manager.get('/cameras/traffic?from=2026-10-12&to=2026-10-17')).body;
   assert.ok(tr.meta.total_enter > 100 && tr.meta.busiest_hour >= 9 && tr.meta.busiest_hour <= 12);
   const sec = (await manager.get('/cameras/security?from=2026-10-01&to=2026-10-18')).body;
-  assert.equal(sec.meta.open_alerts, 1, 'bitta ko‘rib chiqilmagan tungi ogohlantirish');
+  assert.equal(sec.meta.open_alerts, 2, 'ikkita ko‘rib chiqilmagan tungi ogohlantirish');
+  // personas: Bekzod Ergashev is the one most often late; Lola Abdullayeva has three days of leave (no «absent» for them)
+  const month = (await manager.get('/cameras/attendance?from=2026-09-19&to=2026-10-18')).body.data;
+  const lateBy = (id) => month.filter((r) => r.membership_id === id && r.status === 'late').length;
+  const others = [M.doctor(0), M.doctor(1), M.doctor(3), M.doctor(5), M.doctor(6)].map(lateBy);
+  assert.ok(lateBy(M.doctor(2)) > Math.max(...others), 'surunkali kechikuvchi');
+  const hist = (await pool.query(`SELECT status, count(*)::int AS n FROM arrival_suggestions GROUP BY 1`)).rows;
+  assert.ok(hist.find((h) => h.status === 'accepted')?.n > 5, 'bemor kelishi tarixi');
   // the schema has no column for a picture or a face template
   const cols = (await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name IN ('cameras','face_codes','camera_events','arrival_suggestions')`)).rows.map((r) => r.column_name);
   assert.ok(!cols.some((c) => /image|photo|picture|template|face_data|snapshot/i.test(c)), cols.join(','));
@@ -321,4 +328,24 @@ test('tekshiruv tuzatishlari: filial doirasi, eski ochiq ogohlantirish, o‘chir
   const sim = parseIsapi(Buffer.from(JSON.stringify({ eventType: 'alarmResult', eventState: 'active', dateTime: '2026-10-17T10:00:00+05:00',
     alarmResult: [{ faces: [{ identify: [{ candidate: [{ reserve_field: { certificateNumber: 'S-1' }, similarity: 250 }] }] }] }] })), 'application/json');
   assert.equal(sim.events[0].similarity, null, '100 % dan katta o‘xshashlik tashlanadi');
+});
+
+test('tools/hik-replay.mjs: haqiqiy formatdagi xabarlar serverga yetadi va to‘g‘ri saqlanadi', async () => {
+  const { execFile } = await import('node:child_process');
+  const run = (args) => new Promise((resolve) => execFile(process.execPath, ['../../tools/hik-replay.mjs', ...args], { cwd: new URL('..', import.meta.url).pathname }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, out: stdout + stderr })));
+  const r = await manager.post('/cameras', { branch_id: BC, name: 'Replay kamera', purposes: ['attendance', 'patient_arrival', 'counting', 'security'], security_mode: 'always' });
+  const url = base.replace('/api/v1', '') + r.body.data.push_path;
+  const patient = (await pool.query(`SELECT code FROM face_codes WHERE tenant_id = $1 AND subject_type = 'patient' AND revoked_at IS NULL ORDER BY code LIMIT 1`, [SEED_IDS.tenant])).rows[0].code;
+  const staff = (await pool.query(`SELECT code FROM face_codes WHERE tenant_id = $1 AND subject_type = 'staff' AND revoked_at IS NULL ORDER BY code LIMIT 2`, [SEED_IDS.tenant])).rows.map((x) => x.code);
+  const res = await run([url, 'all', '--codes', staff.join(','), '--code', patient, '--time', '2026-10-17T08:47:00+05:00']);
+  assert.equal(res.code, 0, res.out);
+  const kinds = (await pool.query(`SELECT kind, count(*)::int AS n FROM camera_events WHERE camera_id = $1 GROUP BY 1`, [r.body.data.id])).rows;
+  const n = (k) => kinds.find((x) => x.kind === k)?.n ?? 0;
+  assert.equal(n('face_match'), 3, 'ikki xodim + bemor');
+  assert.equal(n('people_count'), 3);
+  assert.equal(n('intrusion') + n('line_crossing') + n('region_entrance'), 3);
+  assert.ok((await pool.query(`SELECT last_seen_at FROM cameras WHERE id = $1`, [r.body.data.id])).rows[0].last_seen_at);
+  const dry = await run([url, 'night', '--dry']);
+  assert.match(dry.out, /fielddetection/); assert.equal(dry.code, 0);
+  assert.notEqual((await run(['http://x/api/v1/hik/short', 'all'])).code, 0, 'noto‘g‘ri manzil rad etiladi');
 });

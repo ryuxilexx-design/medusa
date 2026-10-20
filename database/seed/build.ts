@@ -771,6 +771,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       { key: 'mrk-cash', branch: BC, name: 'Kassa', location: 'Kassa xonasi', purposes: ['security'], mode: 'after_hours' },
       { key: 'mrk-store', branch: BC, name: 'Dori ombori', location: 'Ombor eshigi', purposes: ['security'], mode: 'always' },
       { key: 'yun-entry', branch: BY, name: 'Kirish', location: 'Qabulxona', purposes: ['attendance', 'counting'], mode: 'after_hours' },
+      { key: 'yun-cash', branch: BY, name: 'Kassa (Yunusobod)', location: 'Kassa oynasi', purposes: ['security'], mode: 'after_hours' },
     ];
     const camId = (k: string) => sid('camera:' + k);
     for (const c of CAMS) data.cameras.push({
@@ -796,9 +797,13 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       data.face_codes.push({ id, tenant_id: T, code: `S-${i + 1}`, subject_type: 'staff', membership_id: mid, patient_id: null, consent_confirmed_by: M.manager, created_at: createdBase, revoked_at: null });
       staffCodes.push({ id, membership: mid, doctor: doc, branches });
     });
-    // attendance: the last 14 days (today only up to the demo time)
+    // ---- attendance: 30 days (today only up to the demo time), with recognisable people ----
+    // Bekzod Ergashev is often late; Lola Abdullayeva is on leave for three days; Sardor Nazarov stays late;
+    // the Yunusobod cashier sometimes leaves early; everyone else is mostly punctual (rare lateness / absence).
+    const HISTORY_DAYS = 30;
     const entryCam = (b: string) => (b === BC ? 'mrk-entry' : 'yun-entry');
-    for (let back = 14; back >= 0; back--) {
+    const LEAVE: Record<string, [number, number]> = { [M.doctor(4)]: [12, 10] }; // days back, inclusive
+    for (let back = HISTORY_DAYS - 1; back >= 0; back--) {
       const day = addDays(demoDate, -back), wd = weekdayOf(day);
       for (const sc of staffCodes) {
         let branch: string, start: number, end: number;
@@ -810,35 +815,54 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
           if (wd === 0) continue; // admin staff rest on Sunday
           branch = sc.branches.length > 1 && wd % 2 === 0 ? sc.branches[1] : sc.branches[0]; start = hm('08:00'); end = hm('18:00');
         }
+        const leave = LEAVE[sc.membership];
+        if (leave && back <= leave[0] && back >= leave[1]) continue; // on leave
         const roll = cint(1, 100);
-        if (roll <= 3) continue; // absent
-        const inMin = start - cint(5, 20) + (roll > 88 ? cint(12, 35) : 0); // ~12 % come late
+        if (roll <= 2) continue; // absent
+        const chronicLate = sc.membership === M.doctor(2);
+        const late = chronicLate ? roll > 62 : roll > 93;
+        const inMin = late ? start + cint(6, chronicLate ? 32 : 25) : start - cint(4, 22);
         if (back === 0 && inMin > demoNowMin) continue;
-        const outMin = end + cint(-10, 25);
+        let outMin = end + cint(-8, 22);
+        if (sc.membership === M.doctor(5) && cint(1, 100) <= 60) outMin = end + cint(35, 95);   // overtime
+        if (sc.membership === M.cashier2 && cint(1, 100) <= 30) outMin = end - cint(45, 90);    // leaves early
         ev(entryCam(branch), branch, 'face_match', at(day, inMin), { face_code_id: sc.id, similarity: cint(88, 99) }, `att:${sc.membership}:${day}:in`);
         if (back > 0) ev(entryCam(branch), branch, 'face_match', at(day, outMin), { face_code_id: sc.id, similarity: cint(88, 99) }, `att:${sc.membership}:${day}:out`);
       }
-      // people flow: one counting report per hour (08:00–19:00), busiest around 10–12 and 15–16
+      // ---- people flow: one counting report per hour (08:00–20:00); Monday busiest, Sunday quiet, one promo day ----
       const PROFILE = [6, 14, 22, 26, 20, 12, 10, 16, 18, 12, 8, 4];
+      const DAY_FACTOR = [0.55, 1.2, 1.05, 1, 1.05, 0.95, 0.8]; // Sun..Sat
+      const promo = back === 8 ? 1.6 : 1; // «ochiq eshiklar kuni»
       for (const [cam, branch, scale] of [['mrk-entry', BC, 1], ['yun-entry', BY, 0.6]] as [string, string, number][]) {
         PROFILE.forEach((base, h) => {
           const endMin = hm('08:00') + (h + 1) * 60;
           if (back === 0 && endMin > demoNowMin) return;
-          const enter = Math.max(0, Math.round(base * scale * (wd === 0 ? 0.6 : 1) + cint(-3, 3)));
+          const enter = Math.max(0, Math.round(base * scale * DAY_FACTOR[wd] * promo + cint(-3, 3)));
           const exit = Math.max(0, Math.round(enter * (0.8 + crnd() * 0.3)));
           ev(cam, branch, 'people_count', at(day, endMin - 1), { enter_count: enter, exit_count: exit }, `cnt:${cam}:${day}:${h}`);
         });
       }
+      // ---- security, daytime: staff crossing the cash-desk line now and then (recorded, no alert) ----
+      if (back > 0 && wd !== 0) for (const [cam, branch] of [['mrk-cash', BC], ['yun-cash', BY]] as [string, string][]) {
+        if (cint(1, 100) <= 45) ev(cam, branch, 'line_crossing', at(day, hm('09:00') + cint(0, 480)), { target: 'human' }, `sec:day:${cam}:${day}`);
+      }
     }
-    // security: daytime crossings at the cash desk (no alert), two night events (alerts); the latest one still open
-    ev('mrk-cash', BC, 'line_crossing', at(addDays(demoDate, -3), hm('12:40')), { target: 'human' }, 'sec:1');
-    ev('mrk-cash', BC, 'line_crossing', at(addDays(demoDate, -1), hm('16:05')), { target: 'human' }, 'sec:2');
-    const night1 = ev('mrk-store', BC, 'intrusion', at(addDays(demoDate, -6), hm('22:47')), { target: 'human', alert: true }, 'sec:3');
-    ev('mrk-store', BC, 'region_entrance', at(addDays(demoDate, -1), hm('23:12')), { target: 'human', alert: true }, 'sec:4');
-    ev('mrk-cash', BC, 'tamper', at(addDays(demoDate, -9), hm('06:58')), { alert: true }, 'sec:5');
-    data.camera_event_acks.push({ event_id: night1.id, tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -5), hm('08:20')) });
-    data.camera_event_acks.push({ event_id: sid('camev:sec:5'), tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -9), hm('08:10')) });
-    // patients with a signed biometric consent: every tenth card, plus today's late-morning bookings at the central branch
+    // ---- security, outside working hours: alerts; two are still open (yesterday night, three nights ago) ----
+    const NIGHT: [string, string, string, number, string, string | null][] = [
+      // camera, branch, kind, days back, time, acknowledged at (next morning) or null = still open
+      ['mrk-store', BC, 'intrusion', 26, '22:47', '08:20'],
+      ['mrk-cash', BC, 'tamper', 21, '06:58', '08:10'],
+      ['yun-cash', BY, 'line_crossing', 17, '21:35', '08:05'],
+      ['mrk-store', BC, 'region_entrance', 13, '23:40', '08:30'],
+      ['mrk-cash', BC, 'intrusion', 6, '02:15', '07:55'],
+      ['yun-cash', BY, 'region_entrance', 3, '22:18', null],
+      ['mrk-store', BC, 'region_entrance', 1, '23:12', null],
+    ];
+    NIGHT.forEach(([cam, branch, kind, back, time, ackAt], i) => {
+      const e = ev(cam, branch, kind, at(addDays(demoDate, -back), hm(time)), { target: kind === 'tamper' ? null : 'human', alert: true }, `sec:night:${i}`);
+      if (ackAt) data.camera_event_acks.push({ event_id: e.id, tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -back + (hm(time) > hm('12:00') ? 1 : 0)), hm(ackAt)) });
+    });
+    // ---- patients with a signed biometric consent: every tenth card, plus the next bookings within the arrival window ----
     const todayLater = data.appointments.filter((a) => a.branch_id === BC && a.status === 'scheduled' && a.starts_at >= at(demoDate, demoNowMin) && a.starts_at <= at(demoDate, demoNowMin + 120)) // the camera's arrival window: up to 2 h early
       .sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime()).slice(0, 2);
     const bioPatients = new Set<string>([...patients.filter((p) => p.patient_number % 10 === 0).map((p) => p.id), ...todayLater.map((a) => a.patient_id)]);
@@ -848,7 +872,18 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
         recorded_by: M.registrar, recorded_by_name: 'Malika Yusupova', recorded_at: p.created_at, note: null });
       data.face_codes.push({ id: sid('facecode:patient:' + pid), tenant_id: T, code: `P-${p.patient_number}`, subject_type: 'patient', membership_id: null, patient_id: pid, consent_confirmed_by: null, created_at: p.created_at, revoked_at: null });
     }
-    // the reception camera saw two of today's patients a little before their time: suggestions wait for the registrar
+    // ---- history: the reception camera recognised these patients before their visits; the registrar decided ----
+    const past = data.appointments.filter((a) => a.branch_id === BC && bioPatients.has(a.patient_id) && ['arrived', 'in_progress', 'completed'].includes(a.status)
+      && a.starts_at >= at(addDays(demoDate, -(HISTORY_DAYS - 1)), 0) && a.starts_at < at(demoDate, demoNowMin));
+    past.forEach((a, i) => {
+      const p = patients.find((x) => x.id === a.patient_id)!;
+      const seen = new Date(a.starts_at.getTime() - cint(8, 25) * 60_000);
+      if (p.created_at > seen) return;
+      const e = ev('mrk-entry', BC, 'face_match', seen, { face_code_id: sid('facecode:patient:' + a.patient_id), similarity: cint(90, 99) }, `arr:${a.id}`);
+      data.arrival_suggestions.push({ id: sid('arrival:' + a.id), tenant_id: T, appointment_id: a.id, event_id: e.id, status: i % 9 === 4 ? 'dismissed' : 'accepted',
+        decided_by: M.registrar, decided_at: new Date(seen.getTime() + cint(1, 4) * 60_000), created_at: seen });
+    });
+    // today: the camera saw the next patients a little before their time; suggestions wait for the registrar
     todayLater.forEach((a, i) => {
       const seen = new Date(Math.min(a.starts_at.getTime() - cint(10, 25) * 60_000, at(demoDate, demoNowMin - 2 - i * 4).getTime()));
       const e = ev('mrk-entry', BC, 'face_match', seen, { face_code_id: sid('facecode:patient:' + a.patient_id), similarity: cint(91, 98) }, `arr:${a.id}`);
