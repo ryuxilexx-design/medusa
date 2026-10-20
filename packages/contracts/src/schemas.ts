@@ -36,7 +36,8 @@ export const patientBaseSchema = z.object({
   allergy_note: optionalText(300),
 });
 // ---------- patient consent (ZRU-547) ----------
-export const CONSENT_KINDS = ['data_processing', 'notifications'] as const;
+// 'biometric' = face recognition by the clinic's camera (written consent only; the face stays in the camera, never in Med.uz.ai)
+export const CONSENT_KINDS = ['data_processing', 'notifications', 'biometric'] as const;
 export type ConsentKind = (typeof CONSENT_KINDS)[number];
 /** How the consent was obtained. 'telegram' is recorded only by the bot (the patient pressed «Roziman» themselves). */
 export const CONSENT_METHODS = ['signed_paper', 'telegram', 'verbal'] as const;
@@ -314,3 +315,23 @@ export const expenseCreateSchema = z.object({
   shift_id: uuid.optional(),
 });
 export const expenseVoidSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
+
+// ---------- Hikvision cameras ----------
+export const CAMERA_PURPOSES = ['attendance', 'patient_arrival', 'counting', 'security'] as const;
+export type CameraPurpose = (typeof CAMERA_PURPOSES)[number];
+export const cameraSchema = z.object({
+  branch_id: z.string().uuid({ message: 'Filialni tanlang' }),
+  name: z.string().trim().min(1, 'Kamera nomini kiriting').max(80, 'Nom juda uzun'),
+  location: optionalText(120),
+  model: optionalText(60),
+  purposes: z.array(z.enum(CAMERA_PURPOSES)).min(1, 'Kamera vazifasini tanlang'),
+  security_mode: z.enum(['always', 'after_hours']).default('after_hours'),
+});
+export type CameraInput = z.infer<typeof cameraSchema>;
+export const cameraUpdateSchema = cameraSchema.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
+/** A staff face code: the manager confirms the employee gave written consent to face recognition. */
+export const staffFaceCodeSchema = z.object({
+  membership_id: z.string().uuid(),
+  consent_confirmed: z.literal(true, { errorMap: () => ({ message: 'Xodimning yozma roziligini tasdiqlang' }) }),
+});
+

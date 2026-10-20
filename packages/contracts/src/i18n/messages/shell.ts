@@ -71,6 +71,7 @@ export const shell = {
   'nav.finance': ['Moliya', 'Финансы'],
   'nav.staff': ['Xodimlar', 'Сотрудники'],
   'nav.inventory': ['Ombor', 'Склад'],
+  'nav.cameras': ['Kameralar', 'Камеры'],
   'nav.reports': ['Hisobotlar', 'Отчёты'],
   'nav.settings': ['Sozlamalar', 'Настройки'],
   'nav.myPayments': ['Mening to‘lovlarim', 'Мои платежи'],
@@ -87,6 +88,6 @@ export const shell = {
   'shell.logoutDemo': ['Chiqish / rolni almashtirish', 'Выйти / сменить роль'],
   'shell.demoClock': ['Demo vaqti: {date}, {time}', 'Демо-время: {date}, {time}'],
   'shell.demoClockTitle': ['Demo vaqti: demo sanasi va soati. Faqat «Demo ma’lumotlarini tiklash» uni boshlang‘ich nuqtaga qaytaradi.', 'Демо-время: дата и час демо. Вернуть к началу может только «Сброс демо-данных».'],
-  'shell.release': ['Med.uz.ai, demo reliz 0.9.1', 'Med.uz.ai, демо-релиз 0.9.1'],
-  'shell.releaseProd': ['Med.uz.ai, reliz 0.9.1', 'Med.uz.ai, релиз 0.9.1'],
+  'shell.release': ['Med.uz.ai, demo reliz 0.10', 'Med.uz.ai, демо-релиз 0.10'],
+  'shell.releaseProd': ['Med.uz.ai, reliz 0.10', 'Med.uz.ai, релиз 0.10'],
 } as const satisfies Catalog;

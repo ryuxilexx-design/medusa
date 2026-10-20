@@ -2,14 +2,17 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
-import { backfillSeedConsents, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { config } from './core/config';
 import { syncClock } from './core/clock';
+import { rawBody } from './cameras/hik.controller';
 import { AppModule } from './app.module';
 import { Db } from './core/db';
 
 export async function createApp(): Promise<INestApplication> {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
+  // camera pushes (XML / JSON / multipart): read as a raw body before the JSON parser sees it
+  app.use('/api/v1/hik', rawBody);
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');
   (app.getHttpAdapter().getInstance() as any).disable('x-powered-by');
@@ -27,6 +30,8 @@ export async function createApp(): Promise<INestApplication> {
     await ensureDemoClock(pool, config.demoDate, config.demoTime);
     const added = await backfillSeedConsents(pool, config.demoDate);
     if (added) console.log(`Demo: ${added} ta seed bemoriga rozilik yozuvi qo‘shildi (migratsiya 011 dan oldingi baza)`);
+    const cams = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedCameras(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    if (cams) console.log(`Demo: ${cams} ta demo kamera va ularning hodisalari qo‘shildi (migratsiya 012 dan oldingi baza)`);
   } else if (await readDemoClock(pool)) {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than
     // stamp real visits and payments with demo dates.

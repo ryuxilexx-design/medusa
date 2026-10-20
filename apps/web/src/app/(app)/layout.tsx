@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Banknote, Boxes, CalendarDays, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
+  BarChart3, Banknote, Boxes, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
   Stethoscope, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
@@ -32,6 +32,7 @@ const MENU: Item[] = [
   { href: '/finance', label: 'nav.finance', icon: Banknote, roles: ['manager', 'cashier'], group: 'manage' },
   { href: '/staff', label: 'nav.staff', icon: UsersRound, roles: ['manager'], group: 'manage' },
   { href: '/inventory', label: 'nav.inventory', icon: Boxes, roles: ['manager'], group: 'manage' },
+  { href: '/cameras', label: 'nav.cameras', icon: Cctv, roles: ['manager'], group: 'manage' },
   { href: '/reports', label: 'nav.reports', icon: BarChart3, roles: ['manager', 'doctor'], group: 'manage' },
   { href: '/settings', label: 'nav.settings', icon: Settings, roles: ['manager'], group: 'manage' },
 ];

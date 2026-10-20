@@ -42,7 +42,7 @@ const unconsented = async (offset = 0) => (await pool.query(
 
 test('seed: ~70% bemorda imzolangan rozilik bor, qolganida yo‘q; deterministik', async () => {
   const r = (await pool.query(`SELECT count(*)::int AS n, count(*) FILTER (WHERE method = 'signed_paper' AND granted AND text_version = '2026-10')::int AS ok
-                                 FROM patient_consents WHERE tenant_id = $1`, [SEED_IDS.tenant])).rows[0];
+                                 FROM patient_consents WHERE tenant_id = $1 AND kind = 'data_processing'`, [SEED_IDS.tenant])).rows[0];
   assert.equal(r.n, 70); assert.equal(r.ok, 70);
   const first = (await registrar.get(`/patients/${SEED_IDS.patient(0)}`)).body.data; // #1001
   assert.equal(first.consents.data_processing.granted, true);
@@ -53,7 +53,7 @@ test('seed: ~70% bemorda imzolangan rozilik bor, qolganida yo‘q; deterministik
 test('qayd etish: registrator rozilik va qaytarib olishni yozadi; holat = oxirgi yozuv; tarix; audit izohsiz', async () => {
   const p = await unconsented();
   let card = (await registrar.get(`/patients/${p.id}`)).body.data;
-  assert.deepEqual(card.consents, { data_processing: null, notifications: null });
+  assert.deepEqual(card.consents, { data_processing: null, notifications: null, biometric: null });
 
   let r = await registrar.post(`/patients/${p.id}/consents`, { kind: 'data_processing', granted: true, method: 'signed_paper', note: 'Onasi imzoladi — maxfiy izoh' });
   assert.equal(r.status, 201, JSON.stringify(r.body));
@@ -139,7 +139,7 @@ test('yangi bemor: rozilik shu tranzaksiyada yoziladi; demo rejimida roziliksiz 
   r = await registrar.post('/patients', newPatient());
   assert.equal(r.status, 201);
   card = (await registrar.get(`/patients/${r.body.data.id}`)).body.data;
-  assert.deepEqual(card.consents, { data_processing: null, notifications: null });
+  assert.deepEqual(card.consents, { data_processing: null, notifications: null, biometric: null });
 
   const saved = config.mode;
   config.mode = 'production';

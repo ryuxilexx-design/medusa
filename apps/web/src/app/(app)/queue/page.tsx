@@ -9,6 +9,7 @@ import { useSession } from '@/lib/session';
 import { Badge, Button, Card, cx, EmptyState, LinkButton, ErrorState, LoadingRows, PageHeader, Select, Table, Td, Th } from '@/components/ui';
 import { AppointmentStatus, SourceMark } from '@/components/status';
 import { useAppointmentAction } from '@/components/appointment-dialog';
+import { CameraArrivals } from '@/components/camera-arrivals';
 import { useT } from '@/lib/i18n';
 
 export default function QueuePage() {
@@ -46,6 +47,7 @@ export default function QueuePage() {
           </Select>}
           <Button icon={<RefreshCw className={q.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />} onClick={() => q.refetch()}>{t('registrar.q.refresh')}</Button>
         </>} />
+      <CameraArrivals />
       {q.isLoading ? <Card><LoadingRows /></Card> : q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : (
         <div className="grid grid-cols-1 gap-5 2xl:grid-cols-3">
           <Card className="2xl:col-span-2" padded={false} title={<span className="inline-flex items-center gap-2">{t('registrar.q.inQueue')}<Badge tone={active.length ? 'yellow' : 'gray'}>{active.length}</Badge></span>}>

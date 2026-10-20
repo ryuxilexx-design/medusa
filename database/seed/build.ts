@@ -19,6 +19,7 @@ export interface SeedData {
   service_orders: Row[]; lab_results: Row[]; diagnostic_reports: Row[]; invoices: Row[]; invoice_items: Row[];
   payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[]; cash_shifts: Row[];
   patient_consents: Row[];
+  cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[];
 }
 
 export function sid(key: string): string {
@@ -70,7 +71,8 @@ function at(date: string, minutes: number): Date {
 function hm(s: string): number { const [h, m] = s.split(':').map(Number); return h * 60 + m; }
 const SO = 100; // 1 so'm in tiyin
 
-export function buildSeed(demoDate: string): SeedData {
+/** `demoTime` (HH:MM, Tashkent) is when the demo day starts after a reset: camera events are only seeded up to it. */
+export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(demoDate)) throw new Error('DEMO_DATE must be YYYY-MM-DD');
   const rnd = mulberry32(20261018);
   const int = (a: number, b: number) => a + Math.floor(rnd() * (b - a + 1));
@@ -88,6 +90,7 @@ export function buildSeed(demoDate: string): SeedData {
     encounters: [], clinical_notes: [], service_orders: [], lab_results: [], diagnostic_reports: [], invoices: [],
     invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [], cash_shifts: [],
     patient_consents: [],
+    cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [],
   };
 
   // ---------- tenant, branches ----------
@@ -755,6 +758,104 @@ export function buildSeed(demoDate: string): SeedData {
 
   data.audit_logs.sort((a, b) => (a.occurred_at as Date).getTime() - (b.occurred_at as Date).getTime());
   // memberships must exist before doctors (FK): already true by insertion order in resetDemo.
+  // ---------- Hikvision cameras (demo): staff attendance, patient arrival, people flow, security ----------
+  // A separate PRNG: the main sequence (and every seeded KPI above) stays exactly as before.
+  // No faces anywhere: people are known to the cameras by our codes (S-n staff, P-<patient number> patients).
+  {
+    const crnd = mulberry32(20261019);
+    const cint = (a: number, b: number) => a + Math.floor(crnd() * (b - a + 1));
+    const demoNowMin = demoTime && /^\d{2}:\d{2}$/.test(demoTime) ? hm(demoTime)
+      : (() => { const l = new Date(Date.now() + DEMO_TIMEZONE_OFFSET_HOURS * 3600_000); return l.getUTCHours() * 60 + l.getUTCMinutes(); })();
+    const CAMS = [
+      { key: 'mrk-entry', branch: BC, name: 'Asosiy kirish', location: 'Qabulxona, eshik tepasida', purposes: ['attendance', 'patient_arrival', 'counting'], mode: 'after_hours' },
+      { key: 'mrk-cash', branch: BC, name: 'Kassa', location: 'Kassa xonasi', purposes: ['security'], mode: 'after_hours' },
+      { key: 'mrk-store', branch: BC, name: 'Dori ombori', location: 'Ombor eshigi', purposes: ['security'], mode: 'always' },
+      { key: 'yun-entry', branch: BY, name: 'Kirish', location: 'Qabulxona', purposes: ['attendance', 'counting'], mode: 'after_hours' },
+    ];
+    const camId = (k: string) => sid('camera:' + k);
+    for (const c of CAMS) data.cameras.push({
+      id: camId(c.key), tenant_id: T, branch_id: c.branch, name: c.name, location: c.location, model: 'iDS-2CD7146G0-IZS', purposes: c.purposes,
+      // not a SHA-256 of anything: no push token opens these demo cameras (the simulator is the way to send events)
+      security_mode: c.mode, token_hash: 'seed-camera-no-token:' + c.key, token_hint: '····',
+      status: 'active', last_event_at: null, created_by: M.manager, created_at: createdBase });
+    const ev = (cam: string, branch: string, kind: string, when: Date, extra: Row, key: string) => {
+      const row = { id: sid('camev:' + key), tenant_id: T, camera_id: camId(cam), branch_id: branch, kind, occurred_at: when, received_at: when,
+        face_code_id: null, similarity: null, enter_count: null, exit_count: null, target: null, alert: false, dedupe_key: 'seed:' + key, ...extra };
+      data.camera_events.push(row);
+      const c = data.cameras.find((x) => x.id === row.camera_id)!;
+      if (!c.last_event_at || c.last_event_at < when) c.last_event_at = when;
+      return row;
+    };
+    // staff codes S-1…: everyone with a written consent on file (the manager confirmed it)
+    const staffCodes: { id: string; membership: string; doctor: number | null; branches: string[] }[] = [];
+    const staffList: [string, number | null][] = [[M.manager, null], [M.registrar, null], [M.registrar2, null], [M.cashier, null], [M.cashier2, null], [M.lab, null],
+      ...DOCS.map((_, i) => [M.doctor(i), i] as [string, number])];
+    staffList.forEach(([mid, doc], i) => {
+      const id = sid('facecode:staff:' + mid);
+      const branches = data.memberships.find((m) => m.id === mid)!.branch_ids as string[];
+      data.face_codes.push({ id, tenant_id: T, code: `S-${i + 1}`, subject_type: 'staff', membership_id: mid, patient_id: null, consent_confirmed_by: M.manager, created_at: createdBase, revoked_at: null });
+      staffCodes.push({ id, membership: mid, doctor: doc, branches });
+    });
+    // attendance: the last 14 days (today only up to the demo time)
+    const entryCam = (b: string) => (b === BC ? 'mrk-entry' : 'yun-entry');
+    for (let back = 14; back >= 0; back--) {
+      const day = addDays(demoDate, -back), wd = weekdayOf(day);
+      for (const sc of staffCodes) {
+        let branch: string, start: number, end: number;
+        if (sc.doctor !== null) {
+          const sch = schedOf[`${sc.doctor}:${wd}`];
+          if (!sch) continue;
+          branch = sch.branch_id; start = hm(sch.start_time); end = hm(sch.end_time);
+        } else {
+          if (wd === 0) continue; // admin staff rest on Sunday
+          branch = sc.branches.length > 1 && wd % 2 === 0 ? sc.branches[1] : sc.branches[0]; start = hm('08:00'); end = hm('18:00');
+        }
+        const roll = cint(1, 100);
+        if (roll <= 3) continue; // absent
+        const inMin = start - cint(5, 20) + (roll > 88 ? cint(12, 35) : 0); // ~12 % come late
+        if (back === 0 && inMin > demoNowMin) continue;
+        const outMin = end + cint(-10, 25);
+        ev(entryCam(branch), branch, 'face_match', at(day, inMin), { face_code_id: sc.id, similarity: cint(88, 99) }, `att:${sc.membership}:${day}:in`);
+        if (back > 0) ev(entryCam(branch), branch, 'face_match', at(day, outMin), { face_code_id: sc.id, similarity: cint(88, 99) }, `att:${sc.membership}:${day}:out`);
+      }
+      // people flow: one counting report per hour (08:00–19:00), busiest around 10–12 and 15–16
+      const PROFILE = [6, 14, 22, 26, 20, 12, 10, 16, 18, 12, 8, 4];
+      for (const [cam, branch, scale] of [['mrk-entry', BC, 1], ['yun-entry', BY, 0.6]] as [string, string, number][]) {
+        PROFILE.forEach((base, h) => {
+          const endMin = hm('08:00') + (h + 1) * 60;
+          if (back === 0 && endMin > demoNowMin) return;
+          const enter = Math.max(0, Math.round(base * scale * (wd === 0 ? 0.6 : 1) + cint(-3, 3)));
+          const exit = Math.max(0, Math.round(enter * (0.8 + crnd() * 0.3)));
+          ev(cam, branch, 'people_count', at(day, endMin - 1), { enter_count: enter, exit_count: exit }, `cnt:${cam}:${day}:${h}`);
+        });
+      }
+    }
+    // security: daytime crossings at the cash desk (no alert), two night events (alerts); the latest one still open
+    ev('mrk-cash', BC, 'line_crossing', at(addDays(demoDate, -3), hm('12:40')), { target: 'human' }, 'sec:1');
+    ev('mrk-cash', BC, 'line_crossing', at(addDays(demoDate, -1), hm('16:05')), { target: 'human' }, 'sec:2');
+    const night1 = ev('mrk-store', BC, 'intrusion', at(addDays(demoDate, -6), hm('22:47')), { target: 'human', alert: true }, 'sec:3');
+    ev('mrk-store', BC, 'region_entrance', at(addDays(demoDate, -1), hm('23:12')), { target: 'human', alert: true }, 'sec:4');
+    ev('mrk-cash', BC, 'tamper', at(addDays(demoDate, -9), hm('06:58')), { alert: true }, 'sec:5');
+    data.camera_event_acks.push({ event_id: night1.id, tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -5), hm('08:20')) });
+    data.camera_event_acks.push({ event_id: sid('camev:sec:5'), tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -9), hm('08:10')) });
+    // patients with a signed biometric consent: every tenth card, plus today's late-morning bookings at the central branch
+    const todayLater = data.appointments.filter((a) => a.branch_id === BC && a.status === 'scheduled' && a.starts_at >= at(demoDate, demoNowMin) && a.starts_at <= at(demoDate, demoNowMin + 120)) // the camera's arrival window: up to 2 h early
+      .sort((a, b) => a.starts_at.getTime() - b.starts_at.getTime()).slice(0, 2);
+    const bioPatients = new Set<string>([...patients.filter((p) => p.patient_number % 10 === 0).map((p) => p.id), ...todayLater.map((a) => a.patient_id)]);
+    for (const pid of bioPatients) {
+      const p = patients.find((x) => x.id === pid)!;
+      data.patient_consents.push({ id: sid(`consent:bio:${pid}`), tenant_id: T, patient_id: pid, kind: 'biometric', granted: true, text_version: 'bio-2026-10', method: 'signed_paper',
+        recorded_by: M.registrar, recorded_by_name: 'Malika Yusupova', recorded_at: p.created_at, note: null });
+      data.face_codes.push({ id: sid('facecode:patient:' + pid), tenant_id: T, code: `P-${p.patient_number}`, subject_type: 'patient', membership_id: null, patient_id: pid, consent_confirmed_by: null, created_at: p.created_at, revoked_at: null });
+    }
+    // the reception camera saw two of today's patients a little before their time: suggestions wait for the registrar
+    todayLater.forEach((a, i) => {
+      const seen = new Date(Math.min(a.starts_at.getTime() - cint(10, 25) * 60_000, at(demoDate, demoNowMin - 2 - i * 4).getTime()));
+      const e = ev('mrk-entry', BC, 'face_match', seen, { face_code_id: sid('facecode:patient:' + a.patient_id), similarity: cint(91, 98) }, `arr:${a.id}`);
+      data.arrival_suggestions.push({ id: sid('arrival:' + a.id), tenant_id: T, appointment_id: a.id, event_id: e.id, status: 'pending', decided_by: null, decided_at: null, created_at: seen });
+    });
+  }
+
   // ---------- cash shifts (today): both cashiers opened their drawer before the first payment ----------
   // No RNG is used here, so the seeded KPIs stay exactly as before.
   const shiftOpen = at(demoDate, hm('07:00'));

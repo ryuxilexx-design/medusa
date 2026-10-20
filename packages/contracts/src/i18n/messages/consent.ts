@@ -29,6 +29,17 @@ export const CONSENT_TEXTS = {
 } as const;
 export type ConsentTextVersion = keyof typeof CONSENT_TEXTS;
 
+/**
+ * Face recognition at the clinic's camera: a separate, optional consent with its own text and version id, printed
+ * under the main form. LAWYER REVIEW REQUIRED as for the main text (biometric data; Uzbek law requires it to be stored
+ * in Uzbekistan — the face stays in the clinic's own camera). Changing this text means a new version id
+ * («bio-YYYY-MM») and new keys; never edit a version patients have already signed.
+ */
+export const BIOMETRIC_CONSENT_VERSION = 'bio-2026-10';
+export const BIOMETRIC_CONSENT_TEXT = {
+  'bio-2026-10': { title: 'consent.tbio202610.title', body: 'consent.tbio202610.body', choice: 'consent.tbio202610.choice' },
+} as const;
+
 export const consent = {
   // ---------- consent text, version 2026-10 (needs lawyer review, see above) ----------
   'consent.t202610.title': ['Shaxsga doir ma’lumotlarni qayta ishlashga rozilik', 'Согласие на обработку персональных данных'],
@@ -72,6 +83,14 @@ export const consent = {
   ],
   'consent.t202610.tgChoice': ['Telegram orqali eslatmalar olishga:', 'На получение напоминаний в Telegram:'],
 
+  // ---------- face recognition consent, version bio-2026-10 (needs lawyer review, see above) ----------
+  'consent.tbio202610.title': ['Kamerada yuzni tanishga rozilik (ixtiyoriy)', 'Согласие на распознавание лица камерой (по желанию)'],
+  'consent.tbio202610.body': [
+    'Klinika kirish joyidagi kamera yuzingizni taniydi va registraturaga kelganingizni bildiradi. Yuz rasmi faqat klinikadagi kameraning o‘zida saqlanadi; Med.uz.ai dasturiga faqat sizning kodingiz va kamera sizni ko‘rgan vaqt yoziladi. Bu rozilik ixtiyoriy: roziliksiz ham davolanasiz. Roziligingizni istalgan vaqtda registraturada qaytarib olishingiz mumkin — shunda yuzingiz kameradan o‘chiriladi.',
+    'Камера у входа в клинику распознаёт ваше лицо и сообщает регистратуре о вашем приходе. Снимок лица хранится только в самой камере клиники; в программу Med.uz.ai записываются только ваш код и время, когда камера вас увидела. Это согласие добровольное: без него вы также получаете лечение. Согласие можно отозвать в любой момент в регистратуре — тогда ваше лицо удаляется из камеры.',
+  ],
+  'consent.tbio202610.choice': ['Kamerada yuzni tanishga:', 'На распознавание лица камерой:'],
+
   // ---------- printed form ----------
   'consent.print.version': ['Matn versiyasi:', 'Версия текста:'],
   'consent.print.agreeBox': ['roziman', 'согласен(-на)'],
@@ -89,6 +108,10 @@ export const consent = {
   'consent.block.title': ['Rozilik', 'Согласие'],
   'consent.kind.data_processing': ['Ma’lumotlarni qayta ishlash', 'Обработка данных'],
   'consent.kind.notifications': ['Telegram eslatmalari', 'Напоминания в Telegram'],
+  'consent.kind.biometric': ['Kamerada yuzni tanish', 'Распознавание лица камерой'],
+  'consent.bio.code': ['Kamera kodi: {code}', 'Код для камеры: {code}'],
+  'consent.bio.hint': ['Kameraning yuz kutubxonasiga shu kod bilan qo‘shing', 'Добавьте в библиотеку лиц камеры под этим кодом'],
+  'consent.bio.paperOnly': ['Yuzni tanishga rozilik faqat imzolangan varaqa bilan olinadi', 'Согласие на распознавание лица — только по подписанному бланку'],
   'consent.status.granted': ['Rozilik bor', 'Согласие есть'],
   'consent.status.missing': ['Rozilik yo‘q', 'Согласия нет'],
   'consent.status.withdrawn': ['Rozilik qaytarib olingan', 'Согласие отозвано'],

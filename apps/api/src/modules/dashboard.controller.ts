@@ -6,6 +6,7 @@ import { isDate } from '../core/validate';
 import { addDays, dayStart, today, toMinutes, weekday } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { NET_LINE } from './billing';
+import { cameraAttention } from '../cameras/cameras.controller';
 
 export function range(q: any) {
   const t = today();
@@ -76,6 +77,7 @@ export class DashboardController {
     const cancelledWithPayments = (await this.db.one(
       `SELECT count(DISTINCT a.id)::int AS n FROM appointments a JOIN invoices i ON i.appointment_id = a.id
         WHERE a.tenant_id = $1 AND a.branch_id = ANY($2) AND a.status = 'cancelled' AND i.status <> 'void' AND (i.paid_amount > 0 OR i.status = 'unpaid')`, [ctx.tenantId, branches]))!.n;
+    const cams = (await cameraAttention(this.db, ctx.tenantId, branches))!;
     return {
       data: {
         range: { from: r.from, to: r.to, branch_ids: branches },
@@ -84,7 +86,8 @@ export class DashboardController {
         by_service: byService.map((s) => ({ ...s, value: Number(s.value) })),
         doctors,
         recent_payments: recentPayments,
-        attention: { unpaid_invoices: debt.invoices, unpaid_sum: Number(debt.debt), lab_draft: labPending.draft, lab_waiting: labPending.waiting, low_stock: lowStock, cancelled_with_invoice: cancelledWithPayments },
+        attention: { unpaid_invoices: debt.invoices, unpaid_sum: Number(debt.debt), lab_draft: labPending.draft, lab_waiting: labPending.waiting, low_stock: lowStock, cancelled_with_invoice: cancelledWithPayments,
+          camera_alerts: cams.open_alerts, silent_cameras: cams.silent_cameras },
       },
     };
   }

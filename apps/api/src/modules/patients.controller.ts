@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema } from '@meduza/contracts';
+import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, forbidden, notFound } from '../core/errors';
@@ -136,10 +136,13 @@ export class PatientsController {
   async addConsent(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     await assertPatientAccess(this.db.pool, ctx, id);
     const input = parse(consentRecordSchema, body);
+    // face recognition needs a signed paper form (written consent); a verbal «yes» is not enough
+    if (input.kind === 'biometric' && input.granted && input.method !== 'signed_paper')
+      throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { method: 'Yuzni tanish uchun faqat imzolangan varaqa' });
     const row = await this.db.tx(async (c) => {
       // the patient row is locked so the consent and any concurrent card change are ordered
       await c.query(`SELECT 1 FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId]);
-      return recordConsent(c, ctx, id, { kind: input.kind, granted: input.granted, method: input.method, textVersion: CONSENT_TEXT_VERSION, note: input.note });
+      return recordConsent(c, ctx, id, { kind: input.kind, granted: input.granted, method: input.method, textVersion: input.kind === 'biometric' ? BIOMETRIC_CONSENT_VERSION : CONSENT_TEXT_VERSION, note: input.note });
     });
     return { data: row };
   }

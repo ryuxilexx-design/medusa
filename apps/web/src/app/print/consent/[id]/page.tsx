@@ -1,7 +1,7 @@
 'use client';
 import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CONSENT_TEXT_VERSION, CONSENT_TEXTS } from '@meduza/contracts';
+import { BIOMETRIC_CONSENT_TEXT, BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, CONSENT_TEXTS } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { fullName } from '@/lib/format';
 import { useMeQuery } from '@/lib/session';
@@ -22,6 +22,8 @@ export default function PrintConsent({ params }: { params: Promise<{ id: string 
   if (!blank && !q.data) return <PrintState q={q} />;
   if (!me.data) return <PrintState q={me} />;
   const text = CONSENT_TEXTS[CONSENT_TEXT_VERSION];
+  // the optional face-recognition consent has its own short text and version id
+  const bio = BIOMETRIC_CONSENT_TEXT[BIOMETRIC_CONSENT_VERSION];
   const clinic = me.data.clinic_name;
   const line = '_______________________________';
   const patient = blank ? { last_name: line } : q.data;
@@ -58,6 +60,11 @@ export default function PrintConsent({ params }: { params: Promise<{ id: string 
       ))}
       <p className="print-avoid-break mt-4 rounded border border-slate-400 p-3 font-semibold">{box}{t(text.agree)}</p>
       <p className="print-avoid-break mt-3">{t(text.tgChoice)} &nbsp; {box}{t('consent.print.agreeBox')} &nbsp;&nbsp; {box}{t('consent.print.disagreeBox')}</p>
+      <section className="print-avoid-break mt-4 border-t border-slate-300 pt-3">
+        <h2 className="text-sm font-bold">{t(bio.title)} <span className="font-normal text-slate-600">· {t('consent.print.version')} {BIOMETRIC_CONSENT_VERSION}</span></h2>
+        <p>{t(bio.body)}</p>
+        <p className="mt-2">{t(bio.choice)} &nbsp; {box}{t('consent.print.agreeBox')} &nbsp;&nbsp; {box}{t('consent.print.disagreeBox')}</p>
+      </section>
     </PrintDoc>
   );
 }

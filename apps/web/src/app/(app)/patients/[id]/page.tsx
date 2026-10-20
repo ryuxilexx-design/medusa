@@ -3,7 +3,7 @@ import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet } from 'lucide-react';
-import { ALLERGY_LABEL, type MessageKey } from '@meduza/contracts';
+import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
@@ -31,7 +31,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   const [edit, setEdit] = useState(false);
   const [book, setBook] = useState(false);
   const [allergy, setAllergy] = useState(false);
-  const [consentKind, setConsentKind] = useState<'data_processing' | 'notifications' | null>(null);
+  const [consentKind, setConsentKind] = useState<ConsentKind | null>(null);
   const canEdit = role === 'manager' || role === 'registrar';
 
   if (p.isLoading) return <Card><LoadingRows rows={4} /></Card>;
@@ -110,7 +110,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   );
 }
 
-function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; onConsent: (kind: 'data_processing' | 'notifications') => void }) {
+function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; onConsent: (kind: ConsentKind) => void }) {
   const t = useT();
   // Timeline: newest first; each row links to the visit / result / invoice it came from.
   const events: { at: string; kind: string; text: React.ReactNode; href?: string; badge: React.ReactNode }[] = [];
@@ -137,7 +137,7 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
             </dl>
           ) : <p className="text-sm text-slate-600">{t('registrar.minimalInfo')}</p>}
         </section>
-        {pt.consents && <ConsentBlock patientId={pt.id} consents={pt.consents} role={role} onRecord={onConsent} />}
+        {pt.consents && <ConsentBlock patientId={pt.id} patientNumber={pt.patient_number} consents={pt.consents} role={role} onRecord={onConsent} />}
       </div>
       <div className="min-w-0">
         <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.timeline')}</h3>

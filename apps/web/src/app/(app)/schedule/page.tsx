@@ -10,6 +10,7 @@ import { useSession } from '@/lib/session';
 import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Select, Table, Td, Th, Toolbar } from '@/components/ui';
 import { AppointmentStatus, SourceMark } from '@/components/status';
 import { AppointmentDialog } from '@/components/appointment-dialog';
+import { CameraArrivals } from '@/components/camera-arrivals';
 import { BookingInit, BookingModal } from '@/components/booking';
 import { useT } from '@/lib/i18n';
 
@@ -77,6 +78,7 @@ function Schedule() {
     <>
       <PageHeader title={me.role === 'doctor' ? t('registrar.mySchedule') : t('registrar.schedule')} subtitle={longDate(date)}
         actions={staff && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBooking({ date })}>{t('registrar.book')}</Button>} />
+      <CameraArrivals />
       <Card padded={false}>
         <Toolbar>
           <div className="flex items-center gap-1">

@@ -73,26 +73,7 @@ export class AppointmentsController {
   @Roles('manager', 'registrar') @Post(':id/check-in') @HttpCode(200)
   async checkIn(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     const input = parse(appointmentActionSchema, body);
-    return this.db.tx(async (c) => {
-      const a = await lockAppointment(c, ctx, id);
-      const existing = (await c.query(`SELECT number FROM queue_tickets WHERE appointment_id = $1`, [id])).rows[0];
-      if (existing) return { data: { id, queue_number: existing.number, already: true } };
-      if (a.status !== 'scheduled') throw staleState();
-      if (input.version !== undefined && input.version !== a.version) throw staleState();
-      const day = localDate(a.starts_at);
-      if (day !== today()) throw conflict('NOT_TODAY', 'Faqat bugungi qabul uchun «Keldi» belgilanadi');
-      const arrivedAt = now();
-      const num = (await c.query(
-        `INSERT INTO queue_counters (branch_id, local_date, last_number) VALUES ($1,$2,1)
-         ON CONFLICT (branch_id, local_date) DO UPDATE SET last_number = queue_counters.last_number + 1 RETURNING last_number`, [a.branch_id, day])).rows[0].last_number;
-      await c.query(`INSERT INTO queue_tickets (tenant_id, branch_id, appointment_id, local_date, number, arrived_at) VALUES ($1,$2,$3,$4,$5,$6)`,
-        [ctx.tenantId, a.branch_id, id, day, num, arrivedAt]);
-      await c.query(`UPDATE appointments SET status = 'arrived', version = version + 1, updated_at = demo_now() WHERE id = $1`, [id]);
-      const { invoiceId } = await createBilledOrder(c, ctx, { branchId: a.branch_id, patientId: a.patient_id, appointmentId: id, encounterId: null,
-        serviceId: a.service_id, isPrimary: true, doctorId: a.doctor_id, performerDoctorId: a.doctor_id });
-      await audit(c, ctx, 'appointment.check_in', 'appointment', id, `Keldi, navbat №${num}`, a.branch_id);
-      return { data: { id, queue_number: num, invoice_id: invoiceId } };
-    });
+    return this.db.tx(async (c) => ({ data: await checkInAppointment(c, ctx, id, input.version) }));
   }
 
   @Roles('doctor') @Post(':id/start') @HttpCode(200)
@@ -157,4 +138,27 @@ export async function completeInTx(c: Q, ctx: Ctx, id: string) {
   await c.query(`UPDATE queue_tickets SET finished_at = $2 WHERE appointment_id = $1`, [id, t]);
   await audit(c, ctx, 'appointment.complete', 'appointment', id, 'Qabul yakunlandi', a.branch_id);
   return { data: { id } };
+}
+
+/** «Keldi»: one queue ticket per appointment (numbered per branch and local day) and the booked service billed. Idempotent.
+ *  Shared by the registrar's button and the camera's arrival suggestion. */
+export async function checkInAppointment(c: Q, ctx: Ctx, id: string, version?: number) {
+  const a = await lockAppointment(c, ctx, id);
+  const existing = (await c.query(`SELECT number FROM queue_tickets WHERE appointment_id = $1`, [id])).rows[0];
+  if (existing) return { id, queue_number: existing.number, already: true };
+  if (a.status !== 'scheduled') throw staleState();
+  if (version !== undefined && version !== a.version) throw staleState();
+  const day = localDate(a.starts_at);
+  if (day !== today()) throw conflict('NOT_TODAY', 'Faqat bugungi qabul uchun «Keldi» belgilanadi');
+  const arrivedAt = now();
+  const num = (await c.query(
+    `INSERT INTO queue_counters (branch_id, local_date, last_number) VALUES ($1,$2,1)
+     ON CONFLICT (branch_id, local_date) DO UPDATE SET last_number = queue_counters.last_number + 1 RETURNING last_number`, [a.branch_id, day])).rows[0].last_number;
+  await c.query(`INSERT INTO queue_tickets (tenant_id, branch_id, appointment_id, local_date, number, arrived_at) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [ctx.tenantId, a.branch_id, id, day, num, arrivedAt]);
+  await c.query(`UPDATE appointments SET status = 'arrived', version = version + 1, updated_at = demo_now() WHERE id = $1`, [id]);
+  const { invoiceId } = await createBilledOrder(c, ctx, { branchId: a.branch_id, patientId: a.patient_id, appointmentId: id, encounterId: null,
+    serviceId: a.service_id, isPrimary: true, doctorId: a.doctor_id, performerDoctorId: a.doctor_id });
+  await audit(c, ctx, 'appointment.check_in', 'appointment', id, `Keldi, navbat №${num}`, a.branch_id);
+  return { id, queue_number: num, invoice_id: invoiceId };
 }

@@ -52,7 +52,7 @@ const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
   'doctor_services', 'patients', 'patient_consents', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
   'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'expenses',
-  'inventory_items', 'inventory_movements', 'audit_logs',
+  'inventory_items', 'inventory_movements', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions',
 ];
 
 export class ResetInProgressError extends Error {
@@ -125,6 +125,31 @@ export async function backfillSeedConsents(q: Pick<PoolClient, 'query'>, demoDat
   return r.rowCount ?? 0;
 }
 
+/**
+ * Demo databases seeded before migration 012 have no cameras: adds the seed's cameras, staff/patient codes, biometric
+ * consents and camera events once (only while the main seed clinic has no camera). Arrival suggestions are skipped:
+ * they belong to the seed's own «today».
+ */
+export async function backfillSeedCameras(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const seeded = (await q.query('SELECT 1 FROM tenants WHERE id = $1', [SEED_IDS.tenant])).rowCount;
+  const has = (await q.query('SELECT 1 FROM cameras WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
+  if (!seeded || has) return 0;
+  const seed = buildSeed(demoDate);
+  const patientIds = new Set((await q.query('SELECT id FROM patients WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const bio = seed.patient_consents.filter((c) => c.kind === 'biometric' && patientIds.has(c.patient_id));
+  const codes = seed.face_codes.filter((f) => f.subject_type === 'staff' || patientIds.has(f.patient_id));
+  const codeIds = new Set(codes.map((f) => f.id));
+  const events = seed.camera_events.filter((e) => !e.face_code_id || codeIds.has(e.face_code_id));
+  const eventIds = new Set(events.map((e) => e.id));
+  await insertRows(q as PoolClient, 'cameras', seed.cameras);
+  await insertRows(q as PoolClient, 'patient_consents', bio);
+  await insertRows(q as PoolClient, 'face_codes', codes);
+  await insertRows(q as PoolClient, 'camera_events', events);
+  await insertRows(q as PoolClient, 'camera_event_acks', seed.camera_event_acks.filter((a) => eventIds.has(a.event_id)));
+  await q.query(`SELECT setval('face_code_staff_seq', GREATEST((SELECT max(substring(code from 3)::int) FROM face_codes WHERE subject_type = 'staff'), 1))`);
+  return seed.cameras.length;
+}
+
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */
 export async function assertDatabaseName(q: Pick<PoolClient, 'query'>, expectSuffix: string): Promise<string> {
   const name = (await q.query('SELECT current_database() AS n')).rows[0].n as string;
@@ -145,7 +170,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     // A reset truncates every table. Never let it run on a database that also holds a real clinic.
     const foreign = (await client.query(`SELECT count(*)::int AS n FROM tenants WHERE id <> ALL($1::uuid[])`, [[SEED_IDS.tenant, SEED_IDS.tenant2]])).rows[0].n;
     if (foreign > 0) throw new RealTenantsPresentError(foreign);
-    const seed = buildSeed(demoDate);
+    const seed = buildSeed(demoDate, demoTime);
     await client.query('BEGIN');
     const sessions = (await client.query('SELECT * FROM sessions')).rows;
     // A connected Telegram bot and its chats survive a demo reset (only the conversation state starts over).
@@ -159,6 +184,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
       await insertRows(client, t, seed[t] as Record<string, unknown>[]);
       counts[t] = seed[t].length;
     }
+    await client.query(`SELECT setval('face_code_staff_seq', GREATEST((SELECT max(substring(code from 3)::int) FROM face_codes WHERE subject_type = 'staff'), 1))`);
     const membershipIds = new Set(seed.memberships.map((m) => m.id));
     await insertRows(client, 'sessions', sessions.filter((s) => membershipIds.has(s.membership_id)));
     const tenantIds = new Set(seed.tenants.map((t) => t.id));

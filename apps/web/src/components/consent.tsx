@@ -1,17 +1,22 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, CircleAlert, CircleX, FileSignature, Printer, ShieldAlert } from 'lucide-react';
-import { CONSENT_TEXT_VERSION, type MessageKey } from '@meduza/contracts';
+import { Cctv, CheckCircle2, CircleAlert, CircleX, FileSignature, Printer, ShieldAlert } from 'lucide-react';
+import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, Field, LinkButton, Modal, Select, Textarea, useToast } from './ui';
 
-type Kind = 'data_processing' | 'notifications';
+type Kind = ConsentKind;
 type ConsentRow = { id: string; kind: Kind; granted: boolean; text_version: string; method: 'signed_paper' | 'telegram' | 'verbal'; recorded_by_name: string | null; recorded_at: string; note: string | null };
-export type Consents = { data_processing: ConsentRow | null; notifications: ConsentRow | null };
-const KINDS: Kind[] = ['data_processing', 'notifications'];
+/** `biometric` is missing from an API that predates the camera module: treated as «not recorded». */
+export type Consents = { data_processing: ConsentRow | null; notifications: ConsentRow | null; biometric?: ConsentRow | null };
+const KINDS: Kind[] = ['data_processing', 'notifications', 'biometric'];
+/** Optional consents: «not recorded» is a calm grey, a «no» is «refused» (data processing is the required one). */
+const optional = (k: Kind) => k !== 'data_processing';
+/** The text version a new record of this kind is made against (face recognition has its own short text). */
+const versionOf = (k: Kind) => (k === 'biometric' ? BIOMETRIC_CONSENT_VERSION : CONSENT_TEXT_VERSION);
 
 /** Roles that collect consent (the server checks the same). */
 export const canRecordConsent = (role: string) => role === 'manager' || role === 'registrar' || role === 'doctor';
@@ -20,8 +25,8 @@ export const canRecordConsent = (role: string) => role === 'manager' || role ===
 function ConsentBadge({ kind, row, everGranted }: { kind: Kind; row: ConsentRow | null; everGranted?: boolean }) {
   const t = useT();
   if (row?.granted) return <Badge tone="green" icon={<CheckCircle2 className="h-4 w-4" />}>{t('consent.status.granted')}</Badge>;
-  if (row) return <Badge tone="red" icon={<CircleX className="h-4 w-4" />}>{t(everGranted ? 'consent.status.withdrawn' : kind === 'notifications' ? 'consent.status.refused' : 'consent.status.missing')}</Badge>;
-  if (kind === 'notifications') return <Badge tone="gray" icon={<CircleAlert className="h-4 w-4" />}>{t('consent.status.notAsked')}</Badge>;
+  if (row) return <Badge tone="red" icon={<CircleX className="h-4 w-4" />}>{t(everGranted ? 'consent.status.withdrawn' : optional(kind) ? 'consent.status.refused' : 'consent.status.missing')}</Badge>;
+  if (optional(kind)) return <Badge tone="gray" icon={<CircleAlert className="h-4 w-4" />}>{t('consent.status.notAsked')}</Badge>;
   return <Badge tone="yellow" icon={<CircleAlert className="h-4 w-4" />}>{t('consent.status.missing')}</Badge>;
 }
 
@@ -50,7 +55,7 @@ export function ConsentNotice({ patientId, consents, role, onRecord }: { patient
 }
 
 /** Consent block of the patient card: status of both kinds (word + icon + colour), who recorded it, history, quiet actions. */
-export function ConsentBlock({ patientId, consents, role, onRecord }: { patientId: string; consents: Consents; role: string; onRecord: (kind: Kind) => void }) {
+export function ConsentBlock({ patientId, patientNumber, consents, role, onRecord }: { patientId: string; patientNumber: number; consents: Consents; role: string; onRecord: (kind: Kind) => void }) {
   const t = useT();
   const h = useQuery({ queryKey: ['patient', patientId, 'consents'], queryFn: () => api<{ data: ConsentRow[] }>(`/patients/${patientId}/consents`).then((r) => r.data), enabled: canRecordConsent(role) });
   const everGranted = (k: Kind) => !!h.data?.some((r) => r.kind === k && r.granted);
@@ -66,7 +71,7 @@ export function ConsentBlock({ patientId, consents, role, onRecord }: { patientI
       </div>
       <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
         {KINDS.map((k) => {
-          const r = consents[k];
+          const r = consents[k] ?? null;
           return (
             <div key={k} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -75,6 +80,12 @@ export function ConsentBlock({ patientId, consents, role, onRecord }: { patientI
               </div>
               {r && <p className="mt-1 text-[0.8125rem] text-slate-600">{meta(t, r)}</p>}
               {r?.note && <p className="mt-0.5 text-[0.8125rem] text-slate-600">{t('consent.modal.note')}: {r.note}</p>}
+              {k === 'biometric' && r?.granted && (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem]" data-testid="camera-code">
+                  <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-900"><Cctv className="h-4 w-4 text-slate-600" aria-hidden="true" />{t('consent.bio.code', { code: `P-${patientNumber}` })}</span>
+                  <span className="text-slate-600">{t('consent.bio.hint')}</span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -112,6 +123,9 @@ export function ConsentModal({ open, onClose, patientId, kind: initialKind }: { 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   useEffect(() => { if (open) { setKind(initialKind); setGranted(''); setMethod('signed_paper'); setNote(''); setErrors({}); setFormError(null); } }, [open, initialKind]);
+  // face recognition is written consent only: a verbal «yes» is not accepted (a withdrawal may still be verbal)
+  const paperOnly = kind === 'biometric' && granted !== 'no';
+  useEffect(() => { if (paperOnly) setMethod('signed_paper'); }, [paperOnly]);
   const m = useMutation({
     mutationFn: () => api(`/patients/${patientId}/consents`, { method: 'POST', body: { kind, granted: granted === 'yes', method, note } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['patient', patientId] }); toast.success(t('consent.modal.saved')); onClose(); },
@@ -143,14 +157,14 @@ export function ConsentModal({ open, onClose, patientId, kind: initialKind }: { 
           </div>
           {errors.granted && <p className="mt-1 text-[0.8125rem] font-medium text-red-700" role="alert">{errors.granted}</p>}
         </fieldset>
-        <Field label={t('consent.modal.method')} error={errors.method}>{(id) => (
+        <Field label={t('consent.modal.method')} error={errors.method} hint={paperOnly ? t('consent.bio.paperOnly') : undefined}>{(id) => (
           <Select id={id} value={method} onChange={(e) => setMethod(e.target.value as 'signed_paper' | 'verbal')}>
-            <option value="signed_paper">{t('consent.method.signed_paper')}</option><option value="verbal">{t('consent.method.verbal')}</option>
+            <option value="signed_paper">{t('consent.method.signed_paper')}</option><option value="verbal" disabled={paperOnly}>{t('consent.method.verbal')}</option>
           </Select>
         )}</Field>
         {method === 'verbal' && granted === 'yes' && kind === 'data_processing' && <Alert tone="blue">{t('consent.modal.verbalHint')}</Alert>}
         <Field label={t('consent.modal.note')} error={errors.note} hint={t('consent.modal.noteHint')}>{(id) => <Textarea id={id} rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
-        <p className="text-[0.8125rem] text-slate-600">{t('consent.modal.version', { version: CONSENT_TEXT_VERSION })}</p>
+        <p className="text-[0.8125rem] text-slate-600">{t('consent.modal.version', { version: versionOf(kind) })}</p>
       </form>
     </Modal>
   );

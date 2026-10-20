@@ -161,6 +161,15 @@ Ayting: «Hujjat raqamlanadi va o‘zgartirilmaydi. Xato bo‘lsa sabab bilan be
 
 Ayting: «Bemor 24/7 o‘zi yoziladi, registrator qo‘ng‘iroqqa vaqt sarflamaydi. Bir kun oldin eslatma «Kelaman» tugmasi bilan boradi, kelmay qolish kamayadi. Tahlil qiymatlari Telegram’ga yuborilmaydi — faqat «natija tayyor».» Haqiqiy botni ulash uchun BotFather tokeni kerak.
 
+## Kameralar (2 daqiqa, Rahbar va Registrator oynalarida)
+
+1. Rahbar: bosh sahifada «Kamera: xavfsizlik ogohlantirishi» → **Kameralar → Xavfsizlik**: kecha 23:12 dori omboriga kirish → **Ko‘rib chiqildi**.
+2. **Davomat**: 7 kun bo‘yicha har xodim — kelgan kunlar, kechikishlar, o‘rtacha kelish vaqti → **Kunlar bo‘yicha**.
+3. **Odam oqimi**: eng band soat 11:00–12:00.
+4. Registrator: **Navbat** tepasida «Kamera tanidi» → **Keldi deb belgilash** → navbat raqami (oddiy «Keldi» bilan bir xil).
+5. Asosiy gap: «Yuz rasmi kamerada qoladi, bizda faqat kod va vaqt; bemor uchun alohida imzolangan rozilik».
+   Demo’da haqiqiy kamera yo‘q — Qurilmalar → **Sinov hodisasi** bilan ko‘rsatiladi.
+
 ## Savol bo‘lsa ko‘rsatish mumkin
 
 - Kassir oynasida klinik qayd hujjatini ochishga urinish (`/print/note/...`) → «ruxsat yo‘q». Rahbar ham klinik qaydni o‘qimaydi.

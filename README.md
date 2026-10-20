@@ -170,6 +170,10 @@ Demo rejimida **simulyator** bor: haqiqiy bot mantig‘i ekranda, Telegram’siz
 
 Pilot klinika Railway demo’sida emas, O‘zbekistondagi alohida serverda ishlaydi: `Dockerfile` + `deploy/docker-compose.prod.yml` (PostgreSQL, ilova `APP_MODE=production`, Caddy HTTPS, kunlik shifrlangan zaxira nusxa va haftalik tiklash sinovi). To‘liq qo‘llanma: [`docs/DEPLOY_UZ.md`](docs/DEPLOY_UZ.md). Qonun talablari va provayderlar: [`docs/PILOT_HOSTING_UZ.md`](docs/PILOT_HOSTING_UZ.md).
 
+## Kameralar (Hikvision DeepinView)
+
+Xodimlar davomati, bemor kelganini tanish (registratorga taklif), odam oqimi va xavfsizlik hodisalari. Yuz rasmi faqat kamerada qoladi — Med.uz.ai faqat kodni (`S-12`, `P-1001`) va vaqtni saqlaydi. O‘rnatish: [`docs/HIKVISION.md`](docs/HIKVISION.md).
+
 ## Bemor roziligi (shaxsga doir ma’lumotlar, O‘RQ-547)
 
 Haqiqiy bemorlar kiritilishidan oldin klinika bemorning **shaxsiy va sog‘liq haqidagi ma’lumotlarini qayta ishlashga roziligini** qayd etadi. **Telegram eslatmalariga rozilik** — alohida va ixtiyoriy.

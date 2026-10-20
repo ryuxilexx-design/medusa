@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Banknote, BarChart3, Boxes, CalendarCheck2, CheckCircle2, ChevronRight, FlaskConical, MessageSquareText, Table2, UserCheck, Wallet } from 'lucide-react';
+import { AlertTriangle, Banknote, BarChart3, Boxes, CalendarCheck2, Cctv, CheckCircle2, ChevronRight, FlaskConical, ShieldAlert, MessageSquareText, Table2, UserCheck, Wallet } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtTime, formatSom, fullName, longDate } from '@/lib/format';
@@ -102,6 +102,8 @@ export default function DashboardPage() {
 function Attention({ a }: { a: any }) {
   const t = useT();
   const items = [
+    { icon: <ShieldAlert className="text-red-600" />, label: t('clinical.dash.cameraAlerts'), value: t('clinical.dash.cameraAlertsCount', { n: a.camera_alerts ?? 0 }), href: '/cameras?tab=security', show: (a.camera_alerts ?? 0) > 0 },
+    { icon: <Cctv className="text-amber-600" />, label: t('clinical.dash.silentCameras'), value: t('clinical.dash.silentCount', { n: a.silent_cameras ?? 0 }), href: '/cameras?tab=devices', show: (a.silent_cameras ?? 0) > 0 },
     { icon: <FlaskConical className="text-amber-600" />, label: t('clinical.dash.unverified'), value: `${t('clinical.dash.drafts', { n: a.lab_draft })}, ${t('clinical.dash.waiting', { n: a.lab_waiting })}`, href: '/lab?status=draft_result', show: a.lab_draft + a.lab_waiting > 0 },
     { icon: <Boxes className="text-amber-600" />, label: `${t('clinical.dash.lowStock')}: ${t('clinical.dash.items', { n: a.low_stock.length })}`, value: a.low_stock.map((x: any) => `${x.name} (${Number(x.qty)} ${x.unit})`).join(', '), href: '/inventory?low=1', show: a.low_stock.length > 0 },
     { icon: <AlertTriangle className="text-amber-600" />, label: t('clinical.dash.cancelledOpen'), value: t('clinical.dash.cancelledCount', { n: a.cancelled_with_invoice }), href: '/cashier?debt=1', show: a.cancelled_with_invoice > 0 },

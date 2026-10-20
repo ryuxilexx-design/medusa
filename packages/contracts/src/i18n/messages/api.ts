@@ -42,6 +42,10 @@ export const api = {
   'api.noun.reason': ['Sabab', 'Причина'],
   'api.noun.amount': ['Summa', 'Сумма'],
   'api.noun.referralReason': ['Yo‘llanma sababi', 'Причина направления'],
+  'api.noun.camera': ['Kamera', 'Камера'],
+  'api.noun.faceCode': ['Kod', 'Код'],
+  'api.noun.cameraEvent': ['Hodisa', 'Событие'],
+  'api.noun.suggestion': ['Taklif', 'Предложение'],
 
   // generic
   'api.notFound': ['{what} topilmadi', '{what}: не найдено'],
@@ -216,4 +220,17 @@ export const api = {
   'api.v.consentAnswer': ['Bemor javobini tanlang', 'Выберите ответ пациента'],
   'api.consentRequired': ['Roziliksiz bemor kartasi ochilmaydi', 'Без согласия карта пациента не создаётся'],
   'api.v.consentRequired': ['Bemor shaxsiy ma’lumotlarni qayta ishlashga rozilik berganini belgilang', 'Отметьте, что пациент дал согласие на обработку персональных данных'],
+
+  // cameras
+  'api.periodInvalid': ['Davr noto‘g‘ri', 'Неверный период'],
+  'api.periodTooLong': ['Davr 3 oydan oshmasin', 'Период — не более 3 месяцев'],
+  'api.v.periodOrder': ['Boshlanish sanasi tugashdan keyin', 'Дата начала позже даты окончания'],
+  'api.v.periodLong': ['Davr juda uzun', 'Слишком длинный период'],
+  'api.suggestionDone': ['Bu taklif allaqachon ko‘rib chiqilgan. Sahifani yangilang.', 'Это предложение уже рассмотрено. Обновите страницу.'],
+  'api.v.branch': ['Filialni tanlang', 'Выберите филиал'],
+  'api.v.cameraName': ['Kamera nomini kiriting', 'Введите название камеры'],
+  'api.v.nameLong': ['Nom juda uzun', 'Название слишком длинное'],
+  'api.v.cameraPurpose': ['Kamera vazifasini tanlang', 'Выберите назначение камеры'],
+  'api.v.staffConsent': ['Xodimning yozma roziligini tasdiqlang', 'Подтвердите письменное согласие сотрудника'],
+  'api.v.bioPaper': ['Yuzni tanish uchun faqat imzolangan varaqa', 'Для распознавания лица — только подписанный бланк'],
 } as const satisfies Catalog;

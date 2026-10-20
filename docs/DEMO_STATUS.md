@@ -4,6 +4,18 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 000000000000. 0.10: Hikvision kameralari
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Kameralar (migratsiya `012_cameras.sql`), maxfiy ulanish manzili `POST /api/v1/hik/<token>` (faqat hash saqlanadi), ISAPI XML/JSON/multipart o‘qish, rasm qismlari o‘qilmaydi | Ishlaydi | API testi `cameras.test.mjs`: Hikvision hujjatidagi namunaviy xabarlar (odam sanash davr/real vaqt, fielddetection, alarmResult), yurak urishi, takror yuborish, 413 |
+| Xodimlar davomati (kod `S-n`, yozma rozilik tasdig‘i), shifokor jadvaliga nisbatan kechikish; davr bo‘yicha jamlangan ko‘rinish | Ishlaydi | API + E2E `cameras` |
+| Bemor kelishi: kod `P-<raqam>`, alohida «biometrik» rozilik (faqat imzolangan varaqa, versiya `bio-2026-10`), registratorga «Kamera tanidi» taklifi → oddiy «Keldi» | Ishlaydi | API + E2E |
+| Odam oqimi (soatlar/kunlar), xavfsizlik hodisalari (ish vaqtidan tashqari ogohlantirish, «Ko‘rib chiqildi»), bosh sahifada ogohlantirish | Ishlaydi | API + E2E |
+| Demo: 4 kamera, 2 haftalik davomat va oqim, simulyator; eski demo bazalarga bir marta qo‘shiladi | Demo ma’lumoti | Lokal demo jurnali |
+
+**Cheklov:** haqiqiy DeepinView kamerada hali sinalmagan (Hikvision’ning to‘liq hujjatlari hamkor paroli bilan); `docs/HIKVISION.md` oxiridagi ro‘yxat birinchi kamerada tekshiriladi. Biometrik rozilik matni — yurist tekshirmagan loyiha.
+
 ## 00000000000. 0.9.1: interfeysni qayta tartiblash (sodda va tushunarli)
 
 | Nima o‘zgardi | Tekshiruv |
@@ -291,7 +303,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 81/81 o‘tdi (7 ta rozilik testi qo‘shildi): 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
+| `npm test` (meduza_test) | 91/91 o‘tdi (10 ta kamera testi qo‘shildi): 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
 | `npm run e2e` (izolyatsiyalangan stek) | 113/113: asosiy yo‘l, xato holatlari, xodim kirishi, shifokor jadvali, Telegram simulyatori, AI/MKB-10, qabul hujjatlari, kassa, uch til, rozilik (10) |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |

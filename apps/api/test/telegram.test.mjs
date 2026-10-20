@@ -263,7 +263,11 @@ test('so‘rovnoma: javoblar faqat shu qabul shifokoriga ko‘rinadi', async () 
   assert.equal(r.body.data.complaints, 'Ikki kundan beri bosh og‘riyapti');
   assert.equal(r.body.data.allergies, null);
   assert.equal(r.body.data.medications, 'Paratsetamol');
-  const otherDoc = (await pool.query(`SELECT membership_id FROM doctors WHERE id <> $1 AND tenant_id = $2 AND membership_id IS NOT NULL LIMIT 1`, [a.doctor_id, SEED_IDS.tenant])).rows[0].membership_id;
+  // another doctor who works in the same branch (outside the branch the answer would be 404, not 403)
+  const otherDoc = (await pool.query(
+    `SELECT d.membership_id FROM doctors d JOIN memberships m ON m.id = d.membership_id
+      WHERE d.id <> $1 AND d.tenant_id = $2 AND m.branch_ids @> ARRAY[(SELECT branch_id FROM appointments WHERE id = $3)] ORDER BY d.display_name LIMIT 1`,
+    [a.doctor_id, SEED_IDS.tenant, a.id])).rows[0].membership_id;
   const d2 = session(); await d2.demo(otherDoc);
   assert.equal((await d2.get(`/appointments/${a.id}/intake`)).status, 403);
   assert.equal((await manager.get(`/appointments/${a.id}/intake`)).status, 403, 'rahbar klinik matnni o‘qimaydi');
