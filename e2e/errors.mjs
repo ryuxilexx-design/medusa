@@ -48,7 +48,9 @@ check(server === TEXT1, 'Aloqa tiklangach qayta saqlash serverga yozildi');
 const TEXT2 = TEXT1 + ' — javob yo‘qolgan saqlash';
 await setVal(d, complaints, TEXT2);
 const lost = await loseNextResponse(d, '*/api/v1/encounters/*/draft', 'PUT');
-await clickText(d, 'Qoralamani saqlash'); await sleep(900);
+await clickText(d, 'Qoralamani saqlash');
+// wait for the outcome instead of a fixed pause (the dev server can be slow); the check below still decides
+await d.waitForFunction(() => document.body.innerText.includes('Saqlanmadi'), { timeout: 20000 }).catch(() => undefined);
 check(lost.done() && await d.evaluate(() => document.body.innerText.includes('Saqlanmadi')), 'Javob yo‘qolgan saqlash: xato ko‘rsatildi (muvaffaqiyat emas)');
 server = await d.evaluate((id) => fetch(`/api/v1/encounters/${id}`).then((r) => r.json()).then((j) => j.data.note.complaints), encId);
 check(server === TEXT2, 'Javob yo‘qolgan bo‘lsa ham server saqlagan (haqiqiy holat)');
@@ -90,7 +92,8 @@ const inv = await c.evaluate(() => fetch('/api/v1/invoices?status=unpaid&page_si
 await c.goto(`${BASE}/cashier/${inv.id}`, { waitUntil: 'networkidle0' }); await settle(c);
 const lostPay = await loseNextResponse(c, '*/api/v1/invoices/*/payments', 'POST');
 await setVal(c, 'form input[inputmode=decimal]', '50000');
-await clickText(c, 'To‘lovni qayd qilish', 'form button'); await sleep(900);
+await clickText(c, 'To‘lovni qayd qilish', 'form button');
+await c.waitForFunction(() => document.body.innerText.includes('Server javobi olinmadi'), { timeout: 20000 }).catch(() => undefined);
 const pendingUi = await c.evaluate(() => document.body.innerText.includes('Server javobi olinmadi') && [...document.querySelectorAll('form button')].some((b) => b.textContent.includes('Shu to‘lovni qayta yuborish')));
 const noSuccess = !(await toasts(c)).some((t) => t.includes('qayd etildi'));
 await shot(c, 'err-03-payment-lost');

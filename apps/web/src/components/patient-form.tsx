@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, formatPhone, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, Field, Input, Modal, Select, Textarea, useToast } from './ui';
+import { Alert, Button, Field, Input, Modal, ModalCancel, Select, Textarea, useToast } from './ui';
 import { FileSignature, Printer } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 
@@ -79,7 +79,7 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
 
   return (
     <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={patient ? t('registrar.form.editTitle') : t('registrar.addPatient')}
-      footer={dups ? null : <><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={save.isPending} onClick={() => submit(false)}>{patient ? t('common.save') : t('registrar.form.savePatient')}</Button></>}>
+      footer={dups ? null : <><ModalCancel /><Button variant="primary" loading={save.isPending} onClick={() => submit(false)}>{patient ? t('common.save') : t('registrar.form.savePatient')}</Button></>}>
       {dups ? (
         <div className="space-y-3">
           <Alert title={t('registrar.form.dupTitle')}>{t('registrar.form.dupText')}</Alert>

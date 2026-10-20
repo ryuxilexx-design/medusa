@@ -14,9 +14,23 @@ export { buildSeed };
 export type { SeedData };
 export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS } from '../seed/build';
 
+/**
+ * The app's connection pool. A dropped connection (database restart, admin kill) must never crash the process:
+ * the pool reports it and opens a new one. Waiting for a connection and running one statement are time-limited,
+ * so a flood of slow requests degrades into clear errors instead of freezing every user.
+ * Migrations and the demo reset lift the statement limit for their own session.
+ */
 export function createPool(connectionString = process.env.DATABASE_URL): Pool {
   if (!connectionString) throw new Error('DATABASE_URL is not set');
-  return new Pool({ connectionString, max: 10 });
+  const pool = new Pool({
+    connectionString,
+    max: Number(process.env.DB_POOL_MAX) || 20,
+    connectionTimeoutMillis: Number(process.env.DB_CONNECT_TIMEOUT_MS) || 10_000,
+    statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 30_000,
+    idle_in_transaction_session_timeout: 60_000,
+  });
+  pool.on('error', (e) => console.warn(`[db] idle connection lost: ${e.message}`));
+  return pool;
 }
 
 const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations');
@@ -24,6 +38,7 @@ const MIGRATIONS_DIR = path.resolve(__dirname, '../../migrations');
 export async function migrate(pool: Pool, log = console.log): Promise<void> {
   const client = await pool.connect();
   try {
+    await client.query('SET statement_timeout = 0'); // index builds on a big database may take minutes
     await client.query('SELECT pg_advisory_lock(74001)');
     await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
     const done = new Set((await client.query('SELECT name FROM schema_migrations')).rows.map((r) => r.name));
@@ -44,6 +59,7 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
     }
   } finally {
     await client.query('SELECT pg_advisory_unlock(74001)').catch(() => undefined);
+    await client.query('RESET statement_timeout').catch(() => undefined); // the connection goes back to the pool
     client.release();
   }
 }
@@ -177,6 +193,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     if (foreign > 0) throw new RealTenantsPresentError(foreign);
     const seed = buildSeed(demoDate, demoTime);
     await client.query('BEGIN');
+    await client.query('SET LOCAL statement_timeout = 0');
     const sessions = (await client.query('SELECT * FROM sessions')).rows;
     // A connected Telegram bot and its chats survive a demo reset (only the conversation state starts over).
     const hasTelegram = (await client.query(`SELECT to_regclass('telegram_bots') IS NOT NULL AS ok`)).rows[0].ok;

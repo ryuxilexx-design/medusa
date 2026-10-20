@@ -95,11 +95,12 @@ function Attendance({ p, period, onCodes }: { p: Period; period: React.ReactNode
   const summary = multi && !who;
   return (
     <>
-      {!noCodes && (
+      {/* a failed load shows its error once, in the card below; the key numbers then stay away instead of loading forever */}
+      {!noCodes && !(q.isError && !m) && (
         <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard icon={<CheckCircle2 />} tone="success" label={t('cam.att.onTime')} loading={!m} value={m?.present} />
-          <StatCard icon={<Clock />} label={t('cam.att.late')} loading={!m} value={m?.late} />
-          <StatCard icon={<UserX />} tone={m?.absent ? 'danger' : 'default'} label={t('cam.att.absent')} loading={!m} value={m?.absent} />
+          <StatCard icon={<CheckCircle2 />} tone="success" label={t('cam.att.onTime')} loading={q.isPending} value={m?.present} />
+          <StatCard icon={<Clock />} label={t('cam.att.late')} loading={q.isPending} value={m?.late} />
+          <StatCard icon={<UserX />} tone={m?.absent ? 'danger' : 'default'} label={t('cam.att.absent')} loading={q.isPending} value={m?.absent} />
         </div>
       )}
       <Card padded={false}>
@@ -157,7 +158,7 @@ function AttSummary({ rows, onOpen }: { rows: AttRow[]; onOpen: (id: string) => 
     <Table>
       <thead><tr>
         <Th>{t('cam.col.staff')}</Th><Th right>{t('cam.sum.days')}</Th><Th right>{t('cam.sum.late')}</Th><Th right>{t('cam.sum.absent')}</Th>
-        <Th right className="hidden md:table-cell">{t('cam.sum.avgIn')}</Th><Th right className="hidden lg:table-cell">{t('cam.sum.avgWorked')}</Th><Th />
+        <Th right className="hidden md:table-cell">{t('cam.sum.avgIn')}</Th><Th right className="hidden lg:table-cell">{t('cam.sum.avgWorked')}</Th><Th><span className="sr-only">{t('cam.col.actions')}</span></Th>
       </tr></thead>
       <tbody>{people.map((x) => (
         <tr key={x.r.membership_id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(x.r.membership_id)}>
@@ -185,11 +186,11 @@ function Traffic({ p, period }: { p: Period; period: React.ReactNode }) {
   const empty = !!q.data && !q.data.data.daily.some((d) => d.enter || d.exit);
   return (
     <>
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={<DoorOpen />} label={t('cam.tr.total')} loading={!m} value={m?.total_enter} />
-        <StatCard icon={<CalendarDays />} label={t('cam.tr.avg')} loading={!m} value={m?.avg_per_day} />
-        <StatCard icon={<TrendingUp />} label={t('cam.tr.busiest')} loading={!m} value={m && (m.busiest_hour == null ? '—' : `${hh(m.busiest_hour)}–${hh(m.busiest_hour + 1)}`)} />
-      </div>
+      {!(q.isError && !m) && <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard icon={<DoorOpen />} label={t('cam.tr.total')} loading={q.isPending} value={m?.total_enter} />
+        <StatCard icon={<CalendarDays />} label={t('cam.tr.avg')} loading={q.isPending} value={m?.avg_per_day} />
+        <StatCard icon={<TrendingUp />} label={t('cam.tr.busiest')} loading={q.isPending} value={m && (m.busiest_hour == null ? '—' : `${hh(m.busiest_hour)}–${hh(m.busiest_hour + 1)}`)} />
+      </div>}
       <Card padded={false}>
         <Toolbar>{period}</Toolbar>
         {q.isPending ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : empty ? <EmptyState compact title={t('cam.tr.empty')} /> : (

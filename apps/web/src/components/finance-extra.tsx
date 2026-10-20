@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, Select, StatCard, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, StatCard, Table, Td, Th, useToast } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
 import { CloseShiftModal, expenseCategoryLabel, StatMoney, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
@@ -169,7 +169,7 @@ export function ExpenseRowActions({ e }: { e: any }) {
     <>
       <Button size="sm" variant="ghost" className="!text-slate-700 hover:!bg-red-50 hover:!text-red-700" icon={<Ban className="h-4 w-4" />} onClick={() => setOpen(true)}>{t('cash.cancelExpense')}</Button>
       <Modal open={open} onClose={() => setOpen(false)} dirty={!!reason.trim()} title={t('cash.cancelExpenseTitle', { category: expenseCategoryLabel(t, e.category), amount: formatSom(e.amount) })}
-        footer={<><Button onClick={() => setOpen(false)}>{t('common.back')}</Button><Button variant="danger" loading={m.isPending} disabled={reason.trim().length < 3} onClick={() => m.mutate()}>{t('cash.cancelExpenseConfirm')}</Button></>}>
+        footer={<><ModalCancel>{t('common.back')}</ModalCancel><Button variant="danger" loading={m.isPending} disabled={reason.trim().length < 3} onClick={() => m.mutate()}>{t('cash.cancelExpenseConfirm')}</Button></>}>
         <Field label={t('cash.colReason')} required>{(id) => <Input id={id} value={reason} onChange={(ev) => setReason(ev.target.value)} placeholder={t('cash.cancelExpensePlaceholder')} />}</Field>
         {reason.trim().length < 3 && <p className="mt-2 text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </Modal>
@@ -203,7 +203,7 @@ export function ExpenseModal({ onClose }: { onClose: () => void }) {
   });
   const ready = !!branch && !!tiyin && (paidFrom !== 'cash_drawer' || !!chosenShift);
   return (
-    <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.addExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.add')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.addExpense')} footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.add')}</Button></>}>
       <div className="space-y-4">
         {err && <Alert tone="red">{err}</Alert>}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

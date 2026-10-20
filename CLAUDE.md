@@ -12,7 +12,7 @@ Product name in every UI text, document and export: **Med.uz.ai** (old name "Med
 
 ## Commands
 
-`npm run db:up` · `npm run start` (prod build, web :3000 / API :4000) · `npm run dev` · `npm run build` · `npm run typecheck` · `npm test` (93 API tests) · `npm run e2e` · `npm run db:reset` (wipes live demo data — needs explicit user intent) · `npm run db:backup` / `db:restore -- <file>` · `npm run db:readonly-role` · `npm run db:create-clinic -- …` (onboard a real clinic; prints a one-time temp password) · `npm run db:import-icd10 -- file.csv` (official MKB-10 list).
+`npm run db:up` · `npm run start` (prod build, web :3000 / API :4000) · `npm run dev` · `npm run build` · `npm run typecheck` · `npm test` (111 API tests; `test/audit.test.mjs` holds the regression tests of the 2026-10-20 audit — `docs/audit/`) · `npm run e2e` · `npm run db:reset` (wipes live demo data — needs explicit user intent) · `npm run db:backup` / `db:restore -- <file>` · `npm run db:readonly-role` · `npm run db:create-clinic -- …` (onboard a real clinic; prints a one-time temp password) · `npm run db:import-icd10 -- file.csv` (official MKB-10 list).
 Project skills: `meduza-run`, `meduza-demo-reset`, `meduza-deploy`, `meduza-verify` — use them for those tasks.
 
 ## Rules that are easy to break
@@ -35,6 +35,8 @@ Project skills: `meduza-run`, `meduza-demo-reset`, `meduza-deploy`, `meduza-veri
 - **i18n:** every interface string goes through `t('area.key')` (`useT()` in web; `translate()` elsewhere). Messages live in `packages/contracts/src/i18n/messages/*.ts` as `[uz, ru]` pairs (Russian plural `{one, few, many}`; optional third item overrides the automatic Cyrillic). Never hard-code UI text, never transliterate data (names, services, notes) — only interface text. Dates/ages via `lib/format.ts` helpers. The person's language comes from `/me` (saved per staff account, per session for demo cards) and the `meduza_lang` cookie before login. One 18px base for everyone; sizes in rem (`text-[0.8125rem]`, not px). `test/i18n.test.mjs` checks every pair.
 - **UI building blocks:** follow `docs/UI_GUIDE.md` (one primary action per screen, ≤ 1 short subtitle line, no «next release»/explanation paragraphs on screen, 8 px spacing, h-11 controls). Use `ui.tsx` (`PageHeader`, `StatCard`, `Money`, `Toolbar`, `EmptyState compact`, `Button`, `LinkButton` with `target`, `Field`, `Input`, `Modal` — portal, focus trap, first focus `[data-autofocus]`), `components/money-input.tsx` for any so‘m amount and `components/date-range.tsx` for periods. Check new screens at 1366×768 and 390 px in uz and ru: no clipped columns, no sideways page scroll.
 - **AI:** `AI_MODE=sample` returns a pre-written result only for the exact demo text and must be labelled «Namunaviy AI natijasi»; never present it as live AI. API keys stay server-side.
+
+- **Performance:** queries that run per page view must use an index at 100k patients / 1M appointments (see `docs/audit/load.md`, migration 015). Use `(SELECT demo_now())` or a parameter in WHERE, never unbounded «all time» scans or `LIKE '%…%'` without the trigram indexes; every list has a LIMIT; exports have a bounded period. Cash leaving a drawer locks the shift `FOR UPDATE`; read a quantity only after locking its row.
 
 ## Data & environments
 

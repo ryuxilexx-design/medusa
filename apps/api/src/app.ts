@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import { randomUUID } from 'crypto';
 import { backfillSeedCameras, backfillSeedConsents, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { config } from './core/config';
 import { syncClock } from './core/clock';
@@ -12,12 +13,16 @@ import { Db } from './core/db';
 export async function createApp(): Promise<INestApplication> {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
   // camera pushes (XML / JSON / multipart): read as a raw body before the JSON parser sees it
+  // a request id from the very first byte (also for errors thrown by the body parser)
+  app.use((req: any, res: any, next: () => void) => { if (!req.requestId) { req.requestId = randomUUID(); res.setHeader('X-Request-Id', req.requestId); } next(); });
   app.use('/api/v1/hik', rawBody);
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');
   (app.getHttpAdapter().getInstance() as any).disable('x-powered-by');
   (app.getHttpAdapter().getInstance() as any).set('etag', false);
-  (app.getHttpAdapter().getInstance() as any).set('trust proxy', true); // real client IP behind Next.js / Railway proxy
+  // the real client IP behind exactly N proxies (Next.js + Caddy or the Railway edge = 2); trusting every hop would let
+  // anyone choose their own IP with X-Forwarded-For and walk around the login throttle
+  (app.getHttpAdapter().getInstance() as any).set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 2));
   const pool = app.get(Db).pool;
   await migrate(pool, () => undefined);
   // First deploy: an empty database gets the deterministic demo seed (never runs in production mode).
@@ -38,5 +43,10 @@ export async function createApp(): Promise<INestApplication> {
     throw new Error('APP_MODE=production, lekin bu bazada demo soati bor (demo bazasi). Haqiqiy klinika uchun alohida, toza baza ishlating.');
   }
   syncClock((await pool.query('SELECT demo_now() AS n')).rows[0].n);
+  // expired sessions are removed hourly (they no longer sign anyone in; the table would only grow)
+  if (config.workers) {
+    const purge = () => pool.query(`DELETE FROM sessions WHERE expires_at < now() - interval '1 day'`).catch((e) => console.warn(`[sessions] purge: ${e.message}`));
+    void purge(); setInterval(purge, 3600_000).unref();
+  }
   return app;
 }

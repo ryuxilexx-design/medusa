@@ -6,7 +6,7 @@ import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, type ConsentKind, type
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Field, LinkButton, Modal, Select, Textarea, useToast } from './ui';
+import { Alert, Badge, Button, Field, LinkButton, Modal, ModalCancel, Select, Textarea, useToast } from './ui';
 
 type Kind = ConsentKind;
 type ConsentRow = { id: string; kind: Kind; granted: boolean; text_version: string; method: 'signed_paper' | 'telegram' | 'verbal'; recorded_by_name: string | null; recorded_at: string; note: string | null };
@@ -139,7 +139,7 @@ export function ConsentModal({ open, onClose, patientId, kind: initialKind }: { 
   const dirty = granted !== '' || note.trim() !== '';
   return (
     <Modal open={open} onClose={onClose} dirty={dirty && !m.isSuccess} title={t('consent.modal.title')}
-      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} onClick={submit}>{t('common.save')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} onClick={submit}>{t('common.save')}</Button></>}>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>
         {formError && <Alert tone="red">{formError}</Alert>}
         <Field label={t('consent.modal.kind')} error={errors.kind}>{(id) => (

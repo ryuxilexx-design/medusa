@@ -7,7 +7,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, PageHeader, Table, Tabs, Td, Th, useToast } from '@/components/ui';
+import { Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, PageHeader, Table, Tabs, Td, Th, useToast } from '@/components/ui';
 
 export default function InventoryPage() { return <Suspense><Inventory /></Suspense>; }
 const n = (v: any) => Number(v).toLocaleString('ru-RU').replace(/ /g, ' ');
@@ -133,7 +133,7 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
         </ul>
       </Card>
       <Modal open={!!form} onClose={() => setForm(null)} dirty={!!(qty || reason)} title={form === 'in' ? t('admin.inv.modalIn', { name: it.name }) : t('admin.inv.modalOut', { name: it.name })}
-        footer={<><Button onClick={() => setForm(null)}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
+        footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={t('admin.inv.qty', { unit: it.unit })} required error={qtyError} hint={form === 'out' ? t('admin.inv.available', { qty: n(it.qty) }) : undefined}>{(i) => <Input id={i} inputMode="decimal" value={qty} invalid={!!qtyError} onChange={(e) => setQty(e.target.value)} />}</Field>
           <Field label={t('admin.inv.date')} required error={err.date}>{(i) => <Input id={i} type="date" max={me.today} value={date} invalid={!!err.date} onChange={(e) => setDate(e.target.value)} />}</Field>

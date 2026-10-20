@@ -50,6 +50,10 @@ export const print = {
   'print.lab.title': ['Laboratoriya natijasi: {service}', 'Результат лабораторного исследования: {service}'],
   'print.lab.meta': ['Buyurtma: {ordered}, buyurtmachi: {by}, namuna: {collected}', 'Назначено: {ordered}, назначил(а): {by}, биоматериал: {collected}'],
   'print.lab.noResult': ['Natija kiritilmagan.', 'Результат не внесён.'],
+  'print.lab.hiddenTitle': ['Natija qiymatlari faqat shifokor va laboratoriya uchun', 'Значения результата видят только врач и лаборатория'],
+  'print.lab.hiddenText': ['Bu hujjatni sizning rolingiz chop eta olmaydi. Natija holati: {status}.', 'Ваша роль не может распечатать этот документ. Статус результата: {status}.'],
+  'print.lab.notVerifiedTitle': ['Natija hali tasdiqlanmagan', 'Результат ещё не подтверждён'],
+  'print.lab.notVerifiedText': ['Laboratoriya tasdiqlagandan keyin natijani ko‘rish va chop etish mumkin. Holat: {status}.', 'Результат можно посмотреть и распечатать после подтверждения лабораторией. Статус: {status}.'],
   'print.lab.disclaimer': ['Referens oraliqlar namunaviy va klinik foydalanishga tekshirilmagan. Natija o‘zi tashxis emas — shifokor talqin qiladi.', 'Референсные интервалы условные и не проверены для клинического применения. Результат сам по себе не диагноз — его интерпретирует врач.'],
 
   // ultrasound

@@ -52,7 +52,7 @@ export async function availability(q: Q, tenantId: string, doctorId: string, dat
   if (!sch) return { working: false as const, slots: [], busy: [] };
   const busy = (await q.query(
     `SELECT id, starts_at, ends_at FROM appointments WHERE doctor_id = $1 AND status NOT IN ('cancelled','no_show')
-        AND starts_at < $3 AND ends_at > $2 AND ($4::uuid IS NULL OR id <> $4)`,
+        AND starts_at < $3 AND ends_at > $2 AND starts_at >= $2::timestamptz - interval '1 day' AND ($4::uuid IS NULL OR id <> $4)`, // lower bound: index range, not all history
     [doctorId, localToUtc(date, '00:00'), localToUtc(addDays(date, 1), '00:00'), excludeAppointmentId])).rows;
   const busyMin = busy.map((b) => [toMinutes(localTime(b.starts_at)), toMinutes(localTime(b.ends_at))]);
   const s0 = toMinutes(sch.start), e0 = toMinutes(sch.end);
@@ -72,8 +72,12 @@ export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { pat
   if (requestKey) {
     // serialise retries of the same request, then return the original booking if it already exists
     await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`appt:${ctx.tenantId}:${requestKey}`]);
-    const prev = (await c.query(`SELECT id FROM appointments WHERE tenant_id = $1 AND request_key = $2`, [ctx.tenantId, requestKey])).rows[0];
-    if (prev) return { id: prev.id as string, replayed: true };
+    const prev = (await c.query(`SELECT id, patient_id, doctor_id, service_id FROM appointments WHERE tenant_id = $1 AND request_key = $2`, [ctx.tenantId, requestKey])).rows[0];
+    if (prev) {
+      if (prev.patient_id !== input.patient_id || prev.doctor_id !== input.doctor_id || prev.service_id !== input.service_id)
+        throw conflict('IDEMPOTENCY_MISMATCH', 'Bu so‘rov kaliti boshqa qabul uchun ishlatilgan. Sahifani yangilang.');
+      return { id: prev.id as string, replayed: true };
+    }
   }
   const patient = (await c.query(`SELECT id, patient_number FROM patients WHERE id = $1 AND tenant_id = $2`, [input.patient_id, ctx.tenantId])).rows[0];
   if (!patient) throw invalid({ patient_id: 'Bemor topilmadi' });
@@ -127,6 +131,13 @@ export async function cancelAppointment(c: Q, ctx: Ctx, id: string, input: { ver
   await c.query(`UPDATE service_orders SET status = 'cancelled' WHERE appointment_id = $1 AND is_primary AND status = 'ordered'`, [id]);
   await c.query(`UPDATE notifications SET status = 'skipped', error = 'qabul bekor qilindi' WHERE appointment_id = $1 AND status = 'pending' AND kind IN ('reminder_day','reminder_soon')`, [id]);
   const paid = (await c.query(`SELECT coalesce(sum(paid_amount),0)::bigint AS s FROM invoices WHERE appointment_id = $1 AND status <> 'void'`, [id])).rows[0].s;
+  // nothing was paid: the visit's invoice goes with it (otherwise it would stay as debt for a visit that never happened)
+  if (Number(paid) === 0) {
+    const voided = (await c.query(
+      `UPDATE invoices i SET status = 'void', void_reason = 'Qabul bekor qilindi', version = version + 1, updated_at = demo_now()
+        WHERE i.appointment_id = $1 AND i.status <> 'void' AND i.paid_amount = 0 AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.invoice_id = i.id) RETURNING i.id`, [id])).rows;
+    for (const v of voided) await audit(c, ctx, 'invoice.void', 'invoice', v.id, 'Hisob bekor qilindi: qabul bekor qilindi', a.branch_id);
+  }
   await audit(c, ctx, 'appointment.cancel', 'appointment', id, `Bekor qilindi${input.reason ? ': ' + input.reason : ''}`, a.branch_id);
   if (!byPatient && a.starts_at > now()) await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'cancelled_by_clinic', patientId: a.patient_id, appointmentId: id, dedupeKey: `cancelled:${id}` });
   return { id, needs_billing_review: Number(paid) > 0 };

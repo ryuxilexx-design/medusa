@@ -58,6 +58,7 @@ export const cash = {
   'cash.fullyPaidText': ['Yangi xizmat alohida hisobga tushadi.', 'Новая услуга попадёт в отдельный счёт.'],
   'cash.cashierTakes': ['To‘lovni kassir qabul qiladi.', 'Оплату принимает кассир.'],
   'cash.shiftClosed': ['Smena yopiq', 'Смена закрыта'],
+  'cash.shiftLoadFailed': ['Smena holatini yuklab bo‘lmadi.', 'Не удалось загрузить состояние смены.'],
   'cash.openShiftHint': ['To‘lov qabul qilish uchun {link} sahifasida smenani oching.', 'Чтобы принимать оплату, откройте смену на странице «{link}».'],
   'cash.shiftOtherBranch': ['Smena boshqa filialda', 'Смена открыта в другом филиале'],
   'cash.shiftOtherBranchText': ['Smenangiz «{shiftBranch}» filialida. Bu hisob «{invoiceBranch}» filialiga tegishli.', 'Ваша смена — в филиале «{shiftBranch}». Этот счёт относится к филиалу «{invoiceBranch}».'],

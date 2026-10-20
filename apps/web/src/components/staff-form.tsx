@@ -7,7 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, cx, Field, Input, Modal, Select, useToast } from '@/components/ui';
+import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
 
 export type StaffRow = {
   membership_id: string; full_name: string; login: string | null; role: Role; title: string | null; status: 'active' | 'inactive';
@@ -127,7 +127,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
           {staff.login && <Button icon={<KeyRound className="h-4 w-4" />} onClick={() => setConfirm('reset')}>{t('admin.form.resetPassword')}</Button>}
           {canChangeStatus && <Button variant={staff.status === 'active' ? 'danger' : 'secondary'} icon={<Power className="h-4 w-4" />} onClick={() => setConfirm('status')}>{staff.status === 'active' ? t('admin.form.deactivate') : t('admin.form.activate')}</Button>}
         </div>}
-        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <ModalCancel />
         <Button variant="primary" loading={save.isPending} disabled={!isNew && !dirty} onClick={submit}>{isNew ? t('admin.form.addSubmit') : t('common.save')}</Button>
       </>}>
       <div className="space-y-4">

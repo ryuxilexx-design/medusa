@@ -1,7 +1,7 @@
 // Stores normalised camera events and derives what the clinic acts on: patient arrival suggestions and
 // after-hours security alerts. Shared by the camera push endpoint and the demo simulator.
 import { Q } from '../core/db';
-import { localDate, localTime, toMinutes, weekday } from '../core/clock';
+import { localDate, localTime, now, toMinutes, weekday } from '../core/clock';
 
 export type EventKind = 'face_match' | 'people_count' | 'intrusion' | 'line_crossing' | 'region_entrance' | 'region_exit' | 'tamper';
 export const SECURITY_KINDS: EventKind[] = ['intrusion', 'line_crossing', 'region_entrance', 'region_exit', 'tamper'];
@@ -50,6 +50,10 @@ export type IngestResult = { stored: boolean; ignored?: string; event_id?: strin
  */
 export async function ingestEvent(q: Q, cam: Camera, e: NormalizedEvent): Promise<IngestResult> {
   const has = (p: string) => cam.purposes.includes(p);
+  // a camera clock a day ahead or more than a year behind is wrong: such an event would land on the wrong day forever.
+  // A sanity bound, not a business time: checked against both the demo clock and the real clock (a demo's clock lags).
+  const t = e.occurredAt.getTime(), demo = now().getTime(), real = Date.now();
+  if (Number.isNaN(t) || t > Math.max(demo, real) + 24 * 3600_000 || t < Math.min(demo, real) - 366 * 24 * 3600_000) return { stored: false, ignored: 'bad_time' };
   let faceCodeId: string | null = null, subject: 'staff' | 'patient' | null = null, patientId: string | null = null;
   if (e.kind === 'face_match') {
     if (!has('attendance') && !has('patient_arrival')) return { stored: false, ignored: 'purpose' };

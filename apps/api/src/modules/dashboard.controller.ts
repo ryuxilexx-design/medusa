@@ -76,7 +76,8 @@ export class DashboardController {
         GROUP BY i.id HAVING i.opening_qty + coalesce(sum(CASE WHEN m.type = 'in' THEN m.quantity ELSE -m.quantity END),0) < i.minimum_qty ORDER BY i.name`, [ctx.tenantId, branches]);
     const cancelledWithPayments = (await this.db.one(
       `SELECT count(DISTINCT a.id)::int AS n FROM appointments a JOIN invoices i ON i.appointment_id = a.id
-        WHERE a.tenant_id = $1 AND a.branch_id = ANY($2) AND a.status = 'cancelled' AND i.status <> 'void' AND (i.paid_amount > 0 OR i.status = 'unpaid')`, [ctx.tenantId, branches]))!.n;
+        WHERE a.tenant_id = $1 AND a.branch_id = ANY($2) AND a.status = 'cancelled' AND i.status <> 'void' AND (i.paid_amount > 0 OR i.status = 'unpaid')
+          AND a.starts_at >= (SELECT demo_now()) - interval '90 days'`, [ctx.tenantId, branches]))!.n; // recent ones: older ones were dealt with
     const cams = (await cameraAttention(this.db, ctx.tenantId, branches))!;
     return {
       data: {

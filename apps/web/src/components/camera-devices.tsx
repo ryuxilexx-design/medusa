@@ -7,7 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, Select, Table, Td, Th, useToast } from './ui';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, useToast } from './ui';
 
 export type Camera = {
   id: string; branch_id: string; branch_name: string; name: string; location: string | null; model: string | null;
@@ -85,7 +85,7 @@ function GiveCodeModal({ row, onClose }: { row: StaffCode | null; onClose: () =>
   const submit = () => { setError(null); if (!confirmed) { setError(t('cam.codes.consentRequired')); return; } m.mutate(); };
   return (
     <Modal open={!!row} onClose={onClose} title={row ? t('cam.codes.giveTitle', { name: row.full_name }) : ''} dirty={confirmed && !m.isSuccess}
-      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" icon={<KeyRound className={ic} />} loading={m.isPending} onClick={submit}>{t('cam.codes.give')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="primary" icon={<KeyRound className={ic} />} loading={m.isPending} onClick={submit}>{t('cam.codes.give')}</Button></>}>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>
         <label className="flex min-h-11 cursor-pointer items-start gap-3 text-[0.9375rem] text-slate-900">
           <input type="checkbox" data-autofocus className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" checked={confirmed} aria-invalid={!!error && !confirmed || undefined}
@@ -109,7 +109,7 @@ function RevokeCodeModal({ row, onClose }: { row: StaffCode | null; onClose: () 
   useEffect(() => { if (row) m.reset(); }, [row]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Modal open={!!row} onClose={onClose} title={t('cam.codes.revokeTitle')}
-      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="danger" icon={<CircleSlash className={ic} />} loading={m.isPending} onClick={() => m.mutate()}>{t('cam.codes.revoke')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="danger" icon={<CircleSlash className={ic} />} loading={m.isPending} onClick={() => m.mutate()}>{t('cam.codes.revoke')}</Button></>}>
       <div className="space-y-3">
         <p className="text-[0.9375rem] text-slate-900">{row && t('cam.codes.revokeText', { name: row.full_name, code: row.code })}</p>
         {m.isError && <Alert tone="red">{(m.error as Error).message}</Alert>}
@@ -232,7 +232,7 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
       ) : (
         <div className="flex w-full flex-wrap items-center gap-2">
           {camera && <Button icon={<RefreshCw className={ic} />} onClick={() => setRotating(true)}>{t('cam.form.rotate')}</Button>}
-          <div className="ml-auto flex gap-2"><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={save.isPending} onClick={submit}>{t('common.save')}</Button></div>
+          <div className="ml-auto flex gap-2"><ModalCancel /><Button variant="primary" loading={save.isPending} onClick={submit}>{t('common.save')}</Button></div>
         </div>
       )}>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>

@@ -5,7 +5,7 @@ import { Copy } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, weekdayName } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, cx, Input, Modal, Select, useToast } from '@/components/ui';
+import { Alert, Button, cx, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
 import { useT } from '@/lib/i18n';
 
 type Row = { on: boolean; branch_id: string; room_id: string; start: string; end: string; break_start: string; break_end: string };
@@ -108,7 +108,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
     <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-5xl" title={t('registrar.sched.title', { name: doctor.display_name })}
       footer={<>
         <Button className="mr-auto" size="sm" icon={<Copy className="h-4 w-4" />} onClick={copyMonday} disabled={!rows[1].on}>{t('registrar.sched.copyMonday')}</Button>
-        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <ModalCancel />
         {conflicts
           ? <Button variant="danger" loading={save.isPending} onClick={() => submit(true)}>{t('registrar.sched.saveAnyway')}</Button>
           : <Button variant="primary" loading={save.isPending} disabled={!dirty} onClick={() => submit(false)}>{t('common.save')}</Button>}

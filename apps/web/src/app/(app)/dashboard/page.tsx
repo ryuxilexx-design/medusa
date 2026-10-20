@@ -122,8 +122,9 @@ function Attention({ a }: { a: any }) {
             <Link href={it.href} title={it.value} className="flex h-full items-start gap-3 rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 hover:border-amber-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
               <span className="mt-0.5 shrink-0 [&>svg]:h-5 [&>svg]:w-5">{it.icon}</span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[0.9375rem] font-semibold text-slate-900 md:truncate">{it.label}</span>
-                <span className="line-clamp-2 text-[0.8125rem] text-slate-600 md:line-clamp-1">{it.value}</span>
+                {/* titles wrap instead of being cut: Russian and Cyrillic labels are longer */}
+                <span className="block text-[0.9375rem] font-semibold leading-snug text-slate-900">{it.label}</span>
+                <span className="mt-0.5 line-clamp-2 text-[0.8125rem] text-slate-600">{it.value}</span>
               </span>
               <ChevronRight className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
             </Link>

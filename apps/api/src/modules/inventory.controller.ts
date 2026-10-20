@@ -43,8 +43,10 @@ export class InventoryController {
     if (!isUuid(id)) throw notFound('Material');
     if (input.date && input.date > today()) throw invalid({ date: 'Kelajak sanasi mumkin emas' });
     return this.db.tx(async (c) => {
-      const item = (await c.query(`SELECT i.*, ${QTY} AS qty FROM inventory_items i WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3) FOR UPDATE`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
-      if (!item) throw notFound('Material');
+      // lock first, then count: a quantity computed inside the locking SELECT would come from the snapshot before the wait
+      const locked = (await c.query(`SELECT i.id FROM inventory_items i WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3) FOR UPDATE`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
+      if (!locked) throw notFound('Material');
+      const item = (await c.query(`SELECT i.*, ${QTY} AS qty FROM inventory_items i WHERE i.id = $1`, [id])).rows[0];
       if (input.type === 'out' && input.quantity > Number(item.qty)) throw invalid({ quantity: `Mavjud qoldiqdan (${item.qty} ${item.unit}) ko‘p chiqim qilib bo‘lmaydi` });
       const at = input.date && input.date !== today() ? localToUtc(input.date, '12:00') : now();
       await c.query(`INSERT INTO inventory_movements (id, tenant_id, item_id, type, quantity, reason, actor_name, occurred_at) VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7)`,

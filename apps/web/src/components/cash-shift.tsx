@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowUpRight, Banknote, CreditCard, DoorClosed, DoorOpen, Printer, ReceiptText, Wallet } from 'lucide-react';
+import { ArrowUpRight, Banknote, CreditCard, DoorClosed, DoorOpen, Printer, ReceiptText, RefreshCw, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Field, Input, LinkButton, Modal, Money, Select, StatCard, Textarea, useToast } from '@/components/ui';
+import { Alert, Button, Field, Input, LinkButton, Modal, ModalCancel, Money, Select, StatCard, Textarea, useToast } from '@/components/ui';
 import { MoneyInput } from '@/components/money-input';
 
 export type Shift = {
@@ -19,6 +19,20 @@ export type Shift = {
 /** The signed-in cashier's open shift (null when the drawer is closed). */
 export function useCurrentShift(enabled = true) {
   return useQuery({ queryKey: ['cash-shift', 'current'], queryFn: () => api<{ data: Shift | null }>('/cash-shifts/current').then((r) => r.data), enabled, refetchInterval: 30_000 });
+}
+
+/**
+ * The shift request failed and nothing is known (no cached answer): say so and offer «Retry». Never treat it as
+ * «shift closed» — that would invite the cashier to open a second shift.
+ */
+export function ShiftLoadError({ q }: { q: { error: unknown; refetch: () => unknown; isFetching: boolean } }) {
+  const t = useT();
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-900" role="alert" data-testid="shift-load-error">
+      <span className="min-w-[12rem] flex-1"><b className="font-semibold">{t('cash.shiftLoadFailed')}</b> {(q.error as Error)?.message}</span>
+      <Button size="sm" icon={<RefreshCw className="h-4 w-4" />} loading={q.isFetching} onClick={() => q.refetch()}>{t('common.retry')}</Button>
+    </div>
+  );
 }
 
 type T = ReturnType<typeof useT>;
@@ -43,6 +57,7 @@ export function useShiftUi(enabled: boolean) {
   const [modal, setModal] = useState<'open' | 'close' | 'expense' | null>(null);
   const s = shift.data;
   if (!enabled || shift.isLoading) return { subtitle: null, actions: null, body: null };
+  if (shift.isError && s === undefined) return { subtitle: null, actions: null, body: <div className="mb-5"><ShiftLoadError q={shift} /></div> };
   const tot = s?.totals;
   return {
     subtitle: s ? <span className="inline-flex items-center gap-2"><DoorOpen className="h-5 w-5 shrink-0 text-emerald-700" /><span><b className="font-semibold text-slate-900">{t('cash.shiftOpenTitle', { n: s.number, branch: s.branch_name })}</b>, {t('cash.shiftSinceShort', { time: fmtTime(s.opened_at) })}</span></span> : null,
@@ -86,7 +101,7 @@ function OpenShiftModal({ onClose }: { onClose: () => void }) {
     onError: (e) => setErr((e as Error).message),
   });
   return (
-    <Modal open onClose={onClose} title={t('cash.openShift')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={tiyin == null || !branch} onClick={() => m.mutate()}>{t('cash.open')}</Button></>}>
+    <Modal open onClose={onClose} title={t('cash.openShift')} footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} disabled={tiyin == null || !branch} onClick={() => m.mutate()}>{t('cash.open')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
         {me.branches.length > 1 && <Field label={t('cash.branch')} required>{(id) => <Select id={id} value={branch} onChange={(e) => setBranch(e.target.value)}>{me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>}</Field>}
@@ -123,7 +138,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
   const tot = shift.totals;
   const ready = tiyin != null && (diff === 0 || !!note.trim());
   return (
-    <Modal open onClose={onClose} dirty={!!counted} title={t('cash.closeShiftTitle', { n: shift.number })} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.closeShift')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!counted} title={t('cash.closeShiftTitle', { n: shift.number })} footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.closeShift')}</Button></>}>
       <div className="space-y-3 text-sm">
         {err && <Alert tone="red">{err}</Alert>}
         <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-lg border border-slate-200 p-4">
@@ -165,7 +180,7 @@ function CashExpenseModal({ shift, onClose }: { shift: Shift; onClose: () => voi
   });
   const ready = !!tiyin && !!note.trim();
   return (
-    <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.cashExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.write')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.cashExpense')} footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.write')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -20,6 +20,9 @@ export function useUnsavedGuard(isDirty: boolean) {
   }, [isDirty, id]);
 }
 
+/** True while some screen holds unsaved input. */
+export function hasUnsaved() { return dirty.size > 0; }
+
 /** Runs `go` immediately, or after the user confirms leaving unsaved changes. */
 export function confirmLeave(go: () => void) {
   if (!dirty.size || !ask) return go();

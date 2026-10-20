@@ -14,7 +14,7 @@ import { IntakePanel } from '@/components/intake-panel';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { NewsCard } from '@/components/news-card';
 import { DocumentsCard } from '@/components/documents-card';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
 
@@ -117,7 +117,7 @@ function Workspace({ appt }: { appt: any }) {
         </div>
         {appt.status === 'arrived' && <Button variant="primary" className="shrink-0 self-start sm:self-center" icon={<PlayCircle className="h-5 w-5" />} loading={start.isPending} onClick={() => start.mutate()}>{t('doctor.start')}</Button>}
       </div>
-      {patient.data && (
+      {patient.data && allergy && (
         // a known allergy is the one thing that must never be missed: full-width red band
         <div role={allergy === 'known' ? 'alert' : undefined} className={cx('flex flex-wrap items-start gap-x-2 gap-y-1 px-5 py-2.5 text-[0.9375rem]',
           allergy === 'known' ? 'bg-red-700 font-bold text-white' : allergy === 'denied' ? 'border-t border-slate-100 bg-slate-50 text-slate-800' : 'border-t border-amber-200 bg-amber-50 font-medium text-amber-900')}>
@@ -164,8 +164,13 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enc.data]);
+  // Two tabs on one note: the other tab saved first, so ours is rejected (409 STALE_STATE). `conflict` holds our text
+  // until the doctor opens the newer version; then it moves to `mine`, shown beside the form to copy or put back.
+  const [conflict, setConflict] = useState<NoteForm | null>(null);
+  const [mine, setMine] = useState<NoteForm | null>(null);
+  const [loadingServer, setLoadingServer] = useState(false);
   const dirty = dirtyOf(form, base);
-  useUnsavedGuard(dirty);
+  useUnsavedGuard(dirty || !!conflict || !!mine);
   const lastAttempt = useRef<NoteForm | null>(null); // text of the most recent save whose outcome is unknown/failed
   const fieldRefs = useRef<Partial<Record<TextKey, HTMLTextAreaElement | null>>>({});
 
@@ -188,8 +193,20 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
       }
     },
     onSuccess: ({ r, snapshot }: any) => { setVersion(r.data.version); setSavedAt(r.data.saved_at); setBase(snapshot); lastAttempt.current = null; setSaveError(null); setErrors({}); toast.success(t('note.savedToast', { time: fmtTime(r.data.saved_at) })); },
-    onError: (e) => { setSaveError(t('note.saveFailed', { msg: (e as Error).message })); if (e instanceof ApiError && e.fields) setErrors(mapFields(e.fields)); },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === 'STALE_STATE') { setConflict(form); setSaveError(null); return; }
+      setSaveError(t('note.saveFailed', { msg: (e as Error).message })); if (e instanceof ApiError && e.fields) setErrors(mapFields(e.fields));
+    },
   });
+  /** Loads the version saved in the other tab into the form; the doctor's own text stays beside it («Mening matnim»). */
+  async function openServerVersion() {
+    setLoadingServer(true);
+    const fresh = await enc.refetch();
+    setLoadingServer(false);
+    if (!fresh.data) { toast.error(fresh.error ?? t('state.loadFailed')); return; }
+    const n = fresh.data.note, f = toForm(n);
+    setMine(conflict); setConflict(null); setForm(f); setBase(f); setVersion(n.version); setSavedAt(n.saved_at); setErrors({}); lastAttempt.current = null;
+  }
   const sign = useMutation({
     mutationFn: () => api(`/encounters/${encounterId}/sign`, { method: 'POST', body: toBody(form!, version) }),
     onSuccess: () => {
@@ -199,6 +216,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     },
     onError: async (e) => {
       setConfirmSign(false);
+      if (e instanceof ApiError && e.code === 'STALE_STATE') { setConflict(form); setSaveError(null); return; }
       // A sign whose response was lost: the retry hits IMMUTABLE. Reload and show the real (signed) state instead of a false error.
       if (e instanceof ApiError && e.code === 'IMMUTABLE') {
         const fresh = await enc.refetch();
@@ -208,8 +226,9 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     },
   });
 
-  if (enc.isLoading || !form) return <Card><LoadingRows rows={8} /></Card>;
-  if (enc.isError) return <Card><ErrorState error={enc.error} onRetry={() => enc.refetch()} /></Card>;
+  // a failed first load shows the error and «Retry»; a failed background refetch keeps the form as it is
+  if (!enc.data) return <Card>{enc.isError ? <ErrorState error={enc.error} onRetry={() => enc.refetch()} /> : <LoadingRows rows={8} />}</Card>;
+  if (!form) return <Card><LoadingRows rows={8} /></Card>;
   const signed = enc.data.note.status === 'signed';
   const set = (k: TextKey) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => { setForm((f) => ({ ...f!, [k]: e.target.value })); setErrors((x) => ({ ...x, [k]: '' })); };
   function trySign() {
@@ -237,6 +256,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
 
   return (
     <div className="space-y-5">
+      {mine && <MyText mine={mine} server={form} canPutBack={!signed} onPutBack={() => { setForm(mine); setMine(null); }} onDismiss={() => setMine(null)} />}
       <Card padded={false} title={<span className="flex items-center gap-2 whitespace-nowrap">{t('note.title')} <NoteStatus status={enc.data.note.status} /></span>}
         actions={signed ? printLink : undefined}>
         {!signed && (
@@ -310,12 +330,18 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
       {!signed && (
         <div className="sticky bottom-0 z-10 space-y-2 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_-16px_rgba(26,34,51,0.4)] backdrop-blur">
           {saveError && <Alert tone="red">{saveError}</Alert>}
+          {conflict && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900" role="alert" data-testid="note-conflict">
+              <span className="min-w-[14rem] flex-1">{t('note.conflict')}</span>
+              <Button size="sm" variant="primary" loading={loadingServer} onClick={openServerVersion}>{t('note.conflictLoad')}</Button>
+            </div>
+          )}
           {missingToSign && <Alert tone="red">{t('note.requiredToSign')}</Alert>}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <span className={cx('w-full text-[0.8125rem] sm:w-auto sm:flex-1 sm:whitespace-nowrap', dirty ? 'font-semibold text-amber-800' : 'text-slate-600')}>{dirty ? t('note.dirty') : savedAt ? t('note.savedAt', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>
             <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto">
-              <Button className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" loading={saveDraft.isPending} disabled={!dirty} onClick={() => saveDraft.mutate()}>{t('note.saveDraft')}</Button>
-              <Button variant="primary" className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" loading={sign.isPending} onClick={trySign}>{t('note.sign')}</Button>
+              <Button className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" loading={saveDraft.isPending} disabled={!dirty || !!conflict} onClick={() => saveDraft.mutate()}>{t('note.saveDraft')}</Button>
+              <Button variant="primary" className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" loading={sign.isPending} disabled={!!conflict} onClick={trySign}>{t('note.sign')}</Button>
             </div>
           </div>
         </div>
@@ -342,6 +368,41 @@ function sameNote(a: NoteForm, b: NoteForm) {
 }
 function dirtyOf(a: NoteForm | null, b: NoteForm | null) { return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
 function mapFields(f: Record<string, string>) { const o: Record<string, string> = {}; for (const [k, v] of Object.entries(f)) o[k.replace('vitals.', '')] = v; return o; }
+
+/** After a two-tab conflict: the doctor's unsaved text beside the newer version, each differing part with «Copy». */
+function MyText({ mine, server, canPutBack, onPutBack, onDismiss }: { mine: NoteForm; server: NoteForm; canPutBack: boolean; onPutBack: () => void; onDismiss: () => void }) {
+  const t = useT();
+  const toast = useToast();
+  const vit = (f: NoteForm) => [f.bp_sys && f.bp_dia ? t('note.vitalsBp', { sys: f.bp_sys, dia: f.bp_dia }) : '', f.pulse ? t('note.vitalsPulse', { n: f.pulse }) : '', f.temp ? t('note.vitalsTemp', { n: f.temp }) : ''].filter(Boolean).join(', ');
+  const icd = (f: NoteForm) => f.icd10.map((x) => `${x.code} — ${x.title}`).join('\n');
+  const parts: { label: string; text: string; other: string }[] = [
+    { label: t('note.vitals'), text: vit(mine), other: vit(server) },
+    ...FIELDS.map((f) => ({ label: t(f.label), text: mine[f.key], other: server[f.key] })),
+    { label: t('icd.label'), text: icd(mine), other: icd(server) },
+    { label: t('note.followUpShort'), text: mine.follow_up_date ? fmtDate(mine.follow_up_date) : '', other: server.follow_up_date ? fmtDate(server.follow_up_date) : '' },
+  ].filter((x) => x.text.trim() && x.text.trim() !== x.other.trim());
+  const copy = (text: string) => navigator.clipboard?.writeText(text).then(() => toast.success(t('note.mineCopied')), () => toast.error(t('note.mineCopyFailed')));
+  return (
+    <section className="rounded-xl border-2 border-amber-300 bg-amber-50/60" data-testid="note-mine">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-amber-200 px-5 py-2.5">
+        <h2 className="text-base font-bold text-slate-900">{t('note.mineTitle')}</h2>
+        <div className="flex flex-wrap gap-2">
+          {canPutBack && parts.length > 0 && <Button size="sm" onClick={onPutBack}>{t('note.mineUse')}</Button>}
+          <Button size="sm" variant="ghost" onClick={onDismiss}>{t('common.close')}</Button>
+        </div>
+      </header>
+      <div className="space-y-3 px-5 py-4">
+        <p className="text-sm text-slate-700">{parts.length ? t('note.mineText') : t('note.mineSame')}</p>
+        {parts.map((p) => (
+          <div key={p.label} className="rounded-lg border border-amber-200 bg-white px-3.5 py-2.5">
+            <div className="flex items-center justify-between gap-3"><span className="text-[0.8125rem] font-semibold text-slate-600">{p.label}</span><Button size="sm" variant="ghost" onClick={() => copy(p.text)}>{t('note.mineCopy')}</Button></div>
+            <div className="mt-1 select-text whitespace-pre-wrap text-[0.9375rem] text-slate-900">{p.text}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 /** The note as text (preview and the read-only view of a signed note): no input boxes, nothing to edit. */
 function NoteRows({ form }: { form: NoteForm }) {
@@ -380,8 +441,8 @@ function AiModal({ open, onClose, onApply, encounterId }: { open: boolean; onClo
   const NOT_ENTERED = 'Kiritilmagan';
   return (
     <Modal open={open} onClose={onClose} width="max-w-5xl" dirty={!!text && !d} title={<span className="flex flex-wrap items-center gap-2"><Sparkles className="h-5 w-5 shrink-0 text-brand-600" />{t('ai.title')} {status.data?.mode === 'sample' && <Badge tone="yellow">{t('ai.sampleMode')}</Badge>}{status.data?.mode === 'live' && <Badge tone="teal">{t('ai.live')}</Badge>}</span>}
-      footer={d ? <><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" onClick={() => { onApply(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v === NOT_ENTERED ? '' : v])) as Partial<NoteForm>); onClose(); }}>{t('ai.apply')}</Button></>
-        : <><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={run.isPending} disabled={text.trim().length < 10} onClick={() => run.mutate()}>{t('ai.run')}</Button></>}>
+      footer={d ? <><ModalCancel /><Button variant="primary" onClick={() => { onApply(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v === NOT_ENTERED ? '' : v])) as Partial<NoteForm>); onClose(); }}>{t('ai.apply')}</Button></>
+        : <><ModalCancel /><Button variant="primary" loading={run.isPending} disabled={text.trim().length < 10} onClick={() => run.mutate()}>{t('ai.run')}</Button></>}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2"><label htmlFor="ai-source" className="text-sm font-semibold text-slate-800">{t('ai.source')}</label>
@@ -422,7 +483,7 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
   const total = (services.data ?? []).filter((s) => sel.includes(s.id)).reduce((a, s) => a + s.price, 0);
   return (
     <Modal open={open} onClose={onClose} width="max-w-3xl" dirty={sel.length > 0} title={t('orders.modalTitle')}
-      footer={<><span className="mr-auto text-sm text-slate-700">{t('orders.selected', { n: sel.length, sum: formatSom(total) })}</span><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" disabled={!sel.length} loading={m.isPending} onClick={() => m.mutate()}>{t('orders.submit')}</Button></>}>
+      footer={<><span className="mr-auto text-sm text-slate-700">{t('orders.selected', { n: sel.length, sum: formatSom(total) })}</span><ModalCancel /><Button variant="primary" disabled={!sel.length} loading={m.isPending} onClick={() => m.mutate()}>{t('orders.submit')}</Button></>}>
       {services.isLoading ? <LoadingRows /> : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {groups.map((g) => (

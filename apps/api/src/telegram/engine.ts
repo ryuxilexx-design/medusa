@@ -1,3 +1,4 @@
+import { isUuid } from '../core/validate';
 // Patient conversation engine. Transport-agnostic: the same code serves the real Telegram bot and the simulator.
 // Every update runs in one transaction with the chat row locked (updates of one chat are serialised), is
 // de-duplicated by update_id, and only after COMMIT are the replies sent.
@@ -300,7 +301,7 @@ export class BotEngine {
   }
 
   private async ownAppointment(t: Turn, id: string | undefined) {
-    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) return null;
+    if (!id || !isUuid(id)) return null;
     return (await t.c.query(
       `SELECT a.* FROM appointments a JOIN patients p ON p.id = a.patient_id
         WHERE a.id = $1 AND a.tenant_id = $2 AND p.phone = $3`, [id, t.chat.tenant_id, t.chat.phone])).rows[0] ?? null;

@@ -31,7 +31,7 @@ export class ReferenceController {
     let where = 'd.tenant_id = $1 AND d.active';
     if (isUuid(q.service_id)) { params.push(q.service_id); where += ` AND EXISTS (SELECT 1 FROM doctor_services ds WHERE ds.doctor_id = d.id AND ds.service_id = $${params.length})`; }
     const rows = await this.db.rows(
-      `SELECT d.id, d.display_name, d.specialty, d.default_share_percent,
+      `SELECT d.id, d.display_name, d.specialty, ${ctx.role === 'manager' ? 'd.default_share_percent' : 'NULL::numeric AS default_share_percent'},
               (SELECT json_agg(json_build_object('weekday', s.weekday, 'branch_id', s.branch_id, 'start', to_char(s.start_time,'HH24:MI'), 'end', to_char(s.end_time,'HH24:MI'),
                        'break_start', to_char(s.break_start,'HH24:MI'), 'break_end', to_char(s.break_end,'HH24:MI'), 'room', r.name) ORDER BY s.weekday)
                  FROM schedules s LEFT JOIN rooms r ON r.id = s.room_id WHERE s.doctor_id = d.id) AS schedule,
@@ -47,7 +47,7 @@ export class ReferenceController {
     if (q.category) { params.push(String(q.category)); where += ` AND s.category = $${params.length}`; }
     if (q.active !== 'all') where += ' AND s.active';
     const rows = await this.db.rows(
-      `SELECT s.id, s.code, s.name, s.category, s.duration_min, s.share_percent, s.active, s.lab_template,
+      `SELECT s.id, s.code, s.name, s.category, s.duration_min, ${ctx.role === 'manager' ? 's.share_percent' : 'NULL::numeric AS share_percent'}, s.active, s.lab_template,
               ${PRICE_SQL.replace('$BRANCH', 'NULL')} AS price,
               EXISTS (SELECT 1 FROM service_orders o WHERE o.service_id = s.id) AS used
          FROM services s WHERE ${where} ORDER BY s.code`, params);
@@ -102,7 +102,12 @@ export class ReferenceController {
     if (!isUuid(q.doctor_id) || !isDate(q.date)) throw invalid({ doctor_id: 'Shifokor va sanani tanlang' });
     const doctor = await this.db.one(`SELECT id FROM doctors WHERE id = $1 AND tenant_id = $2`, [q.doctor_id, ctx.tenantId]);
     if (!doctor) throw notFound('Shifokor');
-    let duration = Number(q.duration_min) || 30;
+    let duration = 30;
+    if (q.duration_min !== undefined && q.duration_min !== '') {
+      const d = Number(q.duration_min);
+      if (!Number.isInteger(d) || d < 5 || d > 480) throw invalid({ duration_min: 'Davomiylik 5–480 daqiqa bo‘lsin' });
+      duration = d;
+    }
     if (isUuid(q.service_id)) {
       const s = await this.db.one(`SELECT duration_min FROM services WHERE id = $1 AND tenant_id = $2`, [q.service_id, ctx.tenantId]);
       if (s && !q.duration_min) duration = s.duration_min;

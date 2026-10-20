@@ -21,7 +21,9 @@ export class ErrorFilter implements ExceptionFilter {
     const req = host.switchToHttp().getRequest<Request & { requestId?: string; ctx?: { locale?: Locale } }>();
     const request_id = req.requestId;
     let status = 500, code = 'INTERNAL', message = 'Kutilmagan xatolik. Qayta urinib ko‘ring.', fields: Record<string, string> | undefined, extra: any;
-    if (err instanceof AppError) {
+    if (err?.type === 'entity.too.large' || err?.status === 413) {
+      status = 413; code = 'TOO_LARGE'; message = 'So‘rov juda katta';
+    } else if (err instanceof AppError) {
       ({ status, code, message, fields, extra } = err);
     } else if (err instanceof HttpException) {
       status = err.getStatus();
@@ -35,7 +37,8 @@ export class ErrorFilter implements ExceptionFilter {
       status = 409; code = 'DUPLICATE'; message = 'Bu yozuv allaqachon mavjud.';
     } else if (err?.code === 'P0001') {
       status = 409; code = 'IMMUTABLE'; message = 'Tasdiqlangan yozuvni o‘zgartirib bo‘lmaydi.';
-    } else if (err?.code === '22P02' || err?.code === '22007' || err?.code === '22008') {
+    } else if (['22P02', '22007', '22008', '22001', '22003', '22021', '22P05', '23514', '2201W', '2201X'].includes(err?.code)) {
+      // invalid text representation, bad/overflowing date, too long, numeric overflow, NUL byte, CHECK violation, bad LIMIT/OFFSET
       status = 422; code = 'VALIDATION'; message = 'Noto‘g‘ri qiymat yuborildi.';
     }
     // a camera's push address carries its secret token: never write it to the log

@@ -139,7 +139,8 @@ export class InvoicesController {
     return this.db.tx(async (c) => {
       const inv = await lockInvoice(c, ctx, id);
       if (inv.status === 'void') return { data: { ok: true, already: true } };
-      if (Number(inv.paid_amount) > 0) throw conflict('INVOICE_HAS_PAYMENTS', 'To‘lov qayd etilgan hisobni bekor qilib bo‘lmaydi');
+      if (Number(inv.paid_amount) > 0 || (await c.query(`SELECT 1 FROM payments WHERE invoice_id = $1 LIMIT 1`, [id])).rowCount)
+        throw conflict('INVOICE_HAS_PAYMENTS', 'To‘lov qayd etilgan hisobni bekor qilib bo‘lmaydi');
       await c.query(`UPDATE invoices SET status = 'void', void_reason = $2, version = version + 1, updated_at = demo_now() WHERE id = $1`, [id, reason]);
       await audit(c, ctx, 'invoice.void', 'invoice', id, `Hisob bekor qilindi: ${reason}`, inv.branch_id);
       return { data: { ok: true } };
@@ -179,6 +180,9 @@ export class PaymentsController {
   /** CSV export of the filtered register. Cells starting with = + - @ are neutralised against formula injection. */
   @Roles('manager', 'cashier') @Get('export.csv')
   async csv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
+    // a bounded period: one export is built in memory, so «all time» would stall the server for everyone
+    if (!isDate(q.from) || !isDate(q.to)) throw invalid({ from: 'Davrni tanlang' });
+    if (q.from > q.to || addDays(q.from, 366) < q.to) throw invalid({ from: 'Eksport davri 1 yildan oshmasin' });
     const { params, where } = this.filters(ctx, q);
     const rows = await this.db.rows(
       `SELECT pm.receipt_number, pm.paid_at, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, i.invoice_number, pm.method, pm.amount, pm.cashier_name, pm.note

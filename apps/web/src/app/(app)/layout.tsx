@@ -1,40 +1,45 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Banknote, Boxes, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
+  BarChart3, Banknote, Boxes, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, Newspaper, ScanLine, Search, Settings,
   Stethoscope, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
-import { SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
+import { meReconnecting, SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
 import { fmtTime, localDate, longDate } from '@/lib/format';
 import { useI18n, useT } from '@/lib/i18n';
 import { Button, cx, Modal, Select } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
 import { LanguagePicker } from '@/components/prefs';
-import { confirmLeave, NavigationGuard } from '@/lib/unsaved';
+import { confirmLeave, hasUnsaved, NavigationGuard } from '@/lib/unsaved';
+import { canOpen, SECTION_ROLES, type Section } from '@/lib/routes';
+import { handPatientSearch } from '@/lib/patient-search';
+import { NoAccess } from '@/components/no-access';
 import { BrandLockup } from '@/components/logo';
 
-type Item = { href: string; label: MessageKey; icon: React.ElementType; roles: Role[]; group: 'work' | 'manage' };
-// Menu order follows the TZ; each role only sees what it can use. The server enforces the same rules.
-// Daily work first, management below (shown as two labelled groups when a role has many sections).
+type Item = { href: Section; label: MessageKey; icon: React.ElementType; roles: readonly Role[]; group: 'work' | 'manage' };
+const entry = (href: Section, label: MessageKey, icon: React.ElementType, group: Item['group']): Item => ({ href, label, icon, roles: SECTION_ROLES[href], group });
+// Menu order follows the TZ; each role only sees what it can use (role lists in lib/routes.ts, also the route guard).
+// The server enforces the same rules. Daily work first, management below (two labelled groups when a role has many sections).
 const MENU: Item[] = [
-  { href: '/dashboard', label: 'nav.dashboard', icon: Gauge, roles: ['manager'], group: 'work' },
-  { href: '/patients', label: 'nav.patients', icon: Users, roles: ['manager', 'registrar', 'doctor', 'cashier'], group: 'work' },
-  { href: '/schedule', label: 'nav.schedule', icon: CalendarDays, roles: ['manager', 'registrar', 'doctor'], group: 'work' },
-  { href: '/queue', label: 'nav.queue', icon: ListOrdered, roles: ['manager', 'registrar', 'doctor', 'cashier'], group: 'work' },
-  { href: '/doctor', label: 'nav.doctor', icon: Stethoscope, roles: ['doctor'], group: 'work' },
-  { href: '/lab', label: 'nav.lab', icon: FlaskConical, roles: ['lab', 'manager', 'registrar'], group: 'work' },
-  { href: '/diagnostics', label: 'nav.diagnostics', icon: ScanLine, roles: ['doctor'], group: 'work' },
-  { href: '/cashier', label: 'nav.cashier', icon: Wallet, roles: ['cashier', 'manager', 'registrar'], group: 'work' },
-  { href: '/finance', label: 'nav.finance', icon: Banknote, roles: ['manager', 'cashier'], group: 'manage' },
-  { href: '/staff', label: 'nav.staff', icon: UsersRound, roles: ['manager'], group: 'manage' },
-  { href: '/inventory', label: 'nav.inventory', icon: Boxes, roles: ['manager'], group: 'manage' },
-  { href: '/cameras', label: 'nav.cameras', icon: Cctv, roles: ['manager'], group: 'manage' },
-  { href: '/reports', label: 'nav.reports', icon: BarChart3, roles: ['manager', 'doctor'], group: 'manage' },
-  { href: '/settings', label: 'nav.settings', icon: Settings, roles: ['manager'], group: 'manage' },
+  entry('/dashboard', 'nav.dashboard', Gauge, 'work'),
+  entry('/patients', 'nav.patients', Users, 'work'),
+  entry('/schedule', 'nav.schedule', CalendarDays, 'work'),
+  entry('/queue', 'nav.queue', ListOrdered, 'work'),
+  entry('/doctor', 'nav.doctor', Stethoscope, 'work'),
+  entry('/lab', 'nav.lab', FlaskConical, 'work'),
+  entry('/diagnostics', 'nav.diagnostics', ScanLine, 'work'),
+  entry('/news', 'nav.news', Newspaper, 'work'),
+  entry('/cashier', 'nav.cashier', Wallet, 'work'),
+  entry('/finance', 'nav.finance', Banknote, 'manage'),
+  entry('/staff', 'nav.staff', UsersRound, 'manage'),
+  entry('/inventory', 'nav.inventory', Boxes, 'manage'),
+  entry('/cameras', 'nav.cameras', Cctv, 'manage'),
+  entry('/reports', 'nav.reports', BarChart3, 'manage'),
+  entry('/settings', 'nav.settings', Settings, 'manage'),
 ];
 const LABEL_OVERRIDE: Partial<Record<Role, Record<string, MessageKey>>> = {
   cashier: { '/finance': 'nav.myPayments' },
@@ -46,22 +51,44 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient();
   const me = useMeQuery();
   const { sync, t } = useI18n();
+  // Only a real 401 (the session is gone) leads to the sign-in page. With unsaved input on screen the person first
+  // gets the chance to copy it: saving cannot work any more, but the text must not vanish without a word.
+  // 'ask' = dialog open; 'stay' = the person chose to copy their text first (a banner keeps the way to sign in)
+  const [sessionLost, setSessionLost] = useState<'no' | 'ask' | 'stay'>('no');
+  const toLogin = useCallback(() => { setSessionLost('no'); qc.clear(); router.replace('/login'); }, [qc, router]);
   useEffect(() => {
-    const onUnauth = () => { qc.clear(); router.replace('/login'); };
+    const onUnauth = () => { if (hasUnsaved()) setSessionLost((s) => (s === 'no' ? 'ask' : s)); else toLogin(); };
     window.addEventListener('meduza:unauthorized', onUnauth);
     return () => window.removeEventListener('meduza:unauthorized', onUnauth);
-  }, [qc, router]);
+  }, [toLogin]);
   useEffect(() => {
     const onChange = () => qc.invalidateQueries({ queryKey: ['me'] });
     window.addEventListener('meduza:password-change', onChange);
     return () => window.removeEventListener('meduza:password-change', onChange);
   }, [qc]);
-  useEffect(() => { if (me.isError) router.replace('/login'); }, [me.isError, router]);
+  // A failed first load with a final answer (4xx) means there is no usable session. A failed background refetch never
+  // signs out: network errors and 5xx keep the cached session and retry (see useMeQuery), with a banner meanwhile.
+  const noSession = me.isError && !me.data;
+  useEffect(() => { if (noSession) router.replace('/login'); }, [noSession, router]);
+  const reconnecting = meReconnecting(me);
   // the person's saved language wins over whatever the browser had
   useEffect(() => { if (me.data) sync(me.data.locale); }, [me.data?.locale, sync]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-base text-slate-600"><title>Med.uz.ai</title><Loader2 className="h-5 w-5 animate-spin" /> {t('common.loading')}</div>;
+  if (!me.data) return (
+    <div className="flex h-screen flex-col items-center justify-center gap-3 px-4 text-center text-base text-slate-600"><title>Med.uz.ai</title>
+      <span className="flex items-center gap-2"><Loader2 className="h-5 w-5 animate-spin" /> {t('common.loading')}</span>
+      {reconnecting && <span role="status" className="text-sm text-amber-900">{t('net.reconnectingShort')}</span>}
+    </div>
+  );
   if (me.data.must_change_password) return <ForcedPasswordChange name={me.data.name} />;
-  return <SessionProvider me={me.data}><Shell>{children}</Shell></SessionProvider>;
+  return (
+    <SessionProvider me={me.data}>
+      <Shell reconnecting={reconnecting} sessionEnded={sessionLost === 'stay' ? toLogin : undefined}>{children}</Shell>
+      <Modal open={sessionLost === 'ask'} onClose={() => setSessionLost('stay')} title={t('session.lostTitle')}
+        footer={<><Button onClick={() => setSessionLost('stay')}>{t('session.lostStay')}</Button><Button variant="primary" data-autofocus onClick={toLogin}>{t('session.lostGo')}</Button></>}>
+        <p className="text-base text-slate-800">{t('session.lostText')}</p>
+      </Modal>
+    </SessionProvider>
+  );
 }
 
 /** First sign-in with a temporary password: nothing else opens until the person sets their own password. */
@@ -175,7 +202,7 @@ function UserMenu({ onPassword }: { onPassword: () => void }) {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, reconnecting, sessionEnded }: { children: React.ReactNode; reconnecting: boolean; sessionEnded?: () => void }) {
   const { me, branchId, setBranchId } = useSession();
   const t = useT();
   const pathname = usePathname();
@@ -184,6 +211,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
   const items = MENU.filter((m) => m.roles.includes(me.role));
+  const allowed = canOpen(me.role, pathname);
   // group headings only help when the list is long; a short menu stays one plain list
   const groups: { key: 'work' | 'manage'; items: Item[] }[] = items.length >= 7
     ? [{ key: 'work', items: items.filter((i) => i.group === 'work') }, { key: 'manage', items: items.filter((i) => i.group === 'manage') }]
@@ -204,7 +232,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   }, [navOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   function closeNav() { setNavOpen(false); burger.current?.focus(); }
   const search = (cls: string) => (
-    <form className={cls} role="search" onSubmit={(e) => { e.preventDefault(); router.push(`/patients?search=${encodeURIComponent(q.trim())}`); }}>
+    <form className={cls} role="search" onSubmit={(e) => {
+      e.preventDefault();
+      // the text is handed over in memory, never in the URL (a patient's name must not land in history or logs)
+      const term = q.trim();
+      confirmLeave(() => { handPatientSearch(term); if (pathname !== '/patients') router.push('/patients'); });
+    }}>
       <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('shell.search')} aria-label={t('shell.searchLabel')}
         className="h-11 w-full rounded-lg border-2 border-slate-300 bg-slate-50 pl-10 pr-2 text-[0.9375rem] placeholder:text-slate-500 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-amber-300" />
@@ -214,6 +247,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:pl-64">
       <title>{pageTitle}</title>
+      <a href="#main" className="sr-only z-[70] rounded-lg bg-white px-4 py-3 font-semibold text-brand-800 shadow-lg focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:outline-none focus:ring-4 focus:ring-amber-300">{t('shell.skipToContent')}</a>
       <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full')}>
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-100 pl-5 pr-2">
           <Link href="/" className="rounded-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('nav.home')}><BrandLockup /></Link>
@@ -256,7 +290,17 @@ function Shell({ children }: { children: React.ReactNode }) {
         {canSearch && search('relative hidden min-w-[10rem] max-w-[24rem] flex-1 sm:block')}
         <div className="ml-auto"><UserMenu onPassword={() => setPwOpen(true)} /></div>
       </header>
-      <main className="mx-auto w-full max-w-[1440px] px-4 py-6 lg:px-8">{children}</main>
+      {sessionEnded ? (
+        <div role="alert" className="sticky top-16 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-900 print:hidden">
+          {t('session.lostTitle')}
+          <Button size="sm" onClick={sessionEnded}>{t('session.lostGo')}</Button>
+        </div>
+      ) : reconnecting && (
+        <div role="status" className="sticky top-16 z-10 flex items-center justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 print:hidden">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />{t('net.reconnecting')}
+        </div>
+      )}
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1440px] px-4 py-6 focus:outline-none lg:px-8">{allowed ? children : <NoAccess role={me.role} />}</main>
       <Modal open={pwOpen} onClose={() => setPwOpen(false)} title={t('password.change')}>
         <PasswordForm submitLabel={t('common.save')} onDone={() => setPwOpen(false)} />
       </Modal>

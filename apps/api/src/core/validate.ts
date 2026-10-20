@@ -1,3 +1,4 @@
+import { isRealDate } from '@meduza/contracts';
 import { ZodSchema } from 'zod';
 import { invalid } from './errors';
 
@@ -13,9 +14,9 @@ export function parse<T>(schema: ZodSchema<T>, input: unknown): T {
 }
 
 export function pageParams(q: Record<string, any>) {
-  const page = Math.max(1, Number.parseInt(q.page, 10) || 1);
+  const page = Math.min(100_000, Math.max(1, Number.parseInt(q.page, 10) || 1));
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(q.page_size, 10) || 20));
   return { page, pageSize, offset: (page - 1) * pageSize };
 }
 export const isUuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
-export const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s));
+export const isDate = (s: unknown): s is string => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && isRealDate(s);

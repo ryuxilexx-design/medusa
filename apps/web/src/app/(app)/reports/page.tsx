@@ -41,7 +41,7 @@ function Reports() {
 
   return (
     <>
-      <PageHeader title={manager ? t('clinical.rep.title') : t('clinical.rep.myActivity')} subtitle={t('clinical.rep.subtitle')}
+      <PageHeader title={me.role === 'doctor' ? t('clinical.rep.myActivity') : t('clinical.rep.title')} subtitle={t('clinical.rep.subtitle')}
         actions={<DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />} />
       <div className="space-y-5">
         {(svc.isError || doc.isError) ? <Card><ErrorState error={svc.error ?? doc.error} onRetry={() => { svc.refetch(); doc.refetch(); }} /></Card> : (

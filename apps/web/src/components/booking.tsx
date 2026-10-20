@@ -6,7 +6,7 @@ import { api, ApiError, newIdempotencyKey, qs } from '@/lib/api';
 import { fmtDate, formatSom, fullName, localDate, fmtTime, pid, longDate } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
-import { Alert, Button, cx, Field, Input, Modal, Select, Skeleton, Textarea, useToast } from './ui';
+import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Select, Skeleton, Textarea, useToast } from './ui';
 import { PatientFormModal } from './patient-form';
 import { useT } from '@/lib/i18n';
 
@@ -100,7 +100,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   return (
     <>
       <Modal open={open && !newPatient} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-3xl" title={reschedule ? t('registrar.bk.rescheduleTitle') : t('registrar.book')}
-        footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={save.isPending} onClick={submit}>{reschedule ? t('registrar.bk.saveReschedule') : t('registrar.book')}</Button></>}>
+        footer={<><ModalCancel /><Button variant="primary" loading={save.isPending} onClick={submit}>{reschedule ? t('registrar.bk.saveReschedule') : t('registrar.book')}</Button></>}>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <div className="space-y-3 md:col-span-2">
             {formError && <Alert tone="red">{formError}</Alert>}
@@ -147,7 +147,9 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
               <span className="text-sm font-semibold text-slate-800">{t('registrar.bk.freeSlots')}<span className="text-red-700" aria-hidden="true"> *</span></span>
               <span className="text-[0.8125rem] text-slate-600">{longDate(date)}</span>
             </div>
-            {!doctorId ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.pickDoctorDate')}</p>
+            {/* the slot error shows in every state of this column, also before a doctor is picked */}
+            {errors.start_time && <p className="mb-2 text-sm font-medium text-red-700" role="alert" data-testid="slot-error">{errors.start_time}</p>}
+            {!doctorId ? <p className={cx('rounded-lg border-2 border-dashed p-6 text-center text-sm text-slate-600', errors.start_time ? 'border-red-300' : 'border-slate-200')}>{t('registrar.bk.pickDoctorDate')}</p>
               : avail.isLoading ? <div className="grid grid-cols-5 gap-1.5">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
               : avail.isError ? <Alert tone="red">{(avail.error as Error).message}</Alert>
               : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.doctorOff')}</p>
@@ -169,7 +171,6 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
                     })}
                   </div>
                   {!avail.data.slots.some((s: any) => s.free && !s.past) && <p className="mt-2 text-sm font-medium text-amber-800">{t('registrar.bk.noFreeLeft')}</p>}
-                  {errors.start_time && <p className="mt-2 text-sm font-medium text-red-700" role="alert">{errors.start_time}</p>}
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-slate-700" aria-hidden="true">
                     <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-slate-300 bg-white" />{t('registrar.bk.slotFree')}</span>
                     <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-brand-600 bg-brand-600" />{t('registrar.bk.slotChosen')}</span>

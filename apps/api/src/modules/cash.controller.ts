@@ -181,7 +181,8 @@ export class CashController {
       let shiftId: string | null = null;
       if (input.method === 'cash') {
         if (!input.shift_id) throw invalid({ shift_id: 'Naqd pul qaysi kassadan berilishini tanlang (ochiq smena)' });
-        const sh = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE id = $1 AND tenant_id = $2 AND status = 'open' FOR SHARE`, [input.shift_id, ctx.tenantId])).rows[0];
+        // cash leaving the drawer: an exclusive lock, so two outflows cannot both pass the «enough cash» check
+        const sh = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE id = $1 AND tenant_id = $2 AND status = 'open' FOR UPDATE`, [input.shift_id, ctx.tenantId])).rows[0];
         if (!sh) throw conflict('SHIFT_NOT_OPEN', 'Tanlangan smena yopilgan yoki topilmadi');
         if (sh.branch_id !== inv.branch_id) throw invalid({ shift_id: 'Smena boshqa filialda' });
         await assertCashAvailable(c, sh.id, input.amount);
@@ -226,7 +227,7 @@ export class CashController {
     return this.db.tx(async (c) => {
       let branchId = input.branch_id, shiftId: string | null = null, paidFrom = input.paid_from, occurredAt = input.occurred_on ? localToUtc(input.occurred_on, '12:00') : now();
       if (ctx.role === 'cashier') {
-        const sh = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' AND branch_id = ANY($3) FOR SHARE`, [ctx.tenantId, ctx.membershipId, ctx.branchIds])).rows[0];
+        const sh = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' AND branch_id = ANY($3) FOR UPDATE`, [ctx.tenantId, ctx.membershipId, ctx.branchIds])).rows[0];
         if (!sh) throw conflict('SHIFT_REQUIRED', 'Kassadan xarajat uchun avval smenani oching');
         await assertCashAvailable(c, sh.id, input.amount);
         branchId = sh.branch_id; shiftId = sh.id; paidFrom = 'cash_drawer'; occurredAt = now();
@@ -234,7 +235,8 @@ export class CashController {
         if (!branchId || !ctx.branchIds.includes(branchId)) throw invalid({ branch_id: 'Filialni tanlang' });
         if (paidFrom === 'cash_drawer') {
           if (!input.shift_id) throw invalid({ shift_id: 'Qaysi kassadan berilganini tanlang (ochiq smena)' });
-          const sh = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE id = $1 AND tenant_id = $2 AND status = 'open' FOR SHARE`, [input.shift_id, ctx.tenantId])).rows[0];
+          // cash leaving the drawer: an exclusive lock, so two outflows cannot both pass the «enough cash» check
+        const sh = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE id = $1 AND tenant_id = $2 AND status = 'open' FOR UPDATE`, [input.shift_id, ctx.tenantId])).rows[0];
           if (!sh) throw conflict('SHIFT_NOT_OPEN', 'Tanlangan smena yopilgan yoki topilmadi');
           if (sh.branch_id !== branchId) throw invalid({ shift_id: 'Smena boshqa filialda' });
           await assertCashAvailable(c, sh.id, input.amount);

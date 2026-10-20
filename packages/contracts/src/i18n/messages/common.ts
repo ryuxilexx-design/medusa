@@ -36,6 +36,11 @@ export const common = {
   'net.offline': ['Server bilan aloqa yo‘q. Ma’lumot saqlanmadi — internet yoki serverni tekshirib, qayta urinib ko‘ring.', 'Нет связи с сервером. Данные не сохранены — проверьте интернет или сервер и повторите.'],
   'net.serverError': ['Server xatosi. Qayta urinib ko‘ring.', 'Ошибка сервера. Повторите попытку.'],
   'net.failed': ['So‘rov bajarilmadi', 'Запрос не выполнен'],
+  'net.reconnecting': ['Aloqa uzildi, qayta ulanmoqda… Kiritgan ma’lumotlaringiz sahifada qoladi.', 'Связь прервалась, переподключаемся… Введённые данные остаются на странице.'],
+  'net.reconnectingShort': ['Server bilan aloqa yo‘q, qayta ulanmoqda…', 'Нет связи с сервером, переподключаемся…'],
+  'state.notForRole': ['Bu bo‘lim sizning rolingiz uchun emas', 'Этот раздел не для вашей роли'],
+  'state.notForRoleHint': ['Boshqa ruxsat kerak bo‘lsa, klinika rahbariga murojaat qiling.', 'Если нужен другой доступ, обратитесь к руководителю клиники.'],
+  'state.toHome': ['Bosh sahifaga o‘tish', 'Перейти на главную'],
 
   // dates
   'month.1': ['yanvar', 'января'], 'month.2': ['fevral', 'февраля'], 'month.3': ['mart', 'марта'], 'month.4': ['aprel', 'апреля'],

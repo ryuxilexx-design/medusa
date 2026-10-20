@@ -330,6 +330,14 @@ test('tekshiruv tuzatishlari: filial doirasi, eski ochiq ogohlantirish, o‘chir
   assert.equal(sim.events[0].similarity, null, '100 % dan katta o‘xshashlik tashlanadi');
 });
 
+test('kamera soati: 9999-yil yoki bir yildan eski hodisa saqlanmaydi; demo soatidan oldinda yurgan haqiqiy vaqt qabul qilinadi', async () => {
+  const { ingestEvent } = require('../dist/cameras/ingest.js');
+  const cam = (await pool.query(`SELECT * FROM cameras WHERE name = 'Asosiy kirish' AND tenant_id = $1`, [SEED_IDS.tenant])).rows[0];
+  assert.deepEqual(await ingestEvent(pool, cam, { kind: 'people_count', occurredAt: new Date('9999-01-01T00:00:00Z'), enter: 1, exit: 0, sourceKey: 'y9999' }), { stored: false, ignored: 'bad_time' });
+  assert.deepEqual(await ingestEvent(pool, cam, { kind: 'people_count', occurredAt: new Date('2020-01-01T00:00:00Z'), enter: 1, exit: 0, sourceKey: 'y2020' }), { stored: false, ignored: 'bad_time' });
+  assert.equal((await ingestEvent(pool, cam, { kind: 'people_count', occurredAt: new Date(), enter: 1, exit: 0, sourceKey: 'real-now' })).stored, true);
+});
+
 test('tools/hik-replay.mjs: haqiqiy formatdagi xabarlar serverga yetadi va to‘g‘ri saqlanadi', async () => {
   const { execFile } = await import('node:child_process');
   const run = (args) => new Promise((resolve) => execFile(process.execPath, ['../../tools/hik-replay.mjs', ...args], { cwd: new URL('..', import.meta.url).pathname }, (err, stdout, stderr) => resolve({ code: err ? err.code : 0, out: stdout + stderr })));

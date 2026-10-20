@@ -41,8 +41,7 @@ import { NewsWorker } from './ai/news-worker';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer.apply((req: any, res: any, next: () => void) => {
-      req.requestId = randomUUID();
-      res.setHeader('X-Request-Id', req.requestId);
+      if (!req.requestId) { req.requestId = randomUUID(); res.setHeader('X-Request-Id', req.requestId); }
       res.setHeader('Cache-Control', 'no-store');
       next();
     }).forRoutes('*');

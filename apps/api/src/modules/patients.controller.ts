@@ -30,7 +30,8 @@ export async function assertPatientAccess(q: Q, ctx: Ctx, patientId: string) {
 export class PatientsController {
   constructor(private db: Db) {}
 
-  @Get()
+  // the patient directory is for reception, cashiers, doctors (own patients) and the manager — not the lab
+  @Roles('manager', 'registrar', 'doctor', 'cashier') @Get()
   async list(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const { page, pageSize, offset } = pageParams(q);
     const params: unknown[] = [ctx.tenantId];
@@ -38,12 +39,14 @@ export class PatientsController {
     const search = String(q.search ?? '').trim();
     if (search) {
       const digits = search.replace(/[\s+\-()]/g, '');
-      params.push(`%${search.toLowerCase()}%`);
+      const like = (v: string) => `%${v.replace(/[\\%_]/g, '\\$&')}%`; // % and _ typed by a person are literal
+      params.push(like(search.toLowerCase()));
       const i = params.length;
       const conds = [`lower(p.last_name || ' ' || p.first_name || ' ' || coalesce(p.middle_name,'')) LIKE $${i}`, `lower(p.first_name || ' ' || p.last_name) LIKE $${i}`];
       if (/^\d+$/.test(digits)) {
-        params.push(`%${digits}%`); conds.push(`replace(coalesce(p.phone,''),'+','') LIKE $${params.length}`);
-        params.push(Number(digits)); conds.push(`p.patient_number = $${params.length}`);
+        params.push(like(digits)); conds.push(`replace(coalesce(p.phone,''),'+','') LIKE $${params.length}`);
+        // a full phone number is longer than any patient number (integer): only short digit strings are IDs
+        if (digits.length <= 9) { params.push(Number(digits)); conds.push(`p.patient_number = $${params.length}`); }
       }
       where.push(`(${conds.join(' OR ')})`);
     }
@@ -92,6 +95,8 @@ export class PatientsController {
       throw new AppError(422, 'CONSENT_REQUIRED', 'Roziliksiz bemor kartasi ochilmaydi', { consent: 'Bemor shaxsiy ma’lumotlarni qayta ishlashga rozilik berganini belgilang' });
     }
     return this.db.tx(async (c) => {
+      // serialise registrations of the same birth date in this clinic, so parallel saves of one person see each other
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`patient:${ctx.tenantId}:${input.birth_date}`]);
       const dups = await this.findDuplicates(c, ctx, input);
       if (dups.length && !input.confirm_duplicate) {
         throw new AppError(409, 'DUPLICATE_WARNING', 'O‘xshash bemor topildi. Mavjud profilni oching yoki yangi bemor yaratishni tasdiqlang.', undefined, { candidates: dups });
@@ -116,8 +121,8 @@ export class PatientsController {
     const minimal = ctx.role === 'cashier' || ctx.role === 'lab';
     const p = await this.db.one(
       `SELECT ${minimal ? MIN_COLS : FULL_COLS}${ctx.role === 'doctor' ? ', p.allergy_state, p.allergy_note' : ''},
-              (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void')::bigint AS balance_due
-         FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId]);
+              (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void' AND i.branch_id = ANY($3))::bigint AS balance_due
+         FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId, ctx.branchIds]);
     if (ctx.role === 'doctor' || ctx.role === 'lab') delete (p as any).balance_due;
     // consent status: for the roles that collect it (not cashier/lab, who see only the minimal card)
     if (!minimal) (p as any).consents = await latestConsents(this.db.pool, ctx.tenantId, id);
@@ -193,7 +198,7 @@ export class PatientsController {
     const invoices = r === 'doctor' || r === 'lab' ? [] : await this.db.rows(
       `SELECT i.id, i.invoice_number, i.status, i.total, i.paid_amount, i.created_at, b.name AS branch_name,
               (SELECT string_agg(it.description, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id) AS services
-         FROM invoices i JOIN branches b ON b.id = i.branch_id WHERE i.patient_id = $1 AND i.tenant_id = $2 ORDER BY i.created_at DESC`, [id, ctx.tenantId]);
+         FROM invoices i JOIN branches b ON b.id = i.branch_id WHERE i.patient_id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3) ORDER BY i.created_at DESC`, [id, ctx.tenantId, ctx.branchIds]);
     return { data: { visits, notes, labs, diagnostics, invoices } };
   }
 }

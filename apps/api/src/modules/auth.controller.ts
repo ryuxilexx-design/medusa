@@ -12,20 +12,34 @@ import { startSession } from './session.controller';
 /** Per-account lockout: after this many wrong passwords the account is locked for LOCK_MINUTES. */
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
-/** Per-IP throttle across all accounts (in-memory; resets on restart). */
-const IP_MAX = 20;
+/**
+ * Failed-login throttles (in-memory; reset on restart), on top of the per-account lockout:
+ * per IP + login (stops guessing one account) and per IP overall with a high ceiling (stops spraying many accounts,
+ * while a whole clinic behind one NAT address is not locked out by one person's typos). Entries expire and are pruned.
+ */
+const PAIR_MAX = 10;
+const IP_MAX = 100;
 const IP_WINDOW_MS = 15 * 60_000;
-const ipFailures = new Map<string, { n: number; until: number }>();
+const failures = new Map<string, { n: number; until: number }>();
 
 const BAD_CREDENTIALS = () => new AppError(401, 'INVALID_CREDENTIALS', 'Login yoki parol noto‘g‘ri');
+const TOO_MANY = () => new AppError(429, 'TOO_MANY_ATTEMPTS', 'Juda ko‘p noto‘g‘ri urinish. 15 daqiqadan keyin qayta urinib ko‘ring.');
+const keysOf = (req: Request, login?: string) => [`ip:${req.ip ?? ''}`, ...(login ? [`pair:${req.ip ?? ''}:${login.trim().toLowerCase()}`] : [])];
 
-function ipCheck(req: Request) {
-  const rec = ipFailures.get(String(req.ip ?? ''));
-  if (rec && rec.until > Date.now() && rec.n >= IP_MAX) throw new AppError(429, 'TOO_MANY_ATTEMPTS', 'Juda ko‘p noto‘g‘ri urinish. 15 daqiqadan keyin qayta urinib ko‘ring.');
+function ipCheck(req: Request, login?: string) {
+  const now = Date.now();
+  for (const k of keysOf(req, login)) {
+    const rec = failures.get(k);
+    if (rec && rec.until > now && rec.n >= (k.startsWith('pair:') ? PAIR_MAX : IP_MAX)) throw TOO_MANY();
+  }
 }
-function ipFail(req: Request) {
-  const ip = String(req.ip ?? ''), now = Date.now(), rec = ipFailures.get(ip);
-  ipFailures.set(ip, { n: (rec && rec.until > now ? rec.n : 0) + 1, until: now + IP_WINDOW_MS });
+function ipFail(req: Request, login?: string) {
+  const now = Date.now();
+  if (failures.size > 10_000) for (const [k, v] of failures) if (v.until <= now) failures.delete(k);
+  for (const k of keysOf(req, login)) {
+    const rec = failures.get(k);
+    failures.set(k, { n: (rec && rec.until > now ? rec.n : 0) + 1, until: now + IP_WINDOW_MS });
+  }
 }
 
 /** Audit context for events that happen before a session exists. */
@@ -44,6 +58,7 @@ export class AuthController {
     ipCheck(req);
     const input = parse(passwordLoginSchema, body);
     const login = normalizeLogin(input.login);
+    ipCheck(req, login ?? input.login);
     const user = login ? await this.db.one(
       `SELECT id, password_hash, locked_until > now() AS locked, ceil(extract(epoch FROM locked_until - now()) / 60)::int AS lock_min FROM users WHERE login = $1`, [login]) : undefined;
     if (user?.locked) throw new AppError(429, 'ACCOUNT_LOCKED', `Ko‘p marta noto‘g‘ri parol kiritildi. ${user.lock_min} daqiqadan keyin qayta urinib ko‘ring yoki rahbardan parolni tiklashni so‘rang.`);
@@ -55,7 +70,7 @@ export class AuthController {
         ORDER BY t.name, array_position(ARRAY['manager','doctor','registrar','cashier','lab'], m.role)`, [user.id]) : [];
 
     if (!user || !ok) {
-      ipFail(req);
+      ipFail(req, login ?? input.login);
       if (user) {
         const r = (await this.db.one(
           `UPDATE users SET failed_logins = CASE WHEN failed_logins + 1 >= $2 THEN 0 ELSE failed_logins + 1 END,
@@ -83,11 +98,11 @@ export class AuthController {
   @AllowDuringPasswordChange() @Post('password') @HttpCode(200)
   async change(@CurrentCtx() ctx: Ctx, @Body() body: unknown, @Req() req: Request) {
     if (ctx.authKind !== 'password') throw forbidden('Demo akkauntda parol yo‘q');
-    ipCheck(req);
+    ipCheck(req, ctx.userId);
     const input = parse(passwordChangeSchema, body);
     const u = await this.db.one(`SELECT password_hash FROM users WHERE id = $1`, [ctx.userId]);
     if (!(await verifyPassword(input.current_password, u?.password_hash))) {
-      ipFail(req);
+      ipFail(req, ctx.userId);
       throw invalid({ current_password: 'Joriy parol noto‘g‘ri' });
     }
     const hash = await hashPassword(input.new_password);

@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -31,18 +31,25 @@ export function useAppointmentAction() {
   });
 }
 
+const NO_SHOW_GRACE_MS = 15 * 60_000;
+
 export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose: () => void }) {
-  const { me } = useSession();
+  const { me, demoNow } = useSession();
   const t = useT();
   const router = useRouter();
   const act = useAppointmentAction();
   const [cancel, setCancel] = useState(false);
+  const [noShow, setNoShow] = useState(false);
   const [reason, setReason] = useState('');
   const [resched, setResched] = useState(false);
+  // a pending «cancel» or «no-show» question belongs to one appointment only
+  useEffect(() => { setCancel(false); setNoShow(false); setReason(''); }, [appt?.id]);
   if (!appt) return null;
   const staff = me.role === 'manager' || me.role === 'registrar';
   const isToday = localDate(appt.starts_at) === me.today;
   const done = (fn?: () => void) => ({ onSuccess: () => { fn?.(); onClose(); } });
+  // «Kelmadi» cannot be undone, so it is offered only once the slot has started plus a short grace (demo clock)
+  const noShowOpen = staff && appt.status === 'scheduled' && demoNow().getTime() >= Date.parse(appt.starts_at) + NO_SHOW_GRACE_MS;
 
   return (
     <>
@@ -50,8 +57,8 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
         footer={
           <div className="flex w-full flex-wrap items-center gap-2">
             {staff && appt.status === 'scheduled' && <Button icon={<CalendarClock className="h-4 w-4" />} onClick={() => setResched(true)}>{t('registrar.ap.reschedule')}</Button>}
-            {staff && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setCancel(true)}>{t('registrar.ap.cancel')}</Button>}
-            {staff && appt.status === 'scheduled' && localDate(appt.starts_at) <= me.today && <Button variant="danger" icon={<UserX className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'no-show'} onClick={() => act.mutate({ id: appt.id, action: 'no-show', body: { version: appt.version } }, done())}>{t('registrar.noShow')}</Button>}
+            {staff && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => { setNoShow(false); setCancel(true); }}>{t('registrar.ap.cancel')}</Button>}
+            {noShowOpen && !noShow && <Button variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-slate-900" icon={<UserX className="h-4 w-4" />} onClick={() => { setCancel(false); setNoShow(true); }}>{t('registrar.noShow')}</Button>}
             {/* the one primary action sits on the right and gets the first focus */}
             <div className="ml-auto flex gap-2">
               {staff && appt.status === 'scheduled' && isToday && <Button data-autofocus variant="primary" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'check-in'} onClick={() => act.mutate({ id: appt.id, action: 'check-in', body: { version: appt.version } }, done())}>{t('registrar.checkIn')}</Button>}
@@ -79,6 +86,17 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
         {appt.note && <p className="mt-3 text-sm text-slate-600"><span className="text-slate-600">{t('registrar.ap.noteLabel')}</span> {appt.note}</p>}
         {appt.cancel_reason && <p className="mt-2 text-sm text-slate-600"><span className="text-slate-600">{t('registrar.ap.cancelReasonLabel')}</span> {appt.cancel_reason}</p>}
         {staff && appt.status === 'scheduled' && !isToday && <p className="mt-3 text-xs text-slate-600">{t('registrar.ap.checkInToday')}</p>}
+        {noShow && (
+          <div className="mt-4 space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3" role="group" aria-labelledby="no-show-q" data-testid="no-show-confirm">
+            <p id="no-show-q" className="text-[0.9375rem] font-semibold text-slate-900">{t('registrar.ap.noShowConfirm', { name: fullName(appt), time: fmtTime(appt.starts_at) })}</p>
+            <p className="text-sm text-slate-600">{t('registrar.ap.noShowFinal')}</p>
+            <div className="flex justify-end gap-2">
+              <Button size="sm" autoFocus onClick={() => setNoShow(false)}>{t('common.back')}</Button>
+              <Button size="sm" variant="danger" icon={<UserX className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'no-show'}
+                onClick={() => act.mutate({ id: appt.id, action: 'no-show', body: { version: appt.version } }, done())}>{t('registrar.ap.noShowDo')}</Button>
+            </div>
+          </div>
+        )}
         {cancel && (
           <div className="mt-4 space-y-2 rounded-md border border-red-200 bg-red-50/50 p-3">
             <Field label={t('registrar.ap.cancelReason')} required={appt.status === 'arrived'}>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('registrar.ap.cancelPlaceholder')} />}</Field>

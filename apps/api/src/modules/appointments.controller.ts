@@ -39,8 +39,11 @@ export class AppointmentsController {
     else if (isUuid(q.doctor_id)) { params.push(q.doctor_id); where.push(`a.doctor_id = $${params.length}`); }
     if (isUuid(q.patient_id)) { params.push(q.patient_id); where.push(`a.patient_id = $${params.length}`); }
     if (q.status) { params.push(String(q.status).split(',')); where.push(`a.status = ANY($${params.length})`); }
-    const rows = await this.db.rows(`${APPT_SELECT} WHERE ${where.join(' AND ')} ORDER BY a.starts_at, d.display_name LIMIT 500`, params);
-    return { data: rows, meta: { from, to, total: rows.length } };
+    // a busy multi-branch day has 1–3k visits: never cut the afternoon off silently
+    const LIMIT = 4000;
+    const rows = await this.db.rows(`${APPT_SELECT} WHERE ${where.join(' AND ')} ORDER BY a.starts_at, d.display_name LIMIT ${LIMIT + 1}`, params);
+    const truncated = rows.length > LIMIT;
+    return { data: truncated ? rows.slice(0, LIMIT) : rows, meta: { from, to, total: Math.min(rows.length, LIMIT), truncated } };
   }
 
   @Roles('manager', 'registrar', 'doctor', 'cashier') @Get(':id')
@@ -117,6 +120,8 @@ export class AppointmentsController {
       if (input.version !== undefined && input.version !== a.version) throw staleState();
       if (a.status !== 'scheduled') throw conflict('INVALID_STATE', 'Faqat rejalashtirilgan qabul «Kelmadi» deb belgilanadi');
       if (localDate(a.starts_at) > today()) throw conflict('INVALID_STATE', 'Kelajakdagi qabulni «Kelmadi» deb belgilab bo‘lmaydi');
+      // the patient is late, not absent, until 15 minutes after the booked time
+      if (now().getTime() < new Date(a.starts_at).getTime() + 15 * 60_000) throw conflict('TOO_EARLY', 'Qabul vaqtidan 15 daqiqa o‘tmaguncha «Kelmadi» deb belgilab bo‘lmaydi');
       await c.query(`UPDATE appointments SET status = 'no_show', version = version + 1, updated_at = demo_now() WHERE id = $1`, [id]);
       await audit(c, ctx, 'appointment.no_show', 'appointment', id, 'Kelmadi', a.branch_id);
       return { data: { id } };

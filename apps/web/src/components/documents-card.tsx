@@ -5,7 +5,7 @@ import { Ban, FileText, Pill, Plus, Printer, Send, Trash2 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
-import { Alert, Badge, Button, Card, cx, Field, Input, LinkButton, Modal, Textarea, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Textarea, useToast } from '@/components/ui';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { useT } from '@/lib/i18n';
 
@@ -41,7 +41,8 @@ export function DocumentsCard({ encounterId, note }: { encounterId: string; note
           <Button key={k} size="sm" icon={ICON[k]} onClick={() => setKind(k)}>{t(k === 'prescription' ? 'document.prescriptionShort' : k === 'certificate' ? 'document.certificateShort' : 'document.referral')}</Button>
         ))}
       </div>}>
-      {!docs.data?.length ? <p className="text-sm text-slate-600">{t('docs.none')}</p> : (
+      {/* a failed load is never shown as «no documents» (the doctor could issue a duplicate) */}
+      {docs.isLoading ? <LoadingRows rows={2} /> : docs.isError ? <ErrorState error={docs.error} onRetry={() => docs.refetch()} /> : !docs.data?.length ? <p className="text-sm text-slate-600">{t('docs.none')}</p> : (
         <ul className="divide-y divide-slate-100">
           {docs.data.map((d) => (
             <li key={d.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
@@ -57,8 +58,8 @@ export function DocumentsCard({ encounterId, note }: { encounterId: string; note
         </ul>
       )}
       {kind && <DocumentModal key={kind} kind={kind} encounterId={encounterId} note={note} onClose={() => setKind(null)} />}
-      <Modal open={!!voiding} onClose={() => setVoiding(null)} title={voiding ? t('docs.voidTitle', { kind: t(kindKey(voiding.kind)), n: voiding.number }) : ''}
-        footer={<><Button onClick={() => setVoiding(null)}>{t('common.back')}</Button><Button variant="danger" loading={voidDoc.isPending} disabled={reason.trim().length < 3} onClick={() => voidDoc.mutate()}>{t('docs.voidAction')}</Button></>}>
+      <Modal open={!!voiding} onClose={() => { setVoiding(null); setReason(''); }} dirty={!!reason.trim() && !voidDoc.isPending} title={voiding ? t('docs.voidTitle', { kind: t(kindKey(voiding.kind)), n: voiding.number }) : ''}
+        footer={<><ModalCancel>{t('common.back')}</ModalCancel><Button variant="danger" loading={voidDoc.isPending} disabled={reason.trim().length < 3} onClick={() => voidDoc.mutate()}>{t('docs.voidAction')}</Button></>}>
         <p className="mb-2 text-sm text-slate-700">{t('docs.voidText')}</p>
         <Field label={t('docs.reason')} required>{(id) => <Input id={id} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('docs.reasonPlaceholder')} />}</Field>
       </Modal>
@@ -112,7 +113,7 @@ function DocumentModal({ kind, encounterId, note, onClose }: { kind: Kind; encou
 
   return (
     <Modal open onClose={onClose} dirty={dirty && !issue.isPending} width={kind === 'prescription' ? 'max-w-5xl' : 'max-w-2xl'} title={t('docs.issueTitle', { kind: t(kindKey(kind)) })}
-      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={issue.isPending} onClick={() => { setFormError(null); issue.mutate(); }}>{t('docs.issue')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="primary" loading={issue.isPending} onClick={() => { setFormError(null); issue.mutate(); }}>{t('docs.issue')}</Button></>}>
       <div className="space-y-3">
         {formError && <Alert tone="red">{formError}</Alert>}
         {kind === 'referral' && <>

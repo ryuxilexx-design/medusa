@@ -7,6 +7,7 @@ import { CalendarPlus, Search, UserPlus, Users, X } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, fullName, pid } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
+import { takePatientSearch, usePatientSearchListener } from '@/lib/patient-search';
 import { useSession } from '@/lib/session';
 import { Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th, Toolbar } from '@/components/ui';
 import { PatientFormModal } from '@/components/patient-form';
@@ -23,10 +24,13 @@ function Patients() {
   const t = useT();
   const router = useRouter();
   const sp = useSearchParams();
-  const [search, setSearch] = useState(sp.get('search') ?? '');
+  // the search text stays in memory: a patient's name never goes into the URL (history, server logs)
+  const [search, setSearch] = useState(() => takePatientSearch() ?? sp.get('search') ?? '');
   const [page, setPage] = useState(1);
   const dq = useDebounced(search.trim(), 300);
-  useEffect(() => { setSearch(sp.get('search') ?? ''); }, [sp]);
+  usePatientSearchListener(setSearch);
+  // an old link with ?search=… still works once, then the term is dropped from the address bar
+  useEffect(() => { const s = sp.get('search'); if (s !== null) { setSearch(s); router.replace('/patients'); } }, [sp, router]);
   useEffect(() => setPage(1), [dq]);
   const canEdit = me.role === 'manager' || me.role === 'registrar';
   const [form, setForm] = useState<{ open: boolean; patient?: any }>({ open: false });
@@ -46,7 +50,7 @@ function Patients() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
             <Input className="pl-9 pr-10" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
             {search && (
-              <button type="button" onClick={() => { setSearch(''); router.replace('/patients'); }} aria-label={t('registrar.clear')} title={t('registrar.clear')}
+              <button type="button" onClick={() => setSearch('')} aria-label={t('registrar.clear')} title={t('registrar.clear')}
                 className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
                 <X className="h-4 w-4" />
               </button>

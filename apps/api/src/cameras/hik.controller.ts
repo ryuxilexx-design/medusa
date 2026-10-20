@@ -18,15 +18,20 @@ const log = new Logger('Hikvision');
 /** Express middleware for /api/v1/hik: the raw body as a Buffer (XML, JSON or multipart), with a size limit. */
 export function rawBody(req: any, res: any, next: (e?: unknown) => void) {
   if (req.method !== 'POST') return next();
-  const chunks: Buffer[] = []; let size = 0; let done = false;
+  const chunks: Buffer[] = []; let size = 0; let done = false; let tooLarge = false;
   req.on('data', (c: Buffer) => {
     if (done) return;
     size += c.length;
-    // too large: answer at once and let the rest of the upload drain unread (destroying the socket loses the answer)
-    if (size > HIK_MAX_BODY) { done = true; chunks.length = 0; res.set('Connection', 'close').status(413).json({ error: { code: 'TOO_LARGE', message: 'So‘rov juda katta' } }); req.resume(); return; }
-    chunks.push(c);
+    if (size > HIK_MAX_BODY && !tooLarge) { tooLarge = true; chunks.length = 0; }
+    // a body far beyond the limit is cut off; one slightly over is read to the end (unstored) so the camera gets its answer
+    if (tooLarge && size > HIK_MAX_BODY * 4) { done = true; req.destroy(); return; }
+    if (!tooLarge) chunks.push(c);
   });
-  req.on('end', () => { if (done) return; done = true; req.rawBody = Buffer.concat(chunks); req._body = true; next(); });
+  req.on('end', () => {
+    if (done) return; done = true;
+    if (tooLarge) { res.status(413).json({ error: { code: 'TOO_LARGE', message: 'So‘rov juda katta' } }); return; }
+    req.rawBody = Buffer.concat(chunks); req._body = true; next();
+  });
   req.on('error', (e: unknown) => { if (!done) { done = true; next(e); } });
 }
 
@@ -41,7 +46,8 @@ export class HikController {
       `SELECT c.id, c.tenant_id, c.branch_id, c.purposes, c.security_mode, c.status FROM cameras c JOIN tenants t ON t.id = c.tenant_id
         WHERE c.token_hash = $1 AND t.status = 'active'`, [hashToken(token)]);
     if (!cam) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi');
-    await this.db.rows(`UPDATE cameras SET last_seen_at = $2 WHERE id = $1`, [cam.id, now()]);
+    // one write per camera per half minute is enough to know it is alive
+    await this.db.rows(`UPDATE cameras SET last_seen_at = $2 WHERE id = $1 AND (last_seen_at IS NULL OR last_seen_at < $2::timestamptz - interval '30 seconds')`, [cam.id, now()]);
     if (cam.status !== 'active') return { ok: true, stored: 0 };
     const body: Buffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? ''));
     const parsed = parseIsapi(body, String(req.headers['content-type'] ?? ''));

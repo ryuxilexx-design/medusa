@@ -9,9 +9,9 @@ import { fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/fo
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { useUnsavedGuard } from '@/lib/unsaved';
-import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, PageHeader, Select, Table, Td, Textarea, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, PageHeader, Select, Table, Td, Textarea, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus } from '@/components/status';
-import { useCurrentShift } from '@/components/cash-shift';
+import { ShiftLoadError, useCurrentShift } from '@/components/cash-shift';
 import { RefundModal } from '@/components/refund-modal';
 import { MoneyInput } from '@/components/money-input';
 
@@ -120,6 +120,7 @@ function CashierPay({ inv }: { inv: any }) {
   const t = useT();
   const shift = useCurrentShift();
   if (shift.isLoading) return null;
+  if (shift.isError && shift.data === undefined) return <ShiftLoadError q={shift} />;
   if (!shift.data) {
     const [before, after] = t('cash.openShiftHint').split('{link}');
     return <Alert tone="yellow" title={t('cash.shiftClosed')}>{before}<Link href="/cashier" className="font-medium underline">{t('cash.title')}</Link>{after}</Alert>;
@@ -223,7 +224,7 @@ function DiscountModal({ inv, onClose }: { inv: any; onClose: () => void }) {
   const valueErr = err.value ?? (value.trim() && !valueOk ? (type === 'percent' ? t('cash.percentRange') : t('cash.atMost', { max: formatSom(inv.subtotal) })) : undefined);
   const valid = valueOk && reason.trim().length >= 3;
   return (
-    <Modal open onClose={onClose} dirty={!!(value || reason)} title={t('cash.discountTitle')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" disabled={!valid} loading={m.isPending} onClick={() => m.mutate()}>{t('cash.apply')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!(value || reason)} title={t('cash.discountTitle')} footer={<><ModalCancel /><Button variant="primary" disabled={!valid} loading={m.isPending} onClick={() => m.mutate()}>{t('cash.apply')}</Button></>}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <Field label={t('cash.colType')}>{(id) => <Select id={id} value={type} onChange={(e) => setType(e.target.value as any)}><option value="percent">{t('cash.percentOption')}</option><option value="amount">{t('cash.amountOption')}</option></Select>}</Field>
@@ -250,7 +251,7 @@ function VoidModal({ inv, onClose }: { inv: any; onClose: () => void }) {
     onError: (e) => toast.error(e),
   });
   return (
-    <Modal open onClose={onClose} dirty={!!reason} title={t('cash.voidTitle', { n: inv.invoice_number })} footer={<><Button onClick={onClose}>{t('common.back')}</Button><Button variant="danger" disabled={reason.trim().length < 3} loading={m.isPending} onClick={() => m.mutate()}>{t('cash.voidInvoice')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!reason} title={t('cash.voidTitle', { n: inv.invoice_number })} footer={<><ModalCancel>{t('common.back')}</ModalCancel><Button variant="danger" disabled={reason.trim().length < 3} loading={m.isPending} onClick={() => m.mutate()}>{t('cash.voidInvoice')}</Button></>}>
       <Field label={t('cash.colReason')} required>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
       <p className="mt-2 text-[0.8125rem] text-slate-600">{t('cash.voidHint')}</p>
       {reason.trim().length < 3 && <p className="mt-2 text-sm text-slate-600">{t('cash.fillRequired')}</p>}

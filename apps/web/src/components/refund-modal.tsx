@@ -5,8 +5,8 @@ import { PAYMENT_METHOD_LABEL, REFUND_REASON_LABEL, type MessageKey } from '@med
 import { api, ApiError, newIdempotencyKey } from '@/lib/api';
 import { formatSom, parseSomToTiyin } from '@/lib/format';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Field, Modal, Select, Textarea, useToast } from '@/components/ui';
-import type { Shift } from '@/components/cash-shift';
+import { Alert, Button, Field, Modal, ModalCancel, Select, Textarea, useToast } from '@/components/ui';
+import { ShiftLoadError, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
 
 /**
@@ -60,7 +60,7 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
   const ready = !!paymentId && tiyin != null && tiyin > 0 && !tooMuch && reason.trim().length >= 3 && (method !== 'cash' || !!chosenShift);
   return (
     <Modal open onClose={onClose} dirty={!!reason.trim() || amount !== (payment ? String(Number(payment.refundable) / 100) : '')} title={t('cash.refundTitle', { n: inv.invoice_number })}
-      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="danger" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.doRefund')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="danger" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.doRefund')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
         <p className="text-sm text-slate-600">{t('cash.refundIntro')}</p>
@@ -78,7 +78,8 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
           </Field>
         </div>
         {method === 'cash' && (
-          openShifts.length === 0 && !shifts.isLoading
+          shifts.isError && !shifts.data ? <ShiftLoadError q={shifts} />
+          : openShifts.length === 0 && !shifts.isLoading
             ? <Alert tone="yellow" title={t('cash.noOpenDrawer')}>{t('cash.noOpenDrawerText')}</Alert>
             : <Field label={t('cash.fromDrawer')} required error={errors.shift_id} hint={drawer ? t('cash.drawerHint', { amount: formatSom(drawer.expected_cash) }) : undefined}>
                 {(id) => <Select id={id} value={chosenShift} onChange={(e) => setShiftId(e.target.value)}>

@@ -55,7 +55,7 @@ export class CamerasController {
   async list(@CurrentCtx() ctx: Ctx) {
     const rows = await this.db.rows(
       `SELECT ${CAM_COLS},
-              (SELECT count(*)::int FROM camera_events e WHERE e.camera_id = c.id AND e.received_at >= demo_now() - interval '24 hours') AS events_24h
+              (SELECT count(*)::int FROM camera_events e WHERE e.camera_id = c.id AND e.received_at >= (SELECT demo_now()) - interval '24 hours') AS events_24h
          FROM cameras c JOIN branches b ON b.id = c.branch_id
         WHERE c.tenant_id = $1 AND c.branch_id = ANY($2) ORDER BY b.name, c.name`, [ctx.tenantId, ctx.branchIds]);
     return { data: rows, meta: { simulator_available: config.demoEnabled } };

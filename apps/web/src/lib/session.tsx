@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { translate, type Locale, type Role } from '@meduza/contracts';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { formatLocale } from './format';
 
 export interface Me {
@@ -27,8 +27,22 @@ export function useSession() {
   return c;
 }
 
+/** A 4xx answer is final (401 = session gone, handled by the `meduza:unauthorized` event); anything else is a connection problem. */
+const isFinal = (e: unknown) => e instanceof ApiError && e.status >= 400 && e.status < 500;
+
 export function useMeQuery() {
-  return useQuery({ queryKey: ['me'], queryFn: () => api<{ data: Me }>('/me').then((r) => ({ ...r.data, fetched_at: Date.now() })), retry: false, staleTime: 60_000 });
+  return useQuery({
+    queryKey: ['me'], queryFn: () => api<{ data: Me }>('/me').then((r) => ({ ...r.data, fetched_at: Date.now() })), staleTime: 60_000,
+    // A network blip or a 5xx during a deploy never signs the person out: keep the cached session and retry with backoff
+    // (1 s, 2 s, 4 s … up to 30 s) until the server answers. Only a real 401 leads to the sign-in page.
+    retry: (_n, e) => !isFinal(e),
+    retryDelay: (n) => Math.min(1000 * 2 ** n, 30_000),
+  });
+}
+
+/** True while /me keeps failing for a non-final reason (offline, 5xx): the app shows a calm «reconnecting» banner. */
+export function meReconnecting(q: { failureCount: number; failureReason: unknown }) {
+  return q.failureCount > 0 && !!q.failureReason && !isFinal(q.failureReason);
 }
 
 const BRANCH_KEY = 'meduza.branch';

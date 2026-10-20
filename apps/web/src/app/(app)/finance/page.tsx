@@ -56,11 +56,11 @@ function Finance() {
         actions={manager && <Button variant="primary" icon={<Plus className="h-5 w-5" />} onClick={() => setAdding(true)}>{t('cash.addExpense')}</Button>} />
 
       {manager && <FinanceStats from={from} to={to} branchId={branchId} />}
-      {cashier && (
+      {cashier && !(pays.isError && !pays.data) && (
         <StatRow label={t('cash.financeResult')}>
-          <StatCard icon={<Wallet />} label={t('cash.paymentsTotal')} loading={!pays.data} value={pays.data && <StatMoney tiyin={pays.data.meta.sum} />} sub={pays.data && t('cash.nPayments', { n: pays.data.meta.total })} />
+          <StatCard icon={<Wallet />} label={t('cash.paymentsTotal')} loading={pays.isPending} value={pays.data && <StatMoney tiyin={pays.data.meta.sum} />} sub={pays.data && t('cash.nPayments', { n: pays.data.meta.total })} />
           {Object.keys(PAYMENT_METHOD_LABEL).map((m) => (
-            <StatCard key={m} icon={METHOD_ICON[m]} label={t(`payment.${m}` as MessageKey)} loading={!pays.data} value={pays.data && <StatMoney tiyin={Number(byMethod(m)?.sum ?? 0)} />} sub={pays.data && t('cash.nPayments', { n: byMethod(m)?.n ?? 0 })} />
+            <StatCard key={m} icon={METHOD_ICON[m]} label={t(`payment.${m}` as MessageKey)} loading={pays.isPending} value={pays.data && <StatMoney tiyin={Number(byMethod(m)?.sum ?? 0)} />} sub={pays.data && t('cash.nPayments', { n: byMethod(m)?.n ?? 0 })} />
           ))}
         </StatRow>
       )}

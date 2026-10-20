@@ -9,6 +9,9 @@ services:
   db:
     image: postgres:16.4-bookworm
     restart: unless-stopped
+    # parallel queries need shared memory beyond Docker's 64 MB default; tuned for a 2–4 vCPU / 8 GB database host
+    shm_size: 1g
+    command: ["postgres", "-c", "shared_buffers=1GB", "-c", "effective_cache_size=3GB", "-c", "work_mem=16MB", "-c", "random_page_cost=1.1", "-c", "max_connections=100"]
     environment:
       POSTGRES_USER: meduza
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
@@ -48,6 +51,8 @@ services:
       NEWS_ENABLED: ${NEWS_ENABLED:-on}
       NCBI_API_KEY: ${NCBI_API_KEY:-}
       API_INTERNAL_URL: http://127.0.0.1:4000
+      # Caddy → Next.js → API: the client IP is two proxies away
+      TRUST_PROXY_HOPS: "2"
     networks: [internal, web]
 
   caddy:

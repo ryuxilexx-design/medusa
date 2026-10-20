@@ -313,6 +313,7 @@ export const admin = {
   'admin.auditGroup.telegram': ['Telegram bot', 'Telegram-бот'],
   'admin.auditGroup.ai': ['AI', 'AI'],
   'admin.auditGroup.demo': ['Demo', 'Демо'],
+  'admin.auditGroup.camera': ['Kameralar', 'Камеры'],
   'admin.audit.appointment.create': ['Qabul yozildi', 'Запись на приём'],
   'admin.audit.appointment.reschedule': ['Qabul ko‘chirildi', 'Приём перенесён'],
   'admin.audit.appointment.cancel': ['Qabul bekor qilindi', 'Приём отменён'],
@@ -349,4 +350,10 @@ export const admin = {
   'admin.audit.telegram.disconnect': ['Bot o‘chirildi', 'Бот отключён'],
   'admin.audit.ai.note_draft': ['AI qayd loyihasi', 'Черновик записи AI'],
   'admin.audit.demo.reset': ['Demo tiklandi', 'Демо сброшено'],
+  'admin.audit.camera.create': ['Kamera qo‘shildi', 'Камера добавлена'],
+  'admin.audit.camera.token': ['Kamera ulanish manzili yangilandi', 'Адрес подключения камеры обновлён'],
+  'admin.audit.camera.face_code': ['Xodimga kamera kodi berildi', 'Сотруднику выдан код камеры'],
+  'admin.audit.camera.face_code_revoke': ['Kamera kodi bekor qilindi', 'Код камеры отменён'],
+  'admin.audit.camera.security_ack': ['Xavfsizlik hodisasi ko‘rib chiqildi', 'Событие безопасности рассмотрено'],
+  'admin.audit.detailLang': ['Tafsilot tizim jurnalida o‘zbek tilida saqlanadi', 'Подробности хранятся в журнале на узбекском языке'],
 } as const satisfies Catalog;

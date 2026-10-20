@@ -4,6 +4,15 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 0000000000000. 0.11: to‘liq audit, tezlik, yangiliklar 2.0
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| To‘rt yo‘nalishli audit (xavfsizlik, negativ/poygalar, yuk 3 yillik ma’lumotda, interfeys) — `docs/audit/` | Kritik va jiddiy topilmalar tuzatildi | 16 ta regression testi (`audit.test.mjs`), audit skriptlari qayta yurgizildi |
+| Indekslar va baza ulanishi (migratsiya 015): jadval 23 s → ~50 ms, qidiruv trigram, uzilishda API yiqilmaydi | Ishlaydi | Yuk auditi indeks tajribasi; API testi ulanish uzilishi |
+| Shaxsiy yangiliklar: 25 mutaxassislik, 5 tagacha qo‘shimcha mavzu, saqlash, «o‘qildi», shifokor menyusida «Yangiliklar» | Ishlaydi | API testi, E2E `news` |
+| Tadqiqot: O‘zbekiston shakllari va integratsiyalar, shifokor vaqti — `docs/research/` | Hujjat | — |
+
 ## 000000000000. 0.10: Hikvision kameralari
 
 | Imkoniyat | Holat | Qanday tekshirildi |
@@ -304,8 +313,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 93/93 o‘tdi (12 ta kamera testi): 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 113/113: asosiy yo‘l, xato holatlari, xodim kirishi, shifokor jadvali, Telegram simulyatori, AI/MKB-10, qabul hujjatlari, kassa, uch til, rozilik (10) |
+| `npm test` (meduza_test) | 111/111 o‘tdi (16 ta audit regression, 13 ta kamera testi): 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 150/150 (12 to‘plam, jumladan kameralar va yangiliklar); oldingi qayd 113/113: asosiy yo‘l, xato holatlari, xodim kirishi, shifokor jadvali, Telegram simulyatori, AI/MKB-10, qabul hujjatlari, kassa, uch til, rozilik (10) |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |

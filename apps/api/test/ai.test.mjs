@@ -262,6 +262,52 @@ test('yangiliklar AI o‘chiq: faqat asl sarlavha va havola; rahbar yangilashi 1
   assert.equal((await doctor.post('/news/refresh')).status, 403);
 });
 
+test('shaxsiy yangiliklar: o‘z mutaxassisligi + tanlangan mavzular; saqlash, o‘qildi; begona mavzu va ortiqcha tanlov rad etiladi', async () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const put = (key, pmid, title) => pool.query(
+    `INSERT INTO news_items (specialty_key, external_id, title, url, fetched_on, journal) VALUES ($1,$2,$3,$4,$5,'Test Journal of Medicine') ON CONFLICT DO NOTHING`,
+    [key, pmid, title, `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`, today]);
+  await put('urology', '50000001', 'Prostate biopsy trial');
+  await put('surgery', '50000002', 'Laparoscopic hernia repair');
+  await put('internal', '50000003', 'Hypertension in primary care');
+  await doctor.put('/news/topics', { keys: [] });
+  let feed = (await doctor.get('/news')).body;
+  assert.equal(feed.meta.own, 'internal');
+  assert.ok(feed.data.every((x) => x.specialty_key === 'internal'), 'faqat o‘z sohasi');
+  const topics = (await doctor.get('/news/topics')).body.data;
+  assert.ok(topics.all.length >= 25 && topics.all.some((x) => x.key === 'urology') && topics.all.some((x) => x.key === 'surgery'));
+  // follow urology and surgery (the own specialty is dropped from the stored list)
+  const r = await doctor.put('/news/topics', { keys: ['urology', 'surgery', 'internal'] });
+  assert.equal(r.status, 200); assert.deepEqual(r.body.data.followed, ['urology', 'surgery']);
+  feed = (await doctor.get('/news')).body;
+  const titles = feed.data.map((x) => x.title);
+  assert.ok(titles.includes('Prostate biopsy trial') && titles.includes('Laparoscopic hernia repair') && titles.includes('Hypertension in primary care'));
+  assert.equal(new Set(feed.data.map((x) => x.url)).size, feed.data.length, 'bir maqola bir marta');
+  assert.ok((await doctor.get('/news?specialty=urology')).body.data.every((x) => x.specialty_key === 'urology'));
+  // saved / read
+  const item = feed.data.find((x) => x.title === 'Prostate biopsy trial');
+  const unread = feed.meta.unread;
+  assert.equal((await doctor.post(`/news/${item.id}/save`, { saved: true })).status, 200);
+  const saved = (await doctor.get('/news?view=saved')).body.data;
+  assert.deepEqual(saved.map((x) => x.id), [item.id]);
+  assert.ok(saved[0].saved_at && saved[0].read_at);
+  assert.equal((await doctor.get('/news')).body.meta.unread, unread - 1);
+  assert.equal((await doctor.post(`/news/${feed.data.find((x) => x.title === 'Laparoscopic hernia repair').id}/read`)).status, 200);
+  assert.equal((await doctor.get('/news')).body.meta.unread, unread - 2);
+  assert.equal((await doctor.post(`/news/${item.id}/save`, { saved: false })).status, 200);
+  assert.equal((await doctor.get('/news?view=saved')).body.data.length, 0);
+  // rules
+  const many = await doctor.put('/news/topics', { keys: ['urology', 'surgery', 'dentistry', 'ent', 'oncology', 'dermatology'] });
+  assert.equal(many.status, 422);
+  const unknown = await doctor.put('/news/topics', { keys: ['astrology'] });
+  assert.equal(unknown.status, 422); assert.ok(unknown.body.error.fields.keys);
+  assert.equal((await manager.put('/news/topics', { keys: ['urology'] })).status, 403);
+  assert.equal((await doctor.post('/news/00000000-0000-4000-8000-000000000000/save', { saved: true })).status, 404);
+  // the daily job also covers the topics doctors follow
+  assert.ok((await news.activeSpecialties()).includes('urology'));
+  await doctor.put('/news/topics', { keys: [] });
+});
+
 // ---------- Gemini (second provider behind the same AiClient) ----------
 test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilgan javob, kalit, limit; bepul tarifga real klinikada bemor matni ketmaydi', async () => {
   const gem = { calls: [], next: null };

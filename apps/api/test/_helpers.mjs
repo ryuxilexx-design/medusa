@@ -10,6 +10,8 @@ process.env.MEDUZA_TEST = '1';
 process.env.DEMO_TIME = process.env.TEST_DEMO_TIME || '07:30';
 process.env.AI_MODE = 'sample';
 process.env.APP_MODE = 'demo';
+process.env.PGAPPNAME = `meduza-test-${process.pid}`; // lets a test find (and kill) only its own connections
+process.env.TRUST_PROXY_HOPS = '0'; // tests call the API directly: no proxy in front
 export const { createApp } = require('../dist/app.js');
 export const db = require('@meduza/db');
 

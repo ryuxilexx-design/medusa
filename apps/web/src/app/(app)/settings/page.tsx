@@ -6,11 +6,11 @@ import { ROLE_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, fmtDateTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { useT } from '@/lib/i18n';
+import { useI18n, useT } from '@/lib/i18n';
 import { TelegramSettings } from '@/components/telegram-settings';
 import { AiSettings } from '@/components/ai-settings';
 import { MoneyInput } from '@/components/money-input';
-import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, PageHeader, Pagination, Select, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, PageHeader, Pagination, Select, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 type Tab = 'clinic' | 'services' | 'telegram' | 'ai' | 'audit' | 'demo';
 
@@ -113,7 +113,7 @@ function Services() {
               <Td className="hidden whitespace-nowrap text-slate-700 lg:table-cell">{t(`service.${s.category}` as MessageKey)}</Td>
               <Td right className="font-medium text-slate-900">{formatSom(s.price)}</Td>
               <Td right className="hidden text-slate-700 md:table-cell">{t('admin.set.minutes', { n: s.duration_min })}</Td>
-              <Td right className="hidden text-slate-700 lg:table-cell">{Number(s.share_percent)}%</Td>
+              <Td right className="hidden text-slate-700 lg:table-cell">{s.share_percent == null ? '—' : `${Number(s.share_percent)}%`}</Td>
               <Td className="hidden sm:table-cell">{s.active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.set.active')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.set.inactive')}</Badge>}</Td>
               <Td right><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setEdit(s); }} aria-label={`${t('admin.set.edit')}: ${s.name}`}><span className="hidden md:inline">{t('admin.set.edit')}</span></Button></Td>
             </tr>
@@ -151,7 +151,7 @@ function ServiceModal({ s, onClose }: { s: any; onClose: () => void }) {
   });
   const dirty = name !== s.name || p !== Number(s.price) || Number(dur) !== s.duration_min || active !== s.active;
   return (
-    <Modal open onClose={onClose} dirty={dirty} title={t('admin.set.serviceTitle', { code: s.code })} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" disabled={!dirty} loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
+    <Modal open onClose={onClose} dirty={dirty} title={t('admin.set.serviceTitle', { code: s.code })} footer={<><ModalCancel /><Button variant="primary" disabled={!dirty} loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={t('admin.set.serviceName')} required className="sm:col-span-2" error={err.name ?? local.name}>{(id) => <Input id={id} value={name} invalid={!!(err.name ?? local.name)} onChange={(e) => setName(e.target.value)} />}</Field>
         <Field label={t('admin.set.price')} required error={err.price ?? local.price} hint={t('admin.set.priceHint')}>{(id) => <MoneyInput id={id} value={price} invalid={!!(err.price ?? local.price)} onChange={(e) => setPrice(e.target.value)} />}</Field>
@@ -163,17 +163,23 @@ function ServiceModal({ s, onClose }: { s: any; onClose: () => void }) {
 }
 
 /** Action groups for the filter: the API filters by an action-code prefix (`?action=payment.`). */
-const AUDIT_GROUPS = ['appointment.', 'patient.', 'order.', 'payment.', 'refund.', 'invoice.', 'cash_shift.', 'expense.', 'clinical_note.', 'diagnostic_report.', 'lab', 'document.', 'inventory.', 'staff.', 'doctor.', 'auth.', 'service.', 'settings.', 'telegram.', 'ai.', 'demo.'] as const;
+const AUDIT_GROUPS = ['appointment.', 'patient.', 'order.', 'payment.', 'refund.', 'invoice.', 'cash_shift.', 'expense.', 'clinical_note.', 'diagnostic_report.', 'lab', 'document.', 'inventory.', 'staff.', 'doctor.', 'auth.', 'service.', 'settings.', 'telegram.', 'camera.', 'ai.', 'demo.'] as const;
 const groupKey = (g: string) => `admin.auditGroup.${g.replace(/\.$/, '')}` as MessageKey;
 
 function Audit() {
-  const t = useT();
+  const { t, locale } = useI18n();
   const { me } = useSession();
   const groups = AUDIT_GROUPS.filter((g) => me.demo || g !== 'demo.');
   const [page, setPage] = useState(1);
   const [action, setAction] = useState('');
   const q = useQuery({ queryKey: ['audit', page, action], queryFn: () => api(`/audit?page=${page}&page_size=20${action ? `&action=${encodeURIComponent(action)}` : ''}`), placeholderData: (p) => p });
-  const label = (code: string) => { const k = `admin.audit.${code}` as MessageKey; const s = t(k); return s === k ? code : s; };
+  // the action is always shown as a label in the person's language (an unknown code falls back to its group's name)
+  const label = (code: string) => {
+    const k = `admin.audit.${code}` as MessageKey; const s = t(k);
+    if (s !== k) return s;
+    const g = AUDIT_GROUPS.find((x) => code.startsWith(x));
+    return g ? t(groupKey(g)) : code;
+  };
   return (
     <Card padded={false}>
       <Toolbar>
@@ -190,8 +196,9 @@ function Audit() {
               <tr key={a.id} className="align-top">
                 <Td className="tabular-nums text-slate-700"><div className="whitespace-nowrap">{fmtDateTime(a.occurred_at)}</div><div className="font-medium text-slate-900 sm:hidden">{a.actor_name}</div></Td>
                 <Td className="hidden min-w-[9rem] sm:table-cell"><div className="font-medium text-slate-900">{a.actor_name}</div>{a.actor_role in ROLE_LABEL && <div className="text-[0.8125rem] text-slate-600">{t(`role.${a.actor_role}` as MessageKey)}</div>}</Td>
-                <Td className="sm:min-w-[10rem]"><div className="font-medium text-slate-900" title={a.action}>{label(a.action)}</div><div className="text-[0.8125rem] text-slate-600 md:hidden">{a.summary}</div></Td>
-                <Td className="hidden min-w-[14rem] max-w-[32rem] break-words text-slate-700 md:table-cell">{a.summary}</Td>
+                <Td className="sm:min-w-[10rem]"><div className="font-medium text-slate-900">{label(a.action)}</div><div lang="uz-Latn" className="text-[0.8125rem] text-slate-600 md:hidden">{a.summary}</div></Td>
+                {/* the stored detail is a server-written Uzbek line (data, not interface text): marked as such for screen readers */}
+                <Td className="hidden min-w-[14rem] max-w-[32rem] break-words text-slate-700 md:table-cell"><span lang="uz-Latn" title={locale === 'uz' ? undefined : t('admin.audit.detailLang')}>{a.summary}</span></Td>
               </tr>
             ))}</tbody>
           </Table>

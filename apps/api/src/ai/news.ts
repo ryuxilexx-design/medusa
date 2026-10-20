@@ -8,13 +8,31 @@ import { config } from '../core/config';
 import { AiClient } from './ai-client';
 
 export type Specialty = { key: string; label: string; match: RegExp; query: string };
+// Order matters: the first match wins (specific before general, e.g. «neyroxirurg» → surgery before neurology).
 export const SPECIALTIES: Specialty[] = [
   { key: 'cardiology', label: 'Kardiologiya', match: /kardio|кардио/i, query: '"cardiovascular diseases"[MeSH Terms]' },
+  { key: 'surgery', label: 'Xirurgiya', match: /xirurg|хирург|jarroh|жарроҳ/i, query: '("general surgery"[MeSH Terms] OR "surgical procedures, operative"[MeSH Terms])' },
+  { key: 'urology', label: 'Urologiya', match: /urolog|уролог|androlog|андролог/i, query: '("urologic diseases"[MeSH Terms] OR "urology"[MeSH Terms])' },
+  { key: 'traumatology', label: 'Travmatologiya va ortopediya', match: /travmat|ortoped|травмат|ортопед/i, query: '("orthopedics"[MeSH Terms] OR "wounds and injuries"[MeSH Terms] OR "musculoskeletal diseases"[MeSH Terms])' },
   { key: 'neurology', label: 'Nevrologiya', match: /nevro|невро/i, query: '"nervous system diseases"[MeSH Terms]' },
-  { key: 'pediatrics', label: 'Pediatriya', match: /pediatr|педиатр/i, query: '"pediatrics"[MeSH Terms]' },
+  { key: 'pediatrics', label: 'Pediatriya', match: /pediatr|педиатр|neonat|неонат/i, query: '"pediatrics"[MeSH Terms]' },
   { key: 'obgyn', label: 'Ginekologiya va akusherlik', match: /ginekol|akusher|гинеко|акушер/i, query: '("gynecology"[MeSH Terms] OR "obstetrics"[MeSH Terms])' },
-  { key: 'endocrinology', label: 'Endokrinologiya', match: /endokrin|эндокрин/i, query: '"endocrine system diseases"[MeSH Terms]' },
+  { key: 'endocrinology', label: 'Endokrinologiya', match: /endokrin|эндокрин|diabet|диабет/i, query: '"endocrine system diseases"[MeSH Terms]' },
+  { key: 'dentistry', label: 'Stomatologiya', match: /stomatolog|стоматолог|tish|ortodont|ортодонт|dantist/i, query: '("dentistry"[MeSH Terms] OR "stomatognathic diseases"[MeSH Terms])' },
+  { key: 'ent', label: 'Otorinolaringologiya (LOR)', match: /(^|[\s(-])(lor|лор)([\s),-]|$)|otorino|оторино/i, query: '"otorhinolaryngologic diseases"[MeSH Terms]' },
+  { key: 'ophthalmology', label: 'Oftalmologiya', match: /oftalm|офтальм|okulist|окулист|ko‘z|ko'z/i, query: '"eye diseases"[MeSH Terms]' },
+  { key: 'dermatology', label: 'Dermatologiya va venerologiya', match: /dermat|дермат|venerol|венерол|kosmetolog|косметолог/i, query: '"skin diseases"[MeSH Terms]' },
+  { key: 'oncology', label: 'Onkologiya', match: /onkolog|онколог|mammolog|маммолог/i, query: '"neoplasms"[MeSH Terms]' },
+  { key: 'gastroenterology', label: 'Gastroenterologiya', match: /gastro|гастро|gepatolog|гепатолог/i, query: '"gastrointestinal diseases"[MeSH Terms]' },
+  { key: 'pulmonology', label: 'Pulmonologiya', match: /pulmon|пульмон|ftiziat|фтизиат/i, query: '"lung diseases"[MeSH Terms]' },
+  { key: 'nephrology', label: 'Nefrologiya', match: /nefrolog|нефролог/i, query: '"kidney diseases"[MeSH Terms]' },
+  { key: 'rheumatology', label: 'Revmatologiya', match: /revmat|ревмат/i, query: '"rheumatic diseases"[MeSH Terms]' },
+  { key: 'infectious', label: 'Yuqumli kasalliklar', match: /infeksion|инфекцион|yuqumli/i, query: '"communicable diseases"[MeSH Terms]' },
+  { key: 'psychiatry', label: 'Psixiatriya va psixoterapiya', match: /psixiatr|psixoterap|психиатр|психотерап|narkolog|наркол/i, query: '"mental disorders"[MeSH Terms]' },
+  { key: 'allergology', label: 'Allergologiya va immunologiya', match: /allergolog|аллерголог|immunolog|иммунолог/i, query: '("hypersensitivity"[MeSH Terms] OR "immune system diseases"[MeSH Terms])' },
+  { key: 'anesthesiology', label: 'Anesteziologiya va reanimatsiya', match: /anesteziol|анестезиол|reanimat|реанимат/i, query: '("anesthesiology"[MeSH Terms] OR "critical care"[MeSH Terms])' },
   { key: 'ultrasound', label: 'Ultratovush diagnostikasi', match: /uzi|ultratovush|узи|sonograf/i, query: '"ultrasonography"[MeSH Terms]' },
+  { key: 'radiology', label: 'Rentgenologiya va tomografiya', match: /rentgen|рентген|radiolog|радиолог|tomograf|томограф|\bmrt\b|\bmskt\b/i, query: '("radiography"[MeSH Terms] OR "tomography"[MeSH Terms] OR "magnetic resonance imaging"[MeSH Terms])' },
   { key: 'laboratory', label: 'Laboratoriya diagnostikasi', match: /laborator|лаборатор/i, query: '"clinical laboratory techniques"[MeSH Terms]' },
   { key: 'internal', label: 'Terapiya (ichki kasalliklar)', match: /terapev|umumiy|oilaviy|терапев/i, query: '("internal medicine"[MeSH Terms] OR "primary health care"[MeSH Terms])' },
 ];
@@ -48,6 +66,9 @@ title_uz: sarlavhaning o‘zbek (lotin) tilidagi aniq tarjimasi.
 summary_uz: 2–3 jumla — tadqiqot turi, kimlar ustida, asosiy natija (annotatsiyadagi raqamlar bilan).
 takeaway_uz: bitta jumla — amaliyot uchun nimani anglatadi; dastlabki yoki kichik tadqiqot bo‘lsa, buni ochiq ayt.
 Bu davolash bo‘yicha ko‘rsatma emas: buyruq ohangida yozma. Tibbiy atamalarni o‘zbek amaliyotida qabul qilingan shaklda yoz.`;
+
+/** AI or publisher text stored for display: plain text only (no tags, no script/data URLs, no control characters). */
+export const plain = (s: string) => s.replace(/<[^>]*>/g, '').replace(/\b(?:javascript|vbscript|data)\s*:/gi, '').replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e]/g, ' ').replace(/\s+/g, ' ').trim();
 
 export type Article = { pmid: string; title: string; abstract: string; journal: string | null; published: string | null };
 
@@ -126,7 +147,7 @@ export class NewsService {
       });
       model = m;
       const allowed = new Set(articles.map((a) => a.pmid));
-      summaries = new Map(value.items.filter((i) => allowed.has(i.pmid)).map((i) => [i.pmid, { title_uz: i.title_uz.slice(0, 400), summary_uz: i.summary_uz.slice(0, 1500), takeaway_uz: i.takeaway_uz.slice(0, 500) }]));
+      summaries = new Map(value.items.filter((i) => allowed.has(i.pmid)).map((i) => [i.pmid, { title_uz: plain(i.title_uz).slice(0, 400), summary_uz: plain(i.summary_uz).slice(0, 1500), takeaway_uz: plain(i.takeaway_uz).slice(0, 500) }]));
     }
     let added = 0;
     for (const a of articles) {
@@ -144,7 +165,10 @@ export class NewsService {
   /** Specialties of active doctors in all clinics (what the daily job needs to cover). */
   async activeSpecialties(tenantId?: string): Promise<string[]> {
     const rows = await this.db.rows(`SELECT DISTINCT specialty FROM doctors WHERE active ${tenantId ? 'AND tenant_id = $1' : ''}`, tenantId ? [tenantId] : []);
-    return [...new Set(rows.map((r) => specialtyOf(r.specialty).key))];
+    // plus the extra topics doctors follow
+    const topics = await this.db.rows(`SELECT DISTINCT specialty_key FROM news_topics ${tenantId ? 'WHERE tenant_id = $1' : ''}`, tenantId ? [tenantId] : []);
+    const known = new Set(SPECIALTIES.map((x) => x.key));
+    return [...new Set([...rows.map((r) => specialtyOf(r.specialty).key), ...topics.map((r) => r.specialty_key).filter((k) => known.has(k))])];
   }
 
   async refreshAll(tenantId?: string): Promise<{ specialty: string; added: number; error?: string }[]> {

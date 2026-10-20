@@ -2,15 +2,23 @@ import { z } from 'zod';
 import { normalizePhone } from './money';
 import { EXPENSE_CATEGORIES } from './labels';
 
+/** Control and invisible characters (NUL, zero-width, bidi marks) never belong in typed text. */
+const INVISIBLE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]/g;
+export const cleanText = (s: string) => s.replace(INVISIBLE, '');
 const trimmed = (min: number, max: number, label: string) =>
   z.string({ required_error: `${label} kiritilishi shart` })
-    .transform((s) => s.trim().replace(/\s+/g, ' '))
+    .transform((s) => cleanText(s).trim().replace(/\s+/g, ' '))
     .pipe(z.string().min(min, `${label} kamida ${min} belgidan iborat bo‘lsin`).max(max, `${label} ${max} belgidan oshmasin`));
 const optionalText = (max: number) =>
   z.string().max(max, `${max} belgidan oshmasin`).optional().nullable()
-    .transform((s) => (s == null || s.trim() === '' ? null : s.trim()));
+    .transform((s) => { const v = s == null ? '' : cleanText(s).trim(); return v === '' ? null : v; });
+/** A real calendar day (2027-02-30 is not rolled over to March) between 1900 and 2100. */
+export const isRealDate = (s: string) => {
+  const d = new Date(s + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s && s >= '1900-01-01' && s <= '2100-12-31';
+};
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sana YYYY-MM-DD formatida bo‘lsin')
-  .refine((s) => !Number.isNaN(Date.parse(s + 'T00:00:00Z')), 'Noto‘g‘ri sana');
+  .refine(isRealDate, 'Noto‘g‘ri sana');
 const phone = z.string().optional().nullable().transform((s, ctx) => {
   if (s == null || s.trim() === '') return null;
   const p = normalizePhone(s);
@@ -123,7 +131,10 @@ export const discountSchema = z.object({
   type: z.enum(['percent', 'amount']),
   value: z.number().positive('Qiymat 0 dan katta bo‘lsin'),
   reason: trimmed(3, 300, 'Sabab'),
-}).refine((d) => d.type !== 'percent' || d.value <= 100, { message: 'Foiz 0–100 oralig‘ida bo‘lsin', path: ['value'] });
+}).refine((d) => d.type !== 'percent' || d.value <= 100, { message: 'Foiz 0–100 oralig‘ida bo‘lsin', path: ['value'] })
+  // an amount is whole tiyin, a percent has at most two decimals (no discounts that round to nothing)
+  .refine((d) => (d.type === 'amount' ? Number.isInteger(d.value) : d.value >= 0.01 && Math.abs(d.value * 100 - Math.round(d.value * 100)) < 1e-6),
+    { message: 'Chegirma qiymati noto‘g‘ri', path: ['value'] });
 
 export const paymentSchema = z.object({
   amount: z.number({ invalid_type_error: 'Summa kiritilishi shart' }).int('Summa tiyinda butun son bo‘lsin').positive('Summa 0 dan katta bo‘lsin'),
@@ -142,7 +153,8 @@ export const clinicPatchSchema = z.object({ name: trimmed(2, 120, 'Klinika nomi'
 
 export const inventoryMovementSchema = z.object({
   type: z.enum(['in', 'out']),
-  quantity: z.number().positive('Miqdor 0 dan katta bo‘lsin'),
+  quantity: z.number().positive('Miqdor 0 dan katta bo‘lsin').max(1_000_000, 'Miqdor juda katta')
+    .refine((q) => Math.abs(q * 1000 - Math.round(q * 1000)) < 1e-6, 'Ko‘pi bilan 3 ta kasr xona'),
   reason: trimmed(3, 200, 'Sabab'),
   date: isoDate.optional(),
 });
@@ -155,6 +167,10 @@ export const uziReportSchema = z.object({
 export const aiNoteDraftSchema = z.object({ text: z.string().trim().min(10, 'Kamida 10 belgi kiriting').max(6000), encounter_id: uuid.optional() });
 export const icd10SuggestSchema = z.object({ text: z.string().trim().min(3, 'Tashxis matnini kiriting').max(2000), encounter_id: uuid.optional() });
 export const newsFeedbackSchema = z.object({ useful: z.boolean() });
+/** Extra news topics a doctor follows besides their own specialty (at most 5). */
+export const NEWS_TOPICS_MAX = 5;
+export const newsTopicsSchema = z.object({ keys: z.array(z.string().regex(/^[a-z_]{2,32}$/)).max(NEWS_TOPICS_MAX, `Ko‘pi bilan ${NEWS_TOPICS_MAX} ta mavzu`) });
+export const newsSaveSchema = z.object({ saved: z.boolean() });
 export const aiReportSchema = z.object({ question: z.enum(['revenue_today', 'top_services', 'debts']), branch_id: uuid.optional().nullable() });
 
 // ---------- Staff authentication ----------

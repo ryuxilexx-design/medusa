@@ -7,7 +7,7 @@ import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contra
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LoadingRows, Modal, Select, Table, Tabs, Td, Textarea, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Tabs, Td, Textarea, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus, LabStatus, NoteStatus } from '@/components/status';
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal } from '@/components/booking';
@@ -271,7 +271,7 @@ function AllergyModal({ open, onClose, patient }: { open: boolean; onClose: () =
     onError: (e) => toast.error(e),
   });
   return (
-    <Modal open={open} onClose={onClose} title={t('registrar.allergyTitle')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={state === 'known' && !note.trim()} onClick={() => m.mutate()}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={onClose} dirty={!m.isPending && (state !== patient.allergy_state || note !== (patient.allergy_note ?? ''))} title={t('registrar.allergyTitle')} footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} disabled={state === 'known' && !note.trim()} onClick={() => m.mutate()}>{t('common.save')}</Button></>}>
       <div className="space-y-3">
         <Field label={t('registrar.status')}>{(id) => <Select id={id} value={state} onChange={(e) => setState(e.target.value)}>{Object.keys(ALLERGY_LABEL).map((k) => <option key={k} value={k}>{t(`allergy.${k}` as MessageKey)}</option>)}</Select>}</Field>
         {state === 'known' && <Field label={t('registrar.allergen')} required>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>}

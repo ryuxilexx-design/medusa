@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, newsFeedbackSchema, translate } from '@meduza/contracts';
+import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, newsFeedbackSchema, NEWS_TOPICS_MAX, newsSaveSchema, newsTopicsSchema, translate } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { config } from '../core/config';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
@@ -130,15 +130,88 @@ export class AiController {
 
   // ---------- Daily specialty news ----------
 
-  /** Latest articles for the doctor's specialty (managers may pick one). */
+  /** The doctor's own specialty and the extra topics they follow. */
+  private async newsKeys(ctx: Ctx) {
+    const own = specialtyOf(ctx.doctorSpecialty).key;
+    const followed = (await this.db.rows(`SELECT specialty_key FROM news_topics WHERE membership_id = $1 AND tenant_id = $2 ORDER BY created_at`, [ctx.membershipId, ctx.tenantId]))
+      .map((r) => r.specialty_key).filter((k) => k !== own && SPECIALTIES.some((x) => x.key === k));
+    return { own, followed };
+  }
+
+  /**
+   * Doctor: a personal feed — own specialty + followed topics (or one topic), or the saved articles; newest first,
+   * one row per article even when it belongs to several topics. Manager: one specialty to preview (settings).
+   */
   @Roles('doctor', 'manager') @Get('news')
-  async newsList(@CurrentCtx() ctx: Ctx, @Query('specialty') specialty?: string) {
-    const sp = ctx.role === 'doctor' && !specialty ? specialtyOf(ctx.doctorSpecialty) : specialtyByKey(specialty);
+  async newsList(@CurrentCtx() ctx: Ctx, @Query('specialty') specialty?: string, @Query('view') view?: string) {
+    const all = SPECIALTIES.map((s) => ({ key: s.key, label: s.label }));
+    const base = { specialties: all, news_enabled: config.news.enabled, ai_mode: this.ai.mode() };
+    if (ctx.role !== 'doctor') {
+      const sp = specialtyByKey(specialty);
+      const items = await this.db.rows(
+        `SELECT n.id, n.specialty_key, n.title, n.title_uz, n.summary_uz, n.takeaway_uz, n.journal, n.published, n.url, n.fetched_on, n.model, NULL::boolean AS useful
+           FROM news_items n WHERE n.specialty_key = $1 ORDER BY n.fetched_on DESC, n.created_at DESC LIMIT 10`, [sp.key]);
+      return { data: items, meta: { ...base, specialty: sp.key, label: sp.label } };
+    }
+    const { own, followed } = await this.newsKeys(ctx);
+    const keys = specialty && SPECIALTIES.some((x) => x.key === specialty) ? [specialty] : [own, ...followed];
+    const saved = view === 'saved';
     const items = await this.db.rows(
-      `SELECT n.id, n.title, n.title_uz, n.summary_uz, n.takeaway_uz, n.journal, n.published, n.url, n.fetched_on, n.model, f.useful
-         FROM news_items n LEFT JOIN news_feedback f ON f.item_id = n.id AND f.membership_id = $2
-        WHERE n.specialty_key = $1 ORDER BY n.fetched_on DESC, n.created_at DESC LIMIT 10`, [sp.key, ctx.membershipId]);
-    return { data: items, meta: { specialty: sp.key, label: sp.label, specialties: SPECIALTIES.map((s) => ({ key: s.key, label: s.label })), news_enabled: config.news.enabled, ai_mode: this.ai.mode() } };
+      `SELECT * FROM (
+         SELECT DISTINCT ON (n.external_id) n.id, n.specialty_key, n.title, n.title_uz, n.summary_uz, n.takeaway_uz, n.journal, n.published, n.url,
+                n.fetched_on, n.model, n.created_at, f.useful, r.read_at, r.saved_at
+           FROM news_items n
+           LEFT JOIN news_feedback f ON f.item_id = n.id AND f.membership_id = $2
+           LEFT JOIN news_reads r ON r.item_id = n.id AND r.membership_id = $2
+          WHERE ${saved ? 'r.saved_at IS NOT NULL AND $1::text[] IS NOT NULL' : 'n.specialty_key = ANY($1::text[])'}
+          ORDER BY n.external_id, (n.specialty_key = $3) DESC, n.fetched_on DESC) x
+        ORDER BY ${saved ? 'x.saved_at DESC' : 'x.fetched_on DESC, x.created_at DESC'} LIMIT 40`, [keys, ctx.membershipId, own]);
+    const unread = items.filter((i) => !i.read_at).length;
+    return { data: items, meta: { ...base, specialty: own, label: specialtyByKey(own).label, own, followed, unread } };
+  }
+
+  @Roles('doctor') @Get('news/topics')
+  async newsTopics(@CurrentCtx() ctx: Ctx) {
+    const { own, followed } = await this.newsKeys(ctx);
+    return { data: { own, followed, all: SPECIALTIES.map((s) => ({ key: s.key, label: s.label })), max: NEWS_TOPICS_MAX } };
+  }
+
+  /** Replaces the followed topics (own specialty is always included and not stored). */
+  @Roles('doctor') @Put('news/topics')
+  async setNewsTopics(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+    const { keys } = parse(newsTopicsSchema, body);
+    const own = specialtyOf(ctx.doctorSpecialty).key;
+    const clean = [...new Set(keys)].filter((k) => k !== own);
+    if (clean.some((k) => !SPECIALTIES.some((x) => x.key === k))) throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { keys: 'Noma’lum mavzu' });
+    await this.db.tx(async (c) => {
+      await c.query(`DELETE FROM news_topics WHERE membership_id = $1 AND tenant_id = $2`, [ctx.membershipId, ctx.tenantId]);
+      for (const k of clean) await c.query(`INSERT INTO news_topics (membership_id, tenant_id, specialty_key) VALUES ($1,$2,$3)`, [ctx.membershipId, ctx.tenantId, k]);
+    });
+    // a newly followed topic gets today's articles in the background (the hourly job would also do it)
+    if (config.news.enabled) void Promise.all(clean.map((k) => this.news.refreshSpecialty(k).catch(() => 0)));
+    return { data: { own, followed: clean } };
+  }
+
+  @Roles('doctor') @Post('news/:id/read') @HttpCode(200)
+  async newsRead(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
+    if (!isUuid(id)) throw notFound('Maqola');
+    const r = await this.db.rows(
+      `INSERT INTO news_reads (item_id, membership_id, read_at) SELECT id, $2, now() FROM news_items WHERE id = $1
+       ON CONFLICT (item_id, membership_id) DO UPDATE SET read_at = coalesce(news_reads.read_at, now()) RETURNING item_id`, [id, ctx.membershipId]);
+    if (!r.length) throw notFound('Maqola');
+    return { data: { ok: true } };
+  }
+
+  @Roles('doctor') @Post('news/:id/save') @HttpCode(200)
+  async newsSave(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    if (!isUuid(id)) throw notFound('Maqola');
+    const { saved } = parse(newsSaveSchema, body);
+    const r = await this.db.rows(
+      `INSERT INTO news_reads (item_id, membership_id, read_at, saved_at) SELECT id, $2, now(), CASE WHEN $3 THEN now() END FROM news_items WHERE id = $1
+       ON CONFLICT (item_id, membership_id) DO UPDATE SET saved_at = CASE WHEN $3 THEN coalesce(news_reads.saved_at, now()) END,
+         read_at = coalesce(news_reads.read_at, now()) RETURNING item_id`, [id, ctx.membershipId, saved]);
+    if (!r.length) throw notFound('Maqola');
+    return { data: { ok: true, saved } };
   }
 
   @Roles('doctor') @Post('news/:id/feedback') @HttpCode(200)
