@@ -281,6 +281,7 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
 export function PushAddressModal({ path, onClose }: { path: string | null; onClose: () => void }) {
   const t = useT();
   const toast = useToast();
+  const { me } = useSession();
   if (!path || typeof window === 'undefined') return null;
   const loc = window.location;
   const https = loc.protocol === 'https:';
@@ -305,6 +306,13 @@ export function PushAddressModal({ path, onClose }: { path: string | null; onClo
             <Button data-autofocus icon={<Copy className={ic} />} onClick={() => void copy()}>{t('cam.push.copy')}</Button>
           </div>
         )}</Field>
+        {/* demo: a phone can stand in for the camera (the token travels in the #fragment, never in a server log) */}
+        {me.demo && (
+          <Alert tone="blue" title={t('cam.phone.open')}>
+            {t('cam.phone.openHint')}{' '}
+            <a className="break-all font-semibold underline" href={`/phone-camera#${path.split('/').pop()}`} target="_blank" rel="noopener">{`${loc.origin}/phone-camera#${path.split('/').pop()}`}</a>
+          </Alert>
+        )}
         <section aria-labelledby="push-setup-h">
           <h3 id="push-setup-h" className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('cam.push.setup')}</h3>
           <ol className="space-y-2 text-[0.9375rem] text-slate-800">

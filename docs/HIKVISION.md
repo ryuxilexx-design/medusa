@@ -58,6 +58,19 @@ Texnik tafsilotlar, namunaviy ISAPI xabarlari va manbalar: `docs/HIKVISION_ISAPI
 Kod: `apps/api/src/cameras/` (`isapi.ts` — xabarni o‘qish, `ingest.ts` — qoidalar, `cameras.controller.ts` — API,
 `hik.controller.ts` — kamera manzili). Testlar: `apps/api/test/cameras.test.mjs`.
 
+## Telefonni sinov kamerasi qilish (faqat demo / sinov serveri)
+
+1. Rahbar: Kameralar → Qurilmalar → **Kamera qo‘shish** (barcha vazifalar; xavfsizlik — «Har doim»).
+2. Chiqgan oynadagi **«Telefonda sinash»** havolasini telefonda oching (HTTPS kerak — Railway demo’si mos).
+3. **Kamerani yoqish** → kodni yozing (xodim `S-…` — Kameralar → Kodlar; bemor `P-…` — bemor kartasida biometrik
+   rozilik qayd etilgach) → **Yuzni olish**. Endi kameraga qarasangiz, telefon yuzni taniydi va serverga xuddi
+   Hikvision kabi faqat kod va foizni yuboradi (bir odam — daqiqasiga bir marta).
+4. «Odam kirdi», «Hududga kirish», «Aloqani tekshirish» tugmalari — odam sanash, xavfsizlik va yurak urishi.
+
+Yuz rasmi va yuz izi faqat telefon xotirasida (sahifa yopilsa o‘chadi), serverga yuborilmaydi. Yuz tanish
+`@vladmandic/face-api` 1.7.15 bilan brauzerda bajariladi (model CDN’dan yuklanadi). Bu sinov vositasi: aniqligi
+Hikvision kamerasidan past, haqiqiy klinikada ishlatilmaydi (sahifa production serverda ochilmaydi).
+
 ## Kamerasiz sinash: `tools/hik-replay.mjs`
 
 Kamera yuboradigan aynan shu formatdagi xabarlarni (XML, JSON, multipart) serverga yuboradi — o‘rnatilgan serverni
