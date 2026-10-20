@@ -7,8 +7,12 @@ import { Button, ErrorState } from './ui';
 import { useT } from '@/lib/i18n';
 
 /** A4 document shell: Med.uz.ai + clinic/branch, patient ID, document number, date, responsible person, status and the DEMO mark. */
-export function PrintDoc({ title, number, date, branch, patient, responsible, status, draft, children }: {
+export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, children }: {
   title: string; number: string; date: string | Date; branch?: string; patient: any; responsible: string; status: string; draft?: boolean; children: React.ReactNode;
+  /** Label of the fourth patient-box cell (default «Holat:»). */
+  statusLabel?: string;
+  /** Replaces the default footer (responsible person, signature, legal note), e.g. a form signed by the patient. */
+  footer?: React.ReactNode;
 }) {
   const me = useMeQuery();
   const t = useT();
@@ -38,13 +42,15 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
             <div><span className="text-slate-600">{t('print.patient')}</span> <b>{fullName(patient, true)}</b></div>
             <div><span className="text-slate-600">{t('print.patientId')}</span> <b>{pid(patient?.patient_number)}</b></div>
             <div><span className="text-slate-600">{t('print.birthDate')}</span> {fmtDate(patient?.birth_date)}</div>
-            <div><span className="text-slate-600">{t('print.status')}</span> <b>{status}</b></div>
+            <div><span className="text-slate-600">{statusLabel ?? t('print.status')}</span> <b>{status}</b></div>
           </section>
           <div className="mt-4">{children}</div>
-          <footer className="print-avoid-break mt-10 flex items-end justify-between border-t border-slate-300 pt-3 text-xs text-slate-600">
-            <div>{t('print.responsible')} <b className="text-slate-800">{responsible}</b><div className="mt-6">{t('print.signature')}</div></div>
-            <div className="max-w-[60%] text-right">{t('print.legal')}{demo && <><br />{t('print.demoFooter')}</>}</div>
-          </footer>
+          {footer ? <footer className="print-avoid-break mt-8">{footer}{demo && <p className="mt-3 text-right text-xs text-slate-600">{t('print.demoFooter')}</p>}</footer> : (
+            <footer className="print-avoid-break mt-10 flex items-end justify-between border-t border-slate-300 pt-3 text-xs text-slate-600">
+              <div>{t('print.responsible')} <b className="text-slate-800">{responsible}</b><div className="mt-6">{t('print.signature')}</div></div>
+              <div className="max-w-[60%] text-right">{t('print.legal')}{demo && <><br />{t('print.demoFooter')}</>}</div>
+            </footer>
+          )}
         </div>
       </article>
     </div>

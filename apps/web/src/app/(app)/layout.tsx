@@ -85,10 +85,12 @@ function ForcedPasswordChange({ name }: { name: string }) {
 
 /** Shows the server's demo clock (same source as appointments, payments and audit), ticking locally. */
 function DemoClock() {
-  const { demoNow } = useSession();
+  const { demoNow, me } = useSession();
   const t = useT();
   const [now, setNow] = useState(() => demoNow());
   useEffect(() => { const i = setInterval(() => setNow(demoNow()), 15_000); return () => clearInterval(i); }, [demoNow]);
+  // a real clinic (production) runs on real time: no «demo» wording there
+  if (!me.demo) return <span className="text-[0.8125rem] text-slate-600">{longDate(localDate(now))}, {fmtTime(now)}</span>;
   // the explanation is read out too (a tooltip alone is invisible to keyboard and touch users)
   return <span className="text-[0.8125rem] text-slate-600" title={t('shell.demoClockTitle')}>{t('shell.demoClock', { date: longDate(localDate(now)), time: fmtTime(now) })}<span className="sr-only"> {t('shell.demoClockTitle')}</span></span>;
 }
@@ -185,7 +187,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           {/* on a phone the header keeps only menu, branch and logout: who is signed in is shown here */}
           <div className="leading-tight sm:hidden"><div className="text-sm font-semibold text-slate-900">{me.name}</div><div className="text-[0.8125rem] text-slate-600">{t(`role.${me.role}` as MessageKey)}{me.doctor_specialty ? `, ${me.doctor_specialty}` : ''}</div></div>
           <LanguagePicker signedIn className="w-full [&>select]:flex-1" />
-          <div className="text-2xs text-slate-600">{t('shell.release')}</div>
+          <div className="text-2xs text-slate-600">{t(me.demo ? 'shell.release' : 'shell.releaseProd')}</div>
         </div>
       </aside>
       {navOpen && <div className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" onClick={closeNav} />}

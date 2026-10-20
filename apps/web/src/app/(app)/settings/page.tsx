@@ -15,19 +15,23 @@ type Tab = 'clinic' | 'services' | 'telegram' | 'ai' | 'audit' | 'demo';
 
 export default function SettingsPage() {
   const t = useT();
+  const { me } = useSession();
   const [tab, setTab] = useState<Tab>('clinic');
+  // a real clinic (production) has no demo data to reset: no demo tab, no «demo» in the subtitle
+  const tabs: { value: Tab; label: string }[] = [{ value: 'clinic', label: t('admin.set.tabClinic') }, { value: 'services', label: t('admin.set.tabServices') }, { value: 'telegram', label: t('admin.set.tabTelegram') }, { value: 'ai', label: t('admin.set.tabAi') }, { value: 'audit', label: t('admin.set.tabAudit') }];
+  if (me.demo) tabs.push({ value: 'demo', label: t('admin.set.tabDemo') });
   return (
     <>
-      <PageHeader title={t('admin.set.title')} subtitle={t('admin.set.subtitle')} />
+      <PageHeader title={t('admin.set.title')} subtitle={t(me.demo ? 'admin.set.subtitle' : 'admin.set.subtitleProd')} />
       <Card padded={false}>
-        <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={[{ value: 'clinic', label: t('admin.set.tabClinic') }, { value: 'services', label: t('admin.set.tabServices') }, { value: 'telegram', label: t('admin.set.tabTelegram') }, { value: 'ai', label: t('admin.set.tabAi') }, { value: 'audit', label: t('admin.set.tabAudit') }, { value: 'demo', label: t('admin.set.tabDemo') }]} /></div>
+        <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
         <div className="p-4">
           {tab === 'clinic' && <Clinic />}
           {tab === 'services' && <Services />}
           {tab === 'telegram' && <TelegramSettings />}
           {tab === 'ai' && <AiSettings />}
           {tab === 'audit' && <Audit />}
-          {tab === 'demo' && <Demo />}
+          {tab === 'demo' && me.demo && <Demo />}
         </div>
       </Card>
     </>
@@ -124,6 +128,8 @@ const groupKey = (g: string) => `admin.auditGroup.${g.replace(/\.$/, '')}` as Me
 
 function Audit() {
   const t = useT();
+  const { me } = useSession();
+  const groups = AUDIT_GROUPS.filter((g) => me.demo || g !== 'demo.');
   const [page, setPage] = useState(1);
   const [action, setAction] = useState('');
   const q = useQuery({ queryKey: ['audit', page, action], queryFn: () => api(`/audit?page=${page}&page_size=20${action ? `&action=${encodeURIComponent(action)}` : ''}`), placeholderData: (p) => p });
@@ -134,7 +140,7 @@ function Audit() {
         <Field label={t('admin.audit.filterAction')} className="w-full sm:w-72">
           {(id) => <Select id={id} value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}>
             <option value="">{t('admin.audit.allActions')}</option>
-            {AUDIT_GROUPS.map((g) => <option key={g} value={g}>{t(groupKey(g))}</option>)}
+            {groups.map((g) => <option key={g} value={g}>{t(groupKey(g))}</option>)}
           </Select>}
         </Field>
       </div>

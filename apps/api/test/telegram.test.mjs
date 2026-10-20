@@ -237,6 +237,8 @@ test('yangi bemor: ro‘yxatdan o‘tish (noto‘g‘ri sana rad etiladi), karta
   await say(chat, '31.02.1990');
   assert.match((await out(chat)).at(-1).text, /Sana noto‘g‘ri/);
   await say(chat, '05.03.1991');
+  assert.match((await out(chat)).at(-1).text, /roziligingiz kerak/, 'yangi karta oldidan rozilik so‘raladi');
+  await press(chat, '✅ Roziman');
   const p = (await pool.query(`SELECT * FROM patients WHERE phone = $1`, [phone])).rows[0];
   assert.equal(p.last_name, 'Telegramov'); assert.equal(p.first_name, 'Sinov'); assert.equal(p.birth_date, '1991-03-05'); assert.equal(p.source, 'telegram');
   assert.match((await out(chat)).at(-1).text, /Xizmatni tanlang/);

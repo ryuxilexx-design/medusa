@@ -141,7 +141,7 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
           <ul className="divide-y divide-slate-100">{today.data.map((a) => <li key={a.id} className="flex items-center gap-3 px-4 py-2 text-sm"><span className="w-12 shrink-0 tabular-nums">{fmtTime(a.starts_at)}</span><span className="min-w-0 flex-1 truncate">{fullName(a)}, {a.service_name}</span><AppointmentStatus status={a.status} /></li>)}</ul>
         )}
       </Card>
-      <Card className="lg:col-span-2 2xl:col-span-1" title={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('admin.doc.shareTitle')} <span className="whitespace-nowrap"><DemoTag>{t('admin.doc.demoCalc')}</DemoTag></span></span>} padded={false}>
+      <Card className="lg:col-span-2 2xl:col-span-1" title={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('admin.doc.shareTitle')} <span className="whitespace-nowrap"><DemoTag>{t(me.demo ? 'admin.doc.demoCalc' : 'admin.doc.estimateCalc')}</DemoTag></span></span>} padded={false}>
         <div className="flex flex-wrap gap-x-6 gap-y-1 border-b border-slate-100 px-4 py-2 text-sm">
           <span>{t('admin.doc.services')} <b className="tabular-nums">{d.services.length}</b></span>
           <span>{t('admin.doc.value')} <b className="whitespace-nowrap tabular-nums">{formatSom(total)}</b></span>

@@ -1,0 +1,100 @@
+# Med.uz.ai production stack for one server in Uzbekistan (patient data and backups stay in the country).
+#   cd deploy && cp .env.production.example .env && nano .env      # fill every value
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Then create the clinic: docker compose -f docker-compose.prod.yml exec app node database/dist/src/cli.js create-clinic --help
+# Runbook: docs/DEPLOY_UZ.md
+name: meduzai
+
+services:
+  db:
+    image: postgres:16.4-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: meduza
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: meduza
+      TZ: UTC
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meduza -d meduza"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    # no published port: only the app and the backup job reach the database
+    networks: [internal]
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: meduzai:latest
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      APP_MODE: production
+      DATABASE_URL: postgres://meduza:${POSTGRES_PASSWORD}@db:5432/meduza
+      COOKIE_SECURE: "1"
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in deploy/.env}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      BACKGROUND_WORKERS: ${BACKGROUND_WORKERS:-on}
+      AI_MODE: ${AI_MODE:-off}
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-claude-opus-5-5}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_PAID: ${GEMINI_PAID:-0}
+      NEWS_ENABLED: ${NEWS_ENABLED:-on}
+      NCBI_API_KEY: ${NCBI_API_KEY:-}
+      API_INTERNAL_URL: http://127.0.0.1:4000
+    networks: [internal, web]
+
+  caddy:
+    # HTTPS with an automatic Let's Encrypt certificate for DOMAIN; HTTP is redirected to HTTPS
+    image: caddy:2.8.4
+    restart: unless-stopped
+    depends_on: [app]
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [web]
+
+  backup:
+    # daily pg_dump at BACKUP_HOUR (Tashkent time), 14 daily + 8 weekly copies, weekly restore test
+    image: postgres:16.4-bookworm
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      PGHOST: db
+      PGUSER: meduza
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: meduza
+      TZ: Asia/Tashkent
+      BACKUP_HOUR: ${BACKUP_HOUR:-02}
+      KEEP_DAILY: ${KEEP_DAILY:-14}
+      KEEP_WEEKLY: ${KEEP_WEEKLY:-8}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?set BACKUP_PASSPHRASE in deploy/.env}
+    volumes:
+      - ./backup:/scripts:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    entrypoint: ["/bin/bash", "/scripts/loop.sh"]
+    networks: [internal]
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    internal: true
+  web:

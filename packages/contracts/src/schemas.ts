@@ -35,7 +35,30 @@ export const patientBaseSchema = z.object({
   allergy_state: z.enum(['known', 'denied', 'unknown']).default('unknown'),
   allergy_note: optionalText(300),
 });
-export const patientCreateSchema = patientBaseSchema.extend({ confirm_duplicate: z.boolean().optional() });
+// ---------- patient consent (ZRU-547) ----------
+export const CONSENT_KINDS = ['data_processing', 'notifications'] as const;
+export type ConsentKind = (typeof CONSENT_KINDS)[number];
+/** How the consent was obtained. 'telegram' is recorded only by the bot (the patient pressed «Roziman» themselves). */
+export const CONSENT_METHODS = ['signed_paper', 'telegram', 'verbal'] as const;
+export type ConsentMethod = (typeof CONSENT_METHODS)[number];
+const staffConsentMethod = z.enum(['signed_paper', 'verbal'], { errorMap: () => ({ message: 'Rozilik qanday olinganini tanlang' }) });
+export const consentRecordSchema = z.object({
+  kind: z.enum(CONSENT_KINDS, { errorMap: () => ({ message: 'Rozilik turini tanlang' }) }),
+  granted: z.boolean({ errorMap: () => ({ message: 'Bemor javobini tanlang' }) }),
+  method: staffConsentMethod,
+  note: optionalText(500),
+});
+export type ConsentRecordInput = z.infer<typeof consentRecordSchema>;
+
+export const patientCreateSchema = patientBaseSchema.extend({
+  confirm_duplicate: z.boolean().optional(),
+  /** Consent given at registration; recorded in the same transaction. Required in production (APP_MODE=production). */
+  consent: z.object({
+    data_processing: z.boolean({ errorMap: () => ({ message: 'Bemor javobini tanlang' }) }),
+    notifications: z.boolean().optional(),
+    method: staffConsentMethod,
+  }).optional().nullable(),
+});
 export const patientUpdateSchema = patientBaseSchema.partial();
 export type PatientInput = z.infer<typeof patientCreateSchema>;
 

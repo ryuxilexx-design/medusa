@@ -50,7 +50,7 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
 
 const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
-  'doctor_services', 'patients', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
+  'doctor_services', 'patients', 'patient_consents', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
   'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'expenses',
   'inventory_items', 'inventory_movements', 'audit_logs',
 ];
@@ -103,6 +103,26 @@ export async function ensureDemoClock(q: Pick<PoolClient, 'query'>, demoDate: st
   await q.query(`INSERT INTO demo_clock (id, demo_anchor, real_anchor, set_reason) VALUES (1, $1, clock_timestamp(), 'initial') ON CONFLICT (id) DO NOTHING`,
     [demoStartInstant(demoDate, demoTime)]);
   return (await readDemoClock(q))!;
+}
+
+/**
+ * Demo databases seeded before migration 011 have no consent rows, so every seed card would show «Rozilik yo‘q».
+ * Adds the seed's consent rows once (only while the main seed clinic has none), without a destructive reset.
+ * Rows the seed would create are kept as they are; recorded_at is the patient's real card date in this database.
+ */
+export async function backfillSeedConsents(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const has = (await q.query('SELECT 1 FROM patient_consents WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
+  if (has) return 0;
+  const rows = buildSeed(demoDate).patient_consents;
+  const r = await q.query(
+    `INSERT INTO patient_consents (id, tenant_id, patient_id, kind, granted, text_version, method, recorded_by, recorded_by_name, recorded_at)
+     SELECT r.id, r.tenant_id, r.patient_id, r.kind, r.granted, r.text_version, r.method, r.recorded_by, r.recorded_by_name, p.created_at
+       FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, tenant_id uuid, patient_id uuid, kind text, granted boolean, text_version text,
+                                               method text, recorded_by uuid, recorded_by_name text)
+       JOIN patients p ON p.id = r.patient_id AND p.tenant_id = r.tenant_id
+       JOIN memberships m ON m.id = r.recorded_by AND m.tenant_id = r.tenant_id
+     ON CONFLICT (id) DO NOTHING`, [JSON.stringify(rows)]);
+  return r.rowCount ?? 0;
 }
 
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */

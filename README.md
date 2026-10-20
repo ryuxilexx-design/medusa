@@ -166,6 +166,23 @@ Ishonchlilik:
 
 Demo rejimida **simulyator** bor: haqiqiy bot mantig‘i ekranda, Telegram’siz. Uchrashuvda ko‘rsatish va sinov uchun.
 
+## Haqiqiy klinika serveri (O‘zbekiston)
+
+Pilot klinika Railway demo’sida emas, O‘zbekistondagi alohida serverda ishlaydi: `Dockerfile` + `deploy/docker-compose.prod.yml` (PostgreSQL, ilova `APP_MODE=production`, Caddy HTTPS, kunlik shifrlangan zaxira nusxa va haftalik tiklash sinovi). To‘liq qo‘llanma: [`docs/DEPLOY_UZ.md`](docs/DEPLOY_UZ.md). Qonun talablari va provayderlar: [`docs/PILOT_HOSTING_UZ.md`](docs/PILOT_HOSTING_UZ.md).
+
+## Bemor roziligi (shaxsga doir ma’lumotlar, O‘RQ-547)
+
+Haqiqiy bemorlar kiritilishidan oldin klinika bemorning **shaxsiy va sog‘liq haqidagi ma’lumotlarini qayta ishlashga roziligini** qayd etadi. **Telegram eslatmalariga rozilik** — alohida va ixtiyoriy.
+
+- **Dalil sifatida saqlanadi:** `patient_consents` jadvali faqat qo‘shiladi (UPDATE/DELETE’ni baza triggeri rad etadi). Har bir yozuvda: tur, javob (bor/yo‘q), matn versiyasi, qanday olingani (imzolangan varaqa / og‘zaki / Telegram), kim qayd etgani (bot uchun bo‘sh) va vaqti. Qaytarib olish — yangi yozuv; joriy holat = oxirgi yozuv.
+- **Bemor kartasi:** «Rozilik» bloki (holat so‘z + belgi + rang, versiya, sana, kim, tarix), «Rozilikni qayd etish» va «Rozilik varaqasini chop etish» tugmalari. Rozilik bo‘lmasa yoki qaytarib olingan bo‘lsa, kartada sariq ogohlantirish chiqadi. Qayd etish: registrator, rahbar, shifokor (o‘z bemori); kassir va laborant — yo‘q (server 403).
+- **Yangi bemor formasi:** «Bemor shaxsiy ma’lumotlarni qayta ishlashga yozma rozilik berdi» + rozilik shakli, ixtiyoriy «Telegram eslatmalariga rozilik». Rozilik karta bilan bitta tranzaksiyada yoziladi. `APP_MODE=production` da roziliksiz karta ochilmaydi (422 `CONSENT_REQUIRED`); demo rejimida ixtiyoriy. Karta ochilishidan oldin bo‘sh varaqani chop etish mumkin (`/print/consent/blank`).
+- **Chop etish:** `/print/consent/<bemor>` — A4, to‘liq matn interfeys tilida, bemor F.I.Sh., ID, tug‘ilgan sana, klinika, sana, bemor (yoki vakili) va xodim imzosi uchun joy.
+- **Telegram bot:** yangi bemor botda ro‘yxatdan o‘tayotganda karta yaratilishidan oldin qisqa rozilik matni va «✅ Roziman» / «Yo‘q» tugmalari chiqadi (uch tilda). «Roziman» — karta + ikkala rozilik (`telegram` usuli, versiya `tg-2026-10`); «Yo‘q» — hech narsa saqlanmaydi. Klinikada kartasi bor bemorlardan bot qayta so‘ramaydi. Bemor Telegram xabarlariga «yo‘q» desa, unga eslatma va xabarnomalar navbatga qo‘yilmaydi.
+- **Matn versiyasi:** `2026-10`, `packages/contracts/src/i18n/messages/consent.ts` (uch tilda). Matn o‘zgarsa — yangi versiya, eskisi o‘zgartirilmaydi.
+
+> ⚠️ **Yurist ko‘rib chiqishi shart.** Rozilik matni (to‘liq varaqa ham, botdagi qisqa matn ham) pilot uchun yozilgan oddiy tildagi loyiha. Haqiqiy bemorlar imzolashidan oldin O‘zbekiston huquqi bo‘yicha yurist matnni, saqlash muddatini va klinika rekvizitlarini tekshirishi kerak.
+
 ## Tillar va dizayn
 
 - **Uch til:** o‘zbek (lotin), o‘zbek (kirill), rus. Har bir xodim chap menyuning pastida tanlaydi; tanlov haqiqiy xodim akkauntida (istalgan qurilmada), demo kartada — faqat shu sessiyada saqlanadi. Kirish sahifasida ham til tanlanadi.

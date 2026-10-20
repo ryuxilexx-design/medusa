@@ -9,11 +9,21 @@ export const LINKED_CHATS_SQL = `
    WHERE tc.tenant_id = p.tenant_id AND tc.phone = p.phone AND tc.phone IS NOT NULL AND NOT tc.blocked AND b.status = 'active'`;
 
 /**
+ * SQL condition: patient `p` has not refused / withdrawn the Telegram notifications consent. Linking the bot with
+ * one's own phone is the patient's own opt-in, so "nothing recorded" still allows notices; an explicit «no»
+ * (latest notifications row with granted = false) stops them.
+ */
+export const NOTICES_ALLOWED_SQL = `
+  coalesce((SELECT pc.granted FROM patient_consents pc WHERE pc.patient_id = p.id AND pc.tenant_id = p.tenant_id AND pc.kind = 'notifications'
+             ORDER BY pc.recorded_at DESC, pc.seq DESC LIMIT 1), true)`;
+
+/**
  * Queues a patient notice in the caller's transaction (outbox pattern): it is delivered only if the
- * event commits, and dedupe_key makes it at-most-once. Patients without a linked chat get nothing queued.
+ * event commits, and dedupe_key makes it at-most-once. Patients without a linked chat, or who said «no» to
+ * Telegram notices, get nothing queued.
  */
 export async function enqueueNotice(c: Q, n: { tenantId: string; kind: NoticeKind; patientId: string; appointmentId?: string | null; orderId?: string | null; dedupeKey: string }) {
-  const linked = (await c.query(`SELECT 1 FROM patients p WHERE p.id = $1 AND p.tenant_id = $2 AND EXISTS (${LINKED_CHATS_SQL})`, [n.patientId, n.tenantId])).rowCount;
+  const linked = (await c.query(`SELECT 1 FROM patients p WHERE p.id = $1 AND p.tenant_id = $2 AND EXISTS (${LINKED_CHATS_SQL}) AND ${NOTICES_ALLOWED_SQL}`, [n.patientId, n.tenantId])).rowCount;
   if (!linked) return false;
   const r = await c.query(
     `INSERT INTO notifications (tenant_id, kind, patient_id, appointment_id, order_id, dedupe_key) VALUES ($1,$2,$3,$4,$5,$6)

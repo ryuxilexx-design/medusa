@@ -209,4 +209,11 @@ export const api = {
   'api.v.paymentMethod': ['To‘lov usulini tanlang', 'Выберите способ оплаты'],
   'api.v.time': ['Vaqt HH:MM formatida bo‘lsin', 'Время в формате ЧЧ:ММ'],
   'api.v.tokenWrong': ['Token noto‘g‘ri yoki bekor qilingan', 'Токен неверный или отозван'],
+
+  // patient consent
+  'api.v.consentKind': ['Rozilik turini tanlang', 'Выберите вид согласия'],
+  'api.v.consentMethod': ['Rozilik qanday olinganini tanlang', 'Укажите, как получено согласие'],
+  'api.v.consentAnswer': ['Bemor javobini tanlang', 'Выберите ответ пациента'],
+  'api.consentRequired': ['Roziliksiz bemor kartasi ochilmaydi', 'Без согласия карта пациента не создаётся'],
+  'api.v.consentRequired': ['Bemor shaxsiy ma’lumotlarni qayta ishlashga rozilik berganini belgilang', 'Отметьте, что пациент дал согласие на обработку персональных данных'],
 } as const satisfies Catalog;

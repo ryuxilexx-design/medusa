@@ -78,5 +78,6 @@ export const shell = {
   'shell.logoutDemo': ['Chiqish / rolni almashtirish', 'Выйти / сменить роль'],
   'shell.demoClock': ['Demo vaqti: {date}, {time}', 'Демо-время: {date}, {time}'],
   'shell.demoClockTitle': ['Demo vaqti: demo sanasi va soati. Faqat «Demo ma’lumotlarini tiklash» uni boshlang‘ich nuqtaga qaytaradi.', 'Демо-время: дата и час демо. Вернуть к началу может только «Сброс демо-данных».'],
-  'shell.release': ['Med.uz.ai, demo reliz 0.8', 'Med.uz.ai, демо-релиз 0.8'],
+  'shell.release': ['Med.uz.ai, demo reliz 0.9', 'Med.uz.ai, демо-релиз 0.9'],
+  'shell.releaseProd': ['Med.uz.ai, reliz 0.9', 'Med.uz.ai, релиз 0.9'],
 } as const satisfies Catalog;

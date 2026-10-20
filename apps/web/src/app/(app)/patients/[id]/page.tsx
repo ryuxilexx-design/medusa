@@ -12,6 +12,7 @@ import { AppointmentStatus, InvoiceStatus, LabStatus, NoteStatus } from '@/compo
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal } from '@/components/booking';
 import { LabValues } from '@/components/lab-values';
+import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
 import { useT } from '@/lib/i18n';
 
 type Tab = 'overview' | 'visits' | 'notes' | 'labs' | 'invoices' | 'docs';
@@ -27,6 +28,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   const [edit, setEdit] = useState(false);
   const [book, setBook] = useState(false);
   const [allergy, setAllergy] = useState(false);
+  const [consentKind, setConsentKind] = useState<'data_processing' | 'notifications' | null>(null);
   const canEdit = role === 'manager' || role === 'registrar';
 
   if (p.isLoading) return <Card><LoadingRows rows={4} /></Card>;
@@ -74,13 +76,14 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
             <Button size="sm" className="ml-auto" onClick={() => setAllergy(true)}>{t('registrar.change')}</Button>
           </div>
         )}
+        <ConsentNotice patientId={pt.id} consents={pt.consents} role={role} onRecord={() => setConsentKind('data_processing')} />
       </div>
 
       <Card padded={false}>
         <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
         {h.isLoading ? <LoadingRows /> : h.isError ? <ErrorState error={h.error} onRetry={() => h.refetch()} /> : (
           <div className="p-4">
-            {tab === 'overview' && <Overview pt={pt} h={h.data} role={role} />}
+            {tab === 'overview' && <Overview pt={pt} h={h.data} role={role} onConsent={setConsentKind} />}
             {tab === 'visits' && <Visits visits={h.data.visits} />}
             {tab === 'notes' && <Notes notes={h.data.notes} />}
             {tab === 'labs' && <Labs labs={h.data.labs} diagnostics={h.data.diagnostics} role={role} />}
@@ -92,11 +95,12 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
       <PatientFormModal open={edit} patient={pt} onClose={() => setEdit(false)} />
       <BookingModal open={book} init={{ patient: pt }} onClose={() => setBook(false)} />
       {role === 'doctor' && <AllergyModal open={allergy} onClose={() => setAllergy(false)} patient={pt} />}
+      {pt.consents && <ConsentModal open={!!consentKind} kind={consentKind ?? 'data_processing'} patientId={pt.id} onClose={() => setConsentKind(null)} />}
     </>
   );
 }
 
-function Overview({ pt, h, role }: { pt: any; h: any; role: string }) {
+function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; onConsent: (kind: 'data_processing' | 'notifications') => void }) {
   const t = useT();
   // Timeline: newest first; each row links to the visit / result / invoice it came from.
   const events: { at: string; kind: string; text: React.ReactNode; href?: string; badge: React.ReactNode }[] = [];
@@ -119,6 +123,7 @@ function Overview({ pt, h, role }: { pt: any; h: any; role: string }) {
           {pt.note !== undefined && <KeyVal k={t('registrar.note')} v={pt.note || '—'} />}
         </div>
         {(role === 'cashier' || role === 'lab') && <p className="mt-2 text-xs text-slate-600">{t('registrar.minimalInfo')}</p>}
+        {pt.consents && <ConsentBlock patientId={pt.id} consents={pt.consents} role={role} onRecord={onConsent} />}
       </div>
       <div className="lg:col-span-2">
         <h3 className="mb-2 text-sm font-semibold text-slate-800">{t('registrar.timeline')}</h3>

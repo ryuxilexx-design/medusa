@@ -5,7 +5,7 @@ import { Db } from '../core/db';
 import { decryptSecret } from '../core/secrets';
 import { syncClock } from '../core/clock';
 import { BotEngine, cardFor } from './engine';
-import { LINKED_CHATS_SQL } from './outbox';
+import { LINKED_CHATS_SQL, NOTICES_ALLOWED_SQL } from './outbox';
 import { Lang, T } from './texts';
 import { HttpTransport, OutMessage, SimTransport, TelegramError, Transport } from './transport';
 
@@ -45,7 +45,7 @@ export class Notifier {
          SELECT a.tenant_id, $1, a.patient_id, a.id, $1 || ':' || a.id || ':' || extract(epoch FROM a.starts_at)::bigint
            FROM appointments a JOIN patients p ON p.id = a.patient_id
           WHERE a.status = 'scheduled' AND a.starts_at > demo_now() + $2::interval AND a.starts_at <= demo_now() + $3::interval
-            AND a.created_at <= demo_now() - $4::interval AND EXISTS (${LINKED_CHATS_SQL})
+            AND a.created_at <= demo_now() - $4::interval AND EXISTS (${LINKED_CHATS_SQL}) AND ${NOTICES_ALLOWED_SQL}
          ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`, [kind, from, to, age]);
       n += r.rowCount ?? 0;
     }
@@ -65,6 +65,8 @@ export class Notifier {
           stats[status === 'sent' ? 'sent' : 'skipped']++;
         };
         if (!(await this.stillValid(c, n))) { await finish('skipped', 'endi dolzarb emas'); return true; }
+        // the patient may have said «no» to Telegram notices after this one was queued
+        if (!(await c.query(`SELECT 1 FROM patients p WHERE p.id = $1 AND ${NOTICES_ALLOWED_SQL}`, [n.patient_id])).rowCount) { await finish('skipped', 'bemor Telegram xabarnomalariga rozi emas'); return true; }
         const chats = (await c.query(`SELECT x.*, b.token_enc FROM patients p, LATERAL (${LINKED_CHATS_SQL}) x JOIN telegram_bots b ON b.id = x.bot_id WHERE p.id = $1`, [n.patient_id])).rows;
         if (!chats.length) { await finish('skipped', 'bog‘langan chat yo‘q'); return true; }
         let retryError: string | null = null;

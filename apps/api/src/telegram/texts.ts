@@ -50,6 +50,10 @@ const uz = {
   stale: 'Bu tugma eskirgan. Menyudan qayta tanlang.', useButtons: 'Iltimos, tugmalardan birini tanlang 👇',
   unknown: 'Tushunmadim. Pastdagi menyudan tanlang 👇', error: 'Xatolik yuz berdi. Birozdan keyin qayta urinib ko‘ring.',
   langPick: 'Tilni tanlang / Тилни танланг / Выберите язык:', langSet: 'Til: o‘zbekcha ✅',
+  // consent before a NEW card is created (ZRU-547) — short version of the clinic's consent text; see BOT_CONSENT_VERSION
+  consentAsk: (clinic: string) => `Karta ochishdan oldin roziligingiz kerak.\n\n«${clinic}» klinikasi ism-familiya, tug‘ilgan sana, telefon raqami va sog‘lig‘ingiz haqidagi ma’lumotlarni davolash, tibbiy hujjatlar, hisob-kitob va qabul eslatmalari uchun qayta ishlaydi. Ma’lumotlar O‘zbekistonda saqlanadi.\n\nIstalgan vaqtda registratura orqali ma’lumotlaringizni ko‘rishingiz, tuzattirishingiz yoki roziligingizni qaytarib olishingiz mumkin. Telegram’da tahlil natijalari va tashxis yuborilmaydi.\n\n«✅ Roziman» — ma’lumotlarimni qayta ishlashga va shu botda eslatmalar olishga roziman.`,
+  consentYes: '✅ Roziman', consentNo: 'Yo‘q',
+  consentDeclined: 'Tushunarli. Roziliksiz karta ochilmaydi va ma’lumotlaringiz saqlanmadi. Qabulga yozilish uchun registraturaga qo‘ng‘iroq qiling yoki klinikaga keling.',
 };
 type Texts = typeof uz;
 
@@ -101,6 +105,9 @@ const ru: Texts = {
   stale: 'Эта кнопка устарела. Выберите заново в меню.', useButtons: 'Пожалуйста, выберите одну из кнопок 👇',
   unknown: 'Не понял. Выберите в меню ниже 👇', error: 'Произошла ошибка. Попробуйте чуть позже.',
   langPick: 'Tilni tanlang / Тилни танланг / Выберите язык:', langSet: 'Язык: русский ✅',
+  consentAsk: (clinic) => `Чтобы открыть карту, нужно ваше согласие.\n\nКлиника «${clinic}» обрабатывает ФИО, дату рождения, номер телефона и сведения о вашем здоровье для лечения, ведения медицинских документов, расчётов и напоминаний о приёме. Данные хранятся в Узбекистане.\n\nВ любое время через регистратуру можно посмотреть и исправить свои данные или отозвать согласие. Результаты анализов и диагноз в Telegram не отправляются.\n\n«✅ Согласен(-на)» — согласие на обработку моих данных и на напоминания в этом боте.`,
+  consentYes: '✅ Согласен(-на)', consentNo: 'Нет',
+  consentDeclined: 'Понятно. Без согласия карта не создаётся, ваши данные не сохранены. Чтобы записаться, позвоните в регистратуру или приходите в клинику.',
 };
 
 /**
@@ -123,6 +130,12 @@ const cyrl = Object.fromEntries(Object.entries(uz).map(([k, v]) => [k, cyrillicO
 cyrl.langSet = 'Тил: ўзбекча (кирилл) ✅';
 
 export const T: Record<Lang, Texts> = { uz, 'uz-Cyrl': cyrl, ru };
+
+/**
+ * Version id of the consent the bot shows (consentAsk above), stored with every consent the bot records.
+ * Change the wording → bump this id. Like the full form (CONSENT_TEXT_VERSION), it needs a lawyer's review.
+ */
+export const BOT_CONSENT_VERSION = 'tg-2026-10';
 export type Card = { patient: string; service: string; doctor: string; date: string; time: string; place: string };
 
 const MONTHS: Record<'uz' | 'ru', string[]> = {

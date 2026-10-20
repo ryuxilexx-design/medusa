@@ -8,12 +8,14 @@ import { clinical } from './messages/clinical';
 import { admin } from './messages/admin';
 import { api } from './messages/api';
 import { print } from './messages/print';
+import { consent } from './messages/consent';
 
 export * from './core';
 export { latinToCyrillic } from './translit';
+export { CONSENT_TEXT_VERSION, CONSENT_TEXTS, type ConsentTextVersion } from './messages/consent';
 
 /** Every interface message. Each area keeps its own file; keys are prefixed by area, so they never collide. */
-export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print };
+export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print, ...consent };
 export type MessageKey = keyof typeof MESSAGES;
 export const translate: (locale: Locale, key: MessageKey, params?: Params) => string = createTranslator(MESSAGES);
 

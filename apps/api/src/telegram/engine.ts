@@ -12,7 +12,8 @@ import { audit } from '../core/audit';
 import { addDays, localDate, localTime, localToUtc, now, syncClock, today } from '../core/clock';
 import { availability, cancelAppointment, createAppointment, rescheduleAppointment } from '../modules/booking';
 import { PRICE_SQL } from '../modules/reference.controller';
-import { Card, humanDate, Lang, shortDate, T } from './texts';
+import { recordConsent } from '../modules/consent';
+import { BOT_CONSENT_VERSION, Card, humanDate, Lang, shortDate, T } from './texts';
 import { InlineButton, OutMessage, ReplyMarkup, TelegramError, Transport } from './transport';
 
 export type Bot = { id: string; tenant_id: string; kind: 'telegram' | 'simulator' };
@@ -249,6 +250,10 @@ export class BotEngine {
         if (key !== 'ok') return;
         return st.step === 'confirm' ? this.book(t, d) : this.reschedule(t, d);
       }
+      case 'reg_consent':
+        if (key === 'yes') return this.createFromBot(t, d);
+        if (key === 'no') { t.send(t.t.consentDeclined); return this.showMenu(t); }
+        return;
       case 'intake_offer':
         if (key === 'ok') return this.startIntake(t, d.appointment_id);
         return this.showMenu(t);
@@ -309,23 +314,47 @@ export class BotEngine {
     t.send(t.t.pickPatient, t.kb([...ps.map((p, i) => [{ text: `${p.last_name} ${p.first_name}`, key: String(i) }]), [{ text: t.t.newPerson, key: String(ps.length) }]]));
   }
 
-  private async finishRegistration(t: Turn, birth: string) {
-    const d = t.chat.state.d ?? {};
-    const same = (await t.c.query(
+  private async sameCard(t: Turn, d: Record<string, any>): Promise<string | undefined> {
+    return (await t.c.query(
       `SELECT id FROM patients WHERE tenant_id = $1 AND phone = $2 AND lower(last_name) = lower($3) AND lower(first_name) = lower($4) AND birth_date = $5`,
-      [t.chat.tenant_id, t.chat.phone, d.last, d.first, birth])).rows[0];
-    let id: string = same?.id;
-    if (!id) {
-      const n = (await t.c.query(`SELECT count(*)::int AS n FROM patients WHERE tenant_id = $1 AND phone = $2 AND source = 'telegram'`, [t.chat.tenant_id, t.chat.phone])).rows[0].n;
-      if (n >= MAX_TG_PATIENTS_PER_PHONE) { t.send(t.t.regLimit); return this.showMenu(t); }
-      const seq = (await t.c.query(`UPDATE tenants SET patient_seq = patient_seq + 1 WHERE id = $1 RETURNING patient_seq`, [t.chat.tenant_id])).rows[0].patient_seq;
-      const row = (await t.c.query(
-        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, birth_date, sex, phone, source)
-         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,'unspecified',$6,'telegram') RETURNING id, patient_number`,
-        [t.chat.tenant_id, seq, d.last, d.first, birth, t.chat.phone])).rows[0];
-      await audit(t.c, t.ctx(), 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi (Telegram)`);
-      id = row.id;
+      [t.chat.tenant_id, t.chat.phone, d.last, d.first, d.birth])).rows[0]?.id;
+  }
+
+  private async overCardLimit(t: Turn) {
+    const n = (await t.c.query(`SELECT count(*)::int AS n FROM patients WHERE tenant_id = $1 AND phone = $2 AND source = 'telegram'`, [t.chat.tenant_id, t.chat.phone])).rows[0].n;
+    return n >= MAX_TG_PATIENTS_PER_PHONE;
+  }
+
+  private async finishRegistration(t: Turn, birth: string) {
+    const d = { ...(t.chat.state.d ?? {}), birth };
+    const same = await this.sameCard(t, d);
+    if (same) return this.registered(t, d, same); // an existing card: no new data is stored, consent is not asked here
+    if (await this.overCardLimit(t)) { t.send(t.t.regLimit); return this.showMenu(t); }
+    // A new card needs the patient's consent first (ZRU-547); nothing is stored until they press «Roziman».
+    t.step('reg_consent', d);
+    t.send(t.t.consentAsk(t.clinic), t.kb([[{ text: t.t.consentYes, key: 'yes' }, { text: t.t.consentNo, key: 'no' }]]));
+  }
+
+  /** «Roziman»: the card and both consents (data processing + Telegram notices) are written in this update's transaction. */
+  private async createFromBot(t: Turn, d: Record<string, any>) {
+    if (!d.last || !d.first || !d.birth) { t.toast = t.t.stale; return this.showMenu(t); }
+    const same = await this.sameCard(t, d); // the same person may have been registered meanwhile
+    if (same) return this.registered(t, d, same);
+    if (await this.overCardLimit(t)) { t.send(t.t.regLimit); return this.showMenu(t); }
+    const seq = (await t.c.query(`UPDATE tenants SET patient_seq = patient_seq + 1 WHERE id = $1 RETURNING patient_seq`, [t.chat.tenant_id])).rows[0].patient_seq;
+    const row = (await t.c.query(
+      `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, birth_date, sex, phone, source)
+       VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,'unspecified',$6,'telegram') RETURNING id, patient_number`,
+      [t.chat.tenant_id, seq, d.last, d.first, d.birth, t.chat.phone])).rows[0];
+    const ctx = t.ctx();
+    await audit(t.c, ctx, 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi (Telegram)`);
+    for (const kind of ['data_processing', 'notifications'] as const) {
+      await recordConsent(t.c, ctx, row.id, { kind, granted: true, method: 'telegram', textVersion: BOT_CONSENT_VERSION });
     }
+    return this.registered(t, d, row.id);
+  }
+
+  private registered(t: Turn, d: Record<string, any>, id: string) {
     t.send(t.t.regDone(`${d.last} ${d.first}`), this.menuKb(t.lang));
     return this.renderServices(t, { patient_id: id });
   }

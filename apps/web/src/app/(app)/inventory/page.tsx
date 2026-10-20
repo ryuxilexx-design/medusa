@@ -14,7 +14,7 @@ const n = (v: any) => Number(v).toLocaleString('ru-RU').replace(/ /g, ' ');
 
 function Inventory() {
   const t = useT();
-  const { branchId } = useSession();
+  const { branchId, me } = useSession();
   const sp = useSearchParams();
   const router = useRouter();
   const [low, setLow] = useState(sp.get('low') === '1');
@@ -22,7 +22,7 @@ function Inventory() {
   const q = useQuery({ queryKey: ['inventory', low, branchId], queryFn: () => api(`/inventory${qs({ low: low ? 1 : undefined, branch_id: branchId })}`).then((r) => r.data as any[]) });
   return (
     <>
-      <PageHeader title={t('admin.inv.title')} subtitle={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('admin.inv.subtitle')} <span className="whitespace-nowrap"><DemoTag /></span></span>}
+      <PageHeader title={t('admin.inv.title')} subtitle={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('admin.inv.subtitle')} {me.demo && <span className="whitespace-nowrap"><DemoTag /></span>}</span>}
         actions={<label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-1 text-[0.9375rem] focus-within:ring-4 focus-within:ring-amber-300"><input type="checkbox" className="h-5 w-5 accent-brand-600 focus:outline-none" checked={low} onChange={(e) => setLow(e.target.checked)} />{t('admin.inv.lowOnly')}</label>} />
       <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <Card padded={false}>
@@ -51,7 +51,7 @@ function Inventory() {
         </Card>
         {sel ? <ItemDetail id={sel} /> : <Card className="hidden xl:block"><EmptyState title={t('admin.inv.pick')} text={t('admin.inv.pickText')} /></Card>}
       </div>
-      <p className="mt-3 text-[0.8125rem] text-slate-600">{t('admin.inv.autoNote')}</p>
+      <p className="mt-3 text-[0.8125rem] text-slate-600">{t(me.demo ? 'admin.inv.autoNote' : 'admin.inv.autoNoteProd')}</p>
     </>
   );
 }

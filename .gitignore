@@ -9,3 +9,7 @@ e2e/node_modules
 backups/
 .next-*
 .claude/settings.local.json
+
+# production server secrets and backups
+deploy/.env
+deploy/backups/

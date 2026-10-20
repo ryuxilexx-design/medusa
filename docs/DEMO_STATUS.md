@@ -4,6 +4,32 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 0000000000. Pilot serveri: O‘zbekistonda o‘rnatish to‘plami (production)
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| `Dockerfile` (veb + API bitta konteynerda) va `deploy/docker-compose.prod.yml`: PostgreSQL (tashqi port yo‘q), ilova `APP_MODE=production`, Caddy (HTTPS, xavfsizlik sarlavhalari), zaxira nusxa servisi | Tayyor | Lokal sinov steki: HTTPS 200, sarlavhalar, demo yo‘llari 404, cookie `Secure` |
+| Kunlik shifrlangan zaxira nusxa (pg_dump + GPG AES-256), 14 kunlik + 8 haftalik, haftalik tiklash sinovi, xavfsiz tiklash (`CONFIRM=RESTORE`, oldin xavfsizlik nusxasi) | Tayyor | Birinchi nusxa + tiklash sinovi avtomatik o‘tdi; saqlash soni `KEEP_DAILY=3` bilan tekshirildi |
+| Production’da demo soati ishlatilmaydi (bazada demo soati bo‘lsa API ishga tushmaydi) | Tuzatildi (avval production demo vaqtida ishlar edi) | `/me`: haqiqiy sana; audit vaqti real |
+| Production interfeysida «demo» so‘zi yo‘q: sarlavhadagi soat, reliz yozuvi, sozlamalardagi demo bo‘limi, ombor va AI eslatmalari | Tuzatildi | Brauzerda 12 sahifa + sozlamalar bo‘limlari o‘qib chiqildi, skrinshotlar |
+| Klinika ochish, vaqtinchalik parol → majburiy almashtirish, bemor qo‘shish (rozilik majburiy), rozilik varaqasini chop etish | Ishlaydi | Production steki HTTPS orqali, brauzer va API |
+| O‘rnatish qo‘llanmasi `docs/DEPLOY_UZ.md`; qonun va provayderlar tadqiqoti `docs/PILOT_HOSTING_UZ.md` | Yozildi | — |
+
+**Cheklov:** haqiqiy O‘zbekiston serverida, haqiqiy domen va Let’s Encrypt bilan hali sinalmagan (lokal sinovda o‘z-o‘zidan imzolangan sertifikat). Provayder narxlari va qonun bo‘yicha ochiq savollar — `docs/PILOT_HOSTING_UZ.md` 5-bo‘lim.
+
+## 000000000. Bemor roziligi (O‘RQ-547) — pilotdan oldin
+
+| Imkoniyat | Holat | Qanday tekshirildi |
+|---|---|---|
+| Ma’lumotlarni qayta ishlashga rozilik va alohida Telegram eslatmalariga rozilik, faqat qo‘shiladigan dalil yozuvlari (`patient_consents`, migratsiya `011_consent.sql`) | Ishlaydi: tur, javob, matn versiyasi, usul (imzolangan varaqa / og‘zaki / Telegram), kim va qachon; UPDATE/DELETE’ni baza triggeri rad etadi; qaytarib olish — yangi yozuv | API testi `consent.test.mjs` (7 ta): qayd etish, tarix, audit (izohsiz), trigger, boshqa klinika 404, kassir/laborant/begona shifokor 403 |
+| Bemor kartasi: holat bloki, tarix, «Rozilikni qayd etish», «Rozilik varaqasini chop etish», roziliksiz kartada sariq ogohlantirish | Ishlaydi | E2E `consent`: ogohlantirish → qayd etish (javobsiz saqlanmaydi) → «Rozilik bor» + tarix; skrinshotlar 1366×768 |
+| Yangi bemor formasi: rozilik belgisi + shakli, ixtiyoriy Telegram roziligi; `APP_MODE=production` da roziliksiz karta ochilmaydi (422) | Ishlaydi (demo’da ixtiyoriy) | API testi production rejimini yoqib tekshiradi; E2E formada maydonlarni tekshiradi |
+| Chop etiladigan rozilik varaqasi (A4, uch tilda, bo‘sh varaqa ham) | Ishlaydi | E2E: o‘zbek va rus tilida chop etish, bo‘sh varaqa |
+| Telegram bot: yangi bemordan karta yaratilishidan oldin «✅ Roziman / Yo‘q» | Ishlaydi; «Yo‘q» bo‘lsa hech narsa saqlanmaydi; mavjud bemor qayta so‘ralmaydi; Telegram roziligi «yo‘q» bo‘lsa xabarnoma navbatga qo‘yilmaydi | API testi simulyator orqali (ha/yo‘q, kirill va rus matni) |
+| Seed: bemorlarning 70% ida imzolangan rozilik (`patient_number % 10 < 7`, RNG ishlatilmaydi — KPI o‘zgarmagan) | Demo ma’lumoti; avvalgi demo bazalarga API ishga tushganda bir marta qo‘shiladi (reset kerak emas) | API testi; live demo nusxasida: 70 ta qo‘shildi, qayta ishga tushishda 0 |
+
+**Cheklov:** rozilik matni (versiya `2026-10` va botdagi `tg-2026-10`) — yurist tekshirmagan loyiha. Haqiqiy bemorlardan oldin O‘zbekiston yuristi ko‘rib chiqishi shart (saqlash muddati, qonunga havolalar, klinika rekvizitlari). Elektron imzo yo‘q: qog‘oz varaqa imzolanadi va tizimda qayd etiladi.
+
 ## 00000000. 0.8.1: UI/UX auditi va tuzatishlar
 
 5 ta auditor (shifokor va karkas, registratura, kassa, klinik, boshqaruv) har bir ekranni 1366, 1920 va 390 px kenglikda, uch tilda skrinshot bilan tekshirdi: ~117 topilma va mayda nuqsonlar. Hammasi tuzatildi va har bir bo‘lim «oldin/keyin» skrinshotlari bilan qayta tekshirildi. axe-core (WCAG 2.1 AA) 21 ta ekranda 3 xil xato topdi — tuzatildi.
@@ -256,8 +282,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 
 | Buyruq / tekshiruv | Natija |
 |---|---|
-| `npm test` (meduza_test) | 74/74 o‘tdi (5 ta til testi, bot kirill testi va AI tili testi qo‘shildi): 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
-| `npm run e2e` (izolyatsiyalangan stek) | 89/89: 19 asosiy yo‘l + 16 xato holati + 11 xodim kirishi + 8 shifokor jadvali + 9 Telegram simulyatori + 7 AI/MKB-10 + 7 qabul hujjatlari + 12 kassa |
+| `npm test` (meduza_test) | 81/81 o‘tdi (7 ta rozilik testi qo‘shildi): 11 P0, 6 P1, 2 ta demo vaqti va xavfsizlik, 8 ta xodim kirishi, 4 ta shifokor jadvali, 13 ta Telegram bot, 9 ta AI/MKB-10/yangiliklar (Gemini bilan), 5 ta qabul hujjatlari, 8 ta kassa testi |
+| `npm run e2e` (izolyatsiyalangan stek) | 113/113: asosiy yo‘l, xato holatlari, xodim kirishi, shifokor jadvali, Telegram simulyatori, AI/MKB-10, qabul hujjatlari, kassa, uch til, rozilik (10) |
 | Vizual o‘tish, demo ilovada, faqat o‘qish | 18 skrinshot (`docs/screenshots/`), gorizontal skroll yo‘q, sig‘magan modal yo‘q, konsol xatosi yo‘q; o‘tishdan oldin va keyin demo ma’lumotlari fingerprint’i bir xil |
 | `npm run typecheck`, `npm run build` | Xatosiz |
 | Tashqi so‘rovlar | Asosiy ekranlarda yo‘q |
@@ -274,3 +300,4 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 9. Login butun tizim bo‘yicha yagona: bitta telefon raqami bilan faqat bitta akkaunt. Bir odam ikki klinikada ishlasa, kirishda klinikani tanlash imkoni API’da bor, lekin uni yaratadigan UI hali yo‘q.
 7. Seed telefon raqamlari tasodifiy generatsiya qilingan. Hech qayerga yuborilmaydi, lekin haqiqiy raqamga to‘g‘ri kelishi mumkin.
 8. Bekor qilingan qabulda to‘lov bo‘lsa, pul avtomatik qaytarilmaydi: rahbar «Pulni qaytarish» orqali qaytaradi (0.6).
+10. **Bemor roziligi matni** (`2026-10`, bot uchun `tg-2026-10`) — yurist tekshirmagan loyiha; haqiqiy bemorlardan oldin yurist ko‘rib chiqishi shart. Rozilikni qaytarib olgan bemor kartasi bloklanmaydi — faqat sariq ogohlantirish chiqadi (keyingi qadam klinika tartibiga bog‘liq).

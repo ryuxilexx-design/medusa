@@ -48,7 +48,7 @@ export function AiSettings() {
         </section>
         {u.mode !== 'live' && (
           <Alert tone="yellow" title={t('admin.ai.notLiveTitle')}>
-            {u.key_configured ? t('admin.ai.keyNotLive') : t('admin.ai.noKey')} {t('admin.ai.notLiveText')}
+            {u.key_configured ? t('admin.ai.keyNotLive') : t('admin.ai.noKey')} {t(u.mode === 'sample' ? 'admin.ai.notLiveText' : 'admin.ai.offText')}
           </Alert>
         )}
         {u.mode === 'live' && u.gemini_free && (

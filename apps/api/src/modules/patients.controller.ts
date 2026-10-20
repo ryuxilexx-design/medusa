@@ -1,12 +1,14 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { patientCreateSchema, patientUpdateSchema } from '@meduza/contracts';
+import { CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, forbidden, notFound } from '../core/errors';
 import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { today } from '../core/clock';
+import { config } from '../core/config';
+import { consentHistory, latestConsents, recordConsent } from './consent';
 
 const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.created_at, p.updated_at, p.source,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
@@ -85,6 +87,10 @@ export class PatientsController {
     const input = parse(patientCreateSchema, body);
     if (input.birth_date > today()) throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { birth_date: 'Tug‘ilgan sana kelajakda bo‘lishi mumkin emas' });
     if (input.birth_date < '1900-01-01') throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { birth_date: 'Tug‘ilgan sana noto‘g‘ri' });
+    // A real clinic (production) records the patient's consent to data processing before the card exists (ZRU-547).
+    if (config.mode === 'production' && input.consent?.data_processing !== true) {
+      throw new AppError(422, 'CONSENT_REQUIRED', 'Roziliksiz bemor kartasi ochilmaydi', { consent: 'Bemor shaxsiy ma’lumotlarni qayta ishlashga rozilik berganini belgilang' });
+    }
     return this.db.tx(async (c) => {
       const dups = await this.findDuplicates(c, ctx, input);
       if (dups.length && !input.confirm_duplicate) {
@@ -97,6 +103,9 @@ export class PatientsController {
         [ctx.tenantId, seq, input.last_name, input.first_name, input.middle_name, input.birth_date, input.sex, input.phone, input.contact_name, input.contact_phone,
           input.address, input.note, input.allergy_state, input.allergy_note])).rows[0];
       await audit(c, ctx, 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi${dups.length ? ' (dublikat ogohlantirishi tasdiqlangan)' : ''}`);
+      const consent = input.consent;
+      if (consent?.data_processing) await recordConsent(c, ctx, row.id, { kind: 'data_processing', granted: true, method: consent.method, textVersion: CONSENT_TEXT_VERSION });
+      if (consent?.notifications) await recordConsent(c, ctx, row.id, { kind: 'notifications', granted: true, method: consent.method, textVersion: CONSENT_TEXT_VERSION });
       return { data: row };
     });
   }
@@ -110,7 +119,29 @@ export class PatientsController {
               (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void')::bigint AS balance_due
          FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId]);
     if (ctx.role === 'doctor' || ctx.role === 'lab') delete (p as any).balance_due;
+    // consent status: for the roles that collect it (not cashier/lab, who see only the minimal card)
+    if (!minimal) (p as any).consents = await latestConsents(this.db.pool, ctx.tenantId, id);
     return { data: p };
+  }
+
+  /** Consent history (append-only, newest first). */
+  @Roles('manager', 'registrar', 'doctor') @Get(':id/consents')
+  async consents(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
+    await assertPatientAccess(this.db.pool, ctx, id);
+    return { data: await consentHistory(this.db.pool, ctx.tenantId, id) };
+  }
+
+  /** Records a consent, a refusal or a withdrawal as a new row (rows are never changed or deleted). */
+  @Roles('manager', 'registrar', 'doctor') @Post(':id/consents')
+  async addConsent(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    await assertPatientAccess(this.db.pool, ctx, id);
+    const input = parse(consentRecordSchema, body);
+    const row = await this.db.tx(async (c) => {
+      // the patient row is locked so the consent and any concurrent card change are ordered
+      await c.query(`SELECT 1 FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId]);
+      return recordConsent(c, ctx, id, { kind: input.kind, granted: input.granted, method: input.method, textVersion: CONSENT_TEXT_VERSION, note: input.note });
+    });
+    return { data: row };
   }
 
   @Roles('manager', 'registrar', 'doctor') @Patch(':id')

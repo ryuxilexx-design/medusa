@@ -18,6 +18,7 @@ export interface SeedData {
   appointments: Row[]; queue_counters: Row[]; queue_tickets: Row[]; encounters: Row[]; clinical_notes: Row[];
   service_orders: Row[]; lab_results: Row[]; diagnostic_reports: Row[]; invoices: Row[]; invoice_items: Row[];
   payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[]; cash_shifts: Row[];
+  patient_consents: Row[];
 }
 
 export function sid(key: string): string {
@@ -86,6 +87,7 @@ export function buildSeed(demoDate: string): SeedData {
     service_prices: [], doctor_services: [], patients: [], appointments: [], queue_counters: [], queue_tickets: [],
     encounters: [], clinical_notes: [], service_orders: [], lab_results: [], diagnostic_reports: [], invoices: [],
     invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [], cash_shifts: [],
+    patient_consents: [],
   };
 
   // ---------- tenant, branches ----------
@@ -685,6 +687,13 @@ export function buildSeed(demoDate: string): SeedData {
 
   // patient creation audit (the 30 most recent)
   patients.slice(-30).forEach((p) => audit(p.created_at, BC, M.registrar, 'Malika Yusupova', 'registrar', 'patient.create', 'patient', p.id, `Bemor #${p.patient_number} yaratildi`));
+
+  // ---------- consent (ZRU-547): ~70% of the cards have a signed paper form, the rest show the «Rozilik yo‘q» notice ----------
+  // A deterministic rule, no RNG: the seeded numbers (KPIs) stay exactly as before.
+  patients.filter((p) => p.patient_number % 10 < 7).forEach((p) => data.patient_consents.push({
+    id: sid(`consent:${p.id}`), tenant_id: T, patient_id: p.id, kind: 'data_processing', granted: true, text_version: '2026-10', method: 'signed_paper',
+    recorded_by: M.registrar, recorded_by_name: 'Malika Yusupova', recorded_at: p.created_at, note: null,
+  }));
 
   // ---------- expenses (P1) ----------
   const EXP: [number, string, string, number, string][] = [
