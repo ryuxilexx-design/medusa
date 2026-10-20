@@ -2,61 +2,75 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Package } from 'lucide-react';
 import { api, ApiError, qs } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, DemoTag, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, PageHeader, Table, Td, Th, useToast } from '@/components/ui';
+import { Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, PageHeader, Table, Tabs, Td, Th, useToast } from '@/components/ui';
 
 export default function InventoryPage() { return <Suspense><Inventory /></Suspense>; }
-const n = (v: any) => Number(v).toLocaleString('ru-RU').replace(/ /g, ' ');
+const n = (v: any) => Number(v).toLocaleString('ru-RU').replace(/ /g, ' ');
+const isLow = (i: any) => Number(i.qty) < Number(i.minimum_qty);
 
 function Inventory() {
   const t = useT();
-  const { branchId, me } = useSession();
+  const { branchId } = useSession();
   const sp = useSearchParams();
   const router = useRouter();
-  const [low, setLow] = useState(sp.get('low') === '1');
+  const low = sp.get('low') === '1';
   const sel = sp.get('item');
-  const q = useQuery({ queryKey: ['inventory', low, branchId], queryFn: () => api(`/inventory${qs({ low: low ? 1 : undefined, branch_id: branchId })}`).then((r) => r.data as any[]) });
+  // the whole list (a clinic has tens of items): both tab counts come from one request
+  const q = useQuery({ queryKey: ['inventory', branchId], queryFn: () => api(`/inventory${qs({ branch_id: branchId })}`).then((r) => r.data as any[]) });
+  const all = q.data ?? [];
+  const lowCount = all.filter(isLow).length;
+  const rows = low ? all.filter(isLow) : all;
+  const go = (p: { low?: boolean; item?: string | null }) => {
+    const l = p.low ?? low, it = p.item === undefined ? sel : p.item;
+    router.replace(`/inventory${qs({ low: l ? 1 : undefined, item: it ?? undefined })}`, { scroll: false });
+  };
   return (
     <>
-      <PageHeader title={t('admin.inv.title')} subtitle={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('admin.inv.subtitle')} {me.demo && <span className="whitespace-nowrap"><DemoTag /></span>}</span>}
-        actions={<label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-1 text-[0.9375rem] focus-within:ring-4 focus-within:ring-amber-300"><input type="checkbox" className="h-5 w-5 accent-brand-600 focus:outline-none" checked={low} onChange={(e) => setLow(e.target.checked)} />{t('admin.inv.lowOnly')}</label>} />
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+      <PageHeader title={t('admin.inv.title')} />
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Card padded={false}>
-          {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data!.length ? <EmptyState title={t('admin.inv.notFound')} /> : (
+          <div className="px-3 pt-1">
+            <Tabs value={low ? 'low' : 'all'} onChange={(v) => go({ low: v === 'low' })}
+              items={[{ value: 'all', label: t('admin.inv.tabAll'), count: q.data ? all.length : undefined }, { value: 'low', label: t('admin.inv.lowOnly'), count: q.data ? lowCount : undefined }]} />
+          </div>
+          {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !rows.length ? <EmptyState compact icon={<Package />} title={t(low ? 'admin.inv.noneLow' : 'admin.inv.notFound')} /> : (
             <Table>
-              <thead><tr><Th>{t('admin.inv.colItem')}</Th><Th right className="hidden md:table-cell">{t('admin.inv.colOpening')}</Th><Th right className="hidden md:table-cell">{t('admin.inv.colIn')}</Th><Th right className="hidden md:table-cell">{t('admin.inv.colOut')}</Th><Th right>{t('admin.inv.colQty')}</Th><Th right>{t('admin.inv.colMin')}</Th></tr></thead>
-              <tbody>{q.data!.map((i) => {
-                const isLow = Number(i.qty) < Number(i.minimum_qty);
-                const open = () => router.replace(`/inventory?item=${i.id}${low ? '&low=1' : ''}`, { scroll: false });
+              <thead><tr>
+                <Th>{t('admin.inv.colItem')}</Th>
+                <Th right>{t('admin.inv.colQty')}</Th><Th right className="hidden sm:table-cell">{t('admin.inv.colMin')}</Th><Th className="hidden sm:table-cell"><span className="sr-only">{t('admin.inv.colState')}</span></Th>
+              </tr></thead>
+              <tbody>{rows.map((i) => {
+                const l = isLow(i);
                 return (
-                  <tr key={i.id} onClick={open} className={cx('cursor-pointer hover:bg-slate-50', sel === i.id && 'bg-brand-50')}>
-                    <Td className="md:min-w-[11rem]">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); open(); }} aria-current={sel === i.id || undefined}
-                        className="rounded text-left font-medium hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{i.name}</button>
-                      <div className="text-[0.8125rem] text-slate-600">{i.unit}, {i.branch_name}</div>
-                      {isLow && <Badge tone="red" className="mt-1" icon={<AlertTriangle className="h-3.5 w-3.5" />}>{t('admin.inv.low')}</Badge>}
+                  <tr key={i.id} onClick={() => go({ item: i.id })} className={cx('cursor-pointer', sel === i.id ? 'bg-brand-50' : 'hover:bg-slate-50')}>
+                    <Td className="min-w-[9rem]">
+                      <button type="button" onClick={(e) => { e.stopPropagation(); go({ item: i.id }); }} aria-current={sel === i.id || undefined}
+                        className="rounded text-left font-semibold text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{i.name}</button>
+                      {/* the branch only when the header shows all branches */}
+                      {!branchId && <div className="text-[0.8125rem] text-slate-600">{i.branch_name}</div>}
                     </Td>
-                    <Td right className="hidden md:table-cell">{n(i.opening_qty)}</Td><Td right className="hidden md:table-cell">{n(i.in_qty)}</Td><Td right className="hidden md:table-cell">{n(i.out_qty)}</Td>
-                    <Td right className={isLow ? 'font-semibold text-red-700' : 'font-medium'}>{n(i.qty)}</Td>
-                    <Td right className="text-slate-600">{n(i.minimum_qty)}</Td>
+                    <Td right><span className={l ? 'font-bold text-red-700' : 'font-semibold text-slate-900'}>{n(i.qty)}</span> <span className="text-[0.8125rem] text-slate-600">{i.unit}</span>
+                      {l && <div className="text-[0.8125rem] font-semibold text-red-700 sm:hidden">{t('admin.inv.low')}</div>}</Td>
+                    <Td right className="hidden text-slate-600 sm:table-cell">{n(i.minimum_qty)}</Td>
+                    <Td className="hidden w-px whitespace-nowrap sm:table-cell">{l && <Badge tone="red" icon={<AlertTriangle className="h-3.5 w-3.5" />}>{t('admin.inv.low')}</Badge>}</Td>
                   </tr>
                 );
               })}</tbody>
             </Table>
           )}
         </Card>
-        {sel ? <ItemDetail id={sel} /> : <Card className="hidden xl:block"><EmptyState title={t('admin.inv.pick')} text={t('admin.inv.pickText')} /></Card>}
+        {sel ? <ItemDetail id={sel} onClose={() => go({ item: null })} /> : <Card className="hidden xl:block"><EmptyState compact title={t('admin.inv.pick')} /></Card>}
       </div>
-      <p className="mt-3 text-[0.8125rem] text-slate-600">{t(me.demo ? 'admin.inv.autoNote' : 'admin.inv.autoNoteProd')}</p>
     </>
   );
 }
 
-function ItemDetail({ id }: { id: string }) {
+function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const t = useT();
   const { me } = useSession();
   const qc = useQueryClient();
@@ -83,31 +97,49 @@ function ItemDetail({ id }: { id: string }) {
   const reasonError = err.reason ?? (tried && reason.trim().length < 3 ? t('admin.inv.errReason') : undefined);
   const valid = qn > 0 && reason.trim().length >= 3 && (form !== 'out' || qn <= Number(it.qty));
   const save = () => { setTried(true); if (valid) m.mutate(); };
+  const low = Number(it.qty) < Number(it.minimum_qty);
   return (
     <div ref={top} className="scroll-mt-24">
-    <Card title={it.name} actions={<><Button size="sm" icon={<ArrowDownToLine className="h-4 w-4" />} onClick={() => setForm('in')}>{t('admin.inv.in')}</Button><Button size="sm" icon={<ArrowUpFromLine className="h-4 w-4" />} onClick={() => setForm('out')}>{t('admin.inv.out')}</Button></>}>
-      <p className="text-sm">{t('admin.inv.current')} <b className={cx('whitespace-nowrap', Number(it.qty) < Number(it.minimum_qty) && 'text-red-700')}>{n(it.qty)} {it.unit}</b>, {t('admin.inv.minimum', { n: n(it.minimum_qty) })}, {it.branch_name}</p>
-      <h3 className="mb-1 mt-4 text-sm font-semibold text-slate-800">{t('admin.inv.history')}</h3>
-      <ul className="divide-y divide-slate-100 text-sm">
-        <li className="flex justify-between py-1.5 text-slate-600"><span>{t('admin.inv.opening')}</span><span className="tabular-nums">{n(it.opening_qty)}</span></li>
-        {it.movements.map((mv: any) => (
-          <li key={mv.id} className="flex items-start gap-3 py-2">
-            <span className="w-[8.5rem] shrink-0 whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(mv.occurred_at)}</span>
-            <span className="min-w-0 flex-1"><span className="block">{mv.reason}</span><span className="block text-[0.8125rem] text-slate-600">{mv.actor_name}</span></span>
-            <span className={cx('tabular-nums font-semibold', mv.type === 'in' ? 'text-emerald-700' : 'text-slate-800')}>{mv.type === 'in' ? '+' : '−'}{n(mv.quantity)}</span>
+      <Card title={it.name} padded={false}
+        actions={<Button size="sm" variant="ghost" className="xl:hidden" onClick={onClose}>{t('common.close')}</Button>}>
+        <div className="space-y-4 p-5">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className={cx('text-[1.5rem] font-bold leading-none tabular-nums', low ? 'text-red-700' : 'text-slate-900')}>{n(it.qty)} <span className="text-base font-semibold text-slate-600">{it.unit}</span></span>
+            {low && <Badge tone="red" icon={<AlertTriangle className="h-3.5 w-3.5" />}>{t('admin.inv.low')}</Badge>}
+          </div>
+          <div className="divide-y divide-slate-100">
+            <KeyVal k={t('admin.inv.colMin')} v={n(it.minimum_qty)} />
+            <KeyVal k={t('admin.inv.colBranch')} v={it.branch_name} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button icon={<ArrowDownToLine className="h-4 w-4" />} onClick={() => setForm('in')}>{t('admin.inv.in')}</Button>
+            <Button icon={<ArrowUpFromLine className="h-4 w-4" />} onClick={() => setForm('out')}>{t('admin.inv.out')}</Button>
+          </div>
+        </div>
+        <h3 className="border-t border-slate-100 px-5 pb-1 pt-4 text-[0.9375rem] font-bold text-slate-900">{t('admin.inv.history')}</h3>
+        <ul className="divide-y divide-slate-100 px-5 pb-2 text-sm">
+          {it.movements.map((mv: any) => (
+            <li key={mv.id} className="flex items-start gap-3 py-2.5">
+              <span className="min-w-0 flex-1">
+                <span className="block text-slate-900">{mv.reason}</span>
+                <span className="block text-[0.8125rem] text-slate-600">{fmtDateTime(mv.occurred_at)} · {mv.actor_name}</span>
+              </span>
+              <span className={cx('whitespace-nowrap font-semibold tabular-nums', mv.type === 'in' ? 'text-emerald-700' : 'text-slate-800')}>{mv.type === 'in' ? '+' : '−'}{n(mv.quantity)}</span>
+            </li>
+          ))}
+          <li className="flex items-start gap-3 py-2.5 text-slate-600">
+            <span className="min-w-0 flex-1">{t('admin.inv.opening')}</span><span className="tabular-nums">{n(it.opening_qty)}</span>
           </li>
-        ))}
-      </ul>
+        </ul>
+      </Card>
       <Modal open={!!form} onClose={() => setForm(null)} dirty={!!(qty || reason)} title={form === 'in' ? t('admin.inv.modalIn', { name: it.name }) : t('admin.inv.modalOut', { name: it.name })}
         footer={<><Button onClick={() => setForm(null)}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label={t('admin.inv.qty', { unit: it.unit })} required error={qtyError}>{(i) => <Input id={i} inputMode="decimal" value={qty} invalid={!!qtyError} onChange={(e) => setQty(e.target.value)} />}</Field>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label={t('admin.inv.qty', { unit: it.unit })} required error={qtyError} hint={form === 'out' ? t('admin.inv.available', { qty: n(it.qty) }) : undefined}>{(i) => <Input id={i} inputMode="decimal" value={qty} invalid={!!qtyError} onChange={(e) => setQty(e.target.value)} />}</Field>
           <Field label={t('admin.inv.date')} required error={err.date}>{(i) => <Input id={i} type="date" max={me.today} value={date} invalid={!!err.date} onChange={(e) => setDate(e.target.value)} />}</Field>
           <Field label={t('admin.inv.reason')} required className="sm:col-span-2" error={reasonError}>{(i) => <Input id={i} value={reason} invalid={!!reasonError} onChange={(e) => setReason(e.target.value)} placeholder={form === 'in' ? t('admin.inv.reasonIn') : t('admin.inv.reasonOut')} />}</Field>
-          <p className="text-[0.8125rem] text-slate-600 sm:col-span-2">{t('admin.inv.responsible', { name: me.name })}</p>
         </div>
       </Modal>
-    </Card>
     </div>
   );
 }

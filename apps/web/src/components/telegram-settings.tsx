@@ -6,7 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { fmtDateTime, formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, Field, Input, LoadingRows, ErrorState, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, Field, Input, LoadingRows, ErrorState, useToast } from '@/components/ui';
 
 type Status = {
   bot: { username: string; status: 'active' | 'disabled'; last_error: string | null; last_error_at: string | null; updated_at: string } | null;
@@ -37,77 +37,66 @@ export function TelegramSettings() {
     onError: (e) => { setConfirmOff(false); toast.error(e); },
   });
 
-  if (q.isLoading) return <LoadingRows rows={4} />;
-  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  if (q.isLoading) return <Card><LoadingRows rows={4} /></Card>;
+  if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   const s = q.data!;
   const active = s.bot?.status === 'active';
 
+  const stats: [string, number][] = [[t('admin.tg.statChats'), s.stats.linked_chats], [t('admin.tg.statBookings'), s.stats.bookings_7d], [t('admin.tg.statSent'), s.stats.sent_7d], [t('admin.tg.statConfirmed'), s.stats.confirmed_7d], [t('admin.tg.statFailed'), s.stats.failed_7d]];
+
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
-      <div className="min-w-0 space-y-5">
-        <section>
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.clinicBot')}</h3>
-          <p className="mt-1 text-sm text-slate-600">{t('admin.tg.intro')}</p>
-          {s.bot ? (
-            <div className="mt-3 rounded-lg border border-slate-200 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Bot className="h-5 w-5 text-slate-600" aria-hidden="true" /><span className="font-medium">@{s.bot.username}</span>
+    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_25rem]">
+      <div className="flex min-w-0 flex-col gap-5">
+        <Card title={t('admin.tg.clinicBot')}>
+          <div className="flex flex-col gap-4">
+            <p className="text-[0.9375rem] text-slate-700">{t('admin.tg.intro')}</p>
+            {s.bot && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-200 px-4 py-3">
+                <Bot className="h-5 w-5 text-slate-600" aria-hidden="true" /><span className="font-semibold text-slate-900">@{s.bot.username}</span>
                 {active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.tg.statusOn')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.tg.statusOff')}</Badge>}
                 <span className="text-[0.8125rem] text-slate-600">{t('admin.tg.updatedAt', { at: fmtDateTime(s.bot.updated_at) })}</span>
                 {active && !confirmOff && <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirmOff(true)}>{t('admin.tg.turnOff')}</Button>}
               </div>
-              {confirmOff && (
-                <div className="mt-2"><Alert tone="yellow" title={t('admin.tg.offTitle')}>{t('admin.tg.offText')}
-                  <div className="mt-2 flex gap-2"><Button size="sm" variant="danger" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>{t('admin.tg.offYes')}</Button><Button size="sm" onClick={() => setConfirmOff(false)}>{t('admin.tg.no')}</Button></div>
-                </Alert></div>
-              )}
-              {s.bot.last_error && <div className="mt-2"><Alert tone="red" title={t('admin.tg.broken')}>{s.bot.last_error}{s.bot.last_error_at ? ` (${fmtDateTime(s.bot.last_error_at)})` : ''}</Alert></div>}
-            </div>
-          ) : null}
-          {!active && (
-            <div className="mt-3 space-y-3 rounded-lg border border-dashed border-slate-300 p-3">
-              <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">
-                <li>{rich(t('admin.tg.step1'), { botfather: <b>@BotFather</b>, newbot: <code>/newbot</code>, suffix: <code>…_bot</code> })}</li>
-                <li>{t('admin.tg.step2', { botfather: 'BotFather' })}</li>
-              </ol>
-              {!s.secrets_configured && <Alert tone="yellow" title={t('admin.tg.noSecretsTitle')}>{rich(t('admin.tg.noSecrets'), { key: <code>APP_SECRET_KEY</code> })}</Alert>}
-              <form className="flex flex-col gap-2 sm:flex-row sm:items-start" onSubmit={(e) => { e.preventDefault(); setTokenError(null); if (!token.trim()) { setTokenError(t('admin.tg.enterToken')); return; } connect.mutate(); }}>
-                <Field label={t('admin.tg.token')} error={tokenError ?? undefined} className="flex-1">
-                  {(id) => <Input id={id} type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => { setToken(e.target.value); setTokenError(null); }} placeholder="123456789:AA…" disabled={!s.secrets_configured} invalid={!!tokenError} />}
-                </Field>
-                <Button type="submit" variant="primary" className="sm:mt-6" loading={connect.isPending} disabled={!s.secrets_configured}>{t('admin.tg.connect')}</Button>
-              </form>
-            </div>
-          )}
-          {!s.workers && (
-            <div className="mt-2 text-[0.8125rem] text-amber-900">
-              <p>{t('admin.tg.workersOff')}</p>
-              <details className="mt-1 text-slate-600"><summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
-                <p className="mt-1">{rich(t('admin.tg.adminDetails'), { setting: <code>TELEGRAM_WORKERS=off</code> })}</p></details>
-            </div>
-          )}
-        </section>
+            )}
+            {confirmOff && (
+              <Alert tone="yellow" title={t('admin.tg.offTitle')}>{t('admin.tg.offText')}
+                <div className="mt-2 flex gap-2"><Button size="sm" variant="danger" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>{t('admin.tg.offYes')}</Button><Button size="sm" onClick={() => setConfirmOff(false)}>{t('admin.tg.no')}</Button></div>
+              </Alert>
+            )}
+            {s.bot?.last_error && <Alert tone="red" title={t('admin.tg.broken')}>{s.bot.last_error}{s.bot.last_error_at ? ` (${fmtDateTime(s.bot.last_error_at)})` : ''}</Alert>}
+            {!active && (
+              <>
+                <ol className="list-decimal space-y-1.5 pl-5 text-[0.9375rem] text-slate-700">
+                  <li>{rich(t('admin.tg.step1'), { botfather: <b>@BotFather</b>, newbot: <code>/newbot</code>, suffix: <code>…_bot</code> })}</li>
+                  <li>{t('admin.tg.step2', { botfather: 'BotFather' })}</li>
+                </ol>
+                {!s.secrets_configured && <Alert tone="yellow" title={t('admin.tg.noSecretsTitle')}>{rich(t('admin.tg.noSecrets'), { key: <code>APP_SECRET_KEY</code> })}</Alert>}
+                <form className="flex max-w-xl flex-col gap-3 sm:flex-row sm:items-start" onSubmit={(e) => { e.preventDefault(); setTokenError(null); if (!token.trim()) { setTokenError(t('admin.tg.enterToken')); return; } connect.mutate(); }}>
+                  <Field label={t('admin.tg.token')} error={tokenError ?? undefined} className="flex-1">
+                    {(id) => <Input id={id} type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => { setToken(e.target.value); setTokenError(null); }} placeholder="123456789:AA…" disabled={!s.secrets_configured} invalid={!!tokenError} />}
+                  </Field>
+                  <Button type="submit" variant="primary" className="sm:mt-[1.625rem]" loading={connect.isPending} disabled={!s.secrets_configured}>{t('admin.tg.connect')}</Button>
+                </form>
+              </>
+            )}
+            {!s.workers && (
+              <Alert tone="yellow">{t('admin.tg.workersOff')}
+                <details className="mt-1"><summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
+                  <p className="mt-1">{rich(t('admin.tg.adminDetails'), { setting: <code>TELEGRAM_WORKERS=off</code> })}</p></details>
+              </Alert>
+            )}
+          </div>
+        </Card>
 
-        <section>
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.last7')}</h3>
-          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-5">
-            {[[t('admin.tg.statChats'), s.stats.linked_chats], [t('admin.tg.statBookings'), s.stats.bookings_7d], [t('admin.tg.statSent'), s.stats.sent_7d], [t('admin.tg.statConfirmed'), s.stats.confirmed_7d], [t('admin.tg.statFailed'), s.stats.failed_7d]].map(([k, v]) => (
-              <div key={k as string} className="flex min-w-0 flex-col justify-between gap-1 rounded-lg border border-slate-200 px-3 py-2">
-                <dt className="break-words text-[0.8125rem] leading-snug text-slate-600">{k}</dt><dd className="text-xl font-semibold tabular-nums text-slate-900">{v}</dd>
+        <Card title={t('admin.tg.last7')} padded={false}>
+          <dl className="divide-y divide-slate-100">
+            {stats.map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between gap-3 px-5 py-2.5 text-[0.9375rem]">
+                <dt className="text-slate-700">{k}</dt><dd className="font-bold tabular-nums text-slate-900">{v}</dd>
               </div>
             ))}
           </dl>
-          <p className="mt-1 text-[0.8125rem] text-slate-600">{t('admin.tg.statsNote')}</p>
-        </section>
-
-        <section className="text-sm text-slate-600">
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.how')}</h3>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            <li>{t('admin.tg.how1')}</li>
-            <li>{t('admin.tg.how2', { tg: 'TG' })}</li>
-            <li>{t('admin.tg.how3')}</li>
-          </ul>
-        </section>
+        </Card>
       </div>
       {s.simulator_available && <Simulator />}
     </div>
@@ -190,8 +179,8 @@ function Simulator() {
 
   return (
     <section aria-label={t('admin.tg.simAria')} className="min-w-0 self-start xl:sticky xl:top-24">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <h3 className="whitespace-nowrap text-sm font-semibold text-slate-900">{t('admin.tg.simTitle')} <span className="font-normal text-slate-600">· {t('admin.tg.simDemo')}</span></h3>
+      <div className="mb-2 flex min-h-9 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h2 className="whitespace-nowrap text-base font-bold text-slate-900">{t('admin.tg.simTitle')}</h2>
         <div className="flex flex-wrap gap-1">
           <Button size="sm" variant="ghost" icon={<BellRing className="h-4 w-4" />} loading={runWorkers.isPending} onClick={() => runWorkers.mutate()} title={t('admin.tg.remindersTitle')}>{t('admin.tg.reminders')}</Button>
           <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void newChat().catch((e) => toast.error(e))}>{t('admin.tg.newChat')}</Button>

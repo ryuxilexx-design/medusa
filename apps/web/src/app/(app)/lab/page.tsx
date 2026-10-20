@@ -1,9 +1,8 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, CheckCircle2, FlaskConical, Printer, Save, Search, TestTube } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, CheckCircle2, ChevronRight, FlaskConical, Printer, Save, Search, TestTube } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { addDays, ageFrom, fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
@@ -11,7 +10,7 @@ import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, Tabs, Textarea, useToast } from '@/components/ui';
+import { Alert, Button, Card, cx, EmptyState, ErrorState, Input, LinkButton, LoadingRows, PageHeader, Pagination, Select, Tabs, Textarea, Toolbar, useToast } from '@/components/ui';
 import { LabStatus } from '@/components/status';
 import { LabValues, refText } from '@/components/lab-values';
 
@@ -43,26 +42,34 @@ function Lab() {
   // keep the tab in the URL so a reload (or a link from the dashboard) shows the same list
   const nav = (st: string, order: string | null) => { const q = new URLSearchParams(); if (st) q.set('status', st); if (order) q.set('order', order); const qs2 = q.toString(); router.replace(`/lab${qs2 ? `?${qs2}` : ''}`, { scroll: false }); };
   const pick = (id: string) => { nav(status, id); revealDetail(); };
+  const showBranch = !branchId && me.branches.length > 1;
 
   return (
     <>
-      <PageHeader title={t('clinical.lab.title')} subtitle={me.role === 'lab' ? t('clinical.lab.subtitleLab') : t('clinical.lab.subtitleOther')} />
-      <div className="mb-4"><Tabs value={status} onChange={(v) => { setStatus(v); nav(v, selected); }} items={STATUS_TABS.map((s) => ({ value: s, label: t(TAB_LABEL[s]), count: s ? counts[s] ?? 0 : total }))} /></div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <PageHeader title={t('clinical.lab.title')} subtitle={me.role === 'lab' ? t('clinical.lab.subtitleLab') : t('clinical.lab.subtitleOther')}
+        actions={<Select aria-label={t('clinical.date')} className="w-full min-w-0 sm:w-auto" value={period} onChange={(e) => setPeriod(e.target.value)}><option value="all">{t('clinical.period.all')}</option><option value="today">{t('clinical.period.today')}</option><option value="7d">{t('clinical.period.last7')}</option></Select>} />
+      <div className="mb-5"><Tabs value={status} onChange={(v) => { setStatus(v); nav(v, selected); }} items={STATUS_TABS.map((s) => ({ value: s, label: t(TAB_LABEL[s]), count: s ? counts[s] ?? 0 : total }))} /></div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <Card padded={false} className="self-start">
-          <div className="flex flex-wrap gap-2 border-b border-slate-100 p-3">
-            <div className="relative min-w-[11rem] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('clinical.lab.searchPlaceholder')} aria-label={t('clinical.lab.searchLabel')} /></div>
-            <Select aria-label={t('clinical.date')} className="w-auto" value={period} onChange={(e) => setPeriod(e.target.value)}><option value="all">{t('clinical.period.all')}</option><option value="today">{t('clinical.period.today')}</option><option value="7d">{t('clinical.period.last7')}</option></Select>
-          </div>
-          {list.isLoading ? <LoadingRows /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : !list.data.data.length ? <EmptyState icon={<FlaskConical className="h-8 w-8" />} title={t('clinical.lab.noOrders')} action={search ? <Button size="sm" onClick={() => setSearch('')}>{t('clinical.lab.clearSearch')}</Button> : undefined} /> : (
+          <Toolbar>
+            <div className="relative w-full"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('clinical.lab.searchPlaceholder')} aria-label={t('clinical.lab.searchLabel')} /></div>
+          </Toolbar>
+          {list.isLoading ? <LoadingRows /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : !list.data.data.length ? <EmptyState compact icon={<FlaskConical />} title={t('clinical.lab.noOrders')} action={search ? <Button size="sm" onClick={() => setSearch('')}>{t('clinical.lab.clearSearch')}</Button> : undefined} /> : (
             <>
               <ul className="divide-y divide-slate-100">
                 {list.data.data.map((o: any) => (
                   <li key={o.id}>
-                    <button onClick={() => pick(o.id)} aria-current={selected === o.id || undefined} className={cx('flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left hover:bg-slate-50', selected === o.id && 'bg-brand-50 hover:bg-brand-50')}>
-                      <TestTube className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-                      <div className="min-w-[12rem] flex-1 basis-0"><div className="truncate text-sm font-semibold text-slate-900">{o.service_name}</div><div className="truncate text-xs text-slate-600">{fullName(o)} {pid(o.patient_number)}, {fmtDateTime(o.ordered_at)}, {o.branch_name}</div></div>
-                      <span className="ml-7 sm:ml-0"><LabStatus status={o.status} /></span>
+                    {/* test and time on the first line; patient (and the status, unless a status tab already says it) on the second */}
+                    <button onClick={() => pick(o.id)} aria-current={selected === o.id || undefined}
+                      className={cx('block w-full border-l-4 px-4 py-2.5 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', selected === o.id ? 'border-brand-600 bg-brand-50' : 'border-transparent hover:bg-slate-50')}>
+                      <span className="flex items-baseline gap-3">
+                        <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold text-slate-900">{o.service_name}</span>
+                        <span className="shrink-0 text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(o.ordered_at)}</span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-3">
+                        <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> {pid(o.patient_number)}{showBranch ? ` · ${o.branch_name}` : ''}</span>
+                        {!status && <span className="shrink-0"><LabStatus status={o.status} /></span>}
+                      </span>
                     </button>
                   </li>
                 ))}
@@ -72,7 +79,7 @@ function Lab() {
           )}
         </Card>
         <div id="order-detail" className="min-w-0 scroll-mt-24 self-start xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:rounded-xl">
-          {selected ? <OrderDetail id={selected} /> : <Card><EmptyState title={t('clinical.pickOrder')} text={t('clinical.lab.pickOrderText')} /></Card>}
+          {selected ? <OrderDetail id={selected} /> : <div className="hidden xl:block"><Card><EmptyState icon={<TestTube />} title={t('clinical.pickOrder')} /></Card></div>}
         </div>
       </div>
     </>
@@ -126,31 +133,44 @@ function OrderDetail({ id }: { id: string }) {
   const at = steps.indexOf(d.status);
 
   return (
-    <Card padded={false} className="self-start" title={<span className="flex items-center gap-2">{d.service_name}<LabStatus status={d.status} /></span>}
-      actions={d.status === 'verified' && (isLab || me.role === 'doctor') && <Link href={`/print/lab/${d.id}`} target="_blank" className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"><Printer className="h-4 w-4" />{t('common.print')}</Link>}>
-      <div className="space-y-4 p-4">
-        <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
-          <div><span className="text-slate-600">{t('clinical.f.patient')}</span> <b>{fullName(d)}</b> <span className="whitespace-nowrap">{pid(d.patient_number)}</span></div>
-          <div><span className="text-slate-600">{t('clinical.f.age')}</span> {fmtDate(d.birth_date)}, {ageFrom(d.birth_date, me.today)}</div>
-          <div><span className="text-slate-600">{t('clinical.f.ordered')}</span> {fmtDateTime(d.ordered_at)}</div>
-          <div><span className="text-slate-600">{t('clinical.f.orderedBy')}</span> {d.ordered_by ?? '—'}</div>
-          <div><span className="text-slate-600">{t('clinical.f.branch')}</span> {d.branch_name}</div>
-          <div><span className="text-slate-600">{t('clinical.f.orderId')}</span> <span className="font-mono text-xs">{d.id.slice(0, 8)}</span></div>
+    <Card padded={false} className="self-start" title={<span className="flex flex-wrap items-center gap-2">{d.service_name}{d.status === 'cancelled' && <LabStatus status={d.status} />}</span>}
+      actions={d.status === 'verified' && (isLab || me.role === 'doctor') && <LinkButton size="sm" variant="ghost" href={`/print/lab/${d.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>}>
+      <div className="space-y-4 p-5">
+        <div>
+          <p className="text-base text-slate-900"><b>{fullName(d)}</b> <span className="tabular-nums text-slate-600">{pid(d.patient_number)}</span> <span className="text-slate-400" aria-hidden="true">·</span> <span className="whitespace-nowrap tabular-nums">{ageFrom(d.birth_date, me.today)} ({fmtDate(d.birth_date)})</span></p>
+          <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[0.8125rem] text-slate-600">
+            <div className="flex gap-1"><dt>{t('clinical.f.ordered')}</dt><dd className="tabular-nums text-slate-800">{fmtDateTime(d.ordered_at)}{d.ordered_by ? `, ${d.ordered_by}` : ''}</dd></div>
+            <div className="flex gap-1"><dt>{t('clinical.f.branch')}</dt><dd className="text-slate-800">{d.branch_name}</dd></div>
+            <div className="flex gap-1"><dt>{t('clinical.f.orderId')}</dt><dd className="font-mono text-slate-800">{d.id.slice(0, 8)}</dd></div>
+          </dl>
         </div>
-        <ol className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs">
-          {steps.map((s, i) => <li key={s} className="flex items-center gap-1" aria-current={i === at ? 'step' : undefined}><span className={cx('whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium', i <= at ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700')}>{t(`status.lab.${s}` as MessageKey)}</span>{i < steps.length - 1 && <span className="text-slate-400" aria-hidden="true">→</span>}</li>)}
+        {/* the workflow: done steps ticked, the current one blue (green once verified) */}
+        <ol className="flex flex-wrap items-center gap-x-1 gap-y-2 text-[0.8125rem]">
+          {steps.map((s, i) => {
+            const done = i < at || (i === at && s === 'verified');
+            return (
+              <li key={s} className="flex items-center gap-1" aria-current={i === at ? 'step' : undefined}>
+                <span className={cx('inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 font-semibold', done ? 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200' : i === at ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600')}>
+                  {done && <Check className="h-3.5 w-3.5" aria-hidden="true" />}{t(`status.lab.${s}` as MessageKey)}
+                </span>
+                {i < steps.length - 1 && <ChevronRight className="h-4 w-4 text-slate-400" aria-hidden="true" />}
+              </li>
+            );
+          })}
         </ol>
-        <div className="space-y-0.5 text-xs text-slate-600">
-          {d.collected_at && <p>{t('clinical.lab.collectedAt', { at: fmtDateTime(d.collected_at), name: d.collected_by_name })}</p>}
-          {d.entered_at && <p>{t('clinical.lab.enteredAt', { at: fmtDateTime(d.entered_at), name: d.entered_by_name })}</p>}
-          {d.verified_at && <p className="font-medium text-emerald-700">{t('clinical.lab.verifiedAt', { at: fmtDateTime(d.verified_at), name: d.verified_by_name })}</p>}
-        </div>
+        {(d.collected_at || d.entered_at || d.verified_at) && (
+          <div className="space-y-0.5 text-[0.8125rem] text-slate-600">
+            {d.collected_at && <p>{t('clinical.lab.collectedAt', { at: fmtDateTime(d.collected_at), name: d.collected_by_name })}</p>}
+            {d.entered_at && <p>{t('clinical.lab.enteredAt', { at: fmtDateTime(d.entered_at), name: d.entered_by_name })}</p>}
+            {d.verified_at && <p className="font-medium text-emerald-800">{t('clinical.lab.verifiedAt', { at: fmtDateTime(d.verified_at), name: d.verified_by_name })}</p>}
+          </div>
+        )}
         {err && <Alert tone="red">{err}</Alert>}
         {!isLab && <Alert tone="blue">{t('clinical.lab.statusOnly')}</Alert>}
         {isLab && d.status === 'ordered' && (
-          <div className="rounded-md border border-dashed border-slate-300 p-4 text-center">
-            <p className="mb-3 text-sm text-slate-600">{t('clinical.lab.collectHint')}</p>
-            <Button variant="primary" icon={<TestTube className="h-4 w-4" />} loading={collect.isPending} onClick={() => collect.mutate()}>{t('clinical.lab.collectAction')}</Button>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/60 px-4 py-3">
+            <p className="min-w-0 flex-1 basis-[14rem] text-[0.9375rem] text-slate-900">{t('clinical.lab.collectHint')}</p>
+            <Button variant="primary" className="max-sm:w-full" icon={<TestTube className="h-4 w-4" />} loading={collect.isPending} onClick={() => collect.mutate()}>{t('clinical.lab.collectAction')}</Button>
           </div>
         )}
         {isLab && editable && (

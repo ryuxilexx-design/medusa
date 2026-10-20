@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
 import { ApiError } from '@/lib/api';
 import { useT } from '@/lib/i18n';
+import { formatSom } from '@/lib/format';
 
 export function cx(...c: (string | false | null | undefined)[]) { return c.filter(Boolean).join(' '); }
 
@@ -78,16 +79,51 @@ export function Badge({ tone = 'gray', children, icon, className }: { tone?: Ton
 export function Card({ children, className, title, actions, padded = true }: { children: React.ReactNode; className?: string; title?: React.ReactNode; actions?: React.ReactNode; padded?: boolean }) {
   return (
     <section className={cx('rounded-xl border border-slate-200 bg-white', className)}>
-      {(title || actions) && <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3"><h2 className="text-base font-bold text-slate-900">{title}</h2><div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div></header>}
-      <div className={padded ? 'p-4' : ''}>{children}</div>
+      {(title || actions) && <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-2.5"><h2 className="text-base font-bold text-slate-900">{title}</h2><div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div></header>}
+      <div className={padded ? 'p-5' : ''}>{children}</div>
     </section>
   );
 }
+/** Page title (h1), one short line under it at most, and the page's primary action on the right. */
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-2xl font-bold text-slate-900">{title}</h1>{subtitle && <p className="mt-1 text-base text-slate-600">{subtitle}</p>}</div>
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+      <div className="min-w-0"><h1 className="text-2xl font-bold leading-tight text-slate-900">{title}</h1>{subtitle && <p className="mt-1 text-[0.9375rem] text-slate-600">{subtitle}</p>}</div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/** A money amount for key numbers: the digits never split, the currency word is smaller (and may move under on a narrow card). */
+export function Money({ tiyin, minus }: { tiyin: number; minus?: boolean }) {
+  const num = formatSom(tiyin, false);
+  const cur = formatSom(tiyin).slice(num.length).trim();
+  return <span className="inline-flex flex-wrap items-baseline gap-x-1.5"><span className="whitespace-nowrap">{minus && tiyin ? '−' : ''}{num}</span><span className="whitespace-nowrap text-[0.875rem] font-semibold text-slate-600">{cur}</span></span>;
+}
+
+/** A key number: label on one line, the value large, one short line under it. A link when `href` is given. */
+export function StatCard({ icon, label, value, sub, href, loading, tone = 'default', className }: {
+  icon?: React.ReactNode; label: string; value?: React.ReactNode; sub?: React.ReactNode; href?: string; loading?: boolean; tone?: 'default' | 'danger' | 'success'; className?: string;
+}) {
+  const body = (
+    <div className={cx('flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white px-4 py-4 transition-colors 2xl:px-5', href && 'hover:border-brand-300')}>
+      <div className="flex items-center gap-2 text-[0.875rem] font-semibold text-slate-600">
+        {icon && <span className={cx('shrink-0 [&>svg]:h-[1.125rem] [&>svg]:w-[1.125rem]', tone === 'danger' ? 'text-red-600' : tone === 'success' ? 'text-emerald-700' : 'text-brand-600')}>{icon}</span>}
+        <span className="truncate" title={label}>{label}</span>
+      </div>
+      {loading ? <Skeleton className="mt-2.5 h-7 w-28" /> : <div className={cx('mt-2 text-[1.375rem] font-bold leading-none tabular-nums tracking-tight 2xl:text-[1.5rem]', tone === 'danger' ? 'text-red-700' : tone === 'success' ? 'text-emerald-800' : 'text-slate-900')}>{value}</div>}
+      {loading ? <Skeleton className="mt-2.5 h-3 w-32" /> : sub != null && <div className="mt-2 truncate text-[0.8125rem] text-slate-600">{sub}</div>}
+    </div>
+  );
+  return href ? <Link href={href} className={cx('block rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', className)}>{body}</Link> : <div className={className}>{body}</div>;
+}
+
+/** Filter bar at the top of a card: filters on the left, secondary actions (export…) on the right, one row when it fits. */
+export function Toolbar({ children, actions, className }: { children?: React.ReactNode; actions?: React.ReactNode; className?: string }) {
+  return (
+    <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-slate-100 px-5 py-3', className)}>
+      <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-2.5 sm:basis-0">{children}</div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -98,10 +134,11 @@ export function LoadingRows({ rows = 6 }: { rows?: number }) {
   const t = useT();
   return <div className="space-y-2 p-4" aria-busy="true" aria-label={t('common.loading')}>{Array.from({ length: rows }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}</div>;
 }
-export function EmptyState({ title, text, action, icon }: { title: string; text?: string; action?: React.ReactNode; icon?: React.ReactNode }) {
+/** Nothing to show: one line (+ optional short text and one action). `compact` inside a small card. */
+export function EmptyState({ title, text, action, icon, compact }: { title: string; text?: string; action?: React.ReactNode; icon?: React.ReactNode; compact?: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center">
-      <div className="text-slate-400">{icon ?? <Info className="h-8 w-8" />}</div>
+    <div className={cx('flex flex-col items-center justify-center gap-2 px-6 text-center', compact ? 'py-6' : 'py-10')}>
+      <div className="text-slate-400 [&>svg]:h-7 [&>svg]:w-7">{icon ?? <Info />}</div>
       <p className="text-base font-semibold text-slate-800">{title}</p>
       {text && <p className="max-w-md text-sm text-slate-600">{text}</p>}
       {action && <div className="mt-2">{action}</div>}

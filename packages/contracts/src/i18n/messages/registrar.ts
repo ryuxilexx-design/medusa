@@ -17,6 +17,7 @@ export const registrar = {
   'registrar.open': ['Ochish', 'Открыть'],
   'registrar.profile': ['Profil', 'Профиль'],
   'registrar.book': ['Qabulga yozish', 'Записать на приём'],
+  'registrar.bookShort': ['Yozish', 'Записать'],
   'registrar.edit': ['Tahrirlash', 'Редактировать'],
   'registrar.change': ['O‘zgartirish', 'Изменить'],
   'registrar.allDoctors': ['Barcha shifokorlar', 'Все врачи'],
@@ -40,7 +41,7 @@ export const registrar = {
   'registrar.noResults': ['«{q}» bo‘yicha natija yo‘q.', 'По запросу «{q}» ничего не найдено.'],
   'registrar.colId': ['ID', 'ID'],
   'registrar.fullName': ['F.I.Sh.', 'ФИО'],
-  'registrar.birthAge': ['Tug‘ilgan sana / yosh', 'Дата рождения / возраст'],
+  'registrar.birthAge': ['Tug‘ilgan sana', 'Дата рождения'],
   'registrar.lastVisit': ['Oxirgi tashrif', 'Последний визит'],
   'registrar.nextAppt': ['Keyingi qabul', 'Следующий приём'],
   'registrar.editBasic': ['Asosiy ma’lumotni tahrirlash', 'Изменить основные данные'],
@@ -69,7 +70,7 @@ export const registrar = {
   'registrar.form.sex': ['Jins', 'Пол'],
   'registrar.form.phoneHint': ['Ixtiyoriy, +998 XX XXX XX XX', 'Необязательно, +998 и 9 цифр'],
   'registrar.form.contactName': ['Aloqa vakili (ism)', 'Контактное лицо (имя)'],
-  'registrar.form.contactHint': ['Voyaga yetmagan yoki alohida aloqa zarur bo‘lsa', 'Если пациент несовершеннолетний или нужен отдельный контакт'],
+  'registrar.form.contactHint': ['Bola uchun yoki alohida aloqa kerak bo‘lsa', 'Для ребёнка или если нужен отдельный контакт'],
   'registrar.form.contactPhone': ['Vakil telefoni', 'Телефон контактного лица'],
   'registrar.form.address': ['Manzil', 'Адрес'],
   'registrar.form.noteHint': ['Ma’muriy izoh. Klinik xulosani bu yerga yozmang.', 'Административный комментарий. Не пишите сюда клиническое заключение.'],
@@ -127,6 +128,9 @@ export const registrar = {
   'registrar.nextDay': ['Keyingi kun', 'Следующий день'],
   'registrar.today': ['Bugun', 'Сегодня'],
   'registrar.allStatuses': ['Barcha holatlar ({n})', 'Все статусы ({n})'],
+  'registrar.view': ['Ko‘rinish', 'Вид'],
+  'registrar.legend': ['Belgilar', 'Обозначения'],
+  'registrar.legendOff': ['Ish vaqti emas', 'Нерабочее время'],
   'registrar.viewDay': ['Kunlik', 'День'],
   'registrar.viewList': ['Ro‘yxat', 'Список'],
   'registrar.noApptsDay': ['Bu kunda qabul yo‘q', 'На этот день приёмов нет'],
@@ -135,7 +139,6 @@ export const registrar = {
   'registrar.offHours': ['Ish vaqtidan tashqari', 'Нерабочее время'],
   'registrar.break': ['Tanaffus', 'Перерыв'],
   'registrar.slotTitle': ['{time} — qabulga yozish', '{time} — записать на приём'],
-  'registrar.gridHint': ['Bo‘sh katakni bosib qabulga yozing. Yo‘l-yo‘l — tanaffus, kulrang — ish vaqtidan tashqari. Ko‘chirish qabul kartasi orqali (drag-and-drop keyingi relizda).', 'Нажмите на свободную ячейку, чтобы записать на приём. Полосками отмечен перерыв, серым — нерабочее время. Перенос — через карточку приёма (перетаскивание — в следующем релизе).'],
 
   // doctor's weekly schedule editor
   'registrar.sched.savedConflicts': ['Jadval saqlandi. {n} ta qabulni registrator ko‘chirishi kerak', { one: 'Расписание сохранено. Регистратору нужно перенести {n} приём', few: 'Расписание сохранено. Регистратору нужно перенести {n} приёма', many: 'Расписание сохранено. Регистратору нужно перенести {n} приёмов' }],
@@ -162,8 +165,7 @@ export const registrar = {
   'registrar.sched.ariaBreakEnd': ['{day}: tanaffus oxiri', '{day}: конец перерыва'],
   'registrar.sched.dayOff': ['Dam olish', 'Выходной'],
   'registrar.sched.noRoom': ['— xonasiz —', '— без кабинета —'],
-  'registrar.sched.branchesHint': ['Faqat shifokor biriktirilgan filiallar ko‘rsatilgan. Boshqa filial kerak bo‘lsa — xodim kartasida filialni qo‘shing.', 'Показаны только филиалы, к которым прикреплён врач. Если нужен другой филиал — добавьте его в карточке сотрудника.'],
-  'registrar.sched.effectHint': ['Yangi jadval keyingi yozuvlarga darhol ta’sir qiladi. Bir kunda shifokor bitta filialda ishlaydi.', 'Новое расписание сразу применяется к следующим записям. В один день врач работает в одном филиале.'],
+  'registrar.sched.branchesHint': ['Faqat shifokorning filiallari ko‘rsatilgan.', 'Показаны только филиалы врача.'],
   // booking and reschedule
   'registrar.bk.rescheduled': ['Qabul ko‘chirildi', 'Приём перенесён'],
   'registrar.bk.booked': ['Qabulga yozildi: {date} {time}, {doctor}', 'Запись создана: {date} {time}, {doctor}'],
@@ -179,7 +181,6 @@ export const registrar = {
   'registrar.bk.choose': ['Tanlang…', 'Выберите…'],
   'registrar.bk.doctorFirst': ['Avval shifokorni tanlang', 'Сначала выберите врача'],
   'registrar.bk.duration': ['Davomiylik (daq.)', 'Длительность (мин)'],
-  'registrar.bk.durationHint': ['Xizmatdan olinadi', 'Берётся из услуги'],
   'registrar.bk.shortNote': ['Qisqa izoh', 'Краткий комментарий'],
   'registrar.bk.freeSlots': ['Bo‘sh vaqtlar', 'Свободное время'],
   'registrar.bk.pickDoctorDate': ['Shifokor va sanani tanlang', 'Выберите врача и дату'],
@@ -192,8 +193,7 @@ export const registrar = {
   'registrar.bk.slotFree': ['Bo‘sh', 'Свободно'],
   'registrar.bk.slotChosen': ['Tanlangan', 'Выбрано'],
   'registrar.bk.noFreeLeft': ['Bu kunda bo‘sh vaqt qolmagan. Boshqa sanani tanlang.', 'На этот день свободного времени не осталось. Выберите другую дату.'],
-  'registrar.bk.slotsHint': ['Saqlashda server bandlik, tanaffus va ish vaqtini qayta tekshiradi.', 'При сохранении сервер повторно проверит занятость, перерыв и рабочее время.'],
-  'registrar.bk.priceLine': ['{category}, narx {price} (hisob «Keldi» belgilanganda ochiladi)', '{category}, цена {price} (счёт открывается при отметке «Пришёл»)'],
+  'registrar.bk.priceLine': ['{category} · {price}. Hisob bemor kelganda ochiladi.', '{category} · {price}. Счёт открывается, когда пациент придёт.'],
   'registrar.bk.currentTime': ['Hozirgi vaqt: {at}', 'Текущее время: {at}'],
 
   // appointment card
@@ -224,11 +224,11 @@ export const registrar = {
 
   // live queue
   'registrar.q.title': ['Jonli navbat', 'Живая очередь'],
-  'registrar.q.sub': ['{date}, har 12 soniyada yangilanadi', '{date}, обновляется каждые 12 секунд'],
   'registrar.q.refresh': ['Yangilash', 'Обновить'],
   'registrar.q.inQueue': ['Navbatda', 'В очереди'],
+  'registrar.q.next': ['Keyingi', 'Следующий'],
   'registrar.q.empty': ['Hozir navbatda bemor yo‘q', 'Сейчас в очереди никого нет'],
-  'registrar.q.emptyHint': ['Kutilayotgan bemor kelganda «Keldi deb belgilash» tugmasini bosing.', 'Когда ожидаемый пациент пришёл, нажмите «Отметить приход».'],
+  'registrar.q.emptyHint': ['Bemor kelganda «Keldi deb belgilash» tugmasini bosing.', 'Когда пациент пришёл, нажмите «Отметить приход».'],
   'registrar.q.doctorRoom': ['Shifokor / xona', 'Врач / кабинет'],
   'registrar.q.arrived': ['Keldi', 'Пришёл'],
   'registrar.q.wait': ['Kutish', 'Ожидание'],
@@ -237,5 +237,4 @@ export const registrar = {
   'registrar.q.doneToday': ['Bugun yakunlangan/bekor: {n} ta · {list}', 'Сегодня завершено/отменено: {n} · {list}'],
   'registrar.q.expected': ['Bugun kutilmoqda', 'Ожидаются сегодня'],
   'registrar.q.noExpected': ['Bugun boshqa rejalashtirilgan qabul yo‘q', 'Других запланированных приёмов на сегодня нет'],
-  'registrar.q.footer': ['Ichki navbat ekrani. Navbat raqami filial va kun doirasida takrorlanmaydi; jamoat monitori keyingi relizda.', 'Внутренний экран очереди. Номер в очереди уникален в пределах филиала и дня; общий монитор — в следующем релизе.'],
 } as const satisfies Catalog;

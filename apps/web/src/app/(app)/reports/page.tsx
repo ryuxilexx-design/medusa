@@ -2,13 +2,18 @@
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { Banknote, ClipboardCheck, Percent } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
-import { addDays, formatSom, fmtDate } from '@/lib/format';
+import { addDays, formatSom } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Card, EmptyState, ErrorState, LoadingRows, PageHeader, Table, Td, Th } from '@/components/ui';
+import { Card, EmptyState, Money, ErrorState, LoadingRows, PageHeader, StatCard, Table, Tabs, Td, Th } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
+
+/** Sum of integer tiyin amounts, added exactly (BigInt) — never a floating-point money sum. */
+const sumTiyin = (rows: any[], key: string) => Number(rows.reduce((a: bigint, b: any) => a + BigInt(b[key] ?? 0), 0n));
+const sumInt = (rows: any[], key: string) => rows.reduce((a: number, b: any) => a + Number(b[key] ?? 0), 0);
 
 export default function ReportsPage() { return <Suspense><Reports /></Suspense>; }
 
@@ -16,71 +21,91 @@ function Reports() {
   const { me, branchId } = useSession();
   const t = useT();
   const sp = useSearchParams();
-  const initFrom = sp.get('from') ?? (sp.get('period') === '30d' ? addDays(me.today, -29) : addDays(me.today, -29));
-  const [from, setFrom] = useState(initFrom);
+  const manager = me.role === 'manager';
+  const [from, setFrom] = useState(sp.get('from') ?? addDays(me.today, -29));
   const [to, setTo] = useState(sp.get('to') ?? me.today);
+  const [tab, setTab] = useState<'services' | 'doctors'>(sp.get('view') === 'doctors' ? 'doctors' : 'services');
   const f = { from, to, branch_id: branchId };
-  const svc = useQuery({ queryKey: ['reports', 'services', f], queryFn: () => api(`/reports/services${qs(f)}`), enabled: me.role === 'manager' });
+  const svc = useQuery({ queryKey: ['reports', 'services', f], queryFn: () => api(`/reports/services${qs(f)}`), enabled: manager });
   const doc = useQuery({ queryKey: ['reports', 'doctors', f], queryFn: () => api(`/reports/doctors${qs(f)}`) });
+
+  const docRows: any[] = doc.data?.data ?? [];
+  const svcRows: any[] = svc.data?.data ?? [];
+  // a manager's count and value come from the per-service report (it includes services without a performing doctor)
+  const count = manager ? (svc.data ? sumInt(svcRows, 'count') : undefined) : doc.data ? sumInt(docRows, 'services') : undefined;
+  const value = manager ? svc.data?.meta.total : doc.data ? sumTiyin(docRows, 'value') : undefined;
+  const share = doc.data ? sumTiyin(docRows, 'share') : undefined;
+  const loadingTiles = manager ? svc.isLoading || doc.isLoading : doc.isLoading;
+  const working = docRows.filter((r) => r.services > 0).length;
+  const days = Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1; // calendar dates, not a business timestamp
+
   return (
     <>
-      <PageHeader title={me.role === 'doctor' ? t('clinical.rep.myActivity') : t('clinical.rep.title')} subtitle={t('clinical.rep.subtitle', { from: fmtDate(from), to: fmtDate(to) })}
+      <PageHeader title={manager ? t('clinical.rep.title') : t('clinical.rep.myActivity')} subtitle={t('clinical.rep.subtitle')}
         actions={<DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />} />
-      {me.role === 'doctor' ? <MyActivity q={doc} /> : (
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
-        {me.role === 'manager' && (
-          <Card title={t('clinical.rep.byService')} padded={false}>
-            {svc.isLoading ? <LoadingRows /> : svc.isError ? <ErrorState error={svc.error} onRetry={() => svc.refetch()} /> : !svc.data.data.length ? <EmptyState title={t('clinical.noServicesInPeriod')} /> : (
-              <Table className="max-sm:[&_td]:px-2 max-sm:[&_th]:px-2">
-                <thead><tr><Th>{t('clinical.rep.service')}</Th><Th right>{t('clinical.rep.count')}</Th><Th right className="hidden sm:table-cell">{t('clinical.rep.discount')}</Th><Th right className="max-sm:!whitespace-normal">{t('clinical.rep.value')}</Th></tr></thead>
-                <tbody>
-                  {svc.data.data.map((r: any) => <tr key={r.service_id}><Td><div className="font-medium text-slate-900">{r.service_name}</div><div className="text-xs text-slate-600">{t(`service.${r.category}` as MessageKey)}</div></Td><Td right>{r.count}</Td><Td right className="hidden sm:table-cell">{Number(r.discount) ? `−${formatSom(Number(r.discount))}` : '—'}</Td><Td right className="font-medium max-sm:!whitespace-normal">{formatSom(Number(r.value))}</Td></tr>)}
-                  <tr className="bg-slate-50"><Td className="font-semibold">{t('clinical.rep.total')}</Td><Td right>{svc.data.data.reduce((a: number, b: any) => a + b.count, 0)}</Td><Td className="hidden sm:table-cell" /><Td right className="font-semibold max-sm:!whitespace-normal">{formatSom(svc.data.meta.total)}</Td></tr>
-                </tbody>
-              </Table>
-            )}
+      <div className="space-y-5">
+        {(svc.isError || doc.isError) ? <Card><ErrorState error={svc.error ?? doc.error} onRetry={() => { svc.refetch(); doc.refetch(); }} /></Card> : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">
+            <StatCard loading={loadingTiles} icon={<ClipboardCheck />} label={t('clinical.rep.servicesDone')} value={count} sub={manager ? (doc.data ? t('clinical.rep.doctorsActive', { n: working }) : undefined) : t('clinical.rep.inDays', { n: days })} />
+            <StatCard loading={loadingTiles} icon={<Banknote />} label={t('clinical.rep.value')} value={value != null && <Money tiyin={Number(value)} />} sub={t('clinical.rep.valueSub')} />
+            <StatCard loading={loadingTiles} icon={<Percent />} label={t('clinical.rep.share')} value={share != null && <Money tiyin={share} />} sub={t('clinical.rep.shareSub')} />
+          </div>
+        )}
+
+        {manager && !svc.isError && !doc.isError && (
+          <Card className="overflow-hidden" padded={false}>
+            <div className="[&_[role=tablist]]:px-3"><Tabs value={tab} onChange={setTab} items={[{ value: 'services', label: t('clinical.rep.byService') }, { value: 'doctors', label: t('clinical.rep.byDoctor') }]} /></div>
+            {tab === 'services' ? <ServicesTable q={svc} /> : <DoctorsTable q={doc} />}
           </Card>
         )}
-        <Card title={t('clinical.rep.byDoctor')} padded={false}>
-          {doc.isLoading ? <LoadingRows /> : doc.isError ? <ErrorState error={doc.error} onRetry={() => doc.refetch()} /> : !doc.data.data.some((r: any) => r.services > 0) ? <EmptyState title={t('clinical.noServicesInPeriod')} /> : (
-            <Table>
-              <thead><tr><Th>{t('role.doctor')}</Th><Th right>{t('clinical.rep.services')}</Th><Th right>{t('clinical.rep.value')}</Th><Th right>{t('clinical.rep.share')}</Th></tr></thead>
-              <tbody>
-                {doc.data.data.map((r: any) => <tr key={r.doctor_id}><Td><div className="whitespace-nowrap font-medium">{r.name}</div><div className="text-xs text-slate-600">{r.specialty}</div></Td><Td right>{r.services}</Td><Td right>{formatSom(r.value)}</Td><Td right className="font-medium">{formatSom(r.share)}</Td></tr>)}
-                <tr className="bg-slate-50"><Td className="font-semibold">{t('clinical.rep.total')}</Td><Td right>{doc.data.data.reduce((a: number, b: any) => a + b.services, 0)}</Td><Td right className="font-semibold">{formatSom(doc.data.data.reduce((a: number, b: any) => a + b.value, 0))}</Td><Td right className="font-semibold">{formatSom(doc.data.data.reduce((a: number, b: any) => a + b.share, 0))}</Td></tr>
-              </tbody>
-            </Table>
-          )}
-          <p className="px-4 py-2 text-xs text-slate-600">{t('clinical.rep.shareNote')}</p>
-        </Card>
       </div>
-      )}
-      <p className="mt-3 text-xs text-slate-600">{t('clinical.rep.metricsNote')}</p>
     </>
   );
 }
 
-/** A doctor sees only their own row: three plain figures instead of a one-row table whose last column hides on a phone. */
-function MyActivity({ q }: { q: any }) {
+/** Amount with a smaller currency word that never splits from the number. */
+function ServicesTable({ q }: { q: any }) {
   const t = useT();
-  if (q.isLoading) return <Card><LoadingRows rows={2} /></Card>;
-  if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
+  if (q.isLoading) return <LoadingRows />;
   const rows: any[] = q.data.data;
-  const sum = (k: string) => rows.reduce((a, b) => a + Number(b[k] ?? 0), 0);
-  const tiles: [string, string][] = [[t('clinical.rep.services'), String(sum('services'))], [t('clinical.rep.value'), formatSom(sum('value'))], [t('clinical.rep.share'), formatSom(sum('share'))]];
+  if (!rows.length) return <EmptyState compact title={t('clinical.noServicesInPeriod')} />;
   return (
-    <Card title={t('clinical.rep.myServices')}>
-      {sum('services') === 0 ? <EmptyState title={t('clinical.noServicesInPeriod')} /> : (
-        <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {tiles.map(([k, v], i) => (
-            <div key={k} className={i === 2 ? 'rounded-lg border border-brand-200 bg-brand-50 p-4' : 'rounded-lg border border-slate-200 p-4'}>
-              <dt className="text-sm font-medium text-slate-600">{k}</dt>
-              <dd className="mt-1 whitespace-nowrap text-2xl font-bold tabular-nums text-slate-900">{v}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      <p className="mt-3 text-xs text-slate-600">{t('clinical.rep.shareNote')}</p>
-    </Card>
+    <Table className="max-sm:[&_td]:px-2 max-sm:[&_th]:px-2 sm:[&_td:first-child]:pl-5 sm:[&_th:first-child]:pl-5 sm:[&_td:last-child]:pr-5 sm:[&_th:last-child]:pr-5 max-sm:[&_th:last-child]:!whitespace-normal">
+      <thead><tr><Th>{t('clinical.rep.service')}</Th><Th right>{t('clinical.rep.count')}</Th><Th right className="hidden sm:table-cell">{t('clinical.rep.discount')}</Th><Th right>{t('clinical.rep.value')}</Th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.service_id}>
+            <Td><div className="font-semibold text-slate-900">{r.service_name}</div><div className="text-[0.8125rem] text-slate-600">{t(`service.${r.category}` as MessageKey)}</div></Td>
+            <Td right>{r.count}</Td>
+            <Td right className="hidden text-slate-600 sm:table-cell">{Number(r.discount) ? `−${formatSom(Number(r.discount))}` : '—'}</Td>
+            <Td right className="font-semibold text-slate-900">{formatSom(Number(r.value))}</Td>
+          </tr>
+        ))}
+        <tr className="bg-slate-50"><Td className="font-bold text-slate-900">{t('clinical.rep.total')}</Td><Td right className="font-bold">{sumInt(rows, 'count')}</Td><Td className="hidden sm:table-cell" /><Td right className="font-bold text-slate-900">{formatSom(Number(q.data.meta.total))}</Td></tr>
+      </tbody>
+    </Table>
+  );
+}
+
+function DoctorsTable({ q }: { q: any }) {
+  const t = useT();
+  if (q.isLoading) return <LoadingRows />;
+  const rows: any[] = q.data.data;
+  if (!rows.some((r) => r.services > 0)) return <EmptyState compact title={t('clinical.noServicesInPeriod')} />;
+  return (
+    <Table className="max-sm:[&_td]:px-2 max-sm:[&_th]:px-2 sm:[&_td:first-child]:pl-5 sm:[&_th:first-child]:pl-5 sm:[&_td:last-child]:pr-5 sm:[&_th:last-child]:pr-5 max-sm:[&_th:last-child]:!whitespace-normal">
+      <thead><tr><Th>{t('role.doctor')}</Th><Th right>{t('clinical.rep.services')}</Th><Th right className="hidden sm:table-cell">{t('clinical.rep.value')}</Th><Th right>{t('clinical.rep.share')}</Th></tr></thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.doctor_id}>
+            <Td><div className="font-semibold text-slate-900">{r.name}</div><div className="text-[0.8125rem] text-slate-600">{r.specialty}</div></Td>
+            <Td right>{r.services}</Td>
+            <Td right className="hidden sm:table-cell">{formatSom(r.value)}</Td>
+            <Td right className="font-semibold text-slate-900">{formatSom(r.share)}</Td>
+          </tr>
+        ))}
+        <tr className="bg-slate-50"><Td className="font-bold text-slate-900">{t('clinical.rep.total')}</Td><Td right className="font-bold">{sumInt(rows, 'services')}</Td><Td right className="hidden font-bold text-slate-900 sm:table-cell">{formatSom(sumTiyin(rows, 'value'))}</Td><Td right className="font-bold text-slate-900">{formatSom(sumTiyin(rows, 'share'))}</Td></tr>
+      </tbody>
+    </Table>
   );
 }

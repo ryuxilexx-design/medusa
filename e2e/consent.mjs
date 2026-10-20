@@ -26,6 +26,8 @@ try {
   await r.waitForFunction(() => !document.querySelector('[data-testid="consent-notice"]'), { timeout: 10000 });
   const block = await r.evaluate(() => document.querySelector('[data-testid="consent-block"]').innerText);
   check(block.includes('Rozilik bor') && block.includes('Versiya 2026-10') && block.includes('Malika Yusupova'), 'Blok: «Rozilik bor», versiya, kim qayd etgani');
+  // the history toggle is shown once the card has at least one consent record
+  await r.waitForSelector('[data-testid="consent-block"] details', { timeout: 10000 });
   await r.evaluate(() => { const d = document.querySelector('[data-testid="consent-block"] details'); d.open = true; d.scrollIntoView({ block: 'center' }); });
   await sleep(300);
   check((await r.evaluate(() => document.querySelector('[data-testid="consent-block"] details').innerText)).includes('Tarix (1)'), 'Tarixda 1 ta yozuv');

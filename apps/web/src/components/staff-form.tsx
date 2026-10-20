@@ -146,8 +146,8 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
             <div className="mt-2 flex gap-2"><Button ref={confirmBtn} size="sm" variant={staff.status === 'active' ? 'danger' : 'primary'} loading={status.isPending} onClick={() => status.mutate()}>{staff.status === 'active' ? t('admin.form.deactivateYes') : t('admin.form.activateYes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
           </Alert>
         )}
-        {staff?.is_self && <p className="text-sm text-slate-600">{t('admin.form.selfNote')}{me.auth_kind === 'password' ? ` ${t('admin.form.selfPassword')}` : ''}</p>}
-        {staff?.demo_card && !staff.is_self && <p className="text-sm text-slate-600">{t('admin.form.demoNote')}</p>}
+        {staff?.is_self && <Alert tone="blue">{t('admin.form.selfNote')}</Alert>}
+        {staff?.demo_card && !staff.is_self && <Alert tone="blue">{t('admin.form.demoNote')}</Alert>}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('admin.form.name')} required error={errors.full_name}>
@@ -168,7 +168,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
 
         <fieldset disabled={!!staff?.is_self}>
           <legend className="text-sm font-semibold text-slate-800">{t('admin.form.branches')}<span className="text-red-700" aria-hidden="true"> *</span></legend>
-          <div className="mt-1 flex flex-wrap gap-2">
+          <div className="mt-1.5 flex flex-wrap gap-2">
             {me.branches.map((b) => (
               <label key={b.id} className={cx('flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border-2 px-3 text-[0.9375rem] focus-within:ring-4 focus-within:ring-amber-300',
                 v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 text-brand-900' : errors.branch_ids ? 'border-red-600' : 'border-slate-300')}>
@@ -180,7 +180,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
         </fieldset>
 
         {isDoctor && (
-          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
               <Field label={t('admin.form.specialty')} required error={errors['doctor.specialty']}>
                 {(id) => <Input id={id} value={v.specialty} onChange={set('specialty')} invalid={!!errors['doctor.specialty']} placeholder={t('admin.form.specialtyPlaceholder')} />}
@@ -190,9 +190,9 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
               </Field>
             </div>
             <div>
-              <div className="text-sm font-semibold text-slate-800">{t('admin.form.services')} <span className="font-normal text-slate-600">({t('admin.form.servicesPicked', { n: v.service_ids.length })})</span></div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-semibold text-slate-800">{t('admin.form.services')} <span className="text-[0.8125rem] font-normal text-slate-600">{t('admin.form.servicesPicked', { n: v.service_ids.length })}</span></div>
               {services.isLoading ? <p className="mt-1 text-sm text-slate-600">{t('common.loading')}</p> : (
-                <div className="mt-1 space-y-2 rounded-lg border border-slate-200 bg-white p-2">
+                <div className="mt-1 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
                   {Object.entries(grouped).map(([cat, list]) => (
                     <div key={cat}>
                       <div className="text-[0.8125rem] font-semibold text-slate-600">{t(`service.${cat}` as MessageKey)}</div>
@@ -208,11 +208,10 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
                   ))}
                 </div>
               )}
-              {isNew && <p className="mt-1 text-[0.8125rem] text-slate-600">{t('admin.form.scheduleNext')}</p>}
+              {isNew && <p className="mt-2 text-[0.8125rem] text-slate-600">{t('admin.form.scheduleNext')}</p>}
             </div>
           </div>
         )}
-        {isNew && <p className="text-[0.8125rem] text-slate-600">{t('admin.form.tempOnce')}</p>}
       </div>
     </Modal>
   );

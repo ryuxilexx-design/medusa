@@ -165,8 +165,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
             })}</tbody>
           </table>
         </div>
-        {branches.length < me.branches.length && <p className="text-xs text-slate-600">{t('registrar.sched.branchesHint')}</p>}
-        <p className="text-xs text-slate-600">{t('registrar.sched.effectHint')}</p>
+        {branches.length < me.branches.length && <p className="text-[0.8125rem] text-slate-600">{t('registrar.sched.branchesHint')}</p>}
       </div>
     </Modal>
   );

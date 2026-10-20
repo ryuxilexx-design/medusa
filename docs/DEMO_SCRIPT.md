@@ -11,7 +11,7 @@ npm run demo           # production build + ishga tushirish (web :3000, API :400
 Ilova: **http://127.0.0.1:3000**. Terminal oynasini yopmang.
 
 **Uchrashuvdan 10–30 daqiqa oldin — reset (majburiy):**
-Rahbar → **Sozlamalar** → **Demo boshqaruvi** → **Demo ma’lumotlarini tiklash** → `TIKLASH` deb yozing → **Tiklash**.
+Rahbar → **Sozlamalar** → **Demo** → **Demo ma’lumotlarini tiklash** → `TIKLASH` deb yozing → **Tiklash**.
 (yoki terminalda: `npm run db:reset` — ilova ishlab turganda ham bo‘ladi).
 
 Reset ma’lumotni ham, **demo vaqti**ni ham birga boshlang‘ich holatga qaytaradi: sana 18-oktabr 2026 (yakshanba), soat **11:30**. Soat real vaqtda yuradi; API qayta ishga tushsa ham orqaga qaytmaydi. Yuqori panelda «Demo vaqti · 18-oktabr 2026, yakshanba, 11:3x» ko‘rinadi.
@@ -95,13 +95,13 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 
 ### 7. Rahbar — natija (7:00–8:00) · Oyna 1
 1. **Umumiy ko‘rinish** ni yangilang (F5): tushum **2 720 000 so‘m** (+210 000), to‘lovlar soni 14, kelgan bemorlar va yakunlanganlar +1.
-2. **Qayd etilgan tushum** kartasini bosing → **Moliya**: Abdullayev Jamshidning ikki to‘lovi (Naqd + Karta) → **CSV eksport**.
+2. **Tushum** kartasini bosing → **Moliya**: Abdullayev Jamshidning ikki to‘lovi (Naqd + Karta) → **CSV**.
 > «Hisobot tirik ma’lumotdan hisoblanadi — alohida kiritilgan raqam yo‘q.»
 
 ### 8. Kengayish (8:00–9:00) · Oyna 1
-- **Ombor** → «Faqat kam qolganlar» (4 ta; dashboard ogohlantirishi bilan bir xil).
+- **Ombor** → «Kam qolganlar» (4 ta; dashboard ogohlantirishi bilan bir xil).
 - **Xodimlar** → *Akmal Rasulov* → ish jadvali, bugungi qabullar, hisoblangan ulush. **Jadvalni tahrirlash** → kun, filial, xona, ish vaqti va tanaffus; kelgusi qabulga to‘g‘ri keladigan kunni o‘chirsangiz, tizim o‘sha qabullarni ro‘yxat qilib ko‘rsatadi (saqlamasdan **Bekor qilish**).
-- **Sozlamalar** → **Xizmatlar katalogi** → narxni o‘zgartirish mumkin (eski hisoblar o‘zgarmaydi) → **Audit jurnali**: namoyishdagi barcha amallar.
+- **Sozlamalar** → **Xizmatlar** → narxni o‘zgartirish mumkin (eski hisoblar o‘zgarmaydi) → **Audit jurnali**: namoyishdagi barcha amallar.
 
 ### 9. Yakun (9:00–10:00)
 Keyingi bosqich: klinikaning haqiqiy xizmatlari, narxlari, blankalari va integratsiyalari (TZ §22 savollari).
@@ -135,7 +135,7 @@ Ayting: «AI faqat qoralama va taklif beradi, imzo shifokorda. Bemorning ismi va
 
 ## Kassa nazorati (1 daqiqa, Rahbar va Kassir oynalarida)
 
-1. Kassir: **Kassadan xarajat** → `25000`, «Ichimlik suvi» → panelda «Kassada bo‘lishi kerak» kamayadi.
+1. Kassir: **Kassadan xarajat** → `25000`, «Ichimlik suvi» → panelda «Kassada hozir» kamayadi.
 2. Rahbar: to‘langan hisob → **Pulni qaytarish** → summa, **Naqd**, kassa avtomatik tanlanadi, izoh → **Qaytarish**. Hisob kamayadi, qarz paydo bo‘lmaydi.
 3. Kassir: **Smenani yopish** → sanalgan pulni 1 000 kam yozing → farq chiqadi, izohsiz yopilmaydi → izoh → **Yopish** → smena hisoboti.
 4. Rahbar: **Moliya** → yuqorida sof natija; **Kassa smenalari** → farq bilan yopilgan smena.
@@ -179,4 +179,4 @@ MedPlus/DMED bilan tekshirilmagan solishtirish; tejaladigan soat yoki foiz va’
 
 ## Namoyishdan keyin
 
-Rahbar → Sozlamalar → Demo boshqaruvi → reset. `npm test` va `npm run e2e` demo bazaga tegmaydi (alohida `meduza_test` bazasida ishlaydi).
+Rahbar → Sozlamalar → Demo → reset. `npm test` va `npm run e2e` demo bazaga tegmaydi (alohida `meduza_test` bazasida ishlaydi).

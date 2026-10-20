@@ -14,11 +14,11 @@ const pickLanguage = (p, id) => p.evaluate((id) => {
 try {
   const p = await newPage(b, errors);
   await p.goto(BASE + '/login', { waitUntil: 'networkidle0' });
-  check((await text(p)).includes('Xodim kirishi'), 'Kirish sahifasi standart tilda — o‘zbek (lotin)');
+  check((await text(p)).includes('Tizimga kirish'), 'Kirish sahifasi standart tilda — o‘zbek (lotin)');
   await pickLanguage(p, 'ru');
-  await waitText(p, 'Вход для сотрудников');
+  await waitText(p, 'Вход в систему');
   check(await p.evaluate(() => document.documentElement.lang) === 'ru', '<html lang="ru">');
-  check((await text(p)).includes('Демо: вход по роли'), 'Kirish sahifasi ruscha');
+  check((await text(p)).includes('Демо-роли'), 'Kirish sahifasi ruscha');
   await shot(p, 'i18n-01-login-ru');
 
   // login() opens /login again: the cookie keeps Russian, so the role card heading is «Врач»

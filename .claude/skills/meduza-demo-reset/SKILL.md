@@ -23,7 +23,7 @@ Exit code 2 → people did real work. Show the user the `by_action` counts and l
 ## 3. Reset
 
 - Local: `npm run db:reset` (works while the app runs; sessions survive).
-- Railway: log in as Rahbar through the API with the access code and `POST /api/v1/demo/reset` — or ask the user to use Rahbar → Sozlamalar → Demo boshqaruvi → «Demo ma’lumotlarini tiklash».
+- Railway: log in as Rahbar through the API with the access code and `POST /api/v1/demo/reset` — or ask the user to use Rahbar → Sozlamalar → Demo → «Demo ma’lumotlarini tiklash».
 - Never point a test or E2E run at the demo database to "reset" it; tests use `meduza_test` and refuse other databases on purpose.
 
 ## 4. Verify and report

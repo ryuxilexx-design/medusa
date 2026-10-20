@@ -7,7 +7,7 @@ const step = (s) => console.log('✓ ' + s);
 const PAT = { last: 'Abdullayev', first: 'Jamshid' };
 
 // Manager: baseline revenue
-const kpi = (page) => page.evaluate(() => { const l = [...document.querySelectorAll('div')].find((d) => d.textContent.trim() === 'Qayd etilgan tushum'); return l?.nextElementSibling?.textContent; });
+const kpi = (page) => page.evaluate(() => { const l = [...document.querySelectorAll('div')].find((d) => d.textContent.trim() === 'Tushum'); return l?.nextElementSibling?.textContent; });
 let m = await newPage(b, errors);
 await login(m, 'Rahbar');
 const revenue0 = await kpi(m);

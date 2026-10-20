@@ -23,9 +23,10 @@ export async function login(page, roleLabel, doctorText) {
   if (doctorText) {
     await page.evaluate((t) => { const s = document.querySelector('select[data-testid="doctor-pick"]'); const o = [...s.options].find((o) => o.text.includes(t)); s.value = o.value; s.dispatchEvent(new Event('change', { bubbles: true })); }, doctorText);
   }
+  // demo role rows on the login card: the row whose heading is the role name has its own «Kirish» button
   await page.evaluate((label) => {
-    const card = [...document.querySelectorAll('h2')].find((h) => h.textContent === label).parentElement;
-    card.querySelector('button').click();
+    const row = [...document.querySelectorAll('[data-demo-role]')].find((r) => r.querySelector('h2')?.textContent === label);
+    row.querySelector('button').click();
   }, roleLabel);
   await page.waitForFunction(() => !location.pathname.startsWith('/login'), { timeout: 15000 });
   await page.waitForNetworkIdle({ idleTime: 400 });

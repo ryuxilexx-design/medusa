@@ -4,6 +4,15 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 00000000000. 0.9.1: interfeysni qayta tartiblash (sodda va tushunarli)
+
+| Nima o‘zgardi | Tekshiruv |
+|---|---|
+| Login: bitta markaziy karta, «Demo rollar» / «Login va parol» yorliqlari (production’da faqat forma) | Skrinshot 1366 va 390; E2E `auth`, `i18n` |
+| Qobiq: menyu «Kundalik ish» / «Boshqaruv» guruhlarida, yuqori panelda klinika + sana + bitta «Demo» belgisi, foydalanuvchi menyusi (til, parol, chiqish) | Skrinshotlar; E2E |
+| Barcha sahifalar `docs/UI_GUIDE.md` bo‘yicha: qisqa sarlavha, `StatCard` raqamlar, bir qatordagi filtrlar (`Toolbar`), ixcham bo‘sh holatlar, «keyingi relizda»/izoh paragraflari olib tashlandi | Har sahifa 1366/390, uz/ru skrinshotlari; gorizontal skroll yo‘q |
+| Xizmat narxini ko‘rsatishdagi kasr bo‘lish xatosi tuzatildi (butun tiyin) | Typecheck |
+
 ## 0000000000. Pilot serveri: O‘zbekistonda o‘rnatish to‘plami (production)
 
 | Imkoniyat | Holat | Qanday tekshirildi |

@@ -51,22 +51,24 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
 
   return (
     <div className="space-y-2" ref={box}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-sm font-semibold text-slate-800">{t('icd.label')}</span>
-        {value.map((x) => (
-          <span key={x.code} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-900">
-            <b className="tabular-nums">{x.code}</b><span className="max-w-[17rem] truncate">{x.title}</span>
-            {!disabled && <button type="button" aria-label={t('icd.remove', { code: x.code })} className="rounded-full p-1 text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={() => onChange(value.filter((v) => v.code !== x.code))}><X className="h-4 w-4" /></button>}
-          </span>
-        ))}
-        {!value.length && <span className="text-sm text-slate-600">{t('icd.none')}</span>}
-      </div>
+      <label htmlFor={`${listId}-q`} className="block text-sm font-semibold text-slate-800">{t('icd.label')}</label>
+      {value.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {value.map((x) => (
+            <span key={x.code} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-900">
+              <b className="tabular-nums">{x.code}</b><span className="max-w-[17rem] truncate">{x.title}</span>
+              {!disabled && <button type="button" aria-label={t('icd.remove', { code: x.code })} className="rounded-full p-1 text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={() => onChange(value.filter((v) => v.code !== x.code))}><X className="h-4 w-4" /></button>}
+            </span>
+          ))}
+        </div>
+      )}
+      {disabled && !value.length && <p className="text-sm text-slate-600">{t('icd.none')}</p>}
       {!disabled && (
         <div className="flex flex-wrap items-start gap-2">
           <div className="relative min-w-[13rem] flex-1">
-            <Input aria-label={t('icd.search')} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }} onFocus={() => setOpen(true)} onKeyDown={onKey}
+            <Input id={`${listId}-q`} aria-label={t('icd.search')} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); setActive(-1); }} onFocus={() => setOpen(true)} onKeyDown={onKey}
               role="combobox" aria-expanded={open && debounced.length >= 2} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-              placeholder={t('icd.placeholder')} className="h-10 text-sm" />
+              placeholder={t('icd.placeholder')} />
             {open && debounced.length >= 2 && (
               <ul role="listbox" id={listId} className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
                 {search.isLoading && <li className="px-3 py-2 text-slate-600">{t('common.searching')}</li>}
@@ -83,7 +85,7 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
               </ul>
             )}
           </div>
-          <Button size="sm" icon={<Sparkles className="h-4 w-4" />} loading={suggest.isPending} disabled={needText}
+          <Button icon={<Sparkles className="h-4 w-4 text-brand-600" />} loading={suggest.isPending} disabled={needText}
             title={needText ? t('icd.suggestNeedText') : t('icd.suggestTitle')} aria-describedby={needText ? `${listId}-need` : undefined} onClick={() => suggest.mutate()}>{t('icd.suggest')}</Button>
         </div>
       )}
@@ -91,7 +93,7 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
       {!disabled && needText && <p id={`${listId}-need`} className="text-[0.8125rem] text-slate-600">{t('icd.suggestNeedText')}</p>}
       {suggest.isError && <Alert tone="red">{t('icd.suggestFailed', { msg: (suggest.error as Error).message })}</Alert>}
       {suggest.data && !disabled && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+        <div className="rounded-lg border border-slate-200 bg-white p-3">
           <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[0.8125rem] text-slate-700">
             {suggest.data.mode === 'live' ? <Badge tone="teal">{t('icd.aiSuggestion')}</Badge> : <Badge>{t('icd.wordMatch')}</Badge>}
             <span>{t('icd.onlyClinic')}</span>

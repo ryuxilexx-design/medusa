@@ -1,10 +1,10 @@
 'use client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ShieldCheck } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, ErrorState, LoadingRows, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, LoadingRows, Table, Td, Th, useToast } from '@/components/ui';
 import { NewsCard } from '@/components/news-card';
 
 type Usage = {
@@ -33,77 +33,74 @@ export function AiSettings() {
     },
     onError: (e) => toast.error(e),
   });
-  if (q.isLoading) return <LoadingRows rows={4} />;
-  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  if (q.isLoading) return <Card><LoadingRows rows={4} /></Card>;
+  if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   const u = q.data!;
   const total = u.by_route.reduce((a, b) => a + b.cost_usd, 0);
   const pv = PROVIDER[u.provider] ?? PROVIDER.anthropic;
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
-      <div className="min-w-0 space-y-5">
-        <section className="flex flex-wrap items-center gap-3">
-          <Badge tone={MODE[u.mode][1]}>{t(MODE[u.mode][0])}</Badge>
-          {u.mode === 'live' && <span className="text-sm text-slate-700">{pv.name}, <code>{u.model}</code>{u.gemini_free && `, ${t('admin.ai.freeTier')}`}</span>}
-          <span className="text-sm text-slate-600">{t('admin.ai.today', { n: u.today.calls, cost: usd(u.today.cost_usd) })}</span>
-        </section>
-        {u.mode !== 'live' && (
-          <Alert tone="yellow" title={t('admin.ai.notLiveTitle')}>
-            {u.key_configured ? t('admin.ai.keyNotLive') : t('admin.ai.noKey')} {t(u.mode === 'sample' ? 'admin.ai.notLiveText' : 'admin.ai.offText')}
-          </Alert>
-        )}
-        {u.mode === 'live' && u.gemini_free && (
-          <Alert tone={u.clinical_allowed ? 'yellow' : 'red'} title={t('admin.ai.geminiTitle')}>
-            {t('admin.ai.geminiText', { company: 'Google' })}{' '}
-            {u.clinical_allowed
-              ? t('admin.ai.geminiAllowed')
-              : t('admin.ai.geminiBlocked')}
-          </Alert>
-        )}
-        <section>
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.last30')}</h3>
-          {!u.by_route.length ? <p className="mt-1 text-sm text-slate-600">{t('admin.ai.noCalls')}</p> : (
-            <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
-              <Table>
-                <thead><tr><Th>{t('admin.ai.colService')}</Th><Th right>{t('admin.ai.colCalls')}</Th><Th right>{t('admin.ai.colErrors')}</Th><Th right>{t('admin.ai.colTokens')}</Th><Th right>{t('admin.ai.colLatency')}</Th><Th right>{t('admin.ai.colCost')}</Th></tr></thead>
-                <tbody>{u.by_route.map((r) => (
-                  <tr key={r.route}>
-                    <Td>{ROUTE[r.route] ? t(ROUTE[r.route]) : r.route}</Td><Td right>{r.calls}</Td><Td right>{r.failed || '—'}</Td>
-                    <Td right className="tabular-nums">{r.input_tokens.toLocaleString('ru-RU')} / {r.output_tokens.toLocaleString('ru-RU')}</Td>
-                    <Td right>{r.avg_latency_ms != null ? t('admin.ai.seconds', { s: (r.avg_latency_ms / 1000).toFixed(1) }) : '—'}</Td><Td right className="tabular-nums">{usd(r.cost_usd)}</Td>
-                  </tr>
-                ))}</tbody>
-                <tfoot><tr className="border-t border-slate-200 font-medium"><Td>{t('admin.ai.total')}</Td><Td right>{u.by_route.reduce((a, b) => a + b.calls, 0)}</Td><Td /><Td /><Td /><Td right className="tabular-nums">{usd(total)}</Td></tr></tfoot>
-              </Table>
+    <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="flex min-w-0 flex-col gap-5">
+        <Card title={t('admin.ai.status')}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Badge tone={MODE[u.mode][1]}>{t(MODE[u.mode][0])}</Badge>
+              {u.mode === 'live' && <span className="text-[0.9375rem] text-slate-700">{pv.name}, <code>{u.model}</code>{u.gemini_free && `, ${t('admin.ai.freeTier')}`}</span>}
+              <span className="text-[0.9375rem] text-slate-600">{t('admin.ai.today', { n: u.today.calls, cost: usd(u.today.cost_usd) })}</span>
             </div>
+            {u.mode !== 'live' && (
+              <Alert tone="yellow" title={t('admin.ai.notLiveTitle')}>
+                {u.key_configured ? t('admin.ai.keyNotLive') : t('admin.ai.noKey')} {t(u.mode === 'sample' ? 'admin.ai.notLiveText' : 'admin.ai.offText')}
+              </Alert>
+            )}
+            {u.mode === 'live' && u.gemini_free && (
+              <Alert tone={u.clinical_allowed ? 'yellow' : 'red'} title={t('admin.ai.geminiTitle')}>
+                {t('admin.ai.geminiText', { company: 'Google' })}{' '}{u.clinical_allowed ? t('admin.ai.geminiAllowed') : t('admin.ai.geminiBlocked')}
+              </Alert>
+            )}
+            <div className="divide-y divide-slate-100 border-t border-slate-100 pt-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 py-2 text-[0.9375rem]">
+                <h3 className="font-semibold text-slate-900">{t('admin.ai.icdTitle')}</h3>
+                <span className="text-slate-700">{t('admin.ai.icdCount', { n: u.icd10.n })}{u.icd10.official ? t('admin.ai.icdOfficial', { n: u.icd10.official }) : t('admin.ai.icdStarter')}</span>
+              </div>
+            </div>
+            {(u.mode !== 'live' || !u.icd10.official) && (
+              <details className="text-[0.8125rem] text-slate-600">
+                <summary className="cursor-pointer rounded font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
+                <ul className="mt-1 list-disc space-y-1 pl-5">
+                  {u.mode !== 'live' && <li>{t('admin.ai.adminKey', { key: pv.key, setting: 'AI_MODE=live' })}</li>}
+                  {!u.icd10.official && <li>{t('admin.ai.adminIcd', { cmd: 'npm run db:import-icd10 -- fayl.csv' })}</li>}
+                </ul>
+              </details>
+            )}
+          </div>
+        </Card>
+
+        <Card title={t('admin.ai.last30')} padded={false}>
+          {!u.by_route.length ? <EmptyState compact title={t('admin.ai.noCalls')} /> : (
+            <Table>
+              <thead><tr><Th>{t('admin.ai.colService')}</Th><Th right>{t('admin.ai.colCalls')}</Th><Th right className="hidden sm:table-cell">{t('admin.ai.colErrors')}</Th><Th right className="hidden lg:table-cell">{t('admin.ai.colTokens')}</Th><Th right className="hidden md:table-cell">{t('admin.ai.colLatency')}</Th><Th right>{t('admin.ai.colCost')}</Th></tr></thead>
+              <tbody>{u.by_route.map((r) => (
+                <tr key={r.route}>
+                  <Td className="min-w-[9rem]">{ROUTE[r.route] ? t(ROUTE[r.route]) : r.route}</Td><Td right>{r.calls}</Td><Td right className="hidden sm:table-cell">{r.failed || '—'}</Td>
+                  <Td right className="hidden lg:table-cell">{r.input_tokens.toLocaleString('ru-RU')} / {r.output_tokens.toLocaleString('ru-RU')}</Td>
+                  <Td right className="hidden md:table-cell">{r.avg_latency_ms != null ? t('admin.ai.seconds', { s: (r.avg_latency_ms / 1000).toFixed(1) }) : '—'}</Td><Td right>{usd(r.cost_usd)}</Td>
+                </tr>
+              ))}</tbody>
+              <tfoot><tr className="font-semibold"><Td>{t('admin.ai.total')}</Td><Td right>{u.by_route.reduce((a, b) => a + b.calls, 0)}</Td><Td className="hidden sm:table-cell" /><Td className="hidden lg:table-cell" /><Td className="hidden md:table-cell" /><Td right>{usd(total)}</Td></tr></tfoot>
+            </Table>
           )}
-          <p className="mt-1 text-[0.8125rem] text-slate-600">{u.gemini_free ? t('admin.ai.freeCost') : t('admin.ai.estCost', { provider: pv.name })} {t('admin.ai.costFoot', { console: pv.console })}</p>
-        </section>
-        <section className="text-sm text-slate-600">
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.icdTitle')}</h3>
-          <p className="mt-1">{t('admin.ai.icdCount', { n: u.icd10.n })}{u.icd10.official ? t('admin.ai.icdOfficial', { n: u.icd10.official }) : t('admin.ai.icdStarter')}.
-            {!u.icd10.official && <> {t('admin.ai.icdImport')}</>}</p>
-        </section>
-        {(u.mode !== 'live' || !u.icd10.official) && (
-          <details className="text-[0.8125rem] text-slate-600">
-            <summary className="cursor-pointer rounded font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
-            <ul className="mt-1 list-disc space-y-1 pl-5">
-              {u.mode !== 'live' && <li>{t('admin.ai.adminKey', { key: pv.key, setting: 'AI_MODE=live' })}</li>}
-              {!u.icd10.official && <li>{t('admin.ai.adminIcd', { cmd: 'npm run db:import-icd10 -- fayl.csv' })}</li>}
-            </ul>
-          </details>
-        )}
-        <section className="text-sm text-slate-600">
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.security')}</h3>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            <li>{t('admin.ai.sec1')}</li>
-            <li>{t('admin.ai.sec2')}</li>
-            <li>{t('admin.ai.sec3')}</li>
+          <p className="border-t border-slate-100 px-5 py-3 text-[0.8125rem] text-slate-600">{u.gemini_free ? t('admin.ai.freeCost') : t('admin.ai.estCost', { provider: pv.name })} {t('admin.ai.costFoot', { console: pv.console })}</p>
+        </Card>
+
+        <Card title={t('admin.ai.security')}>
+          <ul className="flex flex-col gap-2 text-[0.9375rem] text-slate-700">
+            {(['admin.ai.sec1', 'admin.ai.sec2', 'admin.ai.sec3'] as const).map((k) => <li key={k} className="flex gap-2.5"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />{t(k)}</li>)}
           </ul>
-        </section>
+        </Card>
       </div>
-      <div className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.newsTitle')}</h3>
+      <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex justify-end">
           <Button size="sm" icon={<RefreshCw className="h-4 w-4" />} loading={refresh.isPending} onClick={() => refresh.mutate()}>{t('admin.ai.refreshNow')}</Button>
         </div>
         <NewsCard canPick canRate={false} initial={5} />

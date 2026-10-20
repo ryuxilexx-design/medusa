@@ -29,41 +29,48 @@ function meta(t: ReturnType<typeof useT>, r: ConsentRow) {
   return t('consent.meta', { version: r.text_version, method: t(`consent.method.${r.method}` as MessageKey), who: t('consent.recordedBy', { name: r.recorded_by_name ?? t('consent.bot'), at: fmtDateTime(r.recorded_at) }) });
 }
 
-/** Full-width amber band on the patient card while there is no valid consent to data processing. */
+/** Full-width amber band on the patient card while there is no valid consent to data processing: one calm line + actions. */
 export function ConsentNotice({ patientId, consents, role, onRecord }: { patientId: string; consents?: Consents; role: string; onRecord: () => void }) {
   const t = useT();
   if (!consents || consents.data_processing?.granted) return null;
   const withdrawn = consents.data_processing?.granted === false;
   return (
-    <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-amber-200 bg-amber-50 px-4 py-2.5 text-amber-900" data-testid="consent-notice">
-      <ShieldAlert className="h-5 w-5 shrink-0" />
-      <div className="min-w-[16rem] flex-1 basis-0">
-        <p className="text-[0.9375rem] font-semibold">{t(withdrawn ? 'consent.withdrawnTitle' : 'consent.missingTitle')}</p>
-        <p className="text-[0.8125rem]">{t(withdrawn ? 'consent.withdrawnText' : 'consent.missingText')}</p>
-      </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
-        <LinkButton size="sm" href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.print')}</LinkButton>
+    <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-amber-200 bg-amber-50 px-5 py-2.5 text-amber-900" data-testid="consent-notice">
+      <ShieldAlert className="h-5 w-5 shrink-0" aria-hidden="true" />
+      <p className="min-w-0 flex-1 basis-[16rem] text-[0.9375rem]">
+        <span className="font-semibold">{t(withdrawn ? 'consent.withdrawnTitle' : 'consent.missingTitle')}.</span>{' '}
+        <span className="text-[0.875rem]">{t(withdrawn ? 'consent.withdrawnText' : 'consent.missingText')}</span>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <LinkButton size="sm" href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.printShort')}</LinkButton>
         {canRecordConsent(role) && <Button size="sm" variant="primary" icon={<FileSignature className="h-4 w-4" />} onClick={onRecord}>{t('consent.record')}</Button>}
       </div>
     </div>
   );
 }
 
-/** Consent block of the patient card: current status of both kinds, details, history and actions. */
+/** Consent block of the patient card: status of both kinds (word + icon + colour), who recorded it, history, quiet actions. */
 export function ConsentBlock({ patientId, consents, role, onRecord }: { patientId: string; consents: Consents; role: string; onRecord: (kind: Kind) => void }) {
   const t = useT();
   const h = useQuery({ queryKey: ['patient', patientId, 'consents'], queryFn: () => api<{ data: ConsentRow[] }>(`/patients/${patientId}/consents`).then((r) => r.data), enabled: canRecordConsent(role) });
   const everGranted = (k: Kind) => !!h.data?.some((r) => r.kind === k && r.granted);
+  const quiet = 'text-slate-700 hover:bg-slate-100 hover:text-brand-800 !px-2';
   return (
-    <section aria-labelledby="consent-h" className="mt-4" data-testid="consent-block">
-      <h3 id="consent-h" className="mb-2 text-sm font-semibold text-slate-800">{t('consent.block.title')}</h3>
-      <div className="divide-y divide-slate-100 rounded-md border border-slate-200">
+    <section aria-labelledby="consent-h" data-testid="consent-block">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h3 id="consent-h" className="text-[0.9375rem] font-bold text-slate-900">{t('consent.block.title')}</h3>
+        <div className="-mr-2 flex flex-wrap items-center gap-1">
+          {canRecordConsent(role) && <Button size="sm" variant="ghost" className={quiet} icon={<FileSignature className="h-4 w-4" />} aria-label={t('consent.record')} onClick={() => onRecord(consents.data_processing?.granted ? 'notifications' : 'data_processing')}>{t('consent.recordShort')}</Button>}
+          <LinkButton size="sm" variant="ghost" className={quiet} href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.printShort')}</LinkButton>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200">
         {KINDS.map((k) => {
           const r = consents[k];
           return (
             <div key={k} className="px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-medium text-slate-800">{t(`consent.kind.${k}`)}</span>
+                <span className="text-sm font-medium text-slate-900">{t(`consent.kind.${k}`)}</span>
                 <ConsentBadge kind={k} row={r} everGranted={everGranted(k)} />
               </div>
               {r && <p className="mt-1 text-[0.8125rem] text-slate-600">{meta(t, r)}</p>}
@@ -72,25 +79,21 @@ export function ConsentBlock({ patientId, consents, role, onRecord }: { patientI
           );
         })}
       </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {canRecordConsent(role) && <Button size="sm" icon={<FileSignature className="h-4 w-4" />} onClick={() => onRecord(consents.data_processing?.granted ? 'notifications' : 'data_processing')}>{t('consent.record')}</Button>}
-        <LinkButton size="sm" href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.print')}</LinkButton>
-      </div>
-      {h.data && (
-        <details className="mt-2 rounded-md border border-slate-200 px-3 py-1.5 text-[0.8125rem]">
-          <summary className="cursor-pointer py-1 font-semibold text-slate-700">{t('consent.history', { n: h.data.length })}</summary>
-          {!h.data.length ? <p className="py-1 text-slate-600">{t('consent.historyEmpty')}</p> : (
+      {!!h.data?.length && (
+        <details className="group mt-2 text-[0.8125rem]">
+          <summary className="inline-flex min-h-9 cursor-pointer items-center gap-1 rounded px-1 font-semibold text-slate-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('consent.history', { n: h.data.length })}</summary>
+          <div className="mt-1 rounded-lg border border-slate-200 px-3 py-1.5">
             <ol className="divide-y divide-slate-100">
-              {h.data.map((r) => (
-                <li key={r.id} className="py-1.5">
-                  <div className="flex flex-wrap items-center gap-x-2"><b>{t(`consent.kind.${r.kind}`)}</b>
-                    <span className={r.granted ? 'text-emerald-800' : 'text-red-800'}>{r.granted ? `✓ ${t('consent.modal.granted')}` : `✕ ${t('consent.modal.denied')}`}</span></div>
-                  <div className="text-slate-600">{meta(t, r)}{r.note ? ` · ${r.note}` : ''}</div>
-                </li>
-              ))}
+                {h.data.map((r) => (
+                  <li key={r.id} className="py-1.5">
+                    <div className="flex flex-wrap items-center gap-x-2"><b className="text-slate-900">{t(`consent.kind.${r.kind}`)}</b>
+                      <span className={r.granted ? 'inline-flex items-center gap-1 text-emerald-800' : 'inline-flex items-center gap-1 text-red-800'}>{r.granted ? <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> : <CircleX className="h-3.5 w-3.5" aria-hidden="true" />}{t(r.granted ? 'consent.modal.granted' : 'consent.modal.denied')}</span></div>
+                    <div className="text-slate-600">{meta(t, r)}{r.note ? ` · ${r.note}` : ''}</div>
+                  </li>
+                ))}
             </ol>
-          )}
-          <p className="pb-1 pt-1.5 text-xs text-slate-600">{t('consent.appendOnly')}</p>
+            <p className="pb-1 pt-1.5 text-[0.8125rem] text-slate-600">{t('consent.appendOnly')}</p>
+          </div>
         </details>
       )}
     </section>

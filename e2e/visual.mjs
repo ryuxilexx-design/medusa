@@ -28,7 +28,7 @@ await goto(m, '/patients?search=Karimov Aziz'); await openRow(m, 'Karimov Aziz',
 problems += (await snap(m, '03-rahbar-bemor-profili')).length;
 await goto(m, '/inventory?low=1'); await m.evaluate(() => document.querySelector('tbody tr')?.click()); problems += (await snap(m, '04-rahbar-ombor')).length;
 await goto(m, '/staff'); await openRow(m, 'Akmal Rasulov', 'tr'); problems += (await snap(m, '05-rahbar-xodimlar')).length;
-await goto(m, '/settings'); await clickText(m, 'Xizmatlar katalogi'); problems += (await snap(m, '06-rahbar-sozlamalar')).length;
+await goto(m, '/settings'); await clickText(m, 'Xizmatlar', '[role=tablist] button'); problems += (await snap(m, '06-rahbar-sozlamalar')).length;
 await goto(m, '/finance'); problems += (await snap(m, '07-rahbar-moliya')).length;
 
 const r = await newPage(b, errors); await login(r, 'Registrator');

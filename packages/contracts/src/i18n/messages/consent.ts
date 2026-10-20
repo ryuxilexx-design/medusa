@@ -102,13 +102,15 @@ export const consent = {
   'consent.meta': ['Versiya {version} · {method} · {who}', 'Версия {version} · {method} · {who}'],
   'consent.record': ['Rozilikni qayd etish', 'Отметить согласие'],
   'consent.print': ['Rozilik varaqasini chop etish', 'Распечатать бланк согласия'],
+  'consent.recordShort': ['Qayd etish', 'Отметить'],
+  'consent.printShort': ['Varaqani chop etish', 'Печать бланка'],
   'consent.printBlank': ['Bo‘sh rozilik varaqasi', 'Пустой бланк согласия'],
   'consent.history': ['Tarix ({n})', 'История ({n})'],
   'consent.historyEmpty': ['Hali yozuv yo‘q', 'Записей пока нет'],
   'consent.missingTitle': ['Bemorning roziligi qayd etilmagan', 'Согласие пациента не отмечено'],
-  'consent.missingText': ['Shaxsiy va sog‘liq haqidagi ma’lumotlarni qayta ishlashga rozilik varaqasini chop eting, bemorga imzolating va shu yerda qayd eting.', 'Распечатайте бланк согласия на обработку персональных и медицинских данных, дайте пациенту подписать и отметьте здесь.'],
+  'consent.missingText': ['Varaqani chop eting, bemorga imzolating va qayd eting.', 'Распечатайте бланк, дайте пациенту подписать и отметьте здесь.'],
   'consent.withdrawnTitle': ['Bemor roziligini qaytarib olgan', 'Пациент отозвал согласие'],
-  'consent.withdrawnText': ['Yangi ma’lumot kiritishdan oldin bemor bilan gaplashing yoki rahbarga murojaat qiling.', 'Прежде чем вносить новые данные, поговорите с пациентом или обратитесь к руководителю.'],
+  'consent.withdrawnText': ['Yangi ma’lumot kiritishdan oldin bemor bilan gaplashing.', 'Прежде чем вносить новые данные, поговорите с пациентом.'],
   'consent.appendOnly': ['Yozuvlar o‘chirilmaydi va o‘zgartirilmaydi: qaytarib olish yangi yozuv sifatida qo‘shiladi.', 'Записи не удаляются и не изменяются: отзыв добавляется новой записью.'],
 
   // record modal

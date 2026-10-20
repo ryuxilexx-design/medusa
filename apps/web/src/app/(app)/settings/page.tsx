@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, MinusCircle, Pencil, RotateCcw } from 'lucide-react';
+import { CheckCircle2, MinusCircle, Pencil, RotateCcw, Search } from 'lucide-react';
 import { ROLE_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, fmtDateTime, formatSom, parseSomToTiyin } from '@/lib/format';
@@ -9,7 +9,8 @@ import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { TelegramSettings } from '@/components/telegram-settings';
 import { AiSettings } from '@/components/ai-settings';
-import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, PageHeader, Pagination, Select, Table, Tabs, Td, Th, useToast } from '@/components/ui';
+import { MoneyInput } from '@/components/money-input';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, PageHeader, Pagination, Select, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 type Tab = 'clinic' | 'services' | 'telegram' | 'ai' | 'audit' | 'demo';
 
@@ -17,23 +18,19 @@ export default function SettingsPage() {
   const t = useT();
   const { me } = useSession();
   const [tab, setTab] = useState<Tab>('clinic');
-  // a real clinic (production) has no demo data to reset: no demo tab, no «demo» in the subtitle
+  // a real clinic (production) has no demo data to reset: no demo tab
   const tabs: { value: Tab; label: string }[] = [{ value: 'clinic', label: t('admin.set.tabClinic') }, { value: 'services', label: t('admin.set.tabServices') }, { value: 'telegram', label: t('admin.set.tabTelegram') }, { value: 'ai', label: t('admin.set.tabAi') }, { value: 'audit', label: t('admin.set.tabAudit') }];
   if (me.demo) tabs.push({ value: 'demo', label: t('admin.set.tabDemo') });
   return (
     <>
-      <PageHeader title={t('admin.set.title')} subtitle={t(me.demo ? 'admin.set.subtitle' : 'admin.set.subtitleProd')} />
-      <Card padded={false}>
-        <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
-        <div className="p-4">
-          {tab === 'clinic' && <Clinic />}
-          {tab === 'services' && <Services />}
-          {tab === 'telegram' && <TelegramSettings />}
-          {tab === 'ai' && <AiSettings />}
-          {tab === 'audit' && <Audit />}
-          {tab === 'demo' && me.demo && <Demo />}
-        </div>
-      </Card>
+      <PageHeader title={t('admin.set.title')} />
+      <div className="mb-5"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
+      {tab === 'clinic' && <Clinic />}
+      {tab === 'services' && <Services />}
+      {tab === 'telegram' && <TelegramSettings />}
+      {tab === 'ai' && <AiSettings />}
+      {tab === 'audit' && <Audit />}
+      {tab === 'demo' && me.demo && <Demo />}
     </>
   );
 }
@@ -47,21 +44,41 @@ function Clinic() {
   const rooms = useQuery({ queryKey: ['rooms'], queryFn: () => api('/rooms').then((r) => r.data as any[]) });
   const [name, setName] = useState('');
   useEffect(() => { if (s.data) setName(s.data.name); }, [s.data]);
-  const m = useMutation({ mutationFn: () => api('/settings/clinic', { method: 'PATCH', body: { name } }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['me'] }); qc.invalidateQueries({ queryKey: ['settings'] }); toast.success(t('admin.set.clinicSaved')); }, onError: (e) => toast.error(e) });
-  if (s.isLoading) return <LoadingRows rows={3} />;
+  const m = useMutation({ mutationFn: () => api('/settings/clinic', { method: 'PATCH', body: { name: name.trim() } }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['me'] }); qc.invalidateQueries({ queryKey: ['settings'] }); toast.success(t('admin.set.clinicSaved')); }, onError: (e) => toast.error(e) });
+  if (s.isLoading) return <Card><LoadingRows rows={3} /></Card>;
+  if (s.isError) return <Card><ErrorState error={s.error} onRetry={() => s.refetch()} /></Card>;
+  const branchName = (id: string) => b.data?.find((x) => x.id === id)?.name;
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      <div className="space-y-3">
-        <Field label={t('admin.set.clinicName')} hint={t('admin.set.clinicNameHint')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
-        <Button variant="primary" disabled={!name.trim() || name === s.data?.name} loading={m.isPending} onClick={() => m.mutate()}>{t('common.save')}</Button>
-        <h3 className="pt-4 text-sm font-semibold text-slate-800">{t('admin.set.branches')}</h3>
-        <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm">{b.data?.map((x) => <li key={x.id} className="px-3 py-2"><div className="font-semibold text-slate-900">{x.name}</div>{x.address && <div className="text-slate-600">{x.address}</div>}</li>)}</ul>
+    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-5">
+        <Card title={t('admin.set.clinic')}>
+          <form className="flex max-w-md flex-col gap-4" onSubmit={(e) => { e.preventDefault(); if (name.trim() && name !== s.data?.name) m.mutate(); }}>
+            <Field label={t('admin.set.clinicName')}>{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />}</Field>
+            <div><Button type="submit" variant="primary" disabled={!name.trim() || name === s.data?.name} loading={m.isPending}>{t('common.save')}</Button></div>
+          </form>
+        </Card>
+        <Card title={t('admin.set.branches')} padded={false}>
+          {b.isLoading ? <LoadingRows rows={2} /> : b.isError ? <ErrorState error={b.error} onRetry={() => b.refetch()} /> : (
+            <ul className="divide-y divide-slate-100">{b.data!.map((x) => (
+              <li key={x.id} className="px-5 py-3"><div className="font-semibold text-slate-900">{x.name}</div>{x.address && <div className="text-sm text-slate-600">{x.address}</div>}</li>
+            ))}</ul>
+          )}
+        </Card>
       </div>
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-800">{t('admin.set.rooms')}</h3>
-        <ul className="divide-y divide-slate-200 rounded-lg border border-slate-200 text-sm">{rooms.data?.map((r) => <li key={r.id} className="flex flex-wrap justify-between gap-x-3 px-3 py-2"><span>{r.name}, {r.purpose}</span><span className="text-slate-600">{r.branch_name}</span></li>)}</ul>
-        <p className="mt-3 text-[0.8125rem] text-slate-600">{t('admin.set.nextRelease')}</p>
-      </div>
+      <Card title={t('admin.set.rooms')} padded={false}>
+        {rooms.isLoading ? <LoadingRows rows={4} /> : rooms.isError ? <ErrorState error={rooms.error} onRetry={() => rooms.refetch()} /> : !rooms.data!.length ? <EmptyState compact title={t('admin.set.noRooms')} /> : (
+          <Table>
+            <thead><tr><Th>{t('admin.set.colRoom')}</Th><Th>{t('admin.set.colPurpose')}</Th><Th className="hidden sm:table-cell">{t('admin.set.colBranch')}</Th></tr></thead>
+            <tbody>{rooms.data!.map((r) => (
+              <tr key={r.id}>
+                <Td className="whitespace-nowrap font-medium text-slate-900">{r.name}</Td>
+                <Td className="text-slate-700">{r.purpose}<div className="text-[0.8125rem] text-slate-600 sm:hidden">{r.branch_name ?? branchName(r.branch_id)}</div></Td>
+                <Td className="hidden whitespace-nowrap text-slate-700 sm:table-cell">{r.branch_name ?? branchName(r.branch_id)}</Td>
+              </tr>
+            ))}</tbody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }
@@ -70,33 +87,56 @@ function Services() {
   const t = useT();
   const q = useQuery({ queryKey: ['services', 'all'], queryFn: () => api('/services?active=all').then((r) => r.data as any[]) });
   const [edit, setEdit] = useState<any>(null);
-  if (q.isLoading) return <LoadingRows />;
-  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  const [search, setSearch] = useState('');
+  const term = search.trim().toLowerCase();
+  const rows = (q.data ?? []).filter((s) => !term || s.name.toLowerCase().includes(term) || String(s.code).toLowerCase().includes(term));
   return (
-    <>
-      <Alert tone="blue">{t('admin.set.priceNote')}</Alert>
-      <Table className="mt-3">
-        <thead><tr><Th>{t('admin.set.colCode')}</Th><Th>{t('admin.set.colService')}</Th><Th>{t('admin.set.colType')}</Th><Th right>{t('admin.set.colPrice')}</Th><Th right>{t('admin.set.colDuration')}</Th><Th right>{t('admin.set.colShare')}</Th><Th>{t('admin.set.colStatus')}</Th><Th right /></tr></thead>
-        <tbody>{q.data!.map((s) => (
-          <tr key={s.id} className="hover:bg-slate-50">
-            <Td className="tabular-nums text-slate-600">{s.code}</Td><Td className="min-w-[12rem] font-medium">{s.name}</Td><Td><Badge>{t(`service.${s.category}` as MessageKey)}</Badge></Td>
-            <Td right>{formatSom(s.price)}</Td><Td right className="whitespace-nowrap">{t('admin.set.minutes', { n: s.duration_min })}</Td><Td right>{Number(s.share_percent)}</Td>
-            <Td>{s.active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.set.active')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.set.inactive')}</Badge>}</Td>
-            <Td right><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(s)} aria-label={`${t('admin.set.edit')}: ${s.name}`}>{t('admin.set.edit')}</Button></Td>
-          </tr>
-        ))}</tbody>
-      </Table>
+    <Card padded={false}>
+      <Toolbar>
+        <div className="relative w-full sm:w-80">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+          <Input type="search" aria-label={t('admin.set.searchService')} placeholder={t('admin.set.searchService')} className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      </Toolbar>
+      {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !rows.length ? <EmptyState compact title={t('admin.set.noServices')} /> : (
+        <Table>
+          <thead><tr>
+            <Th className="hidden sm:table-cell">{t('admin.set.colCode')}</Th><Th>{t('admin.set.colService')}</Th><Th className="hidden lg:table-cell">{t('admin.set.colType')}</Th>
+            <Th right>{t('admin.set.colPrice')}</Th><Th right className="hidden md:table-cell">{t('admin.set.colDuration')}</Th><Th right className="hidden lg:table-cell">{t('admin.set.colShare')}</Th>
+            <Th className="hidden sm:table-cell">{t('admin.set.colStatus')}</Th><Th right><span className="sr-only">{t('admin.set.colActions')}</span></Th>
+          </tr></thead>
+          <tbody>{rows.map((s) => (
+            <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setEdit(s)}>
+              <Td className="hidden whitespace-nowrap tabular-nums text-slate-600 sm:table-cell">{s.code}</Td>
+              <Td className="min-w-[11rem]"><span className="font-semibold text-slate-900">{s.name}</span>
+                {!s.active && <div className="text-[0.8125rem] text-slate-600 sm:hidden">{t('admin.set.inactive')}</div>}</Td>
+              <Td className="hidden whitespace-nowrap text-slate-700 lg:table-cell">{t(`service.${s.category}` as MessageKey)}</Td>
+              <Td right className="font-medium text-slate-900">{formatSom(s.price)}</Td>
+              <Td right className="hidden text-slate-700 md:table-cell">{t('admin.set.minutes', { n: s.duration_min })}</Td>
+              <Td right className="hidden text-slate-700 lg:table-cell">{Number(s.share_percent)}%</Td>
+              <Td className="hidden sm:table-cell">{s.active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.set.active')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.set.inactive')}</Badge>}</Td>
+              <Td right><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setEdit(s); }} aria-label={`${t('admin.set.edit')}: ${s.name}`}><span className="hidden md:inline">{t('admin.set.edit')}</span></Button></Td>
+            </tr>
+          ))}</tbody>
+        </Table>
+      )}
       {edit && <ServiceModal s={edit} onClose={() => setEdit(null)} />}
-    </>
+    </Card>
   );
 }
+
+/** Tiyin → the text a person types («150000» or «150000,50»), with integer arithmetic only. */
+const tiyinToInput = (tiyin: number) => {
+  const cents = tiyin % 100, som = (tiyin - cents) / 100;
+  return cents ? `${som},${String(cents).padStart(2, '0')}` : String(som);
+};
 
 function ServiceModal({ s, onClose }: { s: any; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const [name, setName] = useState(s.name);
-  const [price, setPrice] = useState(String(s.price / 100));
+  const [price, setPrice] = useState(tiyinToInput(Number(s.price)));
   const [dur, setDur] = useState(String(s.duration_min));
   const [active, setActive] = useState<boolean>(s.active);
   const [err, setErr] = useState<Record<string, string>>({});
@@ -109,14 +149,14 @@ function ServiceModal({ s, onClose }: { s: any; onClose: () => void }) {
     onSuccess: (r: any) => { qc.invalidateQueries({ queryKey: ['services'] }); toast.success(r.data.changes.length ? t('admin.set.savedChanges', { changes: r.data.changes.join(', ') }) : t('admin.set.noChanges')); onClose(); },
     onError: (e) => { if (e instanceof ApiError && e.fields) setErr(e.fields); toast.error(e); },
   });
-  const dirty = name !== s.name || p !== s.price || Number(dur) !== s.duration_min || active !== s.active;
+  const dirty = name !== s.name || p !== Number(s.price) || Number(dur) !== s.duration_min || active !== s.active;
   return (
     <Modal open onClose={onClose} dirty={dirty} title={t('admin.set.serviceTitle', { code: s.code })} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" disabled={!dirty} loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={t('admin.set.serviceName')} required className="sm:col-span-2" error={err.name ?? local.name}>{(id) => <Input id={id} value={name} invalid={!!(err.name ?? local.name)} onChange={(e) => setName(e.target.value)} />}</Field>
-        <Field label={t('admin.set.price')} required error={err.price ?? local.price}>{(id) => <Input id={id} inputMode="decimal" value={price} invalid={!!(err.price ?? local.price)} onChange={(e) => setPrice(e.target.value)} />}</Field>
+        <Field label={t('admin.set.price')} required error={err.price ?? local.price} hint={t('admin.set.priceHint')}>{(id) => <MoneyInput id={id} value={price} invalid={!!(err.price ?? local.price)} onChange={(e) => setPrice(e.target.value)} />}</Field>
         <Field label={t('admin.set.duration')} required error={err.duration_min ?? local.duration_min}>{(id) => <Input id={id} type="number" min={5} max={240} value={dur} invalid={!!(err.duration_min ?? local.duration_min)} onChange={(e) => setDur(e.target.value)} />}</Field>
-        <label className="flex min-h-11 sm:col-span-2 cursor-pointer items-center gap-2 text-[0.9375rem]"><input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={active} onChange={(e) => setActive(e.target.checked)} />{t('admin.set.activeCheck')}</label>
+        <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-medium text-slate-900 sm:col-span-2"><input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={active} onChange={(e) => setActive(e.target.checked)} />{t('admin.set.activeCheck')}</label>
       </div>
     </Modal>
   );
@@ -135,33 +175,30 @@ function Audit() {
   const q = useQuery({ queryKey: ['audit', page, action], queryFn: () => api(`/audit?page=${page}&page_size=20${action ? `&action=${encodeURIComponent(action)}` : ''}`), placeholderData: (p) => p });
   const label = (code: string) => { const k = `admin.audit.${code}` as MessageKey; const s = t(k); return s === k ? code : s; };
   return (
-    <>
-      <div className="mb-3 flex flex-wrap items-end gap-3">
-        <Field label={t('admin.audit.filterAction')} className="w-full sm:w-72">
-          {(id) => <Select id={id} value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}>
-            <option value="">{t('admin.audit.allActions')}</option>
-            {groups.map((g) => <option key={g} value={g}>{t(groupKey(g))}</option>)}
-          </Select>}
-        </Field>
-      </div>
-      {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data.data.length ? <EmptyState title={t('admin.audit.empty')} /> : (
+    <Card padded={false}>
+      <Toolbar>
+        <Select aria-label={t('admin.audit.filterAction')} className="w-full sm:w-72" value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}>
+          <option value="">{t('admin.audit.allActions')}</option>
+          {groups.map((g) => <option key={g} value={g}>{t(groupKey(g))}</option>)}
+        </Select>
+      </Toolbar>
+      {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data.data.length ? <EmptyState compact title={t('admin.audit.empty')} /> : (
         <>
           <Table>
-            <thead><tr><Th>{t('admin.set.colTime')}</Th><Th>{t('admin.set.colActor')}</Th><Th>{t('admin.set.colAction')}</Th><Th>{t('admin.set.colDetail')}</Th></tr></thead>
+            <thead><tr><Th>{t('admin.set.colTime')}</Th><Th className="hidden sm:table-cell">{t('admin.set.colActor')}</Th><Th>{t('admin.set.colAction')}</Th><Th className="hidden md:table-cell">{t('admin.set.colDetail')}</Th></tr></thead>
             <tbody>{q.data.data.map((a: any) => (
               <tr key={a.id} className="align-top">
-                <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(a.occurred_at)}</Td>
-                <Td className="min-w-[10rem]"><div>{a.actor_name}</div>{a.actor_role in ROLE_LABEL && <div className="text-[0.8125rem] text-slate-600">{t(`role.${a.actor_role}` as MessageKey)}</div>}</Td>
-                <Td className="min-w-[10rem]"><div className="font-medium text-slate-900">{label(a.action)}</div><div className="font-mono text-xs text-slate-600">{a.action}</div></Td>
-                <Td className="min-w-[14rem] max-w-[32rem] break-words text-slate-700">{a.summary}</Td>
+                <Td className="tabular-nums text-slate-700"><div className="whitespace-nowrap">{fmtDateTime(a.occurred_at)}</div><div className="font-medium text-slate-900 sm:hidden">{a.actor_name}</div></Td>
+                <Td className="hidden min-w-[9rem] sm:table-cell"><div className="font-medium text-slate-900">{a.actor_name}</div>{a.actor_role in ROLE_LABEL && <div className="text-[0.8125rem] text-slate-600">{t(`role.${a.actor_role}` as MessageKey)}</div>}</Td>
+                <Td className="sm:min-w-[10rem]"><div className="font-medium text-slate-900" title={a.action}>{label(a.action)}</div><div className="text-[0.8125rem] text-slate-600 md:hidden">{a.summary}</div></Td>
+                <Td className="hidden min-w-[14rem] max-w-[32rem] break-words text-slate-700 md:table-cell">{a.summary}</Td>
               </tr>
             ))}</tbody>
           </Table>
           <Pagination page={page} pageSize={20} total={q.data.meta.total} onPage={setPage} />
         </>
       )}
-      <p className="mt-2 text-[0.8125rem] text-slate-600">{t('admin.set.auditNote')} {t('admin.audit.storedNote')}</p>
-    </>
+    </Card>
   );
 }
 
@@ -178,14 +215,17 @@ function Demo() {
     onError: (e) => toast.error(e),
   });
   return (
-    <div className="max-w-xl space-y-3">
-      <p className="text-sm text-slate-700">{t('admin.set.demoDate')} <b className="whitespace-nowrap">{fmtDate(me.today)}</b>. {t('admin.set.demoTextRest')}</p>
-      <Button variant="danger" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setConfirm(true)}>{t('admin.set.resetButton')}</Button>
+    <Card title={t('admin.set.resetButton')} className="max-w-2xl">
+      <div className="flex flex-col items-start gap-4">
+        <p className="text-[0.9375rem] text-slate-700">{t('admin.set.demoDate')} <b className="whitespace-nowrap text-slate-900">{fmtDate(me.today)}</b></p>
+        <p className="text-[0.9375rem] text-slate-700">{t('admin.set.demoTextRest')}</p>
+        <Button variant="danger" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setConfirm(true)}>{t('admin.set.resetButton')}</Button>
+      </div>
       <Modal open={confirm} onClose={() => !m.isPending && setConfirm(false)} title={t('admin.set.resetButton')}
         footer={<><Button onClick={() => setConfirm(false)} disabled={m.isPending}>{t('common.cancel')}</Button><Button variant="danger" disabled={typed.trim().toUpperCase() !== 'TIKLASH'} loading={m.isPending} onClick={() => m.mutate()}>{t('admin.set.reset')}</Button></>}>
         <Alert tone="red" title={t('admin.set.resetWarnTitle')}>{t('admin.set.resetWarnText')}</Alert>
-        <Field label={t('admin.set.typeToConfirm', { word: 'TIKLASH' })} className="mt-3">{(id) => <Input id={id} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />}</Field>
+        <Field label={t('admin.set.typeToConfirm', { word: 'TIKLASH' })} className="mt-4">{(id) => <Input id={id} value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />}</Field>
       </Modal>
-    </div>
+    </Card>
   );
 }

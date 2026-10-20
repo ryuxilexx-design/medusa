@@ -5,7 +5,7 @@ import { cx, Input } from './ui';
 /** «from – to» pair of native date inputs, wide enough for the full year next to the calendar icon. */
 export function DateRange({ from, to, onFrom, onTo, className }: { from: string; to: string; onFrom: (v: string) => void; onTo: (v: string) => void; className?: string }) {
   const t = useT();
-  const w = 'w-full min-w-0 sm:w-[10.5rem]';
+  const w = 'w-full min-w-0 sm:w-[9.75rem]';
   return (
     // phone: two equal columns (the dash would be left dangling at the end of a wrapped line)
     <div className={cx('grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center', className)} role="group" aria-label={t('clinical.period.group')}>

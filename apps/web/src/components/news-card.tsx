@@ -42,14 +42,13 @@ export function NewsCard({ canPick = false, canRate = true, initial = 3 }: { can
       ) : (
         <ul className="divide-y divide-slate-100">
           {shown.map((n) => (
-            <li key={n.id} className="px-4 py-3 text-sm">
+            <li key={n.id} className="px-5 py-3 text-sm">
               <a href={n.url} target="_blank" rel="noopener noreferrer" lang={n.title_uz ? 'uz-Latn' : 'en'} className="font-semibold leading-snug text-slate-900 hover:text-brand-700 hover:underline">
                 {n.title_uz ?? n.title}<ExternalLink className="ml-1 inline h-3.5 w-3.5 align-baseline text-slate-500" />
               </a>
-              {!n.title_uz && <span className="ml-1 text-2xs text-slate-600">{t('news.originalTitle')}</span>}
               {n.summary_uz && <p className="mt-1 leading-snug text-slate-800" lang="uz-Latn">{n.summary_uz}</p>}
               {n.takeaway_uz && <p className="mt-1 leading-snug text-slate-700"><b className="font-semibold">{t('news.takeaway')}</b> <span lang="uz-Latn">{n.takeaway_uz}</span></p>}
-              <div className="mt-1.5 flex items-center gap-2 text-2xs text-slate-600">
+              <div className="mt-1 flex items-center gap-2 text-[0.8125rem] text-slate-600">
                 <span className="truncate">{[n.journal, n.published].filter(Boolean).join(', ')}</span>
                 {canRate && (
                   <span className="ml-auto flex shrink-0 gap-1">
@@ -64,9 +63,9 @@ export function NewsCard({ canPick = false, canRate = true, initial = 3 }: { can
           ))}
         </ul>
       )}
-      {items.length > initial && <button type="button" onClick={() => setAll((x) => !x)} className="min-h-10 w-full border-t border-slate-100 px-4 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{all ? t('news.less') : t('news.more', { n: items.length - initial })}</button>}
+      {items.length > initial && <button type="button" onClick={() => setAll((x) => !x)} className="min-h-11 w-full border-t border-slate-100 px-5 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{all ? t('news.less') : t('news.more', { n: items.length - initial })}</button>}
       {items.length > 0 && (
-        <p className="border-t border-slate-100 px-4 py-2 text-2xs leading-snug text-slate-600">
+        <p className="border-t border-slate-100 px-5 py-2.5 text-[0.8125rem] leading-snug text-slate-600">
           {t('news.source')} {items.some((x) => x.model) ? `${t('news.aiNote')} ` : ''}{locale !== 'uz' && items.some((x) => x.summary_uz) ? `${t('news.uzOnly')} ` : ''}{t('news.disclaimer', { date: fmtDate(items[0].fetched_on) })}
         </p>
       )}

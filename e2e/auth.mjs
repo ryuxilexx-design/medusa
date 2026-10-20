@@ -26,6 +26,7 @@ try {
   // Cashier: wrong password → generic error; right temp password → forced change screen
   const c = await newPage(b, errors);
   await c.goto(BASE + '/login', { waitUntil: 'networkidle0' });
+  await clickText(c, 'Login va parol', '[role=tab]');
   await fill(c, 'Telefon yoki login', '935554433');
   await fill(c, 'Parol', 'notogri123');
   await clickText(c, 'Kirish', 'form[aria-label="Xodim kirishi"] button');
@@ -46,7 +47,9 @@ try {
   await clickText(c, 'Parolni saqlash va davom etish');
   await c.waitForFunction(() => !!document.querySelector('nav[aria-label="Asosiy menyu"]'), { timeout: 15000 }); await settle(c);
   check(await c.evaluate(() => document.body.innerText.includes('Sinov Kassirov') && document.body.innerText.includes('Kassir')), 'Yangi parol bilan kassir ish joyi ochildi');
-  check(await c.evaluate(() => !!document.querySelector('button[aria-label="Parolni o‘zgartirish"]')), 'Yuqori panelda «Parolni o‘zgartirish» bor');
+  // password change lives in the user menu of the top bar
+  await c.click('[data-testid=user-menu]'); await sleep(200);
+  check(await c.evaluate(() => [...document.querySelectorAll('button')].some((b) => b.offsetParent !== null && b.textContent.includes('Parolni o‘zgartirish'))), 'Foydalanuvchi menyusida «Parolni o‘zgartirish» bor');
   await shot(c, 'auth-04-cashier-home');
 
   // Manager deactivates → cashier is sent to /login on the next request

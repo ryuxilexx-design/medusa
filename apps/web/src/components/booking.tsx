@@ -113,13 +113,13 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
               <div>
                 <Input id={id} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.bk.patientSearch')} autoComplete="off" />
                 <div className="mt-1 overflow-hidden rounded-lg border border-slate-200">
-                  {dq.trim().length < 2 ? <p className="px-3 py-2 text-xs text-slate-600">{t('registrar.bk.min2')}</p>
+                  {dq.trim().length < 2 ? <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.bk.min2')}</p>
                     : found.isLoading ? <Skeleton className="m-2 h-6" />
                     : found.data?.length ? found.data.map((p) => (
                       <button key={p.id} type="button" onClick={() => pickPatient(p)} className="block min-h-9 w-full px-3 py-1.5 text-left text-sm hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">
                         <b>{fullName(p)}</b> <span className="text-slate-600">{pid(p.patient_number)}, {fmtDate(p.birth_date)}</span>
                       </button>
-                    )) : <p className="px-3 py-2 text-xs text-slate-600">{t('registrar.patientNotFound')}</p>}
+                    )) : <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.patientNotFound')}</p>}
                   <button type="button" onClick={() => setNewPatient(true)} className="block min-h-9 w-full border-t border-slate-200 px-3 py-1.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{t('registrar.bk.newPatient')}</button>
                 </div>
               </div>
@@ -138,14 +138,14 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
             )}</Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label={t('registrar.date')} required error={errors.date}>{(id) => <Input id={id} type="date" min={me.today} value={date} onChange={(e) => { setDate(e.target.value); setTime(''); }} />}</Field>
-              <Field label={t('registrar.bk.duration')} error={errors.duration_min} hint={canEditDuration ? t('registrar.bk.durationHint') : undefined}>{(id) => <Input id={id} type="number" min={5} max={240} step={5} disabled={!canEditDuration} value={duration === '' ? service?.duration_min ?? '' : duration} onChange={(e) => { setDuration(e.target.value ? Number(e.target.value) : ''); setTime(''); }} />}</Field>
+              <Field label={t('registrar.bk.duration')} error={errors.duration_min} >{(id) => <Input id={id} type="number" min={5} max={240} step={5} disabled={!canEditDuration} value={duration === '' ? service?.duration_min ?? '' : duration} onChange={(e) => { setDuration(e.target.value ? Number(e.target.value) : ''); setTime(''); }} />}</Field>
             </div>
             <Field label={t('registrar.bk.shortNote')} error={errors.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('common.optional')} />}</Field>
           </div>
           <div className="md:col-span-3">
-            <div className="mb-2 flex items-baseline justify-between">
+            <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
               <span className="text-sm font-semibold text-slate-800">{t('registrar.bk.freeSlots')}<span className="text-red-700" aria-hidden="true"> *</span></span>
-              <span className="text-xs text-slate-600">{longDate(date)}</span>
+              <span className="text-[0.8125rem] text-slate-600">{longDate(date)}</span>
             </div>
             {!doctorId ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.pickDoctorDate')}</p>
               : avail.isLoading ? <div className="grid grid-cols-5 gap-1.5">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
@@ -153,7 +153,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
               : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.doctorOff')}</p>
               : (
                 <>
-                  <p className="mb-2 text-[0.8125rem] text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, <span className="whitespace-nowrap">{t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}</span>{avail.data.break_start && <>, <span className="whitespace-nowrap">{t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}</span></>}</p>
+                  <p className="mb-3 text-[0.8125rem] text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, <span className="whitespace-nowrap">{t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}</span>{avail.data.break_start && <>, <span className="whitespace-nowrap">{t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}</span></>}</p>
                   {avail.data.branch_id && !me.branches.some((b: any) => b.id === avail.data.branch_id) && <Alert tone="red">{t('registrar.bk.noBranchAccess')}</Alert>}
                   <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6" role="group" aria-label={t('registrar.bk.freeSlots')}>
                     {/* past slots are not shown: they can never be booked */}
@@ -175,9 +175,12 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
                     <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-brand-600 bg-brand-600" />{t('registrar.bk.slotChosen')}</span>
                     <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-slate-200 bg-slate-100 text-center text-[0.625rem] leading-3 text-slate-500 line-through">00</span>{t('registrar.bk.slotBusy')}</span>
                   </div>
-                  <p className="mt-2 text-xs text-slate-600">{t('registrar.bk.slotsHint')}</p>
-                  {service && <p className="mt-1 text-xs text-slate-600">{t('registrar.bk.priceLine', { category: t(`service.${service.category}` as MessageKey), price: formatSom(service.price) })}</p>}
-                  {reschedule && <p className="mt-1 text-xs text-slate-600">{t('registrar.bk.currentTime', { at: `${fmtDate(reschedule.starts_at)} ${fmtTime(reschedule.starts_at)}` })}</p>}
+                  {(service || reschedule) && (
+                    <div className="mt-3 space-y-0.5 border-t border-slate-100 pt-3 text-[0.8125rem] text-slate-600">
+                      {service && <p>{t('registrar.bk.priceLine', { category: t(`service.${service.category}` as MessageKey), price: formatSom(service.price) })}</p>}
+                      {reschedule && <p>{t('registrar.bk.currentTime', { at: `${fmtDate(reschedule.starts_at)} ${fmtTime(reschedule.starts_at)}` })}</p>}
+                    </div>
+                  )}
                 </>
               )}
           </div>

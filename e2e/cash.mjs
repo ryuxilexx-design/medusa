@@ -5,8 +5,9 @@ import { launch, newPage, login, shot, settle, clickText, sleep, check, waitText
 const errors = [];
 const b = await launch();
 const panelText = (p) => p.evaluate(() => document.querySelector('main, body').innerText);
+// «Kassada hozir» key number of the open shift (expected cash in the drawer)
 const expected = async (p) => {
-  const t = await p.evaluate(() => [...document.querySelectorAll('div.text-sm')].find((d) => d.innerText.startsWith('Kassada bo‘lishi kerak'))?.innerText ?? '');
+  const t = await p.evaluate(() => document.querySelector('[data-testid="expected-cash"]')?.innerText ?? '');
   return Number(t.replace(/[^\d]/g, ''));
 };
 try {
@@ -19,7 +20,7 @@ try {
   await shot(c, 'cash-01-panel');
 
   await clickText(c, 'Kassadan xarajat');
-  await waitText(c, 'Naqd pul smena');
+  await c.waitForSelector('[role=dialog]');
   await fill(c, 'Summa, so‘m', '25000', '[role=dialog]');
   await fill(c, 'Nima uchun', 'Ichimlik suvi', '[role=dialog]');
   await clickText(c, 'Yozish', '[role=dialog] button');

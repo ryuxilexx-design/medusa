@@ -1,13 +1,13 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { DoorClosed, DoorOpen, Printer, ReceiptText } from 'lucide-react';
+import { ArrowUpRight, Banknote, CreditCard, DoorClosed, DoorOpen, Printer, ReceiptText, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Card, cx, Field, Input, LinkButton, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Alert, Button, Field, Input, LinkButton, Modal, Money, Select, StatCard, Textarea, useToast } from '@/components/ui';
 import { MoneyInput } from '@/components/money-input';
 
 export type Shift = {
@@ -33,38 +33,43 @@ export const expenseCategoryLabel = (t: T, c: string) => (EXPENSE_CATEGORY_KEY[c
 
 const invalidate = (qc: ReturnType<typeof useQueryClient>) => ['cash-shift', 'cash-shifts', 'invoices', 'payments', 'expenses', 'dashboard', 'finance-summary'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
 
-/** Cashier: drawer state, open / close shift, cash expense. */
-export function ShiftPanel() {
+/**
+ * Cashier: the shift drives the cash page. Returns the header line (shift status), the header actions (open, or
+ * expense / report / close) and the body (four key numbers of the open drawer, or a warning while it is closed).
+ */
+export function useShiftUi(enabled: boolean) {
   const t = useT();
-  const shift = useCurrentShift();
+  const shift = useCurrentShift(enabled);
   const [modal, setModal] = useState<'open' | 'close' | 'expense' | null>(null);
-  if (shift.isLoading) return null;
   const s = shift.data;
-  return (
-    <Card padded={false} className={cx('mb-4', s ? 'border-emerald-200' : 'border-amber-300')}>
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
-        {s ? <>
-          <div className="flex items-center gap-2"><DoorOpen className="h-5 w-5 text-emerald-600" /><div className="leading-tight"><div className="font-semibold">{t('cash.shiftOpenTitle', { n: s.number, branch: s.branch_name })}</div><div className="text-xs text-slate-600">{t('cash.shiftSince', { time: fmtTime(s.opened_at), amount: formatSom(s.opening_cash) })}</div></div></div>
-          <div className="text-sm"><span className="text-slate-600">{t('cash.cashIncome')}</span> <b className="tabular-nums">{formatSom(s.totals.payments.cash.sum)}</b></div>
-          <div className="text-sm"><span className="text-slate-600">{t('cash.cardTransfer')}</span> <b className="tabular-nums">{formatSom(s.totals.payments.card.sum + s.totals.payments.transfer.sum)}</b></div>
-          {s.totals.cash_out > 0 && <div className="text-sm"><span className="text-slate-600">{t('cash.cashOut')}</span> <b className="tabular-nums">−{formatSom(s.totals.cash_out)}</b></div>}
-          <div className="text-sm"><span className="text-slate-600">{t('cash.expectedCash')}</span> <b className="tabular-nums text-emerald-800">{formatSom(s.expected_cash)}</b></div>
-          <div className="ml-auto flex flex-wrap gap-2">
-            <Button size="sm" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setModal('expense')}>{t('cash.cashExpense')}</Button>
-            <LinkButton size="sm" href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('cash.report')}</LinkButton>
-            <Button size="sm" variant="primary" icon={<DoorClosed className="h-4 w-4" />} onClick={() => setModal('close')}>{t('cash.closeShift')}</Button>
-          </div>
-        </> : <>
-          <div className="flex items-center gap-2"><DoorClosed className="h-5 w-5 text-amber-600" /><div className="leading-tight"><div className="font-semibold">{t('cash.shiftClosed')}</div><div className="text-xs text-slate-600">{t('cash.shiftClosedHint')}</div></div></div>
-          <Button className="ml-auto" variant="primary" icon={<DoorOpen className="h-4 w-4" />} onClick={() => setModal('open')}>{t('cash.openShift')}</Button>
-        </>}
-      </div>
+  if (!enabled || shift.isLoading) return { subtitle: null, actions: null, body: null };
+  const tot = s?.totals;
+  return {
+    subtitle: s ? <span className="inline-flex items-center gap-2"><DoorOpen className="h-5 w-5 shrink-0 text-emerald-700" /><span><b className="font-semibold text-slate-900">{t('cash.shiftOpenTitle', { n: s.number, branch: s.branch_name })}</b>, {t('cash.shiftSinceShort', { time: fmtTime(s.opened_at) })}</span></span> : null,
+    actions: s ? <>
+      <Button icon={<ReceiptText className="h-4 w-4" />} onClick={() => setModal('expense')}>{t('cash.cashExpense')}</Button>
+      <LinkButton href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('cash.report')}</LinkButton>
+      <Button icon={<DoorClosed className="h-4 w-4" />} onClick={() => setModal('close')}>{t('cash.closeShift')}</Button>
+    </> : <Button variant="primary" icon={<DoorOpen className="h-5 w-5" />} onClick={() => setModal('open')}>{t('cash.openShift')}</Button>,
+    body: <>
+      {s && tot ? (
+        <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard icon={<Banknote />} label={t('cash.colCashIncome')} value={<StatMoney tiyin={tot.payments.cash.sum} />} sub={t('cash.nPayments', { n: tot.payments.cash.n })} />
+          <StatCard icon={<CreditCard />} label={t('cash.cardTransfer')} value={<StatMoney tiyin={tot.payments.card.sum + tot.payments.transfer.sum} />} sub={t('cash.nPayments', { n: tot.payments.card.n + tot.payments.transfer.n })} />
+          <StatCard icon={<ArrowUpRight />} label={t('cash.cashOut')} value={<StatMoney tiyin={tot.cash_out} minus />} sub={t('cash.cashOutSub')} />
+          <StatCard icon={<Wallet />} tone="success" label={t('cash.inDrawerNow')} value={<span data-testid="expected-cash"><StatMoney tiyin={s.expected_cash} /></span>} sub={t('cash.openingSub', { amount: formatSom(s.opening_cash, false) })} />
+        </div>
+      ) : <div className="mb-5"><Alert tone="yellow" title={t('cash.shiftClosed')}>{t('cash.shiftClosedHint')}</Alert></div>}
       {modal === 'open' && <OpenShiftModal onClose={() => setModal(null)} />}
       {modal === 'close' && s && <CloseShiftModal shift={s} onClose={() => setModal(null)} />}
       {modal === 'expense' && s && <CashExpenseModal shift={s} onClose={() => setModal(null)} />}
-    </Card>
-  );
+    </>,
+  };
 }
+
+/** A so‘m amount for a StatCard: large digits, the currency word smaller (wraps under the number when the card is narrow). */
+/** Kept for callers: the shared money display. */
+export const StatMoney = Money;
 
 function OpenShiftModal({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -121,7 +126,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
     <Modal open onClose={onClose} dirty={!!counted} title={t('cash.closeShiftTitle', { n: shift.number })} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.closeShift')}</Button></>}>
       <div className="space-y-3 text-sm">
         {err && <Alert tone="red">{err}</Alert>}
-        <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-md border border-slate-200 p-3">
+        <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-lg border border-slate-200 p-4">
           <dt className="text-slate-600">{t('cash.openingCashShort')}</dt><dd className="text-right tabular-nums">{formatSom(shift.opening_cash)}</dd>
           <dt className="text-slate-600">{t('cash.cashPaymentsN', { n: tot.payments.cash.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.payments.cash.sum)}</dd>
           {tot.refunds.cash.sum > 0 && <><dt className="text-slate-600">{t('cash.cashRefundsN', { n: tot.refunds.cash.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.refunds.cash.sum)}</dd></>}
@@ -129,7 +134,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
           <div aria-hidden="true" className="col-span-2 my-0.5 border-t border-slate-200" />
           <dt className="font-semibold">{t('cash.expectedCashShort')}</dt><dd className="text-right font-semibold tabular-nums">{formatSom(shift.expected_cash)}</dd>
         </dl>
-        <p className="text-xs text-slate-600">{t('cash.nonCashLine', { card: formatSom(tot.payments.card.sum), transfer: formatSom(tot.payments.transfer.sum) })}</p>
+        <p className="text-[0.8125rem] text-slate-600">{t('cash.nonCashLine', { card: formatSom(tot.payments.card.sum), transfer: formatSom(tot.payments.transfer.sum) })}</p>
         <Field label={t('cash.countedCash')} required error={errors.counted_cash ?? (counted && tiyin == null ? t('cash.enterAmountNumber') : undefined)}>
           {(id) => <MoneyInput id={id} className="w-56" value={counted} onChange={(e) => { setCounted(e.target.value); setErrors({}); }} invalid={!!errors.counted_cash} autoFocus />}
         </Field>
@@ -137,7 +142,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
         {diff != null && (diff !== 0 || errors.note) && (
           <Field label={t('cash.diffReason')} required error={errors.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('cash.diffReasonPlaceholder')} />}</Field>
         )}
-        <p className="text-xs text-slate-600">{t('cash.closedShiftFooter')}</p>
+        <p className="text-[0.8125rem] text-slate-600">{t('cash.closedShiftFooter')}</p>
         {!ready && counted.trim() !== '' && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </div>
     </Modal>
@@ -159,15 +164,13 @@ function CashExpenseModal({ shift, onClose }: { shift: Shift; onClose: () => voi
     onError: (e) => setErr((e as Error).message),
   });
   const ready = !!tiyin && !!note.trim();
-  const [before, after] = t('cash.cashExpenseText', { n: shift.number }).split('{amount}');
   return (
     <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.cashExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.write')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
-        <p className="text-sm text-slate-600">{before}<b>{formatSom(shift.expected_cash)}</b>{after}</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('cash.category')} required>{(id) => <Select id={id} value={category} onChange={(e) => setCategory(e.target.value)}>{EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{expenseCategoryLabel(t, c)}</option>)}</Select>}</Field>
-          <Field label={t('cash.amountSomComma')} required error={amount && tiyin == null ? t('cash.enterNumber') : undefined}>{(id) => <MoneyInput id={id} value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
+          <Field label={t('cash.amountSomComma')} required error={amount && tiyin == null ? t('cash.enterNumber') : undefined} hint={t('cash.drawerHint', { amount: formatSom(shift.expected_cash) })}>{(id) => <MoneyInput id={id} value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
         </div>
         <Field label={t('cash.whatFor')} required>{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('cash.whatForPlaceholder')} />}</Field>
         {!ready && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}

@@ -2,11 +2,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
-import { Banknote, Briefcase, ClipboardList, FlaskConical, Stethoscope } from 'lucide-react';
+import { ArrowRight, Banknote, Briefcase, ClipboardList, FlaskConical, Stethoscope } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { HOME_BY_ROLE } from '@/lib/session';
-import { Alert, Button, ErrorState, Field, Input, Select, Skeleton, useToast } from '@/components/ui';
+import { Alert, Button, cx, ErrorState, Field, Input, Select, Skeleton, useToast } from '@/components/ui';
 import { BrandLockup } from '@/components/logo';
 import { LanguagePicker } from '@/components/prefs';
 import { useT } from '@/lib/i18n';
@@ -31,6 +31,7 @@ export default function LoginPage() {
   const demoMode = accountsQ.data !== null;
   const accounts = { ...accountsQ, data: accountsQ.data?.data };
   const codeRequired = !!accountsQ.data?.meta?.access_code_required;
+  const [tab, setTab] = useState<'demo' | 'password'>('demo');
   const [code, setCode] = useState('');
   const doctors = accounts.data?.filter((a) => a.role === 'doctor') ?? [];
   const [doctorId, setDoctorId] = useState('');
@@ -48,57 +49,68 @@ export default function LoginPage() {
     } catch (e) { toast.error(e); setBusy(null); }
   }
 
+  const tabBtn = (v: 'demo' | 'password', label: string) => (
+    <button type="button" role="tab" aria-selected={tab === v} aria-controls={`login-${v}`} id={`login-tab-${v}`} onClick={() => setTab(v)}
+      className={cx('min-h-11 flex-1 rounded-lg px-3 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+        tab === v ? 'bg-white text-brand-800 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900')}>{label}</button>
+  );
+
   return (
     <main className="min-h-screen bg-slate-100">
       <title>{`${t('login.pageTitle')} — Med.uz.ai`}</title>
-      <div className="mx-auto flex max-w-6xl flex-col px-4 py-5 sm:px-6">
-        {/* phone: logo + language on one row, the demo badge on its own row; wider: logo … badge, language */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <BrandLockup size="lg" />
-          <div className="sm:order-2"><LanguagePicker /></div>
-          {demoMode && <div className="order-3 basis-full sm:order-1 sm:ml-auto sm:basis-auto"><span className="inline-block rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-[0.8125rem] font-semibold text-amber-900">{t('common.demoEnv')}</span></div>}
-        </div>
-        {/* wide screens: hero and demo roles on the left, staff sign-in on the right — the role cards fit on a 1366×768 screen.
-            Phones: hero, sign-in, then the demo roles. */}
-        <div className="mt-4 grid grid-cols-1 items-start gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="max-w-2xl">
-            <h1 className="text-2xl font-bold leading-tight text-slate-900 sm:text-3xl">{t('login.title')}</h1>
-            <p className="mt-2 text-base text-slate-700 sm:text-lg">{t('login.subtitle')}</p>
-          </div>
-          <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1"><StaffLogin /></div>
-          {demoMode && <section aria-labelledby="demo-heading" className="min-w-0 lg:col-start-1">
-            <h2 id="demo-heading" className="text-xl font-bold text-slate-900">{t('login.demoHeading')}</h2>
-            {codeRequired && (
-              <div className="mt-3 max-w-sm">
-                <label htmlFor="access-code" className="text-sm font-semibold text-slate-800">{t('login.accessCode')}</label>
-                <Input id="access-code" type="password" autoComplete="off" className="mt-1" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('login.accessCodePlaceholder')} />
-                <p className="mt-1 text-[0.8125rem] text-slate-600">{t('login.accessCodeHint')}</p>
-              </div>
-            )}
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {accounts.isLoading && Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-44" />)}
-              {accounts.isError && <div className="col-span-full rounded-lg border bg-white"><ErrorState error={accounts.error} onRetry={() => accountsQ.refetch()} /></div>}
-              {accounts.data && CARDS.map((c) => {
-                const acc = c.role === 'doctor' ? null : accounts.data!.find((a) => a.role === c.role);
-                return (
-                  <div key={c.role} className="flex flex-col rounded-xl border border-slate-200 bg-white p-3">
-                    {/* the icon sits inside the heading: the heading text stays exactly the role name */}
-                    <h2 className="flex items-center gap-2.5 text-lg font-bold text-slate-900"><span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">{c.icon}</span>{t(`role.${c.role}` as MessageKey)}</h2>
-                    <p className="mt-1 flex-1 text-sm leading-snug text-slate-700">{t(`login.card.${c.role}` as MessageKey)}</p>
-                    {c.role === 'doctor' ? (
-                      <Select aria-label={t('login.pickDoctor')} data-testid="doctor-pick" className="mt-2 h-10 text-sm" value={doctorId || doctors.find((d) => d.specialty === 'Terapevt')?.membership_id || ''} onChange={(e) => setDoctorId(e.target.value)}>
-                        {/* the name first: a narrow card cuts the end of the line, never the person */}
-                        {doctors.map((d) => <option key={d.membership_id} value={d.membership_id}>{d.full_name} — {d.specialty}</option>)}
-                      </Select>
-                    ) : <p className="mt-2 truncate text-sm text-slate-800">{acc?.full_name}</p>}
-                    <Button variant="primary" className="mt-2.5 w-full" loading={busy === c.role} disabled={!!busy} onClick={() => enter(c.role)}>{t('login.enter')}</Button>
-                  </div>
-                );
-              })}
+      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+        <BrandLockup size="lg" />
+        <LanguagePicker />
+      </div>
+      {/* one centred card: one way in at a time (demo roles or login + password), nothing competing beside it */}
+      <div className="mx-auto w-full max-w-[30rem] px-4 pb-10 pt-4 sm:pt-[6vh]">
+        <h1 className="text-2xl font-bold text-slate-900">{t('login.heading')}</h1>
+        <p className="mt-1 text-[0.9375rem] text-slate-600">{t('login.tagline')}{demoMode && <> · <span className="font-semibold text-amber-800">{t('common.demoEnv')}</span></>}</p>
+        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          {demoMode && (
+            <div role="tablist" aria-label={t('login.heading')} className="mb-5 flex gap-1 rounded-xl bg-slate-100 p-1">
+              {tabBtn('demo', t('login.tabDemo'))}{tabBtn('password', t('login.tabPassword'))}
             </div>
-          </section>}
+          )}
+          {demoMode && tab === 'demo' ? (
+            <section id="login-demo" role="tabpanel" aria-labelledby="login-tab-demo">
+              {codeRequired && (
+                <div className="mb-4">
+                  <Field label={t('login.accessCode')} hint={t('login.accessCodeHint')}>
+                    {(id) => <Input id={id} type="password" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('login.accessCodePlaceholder')} />}
+                  </Field>
+                </div>
+              )}
+              <p className="mb-3 text-[0.9375rem] text-slate-700">{t('login.demoPick')}</p>
+              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                {accounts.isLoading && Array.from({ length: 5 }).map((_, i) => <li key={i} className="p-3"><Skeleton className="h-11" /></li>)}
+                {accounts.isError && <li><ErrorState error={accounts.error} onRetry={() => accountsQ.refetch()} /></li>}
+                {accounts.data && CARDS.map((c) => {
+                  const acc = c.role === 'doctor' ? null : accounts.data!.find((a) => a.role === c.role);
+                  return (
+                    <li key={c.role} data-demo-role={c.role} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
+                      <span aria-hidden="true" className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 min-[400px]:flex">{c.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="truncate text-base font-bold leading-tight text-slate-900">{t(`role.${c.role}` as MessageKey)}</h2>
+                        <p className="mt-0.5 truncate text-sm text-slate-600">{c.role === 'doctor' ? t('login.pickDoctor') : acc?.full_name}</p>
+                      </div>
+                      <Button className="shrink-0 px-3 sm:px-4" loading={busy === c.role} disabled={!!busy} onClick={() => enter(c.role)}>{t('login.enter')}<ArrowRight className="hidden h-4 w-4 sm:block" /></Button>
+                      {c.role === 'doctor' && (
+                        <Select aria-label={t('login.pickDoctor')} data-testid="doctor-pick" className="basis-full text-[0.9375rem] min-[400px]:ml-[3.25rem] min-[400px]:basis-[calc(100%-3.25rem)]" value={doctorId || doctors.find((d) => d.specialty === 'Terapevt')?.membership_id || ''} onChange={(e) => setDoctorId(e.target.value)}>
+                          {/* the name first: a narrow screen cuts the end of the line, never the person */}
+                          {doctors.map((d) => <option key={d.membership_id} value={d.membership_id}>{d.full_name} — {d.specialty}</option>)}
+                        </Select>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : (
+            <section id="login-password" role={demoMode ? 'tabpanel' : undefined} aria-labelledby={demoMode ? 'login-tab-password' : undefined}><StaffLogin /></section>
+          )}
         </div>
-        {demoMode && <p className="mt-8 text-sm text-slate-600">{t('login.demoFooter')}</p>}
+        {demoMode && <p className="mt-4 text-[0.8125rem] text-slate-600">{t('login.demoFooter')}</p>}
       </div>
     </main>
   );
@@ -144,10 +156,8 @@ function StaffLogin() {
   }
 
   return (
-    <form onSubmit={submit} noValidate className="rounded-xl border border-slate-200 bg-white p-5 sm:p-6" aria-label={t('login.staffTitle')}>
-      <h2 className="text-xl font-bold text-slate-900">{t('login.staffTitle')}</h2>
-      <p className="mt-1 text-sm text-slate-700">{t('login.staffHint')}</p>
-      <div className="mt-4 space-y-3">
+    <form onSubmit={submit} noValidate aria-label={t('login.staffTitle')}>
+      <div className="space-y-4">
         {error && <Alert tone="red">{error}</Alert>}
         <Field label={t('login.login')} error={missing.login ? t('login.missingLogin') : undefined}>
           {(id) => <Input ref={loginRef} id={id} autoComplete="username" inputMode="text" value={login} invalid={missing.login} onChange={(e) => { setLogin(e.target.value); setChoices(null); setMembershipId(''); setMissing((m) => ({ ...m, login: false })); }} placeholder="+998 90 123 45 67" />}
@@ -162,8 +172,8 @@ function StaffLogin() {
             </Select>}
           </Field>
         )}
-        <Button type="submit" variant="primary" className="w-full" loading={busy}>{t('login.enter')}</Button>
-        <p className="text-[0.8125rem] text-slate-600">{t('login.forgot')}</p>
+        <Button type="submit" variant="primary" className="min-h-12 w-full text-base" loading={busy}>{t('login.enter')}</Button>
+        <p className="text-[0.8125rem] text-slate-600">{t('login.staffHint')} {t('login.forgot')}</p>
       </div>
     </form>
   );

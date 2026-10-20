@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert } from 'lucide-react';
+import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet } from 'lucide-react';
 import { ALLERGY_LABEL, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -14,6 +14,9 @@ import { BookingModal } from '@/components/booking';
 import { LabValues } from '@/components/lab-values';
 import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
 import { useT } from '@/lib/i18n';
+
+/** Quiet separator between the facts of the header line. */
+const Dot = () => <span className="text-slate-400" aria-hidden="true">·</span>;
 
 type Tab = 'overview' | 'visits' | 'notes' | 'labs' | 'invoices' | 'docs';
 
@@ -43,25 +46,32 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <div className="mb-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-start justify-between gap-3 p-4">
-          <div className="flex min-w-[18rem] flex-1 basis-0 items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-semibold text-brand-700" aria-hidden="true">{pt.first_name?.[0]}{pt.last_name?.[0]}</div>
+      <div className="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-4">
+          <div className="flex min-w-0 flex-1 basis-[22rem] items-center gap-4">
+            <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-bold text-brand-700 sm:flex" aria-hidden="true">{pt.last_name?.[0]}{pt.first_name?.[0]}</div>
             <div className="min-w-0">
               <h1 className="text-2xl font-bold leading-tight text-slate-900">{fullName(pt, true)}</h1>
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600">
-                <span className="tabular-nums">{t('registrar.idLine', { id: pid(pt.patient_number) })}</span>
-                <span className="whitespace-nowrap">{fmtDate(pt.birth_date)}, {ageFrom(pt.birth_date, me.today)}</span>
-                <span>{t(`sex.${pt.sex}` as MessageKey)}</span>
-                {pt.phone !== undefined && <span className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums"><Phone className="h-4 w-4" />{formatPhone(pt.phone)}</span>}
-                {pt.balance_due > 0 && <Badge tone="red">{t('registrar.debt', { sum: formatSom(pt.balance_due) })}</Badge>}
-                {pt.telegram_linked && <Badge tone="blue" icon={<Send className="h-3.5 w-3.5" />}>{t('registrar.telegramLinked')}</Badge>}
-                {pt.source === 'telegram' && <span className="text-xs text-slate-600">{t('registrar.telegramCard')}</span>}
-              </div>
+              {/* each fact carries its own separator, so a wrapped line never ends with a dangling dot */}
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-slate-700">
+                {[
+                  <span key="id" className="font-semibold tabular-nums text-slate-900">{pid(pt.patient_number)}</span>,
+                  <span key="birth" className="tabular-nums">{fmtDate(pt.birth_date)} ({ageFrom(pt.birth_date, me.today)})</span>,
+                  pt.sex && pt.sex !== 'unspecified' && <span key="sex">{t(`sex.${pt.sex}` as MessageKey)}</span>,
+                  pt.phone !== undefined && <span key="phone" className="inline-flex items-center gap-1.5 tabular-nums"><Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />{pt.phone ? formatPhone(pt.phone) : '—'}</span>,
+                ].filter(Boolean).map((el, i) => <span key={i} className="inline-flex items-center gap-2 whitespace-nowrap">{i > 0 && <Dot />}{el}</span>)}
+              </p>
+              {(pt.balance_due > 0 || pt.telegram_linked || pt.source === 'telegram') && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {pt.balance_due > 0 && <Badge tone="red" icon={<Wallet className="h-3.5 w-3.5" />}>{t('registrar.debt', { sum: formatSom(pt.balance_due) })}</Badge>}
+                  {pt.telegram_linked && <Badge tone="blue" icon={<Send className="h-3.5 w-3.5" />}>{t('registrar.telegramLinked')}</Badge>}
+                  {pt.source === 'telegram' && <span className="text-[0.8125rem] text-slate-600">{t('registrar.telegramCard')}</span>}
+                </div>
+              )}
             </div>
           </div>
           {canEdit && (
-            <div className="flex shrink-0 flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>
               <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook(true)}>{t('registrar.newAppt')}</Button>
             </div>
@@ -82,7 +92,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
       <Card padded={false}>
         <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
         {h.isLoading ? <LoadingRows /> : h.isError ? <ErrorState error={h.error} onRetry={() => h.refetch()} /> : (
-          <div className="p-4">
+          <div className="p-4 sm:p-5">
             {tab === 'overview' && <Overview pt={pt} h={h.data} role={role} onConsent={setConsentKind} />}
             {tab === 'visits' && <Visits visits={h.data.visits} />}
             {tab === 'notes' && <Notes notes={h.data.notes} />}
@@ -110,35 +120,41 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
   h.diagnostics.forEach((d: any) => events.push({ at: d.signed_at ?? d.ordered_at, kind: t('service.ultrasound'), text: d.service_name, badge: <NoteStatus status={d.report_status} />, href: `/diagnostics?order=${d.id}` }));
   h.invoices.forEach((i: any) => events.push({ at: i.created_at, kind: t('registrar.invoice'), text: `№${i.invoice_number}, ${formatSom(i.total)}`, badge: <InvoiceStatus status={i.status} />, href: `/cashier/${i.id}` }));
   events.sort((a, b) => +new Date(b.at) - +new Date(a.at));
+  // ID, birth date and phone are in the header: here only what the header does not show
+  const facts = [
+    pt.contact_name !== undefined && { k: t('registrar.contact'), v: pt.contact_name ? `${pt.contact_name}${pt.contact_phone ? ', ' + formatPhone(pt.contact_phone) : ''}` : '—' },
+    pt.address !== undefined && { k: t('registrar.address'), v: pt.address || '—' },
+    pt.note !== undefined && { k: t('registrar.note'), v: pt.note || '—' },
+  ].filter(Boolean) as { k: string; v: string }[];
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="lg:col-span-1">
-        <h3 className="mb-2 text-sm font-semibold text-slate-800">{t('registrar.basicInfo')}</h3>
-        <div className="divide-y divide-slate-100 rounded-md border border-slate-200 px-3">
-          <KeyVal k={t('registrar.patientId')} v={pid(pt.patient_number)} />
-          <KeyVal k={t('registrar.form.birthDate')} v={fmtDate(pt.birth_date)} />
-          {pt.phone !== undefined && <KeyVal k={t('registrar.phone')} v={formatPhone(pt.phone)} />}
-          {pt.contact_name !== undefined && <KeyVal k={t('registrar.contact')} v={pt.contact_name ? `${pt.contact_name}${pt.contact_phone ? ', ' + formatPhone(pt.contact_phone) : ''}` : '—'} />}
-          {pt.address !== undefined && <KeyVal k={t('registrar.address')} v={pt.address || '—'} />}
-          {pt.note !== undefined && <KeyVal k={t('registrar.note')} v={pt.note || '—'} />}
-        </div>
-        {(role === 'cashier' || role === 'lab') && <p className="mt-2 text-xs text-slate-600">{t('registrar.minimalInfo')}</p>}
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+      <div className="space-y-5">
+        <section>
+          <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.basicInfo')}</h3>
+          {facts.length ? (
+            <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200 px-3">
+              {facts.map((f) => <div key={f.k} className="flex justify-between gap-3 py-2 text-sm"><dt className="shrink-0 text-slate-600">{f.k}</dt><dd className="min-w-0 break-words text-right font-medium text-slate-900">{f.v}</dd></div>)}
+            </dl>
+          ) : <p className="text-sm text-slate-600">{t('registrar.minimalInfo')}</p>}
+        </section>
         {pt.consents && <ConsentBlock patientId={pt.id} consents={pt.consents} role={role} onRecord={onConsent} />}
       </div>
-      <div className="lg:col-span-2">
-        <h3 className="mb-2 text-sm font-semibold text-slate-800">{t('registrar.timeline')}</h3>
-        {!events.length ? <EmptyState title={t('registrar.noEvents')} /> : (
-          <ol className="relative space-y-1 border-l border-slate-200 pl-4">
+      <div className="min-w-0">
+        <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.timeline')}</h3>
+        {!events.length ? <EmptyState compact title={t('registrar.noEvents')} /> : (
+          <ol className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {events.slice(0, 30).map((e, i) => {
+              // what happened on the first line, when and what kind on the second; the status on the right
               const body = (
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 rounded-md px-2 py-1.5 hover:bg-slate-50 sm:grid-cols-[7.25rem_4.5rem_minmax(0,1fr)_auto]">
-                  <span className="col-span-2 whitespace-nowrap pt-0.5 text-[0.8125rem] tabular-nums text-slate-600 sm:col-span-1">{fmtDateTime(e.at)}<span className="font-semibold sm:hidden"> · {e.kind}</span></span>
-                  <span className="hidden pt-0.5 text-[0.8125rem] font-semibold text-slate-600 sm:block">{e.kind}</span>
-                  <span className="pt-0.5 text-sm text-slate-800">{e.text}</span>
-                  <span className="justify-self-end">{e.badge}</span>
+                <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5', e.href && 'hover:bg-slate-50')}>
+                  <div className="min-w-[12rem] flex-1">
+                    <p className="text-sm font-medium text-slate-900">{e.text}</p>
+                    <p className="mt-0.5 text-[0.8125rem] tabular-nums text-slate-600">{e.kind} · {fmtDateTime(e.at)}</p>
+                  </div>
+                  <span className="shrink-0">{e.badge}</span>
                 </div>
               );
-              return <li key={i} className="relative"><span className="absolute -left-[1.3rem] top-[0.9rem] h-2 w-2 rounded-full bg-brand-400" aria-hidden="true" />{e.href ? <Link href={e.href} className="block rounded-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{body}</Link> : body}</li>;
+              return <li key={i}>{e.href ? <Link href={e.href} className="block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{body}</Link> : body}</li>;
             })}
           </ol>
         )}
@@ -184,7 +200,8 @@ function Labs({ labs, diagnostics, role }: { labs: any[]; diagnostics: any[]; ro
   const t = useT();
   if (!labs.length && !diagnostics.length) return <EmptyState title={t('registrar.noLabs')} />;
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      {role === 'manager' && labs.length > 0 && <p className="text-[0.8125rem] text-slate-600">{t('registrar.managerStatusOnly')}</p>}
       {labs.map((l) => (
         <div key={l.id} className="rounded-md border border-slate-200 p-3">
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -192,7 +209,6 @@ function Labs({ labs, diagnostics, role }: { labs: any[]; diagnostics: any[]; ro
             <span className="ml-auto"><LabStatus status={l.status} short={role === 'registrar'} /></span>
           </div>
           {l.values && l.status === 'verified' && <div className="mt-2"><LabValues values={l.values} /><p className="mt-1 text-xs text-slate-600">{t('registrar.verifiedBy', { name: l.verified_by_name, at: fmtDateTime(l.verified_at) })}</p></div>}
-          {role === 'manager' && <p className="mt-1 text-xs text-slate-600">{t('registrar.managerStatusOnly')}</p>}
         </div>
       ))}
       {diagnostics.map((d) => (
