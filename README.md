@@ -169,10 +169,9 @@ Demo rejimida **simulyator** bor: haqiqiy bot mantig‘i ekranda, Telegram’siz
 ## Tillar va dizayn
 
 - **Uch til:** o‘zbek (lotin), o‘zbek (kirill), rus. Har bir xodim chap menyuning pastida tanlaydi; tanlov haqiqiy xodim akkauntida (istalgan qurilmada), demo kartada — faqat shu sessiyada saqlanadi. Kirish sahifasida ham til tanlanadi.
-- **Matn o‘lchami:** «Oddiy» (18 px) yoki «Katta» (20 px) — yoshi kattaroq shifokorlar uchun; xodimda saqlanadi.
 - **Bitta manba:** barcha interfeys matnlari `packages/contracts/src/i18n/messages/*.ts` da `[o‘zbekcha, ruscha]` juftligi. O‘zbek kirill lotindan qoidalar bo‘yicha avtomatik olinadi (o‘zlashma so‘zlar ro‘yxati bilan). Server xatolari va forma xatolari ham xodim tilida qaytadi.
 - **Ma’lumot o‘girilmaydi:** bemor, xodim, xizmat nomlari va qayd matnlari qanday yozilgan bo‘lsa, shunday ko‘rinadi.
-- **Dizayn:** Golos Text shrifti (ilova ichida, internetsiz), katta tugmalar, sariq fokus halqasi, holat — so‘z + belgi + rang, allergiya — qizil chiziq.
+- **Dizayn:** Golos Text shrifti (ilova ichida, internetsiz), asosiy matn 18 px, katta tugmalar, sariq fokus halqasi, holat — so‘z + belgi + rang, allergiya — qizil chiziq.
 
 ## Arxitektura qisqacha
 

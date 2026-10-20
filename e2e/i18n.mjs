@@ -1,6 +1,6 @@
-// Interface language and text size in the browser: pick Russian on the login page → the doctor's workplace opens in
-// Russian; switch to Uzbek Cyrillic in the header → it survives a reload (saved for the session); «Крупный/Katta»
-// text size enlarges everything and is kept; patient data is never transliterated.
+// Interface language in the browser: pick Russian on the login page → the doctor's workplace opens in
+// Russian; switch to Uzbek Cyrillic → it survives a reload (saved for the session);
+// patient data is never transliterated.
 import { createRequire } from 'node:module';
 import { launch, newPage, login, shot, settle, sleep, check, waitText, BASE } from './lib.mjs';
 const errors = [];
@@ -42,19 +42,11 @@ try {
   check(cy.includes('Med.uz.ai') || (await p.evaluate(() => !!document.querySelector('a[aria-label^="Med.uz.ai"]'))), 'Brend nomi lotinda');
   await shot(p, 'i18n-03-doctor-cyrl');
 
-  // text size: larger root font, kept after reload
-  const before = await p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
-  await p.evaluate(() => [...document.querySelectorAll('[role=group] button')].find((x) => x.textContent.trim() === 'Катта')?.click());
-  await sleep(400);
-  const after = await p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize));
-  check(before === 18 && after === 20, `Matn kattalashdi: ${before}px → ${after}px`);
-  await p.reload({ waitUntil: 'networkidle0' }); await settle(p);
-  await waitText(p, 'Бугунги беморлар');
-  check(await p.evaluate(() => document.documentElement.dataset.textSize) === 'large', 'Katta matn yangilangandan keyin ham saqlangan');
-  await shot(p, 'i18n-04-doctor-cyrl-large');
+  // one text size for everyone: 18px root
+  check(await p.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize)) === 18, 'Asosiy matn 18px');
+  check(await p.evaluate(() => !document.querySelector('[role=group][aria-label="Матн"]')), 'Matn o‘lchami tugmasi yo‘q');
 
-  // back to Uzbek Latin and normal size, so the demo card stays as other visitors expect
-  await p.evaluate(() => [...document.querySelectorAll('[role=group] button')].find((x) => x.textContent.trim() === 'Оддий')?.click());
+  // back to Uzbek Latin, so the demo card stays as other visitors expect
   await pickLanguage(p, 'uz');
   await waitText(p, 'Bugungi bemorlar');
   check(true, 'O‘zbek (lotin) tiliga qaytdi');

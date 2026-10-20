@@ -2,11 +2,8 @@ import type { Catalog } from '../core';
 
 /** Sign-in, password change, the app frame (menu, header) and personal display settings. */
 export const shell = {
-  // language and text size
+  // language
   'pref.language': ['Til', 'Язык'],
-  'pref.textSize': ['Matn', 'Текст'],
-  'pref.textNormal': ['Oddiy', 'Обычный'],
-  'pref.textLarge': ['Katta', 'Крупный'],
   'pref.saveFailed': ['Sozlama saqlanmadi: {msg}', 'Настройка не сохранена: {msg}'],
 
   // login

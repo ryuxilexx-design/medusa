@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { translate, type Locale, type Role, type TextSize } from '@meduza/contracts';
+import { translate, type Locale, type Role } from '@meduza/contracts';
 import { api } from './api';
 import { formatLocale } from './format';
 
@@ -10,8 +10,8 @@ export interface Me {
   membership_id: string; name: string; title: string | null; role: Role; tenant_id: string; clinic_name: string;
   doctor_id: string | null; doctor_specialty: string | null; branches: { id: string; name: string; code: string }[];
   today: string; now: string; demo: boolean; ai_mode: 'off' | 'sample' | 'live'; ai_off_reason: string | null;
-  /** Interface language and text size saved for this person (staff account) or this session (demo card). */
-  locale: Locale; text_size: TextSize;
+  /** Interface language saved for this person (staff account) or this session (demo card). */
+  locale: Locale;
   /** 'demo' = role card, 'password' = real staff account */
   auth_kind: 'demo' | 'password'; must_change_password: boolean;
   /** browser Date.now() when `now` was received — used to keep the demo clock offset exact even from cache */

@@ -13,7 +13,7 @@ import { fmtTime, localDate, longDate } from '@/lib/format';
 import { useI18n, useT } from '@/lib/i18n';
 import { cx, Modal, Select } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
-import { LanguagePicker, TextSizeToggle } from '@/components/prefs';
+import { LanguagePicker } from '@/components/prefs';
 import { confirmLeave, NavigationGuard } from '@/lib/unsaved';
 import { BrandLockup } from '@/components/logo';
 
@@ -55,8 +55,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('meduza:password-change', onChange);
   }, [qc]);
   useEffect(() => { if (me.isError) router.replace('/login'); }, [me.isError, router]);
-  // the person's saved language and text size win over whatever the browser had
-  useEffect(() => { if (me.data) sync(me.data.locale, me.data.text_size); }, [me.data?.locale, me.data?.text_size, sync]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the person's saved language wins over whatever the browser had
+  useEffect(() => { if (me.data) sync(me.data.locale); }, [me.data?.locale, sync]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-base text-slate-600"><Loader2 className="h-5 w-5 animate-spin" /> {t('common.loading')}</div>;
   if (me.data.must_change_password) return <ForcedPasswordChange name={me.data.name} />;
   return <SessionProvider me={me.data}><Shell>{children}</Shell></SessionProvider>;
@@ -124,10 +124,6 @@ function Shell({ children }: { children: React.ReactNode }) {
         {/* personal display settings stay in sight on every screen, without crowding the header */}
         <div className="space-y-2.5 border-t border-slate-100 p-3">
           <LanguagePicker signedIn className="w-full [&>select]:flex-1" />
-          <div>
-            <div className="mb-1 text-[0.8125rem] font-semibold text-slate-600">{t('pref.textSize')}</div>
-            <TextSizeToggle className="w-full [&>button]:flex-1" />
-          </div>
           <div className="text-2xs text-slate-600">{t('shell.release')}</div>
         </div>
       </aside>

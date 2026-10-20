@@ -9,9 +9,9 @@ Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server teks
 | Imkoniyat | Holat | Qanday tekshirildi |
 |---|---|---|
 | Interfeys tili: o‘zbek (lotin), o‘zbek (kirill), rus | Ishlaydi: barcha sahifalar (kirish, shifokor, registratura, navbat, kassa, moliya, laboratoriya, UZI, dashboard, hisobotlar, xodimlar, sozlamalar, ombor), barcha chop etiladigan hujjatlar, dashboard «Tezkor savollar» javoblari, summa so‘zi (so‘m / сўм / сум) | E2E `i18n`: rus tilida kirish → shifokor sahifasi ruscha, sana «18 октября 2026»; kirillga o‘tish yangilangandan keyin ham saqlanadi; lotin matn qolmaydi |
-| Til va matn o‘lchami xodimda saqlanadi | Ishlaydi | API test: xodim akkauntida saqlanadi (boshqa qurilmada ham), demo kartada faqat shu sessiyada (boshqa tashrifchiga o‘tmaydi), kirishdan oldingi til yangi sessiyaga o‘tadi, noto‘g‘ri qiymat 422 |
+| Til xodimda saqlanadi | Ishlaydi | API test: xodim akkauntida saqlanadi (boshqa qurilmada ham), demo kartada faqat shu sessiyada (boshqa tashrifchiga o‘tmaydi), kirishdan oldingi til yangi sessiyaga o‘tadi, noto‘g‘ri qiymat 422 |
 | O‘zbek kirill matni lotindan avtomatik | Ishlaydi | API test: har bir xabar ikkala tilda, o‘rinbosarlar mos, kirill matnda lotin harfi qolmagan; namunaviy so‘zlar (Йўқ, Консультация, Телеграмда, 18-октябрь) to‘g‘ri |
-| Sodda dizayn: Golos Text shrifti (ilova ichida, internetsiz), asosiy matn 18 px, «Katta» — 20 px, katta tugmalar, sariq fokus halqasi, katta harfli sarlavhalar yo‘q | Ishlaydi | E2E: «Katta» matnni 18 → 20 px qiladi va saqlanadi; skrinshotlar 1366×768 da ko‘rildi |
+| Sodda dizayn: Golos Text shrifti (ilova ichida, internetsiz), asosiy matn 18 px (hamma uchun bitta o‘lcham), katta tugmalar, sariq fokus halqasi, katta harfli sarlavhalar yo‘q | Ishlaydi | E2E: asosiy matn 18 px; skrinshotlar 1366×768 da ko‘rildi |
 | Allergiya qizil chiziq bilan, qaydning pastki panelida faqat «Saqlash» va «Tasdiqlash» | Ishlaydi | Skrinshot |
 | E2E: rus tilida 5 rol bilan 26 sahifa ochiladi | Ishlaydi | Har bir sahifada lug‘atdagi o‘zbekcha interfeys jumlasi qolmaganini tekshiradi (ma’lumot — ism, xizmat, qayd matni — hisobga olinmaydi); skrinshotlar ko‘rildi |
 | Telegram bot: bemor o‘zbek kirillni ham tanlay oladi | Ishlaydi | API test: «Ўзбекча» tugmasi, kirill menyu bilan yozilish, bemor ismi o‘girilmaydi (migratsiya 010) |
