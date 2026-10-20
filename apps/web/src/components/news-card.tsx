@@ -28,12 +28,15 @@ export function NewsCard({ canPick = false, canRate = true, initial = 3 }: { can
   const shown = all ? items : items.slice(0, initial);
 
   return (
-    <Card padded={false} title={<span className="flex items-center gap-2"><Newspaper className="h-5 w-5 text-brand-600" />{t('news.title')}</span>}
+    <Card padded={false}
+      // the specialty sits under the title, so a narrow column never squeezes the title into two lines
+      title={<span className="flex flex-col"><span className="flex items-center gap-2"><Newspaper className="h-5 w-5 shrink-0 text-brand-600" />{t('news.title')}</span>
+        {!canPick && meta && <span className="text-[0.8125rem] font-normal text-slate-600">{meta.label}</span>}</span>}
       actions={canPick && meta ? (
         <Select aria-label={t('news.specialty')} className="h-9 w-auto text-sm" value={specialty || meta.specialty} onChange={(e) => setSpecialty(e.target.value)}>
           {meta.specialties.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </Select>
-      ) : meta && <span className="text-[0.8125rem] text-slate-600">{meta.label}</span>}>
+      ) : undefined}>
       {q.isLoading ? <LoadingRows rows={3} /> : !items.length ? (
         <EmptyState title={t('news.empty')} text={meta?.news_enabled === false ? t('news.disabled') : t('news.emptyText')} />
       ) : (
@@ -51,9 +54,9 @@ export function NewsCard({ canPick = false, canRate = true, initial = 3 }: { can
                 {canRate && (
                   <span className="ml-auto flex shrink-0 gap-1">
                     <button type="button" aria-label={t('news.useful')} aria-pressed={n.useful === true} title={t('news.useful')} onClick={() => rate.mutate({ id: n.id, useful: true })}
-                      className={cx('rounded-lg p-2 hover:bg-slate-100', n.useful === true ? 'text-emerald-700' : 'text-slate-500')}><ThumbsUp className="h-4 w-4" /></button>
+                      className={cx('rounded-lg p-2 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', n.useful === true ? 'text-emerald-700' : 'text-slate-500')}><ThumbsUp className="h-4 w-4" /></button>
                     <button type="button" aria-label={t('news.notUseful')} aria-pressed={n.useful === false} title={t('news.notUseful')} onClick={() => rate.mutate({ id: n.id, useful: false })}
-                      className={cx('rounded-lg p-2 hover:bg-slate-100', n.useful === false ? 'text-red-700' : 'text-slate-500')}><ThumbsDown className="h-4 w-4" /></button>
+                      className={cx('rounded-lg p-2 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', n.useful === false ? 'text-red-700' : 'text-slate-500')}><ThumbsDown className="h-4 w-4" /></button>
                   </span>
                 )}
               </div>
@@ -61,7 +64,7 @@ export function NewsCard({ canPick = false, canRate = true, initial = 3 }: { can
           ))}
         </ul>
       )}
-      {items.length > initial && <button type="button" onClick={() => setAll((x) => !x)} className="min-h-10 w-full border-t border-slate-100 px-4 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-slate-50">{all ? t('news.less') : t('news.more', { n: items.length - initial })}</button>}
+      {items.length > initial && <button type="button" onClick={() => setAll((x) => !x)} className="min-h-10 w-full border-t border-slate-100 px-4 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{all ? t('news.less') : t('news.more', { n: items.length - initial })}</button>}
       {items.length > 0 && (
         <p className="border-t border-slate-100 px-4 py-2 text-2xs leading-snug text-slate-600">
           {t('news.source')} {items.some((x) => x.model) ? `${t('news.aiNote')} ` : ''}{locale !== 'uz' && items.some((x) => x.summary_uz) ? `${t('news.uzOnly')} ` : ''}{t('news.disclaimer', { date: fmtDate(items[0].fetched_on) })}

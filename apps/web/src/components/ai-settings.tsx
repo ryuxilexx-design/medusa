@@ -39,8 +39,8 @@ export function AiSettings() {
   const total = u.by_route.reduce((a, b) => a + b.cost_usd, 0);
   const pv = PROVIDER[u.provider] ?? PROVIDER.anthropic;
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <div className="space-y-5">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_26rem]">
+      <div className="min-w-0 space-y-5">
         <section className="flex flex-wrap items-center gap-3">
           <Badge tone={MODE[u.mode][1]}>{t(MODE[u.mode][0])}</Badge>
           {u.mode === 'live' && <span className="text-sm text-slate-700">{pv.name}, <code>{u.model}</code>{u.gemini_free && `, ${t('admin.ai.freeTier')}`}</span>}
@@ -48,7 +48,7 @@ export function AiSettings() {
         </section>
         {u.mode !== 'live' && (
           <Alert tone="yellow" title={t('admin.ai.notLiveTitle')}>
-            {u.key_configured ? t('admin.ai.keyNotLive', { setting: 'AI_MODE=live' }) : t('admin.ai.noKey', { key: pv.key })} {t('admin.ai.notLiveText')}
+            {u.key_configured ? t('admin.ai.keyNotLive') : t('admin.ai.noKey')} {t('admin.ai.notLiveText')}
           </Alert>
         )}
         {u.mode === 'live' && u.gemini_free && (
@@ -76,14 +76,23 @@ export function AiSettings() {
               </Table>
             </div>
           )}
-          <p className="mt-1 text-xs text-slate-600">{u.gemini_free ? t('admin.ai.freeCost') : t('admin.ai.estCost', { provider: pv.name })} {t('admin.ai.costFoot', { console: pv.console })}</p>
+          <p className="mt-1 text-[0.8125rem] text-slate-600">{u.gemini_free ? t('admin.ai.freeCost') : t('admin.ai.estCost', { provider: pv.name })} {t('admin.ai.costFoot', { console: pv.console })}</p>
         </section>
-        <section className="text-[0.8125rem] text-slate-600">
+        <section className="text-sm text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.icdTitle')}</h3>
           <p className="mt-1">{t('admin.ai.icdCount', { n: u.icd10.n })}{u.icd10.official ? t('admin.ai.icdOfficial', { n: u.icd10.official }) : t('admin.ai.icdStarter')}.
-            {!u.icd10.official && <> {t('admin.ai.icdImport')} <code>npm run db:import-icd10 -- fayl.csv</code>.</>}</p>
+            {!u.icd10.official && <> {t('admin.ai.icdImport')}</>}</p>
         </section>
-        <section className="text-[0.8125rem] text-slate-600">
+        {(u.mode !== 'live' || !u.icd10.official) && (
+          <details className="text-[0.8125rem] text-slate-600">
+            <summary className="cursor-pointer rounded font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {u.mode !== 'live' && <li>{t('admin.ai.adminKey', { key: pv.key, setting: 'AI_MODE=live' })}</li>}
+              {!u.icd10.official && <li>{t('admin.ai.adminIcd', { cmd: 'npm run db:import-icd10 -- fayl.csv' })}</li>}
+            </ul>
+          </details>
+        )}
+        <section className="text-sm text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.security')}</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             <li>{t('admin.ai.sec1')}</li>
@@ -92,8 +101,8 @@ export function AiSettings() {
           </ul>
         </section>
       </div>
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
+      <div className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-900">{t('admin.ai.newsTitle')}</h3>
           <Button size="sm" icon={<RefreshCw className="h-4 w-4" />} loading={refresh.isPending} onClick={() => refresh.mutate()}>{t('admin.ai.refreshNow')}</Button>
         </div>

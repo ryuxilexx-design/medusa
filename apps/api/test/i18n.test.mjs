@@ -33,7 +33,7 @@ test('o‘zbek kirill: lotin harfi qolmaydi (brend va kodlardan tashqari), tanla
     'Yo‘q': 'Йўқ', 'Shikoyatlar': 'Шикоятлар', 'Konsultatsiya': 'Консультация', 'ketsin': 'кетсин', 'Ma’lumot': 'Маълумот',
     'Qayerda': 'Қаерда', 'Yetarli': 'Етарли', 'Ehtiyot': 'Эҳтиёт', 'Tayyor': 'Тайёр', 'Telegram’da': 'Телеграмда',
     'AQB 160/100, puls 88': 'АҚБ 160/100, пульс 88', 'MKB-10: I10': 'МКБ-10: I10', '18-oktabr': '18-октябрь', 'UZI va EKG': 'УЗИ ва ЭКГ',
-    'bog‘': 'боғ', 'O‘zbekcha': 'Ўзбекча', 'Protsedura': 'Процедура', 'Med.uz.ai demo': 'Med.uz.ai демо', '{n} ta bemor': '{n} та бемор',
+    'bog‘': 'боғ', 'O‘zbekcha': 'Ўзбекча', 'Protsedura': 'Процедура', 'Med.uz.ai demo': 'Med.uz.ai демо', '{n} ta bemor': '{n} та бемор', 'Bemor profili': 'Бемор профили', 'Profil': 'Профиль',
   };
   for (const [lat, want] of Object.entries(cases)) assert.equal(cyr(lat), want, lat);
 });

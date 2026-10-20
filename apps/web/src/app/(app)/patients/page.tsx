@@ -8,7 +8,7 @@ import { api, qs } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, fullName, pid } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
-import { Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th } from '@/components/ui';
+import { Button, Card, EmptyState, LinkButton, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th } from '@/components/ui';
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal, BookingInit } from '@/components/booking';
 import { useT } from '@/lib/i18n';
@@ -38,8 +38,8 @@ function Patients() {
       <Card padded={false}>
         <div className="flex items-center gap-2 border-b border-slate-100 p-3">
           <div className="relative w-full max-w-md">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-            <Input className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
           </div>
           {search && <Button variant="ghost" size="sm" onClick={() => { setSearch(''); router.replace('/patients'); }}>{t('registrar.clear')}</Button>}
         </div>
@@ -49,21 +49,22 @@ function Patients() {
         ) : (
           <>
             <Table>
-              <thead><tr><Th>{t('registrar.colId')}</Th><Th>{t('registrar.fullName')}</Th><Th>{t('registrar.birthAge')}</Th>{!minimal && <Th>{t('registrar.phone')}</Th>}<Th>{t('registrar.lastVisit')}</Th><Th>{t('registrar.nextAppt')}</Th><Th right>{t('registrar.actions')}</Th></tr></thead>
+              <thead><tr><Th>{t('registrar.colId')}</Th><Th>{t('registrar.fullName')}</Th><Th className="!whitespace-normal">{t('registrar.birthAge')}</Th>{!minimal && <Th>{t('registrar.phone')}</Th>}<Th className="hidden 2xl:table-cell">{t('registrar.lastVisit')}</Th><Th className="!whitespace-normal">{t('registrar.nextAppt')}</Th><Th right>{t('registrar.actions')}</Th></tr></thead>
               <tbody>
                 {q.data.data.map((p: any) => (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <Td className="tabular-nums text-slate-600">{pid(p.patient_number)}</Td>
-                    <Td><Link href={`/patients/${p.id}`} className="font-medium text-slate-900 hover:text-brand-700 hover:underline">{fullName(p, true)}</Link></Td>
+                    <Td className="whitespace-nowrap tabular-nums text-slate-600">{pid(p.patient_number)}</Td>
+                    <Td className="min-w-[10rem]"><Link href={`/patients/${p.id}`} className="rounded font-semibold text-slate-900 underline-offset-2 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{fullName(p, true)}</Link></Td>
                     <Td className="whitespace-nowrap">{fmtDate(p.birth_date)}<span className="text-slate-600">, {ageFrom(p.birth_date, me.today)}</span></Td>
                     {!minimal && <Td className="whitespace-nowrap tabular-nums">{formatPhone(p.phone)}</Td>}
-                    <Td className="whitespace-nowrap text-slate-600">{p.last_visit ? fmtDate(p.last_visit) : '—'}</Td>
+                    <Td className="hidden whitespace-nowrap text-slate-600 2xl:table-cell">{p.last_visit ? fmtDate(p.last_visit) : '—'}</Td>
                     <Td className="whitespace-nowrap text-slate-600">{p.next_appointment ? fmtDateTime(p.next_appointment) : '—'}</Td>
                     <Td right>
-                      <div className="flex justify-end gap-1">
-                        <Link href={`/patients/${p.id}`} className="rounded px-2 py-1 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">{t('registrar.profile')}</Link>
-                        {canEdit && <Button size="sm" variant="ghost" icon={<CalendarPlus className="h-3.5 w-3.5" />} onClick={() => setBooking({ patient: p })}>{t('registrar.book')}</Button>}
-                        {canEdit && <Button size="sm" variant="ghost" aria-label={t('registrar.edit')} title={t('registrar.editBasic')} onClick={() => setForm({ open: true, patient: p })}><Pencil className="h-3.5 w-3.5" /></Button>}
+                      <div className="flex items-center justify-end gap-1">
+                        {canEdit ? <>
+                          <Button size="sm" variant="ghost" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBooking({ patient: p })}>{t('registrar.book')}</Button>
+                          <Button size="sm" variant="ghost" aria-label={`${t('registrar.editBasic')}: ${fullName(p)}`} onClick={() => setForm({ open: true, patient: p })}><Pencil className="h-4 w-4" /></Button>
+                        </> : <LinkButton size="sm" variant="ghost" href={`/patients/${p.id}`}>{t('registrar.profile')}</LinkButton>}
                       </div>
                     </Td>
                   </tr>

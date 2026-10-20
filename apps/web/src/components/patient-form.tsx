@@ -75,12 +75,12 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
       {dups ? (
         <div className="space-y-3">
           <Alert title={t('registrar.form.dupTitle')}>{t('registrar.form.dupText')}</Alert>
-          <ul className="divide-y rounded-md border">
+          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {dups.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                 <div><span className="font-medium">{fullName(d, true)}</span> <span className="text-slate-600">{pid(d.patient_number)}, {fmtDate(d.birth_date)}, {formatPhone(d.phone)}</span>
                   <div className="text-xs text-slate-600">{d.match === 'phone' ? t('registrar.form.dupPhone') : t('registrar.form.dupNameBirth')}</div></div>
-                <Link href={`/patients/${d.id}`} onClick={onClose} className="text-sm font-medium text-brand-700 hover:underline">{t('registrar.form.openProfile')}</Link>
+                <Link href={`/patients/${d.id}`} onClick={onClose} className="shrink-0 rounded text-sm font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('registrar.form.openProfile')}</Link>
               </li>
             ))}
           </ul>

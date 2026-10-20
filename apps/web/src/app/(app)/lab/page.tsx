@@ -3,7 +3,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, FlaskConical, Printer, Save, Search, TestTube } from 'lucide-react';
+import { ArrowDown, ArrowUp, CheckCircle2, FlaskConical, Printer, Save, Search, TestTube } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { addDays, ageFrom, fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
@@ -40,26 +40,29 @@ function Lab() {
   });
   const counts: Record<string, number> = Object.fromEntries((list.data?.meta.counts ?? []).map((c: any) => [c.status, c.n]));
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  // keep the tab in the URL so a reload (or a link from the dashboard) shows the same list
+  const nav = (st: string, order: string | null) => { const q = new URLSearchParams(); if (st) q.set('status', st); if (order) q.set('order', order); const qs2 = q.toString(); router.replace(`/lab${qs2 ? `?${qs2}` : ''}`, { scroll: false }); };
+  const pick = (id: string) => { nav(status, id); revealDetail(); };
 
   return (
     <>
       <PageHeader title={t('clinical.lab.title')} subtitle={me.role === 'lab' ? t('clinical.lab.subtitleLab') : t('clinical.lab.subtitleOther')} />
+      <div className="mb-4"><Tabs value={status} onChange={(v) => { setStatus(v); nav(v, selected); }} items={STATUS_TABS.map((s) => ({ value: s, label: t(TAB_LABEL[s]), count: s ? counts[s] ?? 0 : total }))} /></div>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <Card padded={false}>
-          <div className="px-3 pt-1"><Tabs value={status} onChange={setStatus} items={STATUS_TABS.map((s) => ({ value: s, label: t(TAB_LABEL[s]), count: s ? counts[s] ?? 0 : total }))} /></div>
+        <Card padded={false} className="self-start">
           <div className="flex flex-wrap gap-2 border-b border-slate-100 p-3">
-            <div className="relative min-w-[200px] flex-1"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('clinical.lab.searchPlaceholder')} aria-label={t('clinical.lab.searchLabel')} /></div>
+            <div className="relative min-w-[11rem] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('clinical.lab.searchPlaceholder')} aria-label={t('clinical.lab.searchLabel')} /></div>
             <Select aria-label={t('clinical.date')} className="w-auto" value={period} onChange={(e) => setPeriod(e.target.value)}><option value="all">{t('clinical.period.all')}</option><option value="today">{t('clinical.period.today')}</option><option value="7d">{t('clinical.period.last7')}</option></Select>
           </div>
-          {list.isLoading ? <LoadingRows /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : !list.data.data.length ? <EmptyState icon={<FlaskConical className="h-8 w-8" />} title={t('clinical.lab.noOrders')} /> : (
+          {list.isLoading ? <LoadingRows /> : list.isError ? <ErrorState error={list.error} onRetry={() => list.refetch()} /> : !list.data.data.length ? <EmptyState icon={<FlaskConical className="h-8 w-8" />} title={t('clinical.lab.noOrders')} action={search ? <Button size="sm" onClick={() => setSearch('')}>{t('clinical.lab.clearSearch')}</Button> : undefined} /> : (
             <>
               <ul className="divide-y divide-slate-100">
                 {list.data.data.map((o: any) => (
                   <li key={o.id}>
-                    <button onClick={() => router.replace(`/lab?order=${o.id}`)} className={cx('flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50', selected === o.id && 'bg-brand-50 hover:bg-brand-50')}>
-                      <TestTube className="h-4 w-4 shrink-0 text-slate-400" />
-                      <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{o.service_name}</div><div className="truncate text-xs text-slate-600">{fullName(o)} {pid(o.patient_number)}, {fmtDateTime(o.ordered_at)}, {o.branch_name}</div></div>
-                      <LabStatus status={o.status} />
+                    <button onClick={() => pick(o.id)} aria-current={selected === o.id || undefined} className={cx('flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-left hover:bg-slate-50', selected === o.id && 'bg-brand-50 hover:bg-brand-50')}>
+                      <TestTube className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+                      <div className="min-w-[12rem] flex-1 basis-0"><div className="truncate text-sm font-semibold text-slate-900">{o.service_name}</div><div className="truncate text-xs text-slate-600">{fullName(o)} {pid(o.patient_number)}, {fmtDateTime(o.ordered_at)}, {o.branch_name}</div></div>
+                      <span className="ml-7 sm:ml-0"><LabStatus status={o.status} /></span>
                     </button>
                   </li>
                 ))}
@@ -68,10 +71,18 @@ function Lab() {
             </>
           )}
         </Card>
-        {selected ? <OrderDetail id={selected} /> : <Card><EmptyState title={t('clinical.pickOrder')} text={t('clinical.lab.pickOrderText')} /></Card>}
+        <div id="order-detail" className="min-w-0 scroll-mt-24 self-start xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:rounded-xl">
+          {selected ? <OrderDetail id={selected} /> : <Card><EmptyState title={t('clinical.pickOrder')} text={t('clinical.lab.pickOrderText')} /></Card>}
+        </div>
       </div>
     </>
   );
+}
+
+/** Below xl the detail sits under the list: bring it into view after a tap so the click visibly does something. */
+function revealDetail() {
+  if (typeof window === 'undefined' || window.matchMedia('(min-width: 1280px)').matches) return;
+  setTimeout(() => document.getElementById('order-detail')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
 }
 
 function OrderDetail({ id }: { id: string }) {
@@ -107,6 +118,10 @@ function OrderDetail({ id }: { id: string }) {
   const isLab = me.role === 'lab';
   const editable = isLab && ['sample_collected', 'draft_result'].includes(d.status);
   const flagOf = (p: any, v: string): 'low' | 'high' | 'normal' | null => { if (v === '' || isNaN(Number(v.replace(',', '.')))) return null; const n = Number(v.replace(',', '.')); return p.ref_low != null && n < p.ref_low ? 'low' : p.ref_high != null && n > p.ref_high ? 'high' : 'normal'; };
+  // a parameter with a numeric reference range expects a number; free-text parameters (e.g. colour) are left alone
+  const notNumber = (p: any, v: string) => v.trim() !== '' && (p.ref_low != null || p.ref_high != null) && isNaN(Number(v.trim().replace(',', '.')));
+  const nonNumeric = (d.lab_template ?? []).filter((p: any) => notNumber(p, values[p.code] ?? '')).map((p: any) => p.name);
+  const verifyBlocked = dirty ? t('clinical.lab.saveFirst') : d.status !== 'draft_result' ? t('clinical.lab.enterFirst') : null;
   const steps = ['ordered', 'sample_collected', 'draft_result', 'verified'];
   const at = steps.indexOf(d.status);
 
@@ -114,16 +129,16 @@ function OrderDetail({ id }: { id: string }) {
     <Card padded={false} className="self-start" title={<span className="flex items-center gap-2">{d.service_name}<LabStatus status={d.status} /></span>}
       actions={d.status === 'verified' && (isLab || me.role === 'doctor') && <Link href={`/print/lab/${d.id}`} target="_blank" className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"><Printer className="h-4 w-4" />{t('common.print')}</Link>}>
       <div className="space-y-4 p-4">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-          <div><span className="text-slate-600">{t('clinical.f.patient')}</span> <b>{fullName(d)}</b> {pid(d.patient_number)}</div>
+        <div className="grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+          <div><span className="text-slate-600">{t('clinical.f.patient')}</span> <b>{fullName(d)}</b> <span className="whitespace-nowrap">{pid(d.patient_number)}</span></div>
           <div><span className="text-slate-600">{t('clinical.f.age')}</span> {fmtDate(d.birth_date)}, {ageFrom(d.birth_date, me.today)}</div>
           <div><span className="text-slate-600">{t('clinical.f.ordered')}</span> {fmtDateTime(d.ordered_at)}</div>
           <div><span className="text-slate-600">{t('clinical.f.orderedBy')}</span> {d.ordered_by ?? '—'}</div>
           <div><span className="text-slate-600">{t('clinical.f.branch')}</span> {d.branch_name}</div>
           <div><span className="text-slate-600">{t('clinical.f.orderId')}</span> <span className="font-mono text-xs">{d.id.slice(0, 8)}</span></div>
         </div>
-        <ol className="flex items-center gap-1 text-xs">
-          {steps.map((s, i) => <li key={s} className="flex items-center gap-1"><span className={cx('rounded-full px-2 py-0.5', i <= at ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600')}>{t(`status.lab.${s}` as MessageKey)}</span>{i < steps.length - 1 && <span className="text-slate-300">→</span>}</li>)}
+        <ol className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-xs">
+          {steps.map((s, i) => <li key={s} className="flex items-center gap-1" aria-current={i === at ? 'step' : undefined}><span className={cx('whitespace-nowrap rounded-full px-2.5 py-0.5 font-medium', i <= at ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700')}>{t(`status.lab.${s}` as MessageKey)}</span>{i < steps.length - 1 && <span className="text-slate-400" aria-hidden="true">→</span>}</li>)}
         </ol>
         <div className="space-y-0.5 text-xs text-slate-600">
           {d.collected_at && <p>{t('clinical.lab.collectedAt', { at: fmtDateTime(d.collected_at), name: d.collected_by_name })}</p>}
@@ -135,36 +150,44 @@ function OrderDetail({ id }: { id: string }) {
         {isLab && d.status === 'ordered' && (
           <div className="rounded-md border border-dashed border-slate-300 p-4 text-center">
             <p className="mb-3 text-sm text-slate-600">{t('clinical.lab.collectHint')}</p>
-            <Button variant="primary" icon={<TestTube className="h-4 w-4" />} loading={collect.isPending} onClick={() => collect.mutate()}>{t('clinical.lab.collect')}</Button>
+            <Button variant="primary" icon={<TestTube className="h-4 w-4" />} loading={collect.isPending} onClick={() => collect.mutate()}>{t('clinical.lab.collectAction')}</Button>
           </div>
         )}
         {isLab && editable && (
           <div>
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600"><th className="py-1">{t('lab.param')}</th><th className="w-28 py-1">{t('clinical.lab.value')}</th><th className="py-1">{t('lab.unit')}</th><th className="py-1">{t('lab.reference')}</th><th className="py-1">{t('lab.flag')}</th></tr></thead>
+            <div className="-mx-1 overflow-x-auto px-1">
+            <table className="w-full text-sm sm:min-w-[26rem]">
+              <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600"><th className="py-1 pr-2">{t('lab.param')}</th><th className="w-28 py-1 pr-2 text-right">{t('clinical.lab.value')}</th><th className="py-1 pr-2">{t('lab.unit')}</th><th className="hidden py-1 pr-2 sm:table-cell">{t('lab.reference')}</th><th className="hidden py-1 sm:table-cell">{t('lab.flag')}</th></tr></thead>
               <tbody>{(d.lab_template ?? []).map((p: any, i: number) => {
-                const f = flagOf(p, values[p.code] ?? '');
+                const v = values[p.code] ?? '';
+                const f = flagOf(p, v);
+                const out = f === 'high' || f === 'low';
+                const bad = !!errors[`values.${i}`] || notNumber(p, v);
+                const flag = f === 'high' ? <span className="inline-flex items-center gap-0.5 font-semibold text-red-700"><ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />{t('lab.high')}</span> : f === 'low' ? <span className="inline-flex items-center gap-0.5 font-semibold text-red-700"><ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />{t('lab.low')}</span> : f === 'normal' ? <span className="text-slate-600">{t('lab.normal')}</span> : null;
                 return (
                   <tr key={p.code} className="border-t border-slate-100">
-                    <td className="py-1.5 pr-2"><label htmlFor={`v-${p.code}`}>{p.name}</label></td>
-                    <td className="py-1.5 pr-2"><Input id={`v-${p.code}`} className="h-8 text-right tabular-nums" inputMode="decimal" value={values[p.code] ?? ''} invalid={!!errors[`values.${i}`]}
+                    <td className="py-1.5 pr-2"><label htmlFor={`v-${p.code}`}>{p.name}</label>{/* phone: reference and flag under the name instead of two more columns */}<div className="text-xs text-slate-600 sm:hidden"><span className="whitespace-nowrap tabular-nums">{refText(p)}</span>{flag && <span className="ml-2 whitespace-nowrap">{flag}</span>}</div></td>
+                    <td className="py-1.5 pr-2"><Input id={`v-${p.code}`} className={cx('h-9 text-right tabular-nums', out && !bad && '!border-red-600 !bg-red-50 font-semibold !text-red-800')} inputMode="decimal" value={v} invalid={bad}
                       onChange={(e) => setValues((x) => ({ ...x, [p.code]: e.target.value }))} /></td>
-                    <td className="py-1.5 pr-2 text-slate-600">{p.unit}</td><td className="py-1.5 pr-2 tabular-nums text-slate-600">{refText(p)}</td>
-                    <td className={cx('py-1.5 text-xs font-medium', f === 'high' || f === 'low' ? 'text-red-700' : 'text-slate-600')}>{f ? t(`lab.${f}`) : ''}</td>
+                    <td className="py-1.5 pr-2 text-slate-600">{p.unit}</td><td className="hidden whitespace-nowrap py-1.5 pr-2 tabular-nums text-slate-600 sm:table-cell">{refText(p)}</td>
+                    <td className="hidden whitespace-nowrap py-1.5 text-[0.8125rem] sm:table-cell">{flag}</td>
                   </tr>
                 );
               })}</tbody>
             </table>
-            {Object.values(errors).filter(Boolean).length > 0 && <p className="mt-1 text-xs text-red-600">{Object.values(errors).join('; ')}</p>}
+            </div>
+            {nonNumeric.length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{t('clinical.lab.needNumber', { names: nonNumeric.join(', ') })}</p>}
+            {Object.values(errors).filter(Boolean).length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{Object.values(errors).join('; ')}</p>}
             <div className="mt-3"><label className="text-[0.8125rem] font-medium text-slate-700" htmlFor="lab-comment">{t('clinical.lab.comment')}</label><Textarea id="lab-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
             <p className="mt-2 text-xs text-slate-600">{t('clinical.lab.refNote')}</p>
-            <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <Button icon={<Save className="h-4 w-4" />} loading={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>{t('clinical.lab.saveDraft')}</Button>
-              <Button variant="success" icon={<CheckCircle2 className="h-4 w-4" />} loading={verify.isPending} disabled={d.status !== 'draft_result' || dirty} title={dirty ? t('clinical.lab.saveFirst') : d.status !== 'draft_result' ? t('clinical.lab.enterFirst') : undefined} onClick={() => verify.mutate()}>{t('clinical.lab.verify')}</Button>
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+              {verifyBlocked && <p id="verify-why" className="mr-auto text-sm text-slate-600">{verifyBlocked}</p>}
+              <Button className="max-sm:w-full" icon={<Save className="h-4 w-4" />} loading={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>{t('clinical.lab.saveDraft')}</Button>
+              <Button className="max-sm:w-full" variant="success" icon={<CheckCircle2 className="h-4 w-4" />} loading={verify.isPending} disabled={!!verifyBlocked} aria-describedby={verifyBlocked ? 'verify-why' : undefined} onClick={() => verify.mutate()}>{t('clinical.lab.verify')}</Button>
             </div>
           </div>
         )}
-        {d.status === 'verified' && d.values && <div><LabValues values={d.values} />{d.comment && <p className="mt-2 text-sm"><span className="text-slate-600">{t('clinical.f.comment')}</span> {d.comment}</p>}<p className="mt-2 text-xs text-slate-600">{t('clinical.lab.verifiedLocked')}</p></div>}
+        {d.status === 'verified' && d.values && <div><div className="overflow-x-auto"><LabValues values={d.values} /></div>{d.comment && <p className="mt-2 text-sm"><span className="text-slate-600">{t('clinical.f.comment')}</span> {d.comment}</p>}<p className="mt-2 text-xs text-slate-600">{t('clinical.lab.verifiedLocked')}</p></div>}
       </div>
     </Card>
   );

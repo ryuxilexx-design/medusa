@@ -43,7 +43,9 @@ function convertWord(word: string): string {
   for (const [stem, cyr] of LOAN_STEMS) {
     if (lower.startsWith(stem)) {
       const rest = word.slice(stem.length).replace(/^[‘ʻ'`’ʼ]/, ''); // the apostrophe before a suffix is Latin-only
-      return capFirst(word, cyr) + (rest ? convert(rest) : '');
+      // the soft sign goes before a vowel suffix: profil + i → профили, model + ini → моделини
+      const base = rest && /^[aeiouy]/i.test(rest) && cyr.endsWith('ь') ? cyr.slice(0, -1) : cyr;
+      return capFirst(word, base) + (rest ? convert(rest) : '');
     }
   }
   return convert(word);

@@ -23,7 +23,7 @@ export function IntakePanel({ appointmentId, onUseComplaints }: { appointmentId:
         <h2 className="flex items-center gap-2 font-bold text-sky-950"><ClipboardList className="h-5 w-5" />{t('intake.title')}</h2>
         <span className="text-[0.8125rem] text-sky-900">{t('intake.meta', { at: fmtDateTime(f.submitted_at) })}</span>
       </div>
-      <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[170px_minmax(0,1fr)]">
+      <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[10rem_minmax(0,1fr)]">
         <dt className="text-slate-600">{t('intake.complaints')}</dt><dd className="whitespace-pre-wrap text-slate-900">{f.complaints || '—'}</dd>
         <dt className="text-slate-600">{t('intake.allergies')}</dt><dd className="text-slate-900">{f.allergies || t('intake.noAllergies')}</dd>
         <dt className="text-slate-600">{t('intake.medications')}</dt><dd className="text-slate-900">{f.medications || t('intake.noMedications')}</dd>

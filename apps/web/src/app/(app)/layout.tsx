@@ -1,17 +1,17 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Banknote, Boxes, CalendarDays, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, ScanLine, Search, Settings,
-  Stethoscope, Users, UsersRound, Wallet,
+  Stethoscope, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
 import { SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
 import { fmtTime, localDate, longDate } from '@/lib/format';
 import { useI18n, useT } from '@/lib/i18n';
-import { cx, Modal, Select } from '@/components/ui';
+import { Button, cx, Modal, Select } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
 import { LanguagePicker } from '@/components/prefs';
 import { confirmLeave, NavigationGuard } from '@/lib/unsaved';
@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => { if (me.isError) router.replace('/login'); }, [me.isError, router]);
   // the person's saved language wins over whatever the browser had
   useEffect(() => { if (me.data) sync(me.data.locale); }, [me.data?.locale, sync]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-base text-slate-600"><Loader2 className="h-5 w-5 animate-spin" /> {t('common.loading')}</div>;
+  if (!me.data) return <div className="flex h-screen items-center justify-center gap-2 text-base text-slate-600"><title>Med.uz.ai</title><Loader2 className="h-5 w-5 animate-spin" /> {t('common.loading')}</div>;
   if (me.data.must_change_password) return <ForcedPasswordChange name={me.data.name} />;
   return <SessionProvider me={me.data}><Shell>{children}</Shell></SessionProvider>;
 }
@@ -69,6 +69,7 @@ function ForcedPasswordChange({ name }: { name: string }) {
   const t = useT();
   return (
     <main className="flex min-h-screen items-start justify-center bg-slate-100 px-4 pt-[8vh]">
+      <title>{`${t('password.forcedTitle')} — Med.uz.ai`}</title>
       <div className="w-full max-w-md">
         <div className="flex items-center justify-between gap-3"><BrandLockup size="lg" /><LanguagePicker signedIn /></div>
         <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">
@@ -88,7 +89,39 @@ function DemoClock() {
   const t = useT();
   const [now, setNow] = useState(() => demoNow());
   useEffect(() => { const i = setInterval(() => setNow(demoNow()), 15_000); return () => clearInterval(i); }, [demoNow]);
-  return <span className="text-[0.8125rem] text-slate-600" title={t('shell.demoClockTitle')}>{t('shell.demoClock', { date: longDate(localDate(now)), time: fmtTime(now) })}</span>;
+  // the explanation is read out too (a tooltip alone is invisible to keyboard and touch users)
+  return <span className="text-[0.8125rem] text-slate-600" title={t('shell.demoClockTitle')}>{t('shell.demoClock', { date: longDate(localDate(now)), time: fmtTime(now) })}<span className="sr-only"> {t('shell.demoClockTitle')}</span></span>;
+}
+
+/** Clinic name + demo clock: in the header on wide screens, inside the menu below xl. */
+function ClinicInfo({ className }: { className?: string }) {
+  const { me } = useSession();
+  return (
+    <div className={cx('min-w-0 flex-col leading-tight', className)}>
+      <span className="truncate text-[0.9375rem] font-bold text-slate-900">{me.clinic_name}</span>
+      <DemoClock />
+    </div>
+  );
+}
+
+/** True from the lg breakpoint up (sidebar always visible); false on phones/tablets, where it is a drawer. */
+function useDesktop() {
+  const [desk, setDesk] = useState(true);
+  useEffect(() => {
+    const m = window.matchMedia('(min-width: 1024px)');
+    const on = () => setDesk(m.matches);
+    on(); m.addEventListener('change', on);
+    return () => m.removeEventListener('change', on);
+  }, []);
+  return desk;
+}
+
+/** «<page> — Med.uz.ai» for the browser tab, from the same labels as the menu. */
+function usePageTitle(items: Item[], role: Role) {
+  const pathname = usePathname();
+  const t = useT();
+  const it = items.find((m) => pathname === m.href || pathname.startsWith(m.href + '/'));
+  return it ? `${t(LABEL_OVERRIDE[role]?.[it.href] ?? it.label)} — Med.uz.ai` : 'Med.uz.ai';
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -102,12 +135,37 @@ function Shell({ children }: { children: React.ReactNode }) {
   const [pwOpen, setPwOpen] = useState(false);
   const items = MENU.filter((m) => m.roles.includes(me.role));
   const canSearch = ['manager', 'registrar', 'doctor', 'cashier'].includes(me.role);
+  const desktop = useDesktop();
+  const burger = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
+  const pageTitle = usePageTitle(items, me.role);
   useEffect(() => setNavOpen(false), [pathname]);
+  // drawer (below lg): focus moves into it, Esc closes it, focus returns to the menu button
+  useEffect(() => {
+    if (!navOpen) return;
+    setTimeout(() => drawer.current?.querySelector<HTMLElement>('nav a')?.focus(), 30);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeNav(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  function closeNav() { setNavOpen(false); burger.current?.focus(); }
+  const search = (cls: string) => (
+    <form className={cls} role="search" onSubmit={(e) => { e.preventDefault(); router.push(`/patients?search=${encodeURIComponent(q.trim())}`); }}>
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('shell.search')} aria-label={t('shell.searchLabel')}
+        className="h-10 w-full rounded-lg border-2 border-slate-300 bg-slate-50 pl-10 pr-2 text-sm placeholder:text-slate-500 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-amber-300" />
+    </form>
+  );
 
   return (
     <div className="min-h-screen lg:pl-60">
-      <aside className={cx('fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-slate-200 bg-white transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full')}>
-        <Link href="/" className="flex h-16 items-center border-b border-slate-100 px-4" aria-label={t('nav.home')}><BrandLockup /></Link>
+      <title>{pageTitle}</title>
+      <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-slate-200 bg-white transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full')}>
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-slate-100 pl-4 pr-2">
+          <Link href="/" className="rounded-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('nav.home')}><BrandLockup /></Link>
+          <Button variant="ghost" className="px-2.5 text-slate-700 lg:hidden" onClick={closeNav} aria-label={t('nav.close')}><X className="h-6 w-6" /></Button>
+        </div>
+        {canSearch && search('relative mx-2.5 mt-3 sm:hidden')}
         <nav className="flex-1 overflow-y-auto px-2.5 py-3" aria-label={t('nav.menu')}>
           {items.map((it) => {
             const active = pathname === it.href || pathname.startsWith(it.href + '/');
@@ -123,34 +181,28 @@ function Shell({ children }: { children: React.ReactNode }) {
         </nav>
         {/* personal display settings stay in sight on every screen, without crowding the header */}
         <div className="space-y-2.5 border-t border-slate-100 p-3">
+          <ClinicInfo className="flex xl:hidden" />
+          {/* on a phone the header keeps only menu, branch and logout: who is signed in is shown here */}
+          <div className="leading-tight sm:hidden"><div className="text-sm font-semibold text-slate-900">{me.name}</div><div className="text-[0.8125rem] text-slate-600">{t(`role.${me.role}` as MessageKey)}{me.doctor_specialty ? `, ${me.doctor_specialty}` : ''}</div></div>
           <LanguagePicker signedIn className="w-full [&>select]:flex-1" />
           <div className="text-2xs text-slate-600">{t('shell.release')}</div>
         </div>
       </aside>
-      {navOpen && <div className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" onClick={() => setNavOpen(false)} />}
+      {navOpen && <div className="fixed inset-0 z-30 bg-slate-900/30 lg:hidden" onClick={closeNav} />}
 
       <header className="sticky top-0 z-20 flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur print:hidden">
-        <button className="rounded-lg p-2 text-slate-700 hover:bg-slate-100 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')}><Menu className="h-6 w-6" /></button>
-        <div className="hidden min-w-0 flex-col leading-tight md:flex">
-          <span className="truncate text-[0.9375rem] font-bold text-slate-900">{me.clinic_name}</span>
-          <DemoClock />
-        </div>
+        <Button ref={burger} variant="ghost" className="px-2.5 text-slate-700 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
+        <ClinicInfo className="hidden xl:flex" />
         {me.branches.length > 1 ? (
-          <Select aria-label={t('shell.branch')} className="h-10 w-auto max-w-[200px] text-sm" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <Select aria-label={t('shell.branch')} className="h-10 w-auto min-w-0 max-w-[11rem] text-sm sm:max-w-[15rem]" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             <option value="">{t('shell.allBranches')}</option>
             {me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
-        ) : <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm text-slate-800">{me.branches[0]?.name}</span>}
-        {canSearch && (
-          <form className="relative ml-1 hidden min-w-[10rem] max-w-[16rem] flex-1 sm:block" role="search" onSubmit={(e) => { e.preventDefault(); router.push(`/patients?search=${encodeURIComponent(q.trim())}`); }}>
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-slate-500" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('shell.search')} aria-label={t('shell.searchLabel')}
-              className="h-10 w-full rounded-lg border-2 border-slate-300 bg-slate-50 pl-10 pr-2 text-sm placeholder:text-slate-500 focus:border-brand-600 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100" />
-          </form>
-        )}
-        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+        ) : <span className="min-w-0 truncate rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm text-slate-800">{me.branches[0]?.name}</span>}
+        {canSearch && search('relative ml-1 hidden min-w-[10rem] max-w-[16rem] flex-1 sm:block xl:max-w-[22rem]')}
+        <div className="ml-auto flex items-center gap-2.5">
           {me.demo && <span className="hidden rounded-full border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-2xs font-semibold text-amber-900 2xl:inline">{t('common.demoEnv')}</span>}
-          <div className="text-right leading-tight">
+          <div className="hidden text-right leading-tight sm:block">
             <div className="text-sm font-semibold text-slate-900">{me.name}</div>
             <div className="text-[0.8125rem] text-slate-600">{t(`role.${me.role}` as MessageKey)}{me.doctor_specialty ? `, ${me.doctor_specialty}` : ''}</div>
           </div>

@@ -5,7 +5,7 @@ import { Ban, FileText, Pill, Plus, Printer, Send, Trash2 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
-import { Alert, Badge, Button, Card, cx, Field, Input, Modal, Textarea, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, Field, Input, LinkButton, Modal, Textarea, useToast } from '@/components/ui';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { useT } from '@/lib/i18n';
 
@@ -49,14 +49,14 @@ export function DocumentsCard({ encounterId, note }: { encounterId: string; note
               <span className="text-[0.8125rem] text-slate-600">{fmtDateTime(d.issued_at)}</span>
               {d.status === 'void' ? <Badge>{d.void_reason ? t('docs.voidWithReason', { reason: d.void_reason }) : t('docs.void')}</Badge> : <Badge tone="green">{t('docs.issued')}</Badge>}
               <span className="ml-auto flex gap-1.5">
-                <a href={`/print/document/${d.id}`} target="_blank" rel="noopener" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:border-slate-500"><Printer className="h-4 w-4" />{t('common.print')}</a>
+                <LinkButton size="sm" target="_blank" href={`/print/document/${d.id}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>
                 {d.status === 'issued' && <Button size="sm" variant="ghost" icon={<Ban className="h-4 w-4" />} onClick={() => { setVoiding(d); setReason(''); }}>{t('docs.voidAction')}</Button>}
               </span>
             </li>
           ))}
         </ul>
       )}
-      {kind && <DocumentModal kind={kind} encounterId={encounterId} note={note} onClose={() => setKind(null)} />}
+      {kind && <DocumentModal key={kind} kind={kind} encounterId={encounterId} note={note} onClose={() => setKind(null)} />}
       <Modal open={!!voiding} onClose={() => setVoiding(null)} title={voiding ? t('docs.voidTitle', { kind: t(kindKey(voiding.kind)), n: voiding.number }) : ''}
         footer={<><Button onClick={() => setVoiding(null)}>{t('common.back')}</Button><Button variant="danger" loading={voidDoc.isPending} disabled={reason.trim().length < 3} onClick={() => voidDoc.mutate()}>{t('docs.voidAction')}</Button></>}>
         <p className="mb-2 text-sm text-slate-700">{t('docs.voidText')}</p>
@@ -78,6 +78,10 @@ function DocumentModal({ kind, encounterId, note, onClose }: { kind: Kind; encou
   const [cert, setCert] = useState({ purpose: t(PURPOSES[0]), include_diagnosis: false, rest_days: '0', notes: '' });
   const [items, setItems] = useState<Item[]>([emptyItem()]);
   const [rxNotes, setRxNotes] = useState('');
+  // what the form looked like when it opened: closing with anything typed asks first (like every other form)
+  const snapshot = () => JSON.stringify(kind === 'referral' ? ref : kind === 'certificate' ? cert : { items, rxNotes });
+  const [initial] = useState(snapshot);
+  const dirty = snapshot() !== initial;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   useEffect(() => { setErrors({}); setFormError(null); }, [kind]);
@@ -107,7 +111,7 @@ function DocumentModal({ kind, encounterId, note, onClose }: { kind: Kind; encou
   };
 
   return (
-    <Modal open onClose={onClose} width={kind === 'prescription' ? 'max-w-5xl' : 'max-w-2xl'} title={t('docs.issueTitle', { kind: t(kindKey(kind)) })}
+    <Modal open onClose={onClose} dirty={dirty && !issue.isPending} width={kind === 'prescription' ? 'max-w-5xl' : 'max-w-2xl'} title={t('docs.issueTitle', { kind: t(kindKey(kind)) })}
       footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={issue.isPending} onClick={() => { setFormError(null); issue.mutate(); }}>{t('docs.issue')}</Button></>}>
       <div className="space-y-3">
         {formError && <Alert tone="red">{formError}</Alert>}
@@ -150,7 +154,7 @@ function DocumentModal({ kind, encounterId, note, onClose }: { kind: Kind; encou
         {kind === 'prescription' && <>
           {errors.items && <Alert tone="red">{errors.items}</Alert>}
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] table-fixed text-sm">
+            <table className="w-full min-w-[51rem] table-fixed text-sm">
               <colgroup><col className="w-[19%]" /><col className="w-[11%]" /><col className="w-[10%]" /><col className="w-[22%]" /><col className="w-[11%]" /><col className="w-[23%]" /><col className="w-10" /></colgroup>
               <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600"><th className="pb-1">{t('docs.drug')}</th><th className="pb-1">{t('docs.form')}</th><th className="pb-1">{t('docs.dose')}</th><th className="pb-1">{t('docs.frequency')}</th><th className="pb-1">{t('docs.duration')}</th><th className="pb-1">{t('docs.instructions')}</th><th /></tr></thead>
               <tbody>{items.map((it, i) => (

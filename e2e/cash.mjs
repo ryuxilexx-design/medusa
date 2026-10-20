@@ -31,10 +31,10 @@ try {
   const e1 = await expected(c);
   await fill(c, 'Kassada sanalgan naqd pul, so‘m', String(e1 - 1000), '[role=dialog]');
   await waitText(c, 'Kassada pul yetmayapti');
-  check(await c.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Yopish').disabled), 'Farq bor — izohsiz yopib bo‘lmaydi');
+  check(await c.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Smenani yopish').disabled), 'Farq bor — izohsiz yopib bo‘lmaydi');
   await fill(c, 'Farq sababi', 'Qaytim xatosi', '[role=dialog]');
   await shot(c, 'cash-02-close');
-  await clickText(c, 'Yopish', '[role=dialog] button');
+  await clickText(c, 'Smenani yopish', '[role=dialog] button');
   await waitText(c, 'Smena yopildi'); await settle(c);
   await waitText(c, 'Smena yopiq');
   check(true, 'Smena farq va izoh bilan yopildi');

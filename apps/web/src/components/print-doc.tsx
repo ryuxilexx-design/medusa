@@ -1,9 +1,9 @@
 'use client';
-import { Loader2, Printer } from 'lucide-react';
+import { Loader2, Printer, X } from 'lucide-react';
 import { useMeQuery } from '@/lib/session';
 import { fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
 import { BrandMark, BrandWordmark } from './logo';
-import { ErrorState } from './ui';
+import { Button, ErrorState } from './ui';
 import { useT } from '@/lib/i18n';
 
 /** A4 document shell: Med.uz.ai + clinic/branch, patient ID, document number, date, responsible person, status and the DEMO mark. */
@@ -15,9 +15,11 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
   const demo = me.data?.demo !== false; // until /me answers, assume demo (never print a real-looking demo document)
   return (
     <div className="min-h-screen bg-slate-200 py-6 print:bg-white print:py-0">
-      <div className="no-print mx-auto mb-3 flex max-w-[210mm] justify-between">
-        <button onClick={() => window.close()} className="min-h-10 text-sm font-semibold text-slate-700 hover:underline">{t('print.close')}</button>
-        <button onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-[0.9375rem] font-semibold text-white shadow hover:bg-brand-700"><Printer className="h-5 w-5" />{t('print.print')}</button>
+      {/* the tab title is also the file name offered by «Save as PDF» */}
+      <title>{`${title} ${number} — Med.uz.ai`}</title>
+      <div className="no-print mx-auto mb-3 flex max-w-[210mm] items-center justify-between gap-3 px-4 print:hidden">
+        <Button variant="ghost" icon={<X className="h-5 w-5" />} onClick={() => window.close()}>{t('print.close')}</Button>
+        <Button variant="primary" icon={<Printer className="h-5 w-5" />} onClick={() => window.print()}>{t('print.print')}</Button>
       </div>
       <article className="relative mx-auto min-h-[297mm] max-w-[210mm] overflow-hidden bg-white p-[14mm] text-[0.8125rem] leading-relaxed text-slate-900 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
         {demo && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -50,7 +52,15 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
 }
 
 export function PrintState({ q }: { q: { isLoading: boolean; isError: boolean; error: unknown; refetch: () => void } }) {
-  if (q.isLoading) return <div className="flex h-screen items-center justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /></div>;
-  if (q.isError) return <div className="mx-auto mt-20 max-w-md rounded-lg border bg-white"><ErrorState error={q.error} onRetry={q.refetch} /></div>;
+  const t = useT();
+  if (q.isLoading) return <div className="flex h-screen items-center justify-center text-slate-600" aria-busy="true" aria-label={t('common.loading')}><Loader2 className="h-5 w-5 animate-spin" /></div>;
+  if (q.isError) return (
+    <div className="mx-4 mt-20 sm:mx-auto sm:max-w-md">
+      <title>Med.uz.ai</title>
+      <div className="rounded-lg border border-slate-200 bg-white"><ErrorState error={q.error} onRetry={q.refetch} /></div>
+      {/* this tab was opened from the app: give a way back */}
+      <div className="mt-3 flex justify-center"><Button variant="ghost" icon={<X className="h-5 w-5" />} onClick={() => window.close()}>{t('print.close')}</Button></div>
+    </div>
+  );
   return null;
 }

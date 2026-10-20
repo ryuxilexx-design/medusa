@@ -14,7 +14,7 @@ import { IntakePanel } from '@/components/intake-panel';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { NewsCard } from '@/components/news-card';
 import { DocumentsCard } from '@/components/documents-card';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, Skeleton, Textarea, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
 
@@ -60,10 +60,10 @@ function Cabinet() {
   }, [selectedId, sorted, router]);
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[270px_minmax(0,1fr)] 2xl:grid-cols-[270px_minmax(0,1fr)_320px]">
-      <Card padded={false} className="self-start lg:sticky lg:top-[88px]" title={t('doctor.today')}>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[15rem_minmax(0,1fr)_18rem]">
+      <Card padded={false} className="self-start lg:sticky lg:top-[5rem]" title={t('doctor.today')}>
         {day.isLoading ? <LoadingRows rows={5} /> : day.isError ? <ErrorState error={day.error} onRetry={() => day.refetch()} /> : !sorted.length ? <EmptyState title={t('doctor.noVisits')} /> : (
-          <ul className="max-h-[calc(100vh-150px)] divide-y divide-slate-100 overflow-y-auto">
+          <ul className="max-h-[16rem] divide-y divide-slate-100 overflow-y-auto lg:max-h-[calc(100vh-8.5rem)]">
             {sorted.map((a) => (
               <li key={a.id}>
                 <Link href={`/doctor?appointment=${a.id}`} className={cx('block px-3 py-2.5 hover:bg-slate-50', a.id === selectedId && 'bg-brand-50 shadow-[inset_3px_0_0_#2d64bd] hover:bg-brand-50')} aria-current={a.id === selectedId ? 'true' : undefined}>
@@ -80,7 +80,8 @@ function Cabinet() {
         : !appt ? (single.isError ? <Card><ErrorState error={single.error} /></Card> : <Card><LoadingRows /></Card>)
         : <Workspace key={appt.id} appt={appt} />}
       <div className="hidden space-y-4 2xl:block"><NewsCard />{appt && <HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} />}</div>
-      <div className="lg:col-span-2 2xl:hidden"><NewsCard /></div>
+      {/* column 2 only: the sticky patient list in column 1 must never slide over it */}
+      <div className="lg:col-start-2 2xl:hidden"><NewsCard /></div>
     </div>
   );
 }
@@ -108,18 +109,21 @@ function Workspace({ appt }: { appt: any }) {
       </div>
       {patient.data && (
         // a known allergy is the one thing that must never be missed: full-width red band
-        <div role={patient.data.allergy_state === 'known' ? 'alert' : undefined} className={cx('flex flex-wrap items-center gap-2 px-4 py-2.5 text-[0.9375rem] sm:px-5',
+        <div role={patient.data.allergy_state === 'known' ? 'alert' : undefined} className={cx('flex items-start gap-2 px-4 py-2.5 text-[0.9375rem] sm:px-5',
           patient.data.allergy_state === 'known' ? 'bg-red-700 font-bold text-white' : patient.data.allergy_state === 'denied' ? 'border-t border-slate-100 bg-slate-50 text-slate-800' : 'border-t border-amber-200 bg-amber-50 font-medium text-amber-900')}>
-          <ShieldAlert className="h-5 w-5 shrink-0" />
-          {t('doctor.allergy', { state: t(`allergy.${patient.data.allergy_state}` as MessageKey) })}{patient.data.allergy_note ? `: ${patient.data.allergy_note}` : ''}
-          <Link href={`/patients/${appt.patient_id}`} className={cx('ml-auto text-sm font-semibold underline-offset-2 hover:underline', patient.data.allergy_state === 'known' ? 'text-white' : 'text-brand-700')}>{t('doctor.profile')}</Link>
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+          <span className="min-w-0 flex-1">{patient.data.allergy_state === 'known' && patient.data.allergy_note
+            ? t('doctor.allergyKnown', { note: patient.data.allergy_note })
+            : `${t('doctor.allergy', { state: t(`allergy.${patient.data.allergy_state}` as MessageKey) })}${patient.data.allergy_note ? `: ${patient.data.allergy_note}` : ''}`}</span>
+          <Link href={`/patients/${appt.patient_id}`} className={cx('shrink-0 whitespace-nowrap rounded text-sm font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', patient.data.allergy_state === 'known' ? 'text-white' : 'text-brand-700')}>{t('doctor.profile')}</Link>
         </div>
       )}
     </div>
   );
 
   const intake = <IntakePanel appointmentId={appt.id} />;
-  if (appt.status === 'scheduled') return <div className="space-y-4">{header}{intake}<Card><EmptyState title={t('doctor.notArrivedTitle')} text={t('doctor.notArrivedText')} /></Card></div>;
+  if (appt.status === 'scheduled') return <div className="space-y-4">{header}{intake}<Card><EmptyState title={t('doctor.notArrivedTitle')} text={t('doctor.notArrivedText')} /></Card>
+    <div className="2xl:hidden"><HistoryPanel patientId={appt.patient_id} /></div></div>;
   if (appt.status === 'no_show' || appt.status === 'cancelled') return <div className="space-y-4">{header}<Card><EmptyState title={t('doctor.notHeld')} /></Card></div>;
   if (appt.status === 'arrived') return <div className="space-y-4">{header}{intake}<Card><EmptyState icon={<PlayCircle className="h-8 w-8" />} title={t('doctor.waitingTitle')} text={t('doctor.waitingText', { n: appt.queue_number ?? '—' })} /></Card>
     <div className="2xl:hidden"><HistoryPanel patientId={appt.patient_id} /></div></div>;
@@ -153,6 +157,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   const dirty = dirtyOf(form, base);
   useUnsavedGuard(dirty);
   const lastAttempt = useRef<NoteForm | null>(null); // text of the most recent save whose outcome is unknown/failed
+  const fieldRefs = useRef<Partial<Record<TextKey, HTMLTextAreaElement | null>>>({});
 
   /**
    * Saves the draft. If an earlier save reached the server but its response was lost, the server version has moved on:
@@ -201,9 +206,13 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     const e: Record<string, string> = {};
     for (const k of REQUIRED_FOR_SIGN) if (!form![k].trim()) e[k] = t('note.fillToSign');
     setErrors(e);
-    if (Object.keys(e).length) { setSaveError(t('note.requiredToSign')); return; }
+    // take the doctor straight to the first empty required field
+    const first = REQUIRED_FOR_SIGN.find((k) => e[k]);
+    if (first) { const el = fieldRefs.current[first as TextKey]; el?.focus({ preventScroll: true }); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
     setConfirmSign(true);
   }
+  // the summary stays only while a required field is still empty (it clears as soon as they are filled)
+  const missingToSign = REQUIRED_FOR_SIGN.some((k) => errors[k] === t('note.fillToSign'));
   const aiDisabledReason = me.ai_mode === 'off' ? (me.ai_off_reason ?? t('note.aiOff')).replace(/\.$/, '') : null;
 
   return (
@@ -211,24 +220,27 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
       <Card padded={false} title={<span className="flex items-center gap-2 whitespace-nowrap">{t('note.title')} <NoteStatus status={enc.data.note.status} /></span>}
         actions={<span className={cx('text-right text-[0.8125rem]', dirty && !signed ? 'font-semibold text-amber-800' : 'text-slate-600')}>{signed ? t('note.signedBy', { name: enc.data.note.signed_by_name, at: fmtDateTime(enc.data.note.signed_at) }) : dirty ? t('note.dirty') : savedAt ? t('note.savedAt', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>}>
         {/* helpers above the note; the bottom bar keeps only the two decisions: save and sign */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 px-4 py-2.5">
           {!signed && <>
-            <Button size="sm" icon={<Sparkles className="h-4 w-4" />} disabled={!!aiDisabledReason} title={aiDisabledReason ?? t('note.aiButtonTitle')} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</Button>
-            <Button size="sm" icon={<FlaskConical className="h-4 w-4" />} onClick={() => setOrderOpen(true)}>{t('note.order')}</Button>
+            <Button size="sm" className="!px-2.5" icon={<Sparkles className="h-4 w-4" />} disabled={!!aiDisabledReason} title={aiDisabledReason ?? t('note.aiButtonTitle')} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</Button>
+            <Button size="sm" className="!px-2.5" icon={<FlaskConical className="h-4 w-4" />} onClick={() => setOrderOpen(true)}>{t('note.order')}</Button>
           </>}
-          <Button size="sm" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(true)}>{t('note.preview')}</Button>
-          <Link href={`/print/note/${encounterId}`} target="_blank" className="inline-flex min-h-9 items-center gap-2 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:border-slate-500"><Printer className="h-4 w-4" />{t('common.print')}</Link>
+          <Button size="sm" className="!px-2.5" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(true)}>{t('note.preview')}</Button>
+          <LinkButton size="sm" className="!px-2.5" target="_blank" href={`/print/note/${encounterId}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>
           {aiDisabledReason && !signed && <span className="w-full text-[0.8125rem] text-slate-600">{t('note.aiOffLine', { reason: aiDisabledReason })}</span>}
         </div>
         <div className="space-y-3 p-4">
           {saveError && <Alert tone="red">{saveError}</Alert>}
+          {missingToSign && <Alert tone="red">{t('note.requiredToSign')}</Alert>}
           {signed && <Alert tone="blue">{t('note.signedLocked')}</Alert>}
           <IntakePanel appointmentId={appointmentId} onUseComplaints={signed ? undefined : (text) => {
             setForm((f) => ({ ...f!, complaints: f!.complaints.trim() ? `${f!.complaints.trim()}\n${text}` : text }));
             setErrors((x) => ({ ...x, complaints: '' }));
             toast.info(t('note.intakeAdded'));
           }} />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {signed ? <div className="divide-y divide-slate-100"><NoteRows form={form} /></div> : <>
+          {/* inputs line up on one baseline even when a label wraps to two lines */}
+          <div className="grid grid-cols-2 items-end gap-3 sm:grid-cols-[repeat(4,minmax(0,1fr))_minmax(9.5rem,1.25fr)]">
             <Field label={t('note.bpSys')} error={errors.bp_sys}>{(id) => <Input id={id} inputMode="numeric" value={form.bp_sys} onChange={set('bp_sys')} disabled={signed} placeholder="—" />}</Field>
             <Field label={t('note.bpDia')} error={errors.bp_dia}>{(id) => <Input id={id} inputMode="numeric" value={form.bp_dia} onChange={set('bp_dia')} disabled={signed} placeholder="—" />}</Field>
             <Field label={t('note.pulse')} error={errors.pulse}>{(id) => <Input id={id} inputMode="numeric" value={form.pulse} onChange={set('pulse')} disabled={signed} placeholder="—" />}</Field>
@@ -238,7 +250,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
           {FIELDS.map((f) => (
             <div key={f.key} className="space-y-2">
               <Field label={t(f.label)} required={f.required} error={errors[f.key]}>
-                {(id) => <Textarea id={id} rows={f.rows} value={form[f.key]} onChange={set(f.key)} disabled={signed} invalid={!!errors[f.key]} placeholder={signed ? '' : t('common.notEntered')} />}
+                {(id) => <Textarea ref={(el) => { fieldRefs.current[f.key] = el; }} id={id} rows={f.rows} value={form[f.key]} onChange={set(f.key)} invalid={!!errors[f.key]} placeholder={t('common.notEntered')} />}
               </Field>
               {f.key === 'diagnosis' && (
                 <IcdPicker value={form.icd10} diagnosis={form.diagnosis} encounterId={encounterId} disabled={signed}
@@ -247,13 +259,15 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
               {f.key === 'diagnosis' && errors.icd10 && <p className="text-sm font-medium text-red-700" role="alert">{errors.icd10}</p>}
             </div>
           ))}
+          </>}
         </div>
         {!signed && (
-          <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-b-xl border-t border-slate-200 bg-white/95 px-4 py-2.5 shadow-[0_-8px_20px_-16px_rgba(26,34,51,0.35)] backdrop-blur">
-            <span className={cx('min-w-[8rem] flex-1 text-[0.8125rem]', dirty ? 'font-semibold text-amber-800' : 'text-slate-600')}>{dirty ? t('note.dirty') : savedAt ? t('note.savedAt', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>
-            <div className="ml-auto flex flex-wrap justify-end gap-2">
-              <Button icon={<Save className="h-5 w-5" />} loading={saveDraft.isPending} disabled={!dirty} onClick={() => saveDraft.mutate()}>{t('note.saveDraft')}</Button>
-              <Button variant="success" className="min-h-12 px-5 text-base" icon={<ClipboardCheck className="h-5 w-5" />} loading={sign.isPending} onClick={trySign}>{t('note.sign')}</Button>
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-b-xl border-t border-slate-200 bg-white/95 px-3 py-2 shadow-[0_-8px_20px_-16px_rgba(26,34,51,0.35)] backdrop-blur sm:px-4 sm:py-2.5">
+            {/* on a phone the save status is already in the card header: the bar keeps only the two decisions, side by side */}
+            <span className={cx('hidden min-w-[8rem] flex-1 text-[0.8125rem] sm:block', dirty ? 'font-semibold text-amber-800' : 'text-slate-600')}>{dirty ? t('note.dirty') : savedAt ? t('note.savedAt', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>
+            <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+              <Button className="!whitespace-normal !px-3 text-sm leading-tight sm:!whitespace-nowrap sm:!px-4 sm:text-[0.9375rem]" icon={<Save className="hidden h-5 w-5 shrink-0 sm:block" />} loading={saveDraft.isPending} disabled={!dirty} onClick={() => saveDraft.mutate()}>{t('note.saveDraft')}</Button>
+              <Button variant="success" className="min-h-12 !whitespace-normal !px-3 text-sm leading-tight sm:!whitespace-nowrap sm:!px-5 sm:text-base" icon={<ClipboardCheck className="hidden h-5 w-5 shrink-0 sm:block" />} loading={sign.isPending} onClick={trySign}>{t('note.sign')}</Button>
             </div>
           </div>
         )}
@@ -299,19 +313,27 @@ function sameNote(a: NoteForm, b: NoteForm) {
 function dirtyOf(a: NoteForm | null, b: NoteForm | null) { return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
 function mapFields(f: Record<string, string>) { const o: Record<string, string> = {}; for (const [k, v] of Object.entries(f)) o[k.replace('vitals.', '')] = v; return o; }
 
+/** The note as text (preview and the read-only view of a signed note): no input boxes, nothing to edit. */
+function NoteRows({ form }: { form: NoteForm }) {
+  const t = useT();
+  const row = (k: string, v: string) => <div className="py-1.5"><div className="text-[0.8125rem] font-semibold text-slate-600">{k}</div><div className="whitespace-pre-wrap text-[0.9375rem] text-slate-900">{v.trim() || <span className="text-slate-600">{t('common.notEntered')}</span>}</div></div>;
+  const vit = [form.bp_sys && form.bp_dia ? t('note.vitalsBp', { sys: form.bp_sys, dia: form.bp_dia }) : '', form.pulse ? t('note.vitalsPulse', { n: form.pulse }) : '', form.temp ? t('note.vitalsTemp', { n: form.temp }) : ''].filter(Boolean).join(', ');
+  return (
+    <>
+      {vit && row(t('note.vitals'), vit)}
+      {FIELDS.map((f) => <div key={f.key}>{row(t(f.label), form[f.key])}{f.key === 'diagnosis' && form.icd10.length > 0 && row(t('icd.label'), form.icd10.map((x) => `${x.code} — ${x.title}`).join('\n'))}</div>)}
+      {form.follow_up_date && row(t('note.followUpShort'), fmtDate(form.follow_up_date))}
+    </>
+  );
+}
+
 function NotePreview({ form, patient, appt, status }: { form: NoteForm; patient: any; appt: any; status: string }) {
   const t = useT();
-  const row = (k: string, v: string) => <div className="py-1.5"><div className="text-[0.8125rem] font-semibold text-slate-600">{k}</div><div className="whitespace-pre-wrap text-[0.9375rem]">{v.trim() || <span className="text-slate-500">{t('common.notEntered')}</span>}</div></div>;
-  const vit = [form.bp_sys && form.bp_dia ? t('note.vitalsBp', { sys: form.bp_sys, dia: form.bp_dia }) : '', form.pulse ? t('note.vitalsPulse', { n: form.pulse }) : '', form.temp ? t('note.vitalsTemp', { n: form.temp }) : ''].filter(Boolean).join(', ');
   return (
     <div>
       {status !== 'signed' && <div className="mb-2 inline-block rounded border-2 border-amber-500 px-2 py-0.5 text-sm font-bold text-amber-800">{t('note.draftStamp')}</div>}
       <p className="text-[0.9375rem]"><b>{fullName(patient, true)}</b> {pid(patient.patient_number)}, {fmtDate(patient.birth_date)}, {appt.service_name}, {appt.doctor_name}</p>
-      <div className="mt-2 divide-y divide-slate-100">
-        {vit && row(t('note.vitals'), vit)}
-        {FIELDS.map((f) => <div key={f.key}>{row(t(f.label), form[f.key])}{f.key === 'diagnosis' && form.icd10.length > 0 && row(t('icd.label'), form.icd10.map((x) => `${x.code} — ${x.title}`).join('\n'))}</div>)}
-        {form.follow_up_date && row(t('note.followUpShort'), fmtDate(form.follow_up_date))}
-      </div>
+      <div className="mt-2 divide-y divide-slate-100"><NoteRows form={form} /></div>
     </div>
   );
 }
@@ -327,14 +349,14 @@ function AiModal({ open, onClose, onApply, encounterId }: { open: boolean; onClo
   // the model answers «Kiritilmagan» for an empty section (its prompt is Uzbek); show it in the doctor's language
   const NOT_ENTERED = 'Kiritilmagan';
   return (
-    <Modal open={open} onClose={onClose} width="max-w-5xl" dirty={!!text && !d} title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-brand-600" />{t('ai.title')} {status.data?.mode === 'sample' && <Badge tone="yellow">{t('ai.sampleMode')}</Badge>}{status.data?.mode === 'live' && <Badge tone="teal">{t('ai.live')}</Badge>}</span>}
+    <Modal open={open} onClose={onClose} width="max-w-5xl" dirty={!!text && !d} title={<span className="flex flex-wrap items-center gap-2"><Sparkles className="h-5 w-5 shrink-0 text-brand-600" />{t('ai.title')} {status.data?.mode === 'sample' && <Badge tone="yellow">{t('ai.sampleMode')}</Badge>}{status.data?.mode === 'live' && <Badge tone="teal">{t('ai.live')}</Badge>}</span>}
       footer={d ? <><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" onClick={() => { onApply(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v === NOT_ENTERED ? '' : v])) as Partial<NoteForm>); onClose(); }}>{t('ai.apply')}</Button></>
         : <><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={run.isPending} disabled={text.trim().length < 10} onClick={() => run.mutate()}>{t('ai.run')}</Button></>}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <div className="mb-1 flex items-center justify-between"><span className="text-sm font-semibold text-slate-800">{t('ai.source')}</span>
-            {status.data?.sample_text && !d && <button className="text-sm font-semibold text-brand-700 hover:underline" onClick={() => setText(status.data.sample_text)}>{t('ai.useSample')}</button>}</div>
-          <Textarea rows={14} value={text} onChange={(e) => setText(e.target.value)} disabled={!!d} placeholder={t('ai.placeholder')} />
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-x-2"><label htmlFor="ai-source" className="text-sm font-semibold text-slate-800">{t('ai.source')}</label>
+            {status.data?.sample_text && !d && <Button size="sm" variant="ghost" className="-mr-2 !px-2" onClick={() => setText(status.data.sample_text)}>{t('ai.useSample')}</Button>}</div>
+          <Textarea id="ai-source" rows={8} className="md:min-h-[22rem]" value={text} onChange={(e) => setText(e.target.value)} disabled={!!d} placeholder={t('ai.placeholder')} />
           {status.data?.mode === 'sample' && <p className="mt-1 text-[0.8125rem] text-slate-600">{t('ai.sampleOnly')}</p>}
         </div>
         <div>
@@ -377,8 +399,8 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
             <fieldset key={g.c}><legend className="mb-1 text-sm font-bold text-slate-800">{t(`service.${g.c}` as MessageKey)}</legend>
               {g.items.map((s) => (
                 <label key={s.id} className={cx('flex min-h-10 cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 text-[0.9375rem] hover:bg-slate-50', taken.has(s.name) && 'cursor-not-allowed opacity-60')}>
-                  <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" disabled={taken.has(s.name)} checked={sel.includes(s.id)} onChange={(e) => setSel((x) => e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id))} />
-                  <span className="flex-1">{s.name}{taken.has(s.name) && <span className="text-[0.8125rem] text-slate-600"> {t('orders.taken')}</span>}</span><span className="tabular-nums text-[0.8125rem] text-slate-600">{formatSom(s.price, false)}</span>
+                  <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-brand-600" disabled={taken.has(s.name)} checked={sel.includes(s.id)} onChange={(e) => setSel((x) => e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id))} />
+                  <span className="min-w-0 flex-1">{s.name}{taken.has(s.name) && <span className="text-[0.8125rem] text-slate-600"> {t('orders.taken')}</span>}</span><span className="shrink-0 whitespace-nowrap tabular-nums text-[0.8125rem] text-slate-600">{formatSom(s.price, false)}</span>
                 </label>
               ))}
             </fieldset>
@@ -395,14 +417,14 @@ function HistoryPanel({ patientId, currentEncounter }: { patientId: string; curr
   const h = useQuery({ queryKey: ['doctor-history', patientId], queryFn: () => api(`/doctor/patient-history?patient_id=${patientId}`).then((r) => r.data) });
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <Card padded={false} title={t('history.title')} className="self-start 2xl:sticky 2xl:top-[88px]">
+    <Card padded={false} title={t('history.title')} className="self-start 2xl:sticky 2xl:top-[5rem]">
       {h.isLoading ? <LoadingRows rows={4} /> : h.isError ? <ErrorState error={h.error} onRetry={() => h.refetch()} /> : (
-        <div className="max-h-[calc(100vh-150px)] space-y-4 overflow-y-auto p-3 text-sm">
+        <div className="space-y-4 p-3 text-sm 2xl:max-h-[calc(100vh-8.5rem)] 2xl:overflow-y-auto">
           <section>
             <h3 className="mb-1 text-sm font-bold text-slate-800">{t('history.visits')}</h3>
             {h.data.notes.filter((n: any) => n.encounter_id !== currentEncounter).length === 0 ? <p className="text-slate-600">{t('history.noVisits')}</p> :
               h.data.notes.filter((n: any) => n.encounter_id !== currentEncounter).map((n: any) => (
-                <button key={n.encounter_id} aria-expanded={open === n.encounter_id} onClick={() => setOpen(open === n.encounter_id ? null : n.encounter_id)} className="mb-1.5 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-left hover:bg-slate-50">
+                <button key={n.encounter_id} aria-expanded={open === n.encounter_id} onClick={() => setOpen(open === n.encounter_id ? null : n.encounter_id)} className="mb-1.5 block w-full rounded-lg border border-slate-200 px-2.5 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
                   <div className="flex justify-between text-[0.8125rem]"><b>{fmtDate(n.starts_at)}</b><span className="text-slate-600">{n.specialty}</span></div>
                   <div className="text-sm">{n.diagnosis}</div>
                   {open === n.encounter_id && <div className="mt-1 space-y-0.5 text-[0.8125rem] text-slate-700"><p>{t('history.complaint', { text: n.complaints })}</p><p>{t('history.advice', { text: n.recommendations })}</p><p className="text-slate-600">{n.doctor_name}</p></div>}

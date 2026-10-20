@@ -1,6 +1,5 @@
 'use client';
 import { useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DoorClosed, DoorOpen, Printer, ReceiptText } from 'lucide-react';
 import { EXPENSE_CATEGORIES, type MessageKey } from '@meduza/contracts';
@@ -8,7 +7,8 @@ import { api, ApiError } from '@/lib/api';
 import { fmtTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Card, cx, Field, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { Alert, Button, Card, cx, Field, Input, LinkButton, Modal, Select, Textarea, useToast } from '@/components/ui';
+import { MoneyInput } from '@/components/money-input';
 
 export type Shift = {
   id: string; number: number; status: 'open' | 'closed'; branch_id: string; branch_name: string; cashier_name: string; opened_at: string; opening_cash: number;
@@ -51,7 +51,7 @@ export function ShiftPanel() {
           <div className="text-sm"><span className="text-slate-600">{t('cash.expectedCash')}</span> <b className="tabular-nums text-emerald-800">{formatSom(s.expected_cash)}</b></div>
           <div className="ml-auto flex flex-wrap gap-2">
             <Button size="sm" icon={<ReceiptText className="h-4 w-4" />} onClick={() => setModal('expense')}>{t('cash.cashExpense')}</Button>
-            <Link href={`/print/shift/${s.id}`} target="_blank" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 text-[0.8125rem] font-medium text-slate-700 hover:bg-slate-50"><Printer className="h-3.5 w-3.5" />{t('cash.report')}</Link>
+            <LinkButton size="sm" href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('cash.report')}</LinkButton>
             <Button size="sm" variant="primary" icon={<DoorClosed className="h-4 w-4" />} onClick={() => setModal('close')}>{t('cash.closeShift')}</Button>
           </div>
         </> : <>
@@ -86,7 +86,7 @@ function OpenShiftModal({ onClose }: { onClose: () => void }) {
         {err && <Alert tone="red">{err}</Alert>}
         {me.branches.length > 1 && <Field label={t('cash.branch')} required>{(id) => <Select id={id} value={branch} onChange={(e) => setBranch(e.target.value)}>{me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>}</Field>}
         <Field label={t('cash.openingCash')} required error={tiyin == null ? t('cash.enterAmountNumber') : undefined} hint={t('cash.openingCashHint')}>
-          {(id) => <Input id={id} inputMode="decimal" className="w-48" value={cash} onChange={(e) => { setCash(e.target.value); setErr(null); }} invalid={tiyin == null} />}
+          {(id) => <MoneyInput id={id} className="w-56" value={cash} onChange={(e) => { setCash(e.target.value); setErr(null); }} invalid={tiyin == null} />}
         </Field>
       </div>
     </Modal>
@@ -116,8 +116,9 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
     },
   });
   const tot = shift.totals;
+  const ready = tiyin != null && (diff === 0 || !!note.trim());
   return (
-    <Modal open onClose={onClose} dirty={!!counted} title={t('cash.closeShiftTitle', { n: shift.number })} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={tiyin == null || (diff !== 0 && !note.trim())} onClick={() => m.mutate()}>{t('common.close')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!counted} title={t('cash.closeShiftTitle', { n: shift.number })} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.closeShift')}</Button></>}>
       <div className="space-y-3 text-sm">
         {err && <Alert tone="red">{err}</Alert>}
         <dl className="grid grid-cols-[1fr_auto] gap-x-6 gap-y-1 rounded-md border border-slate-200 p-3">
@@ -125,17 +126,19 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
           <dt className="text-slate-600">{t('cash.cashPaymentsN', { n: tot.payments.cash.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.payments.cash.sum)}</dd>
           {tot.refunds.cash.sum > 0 && <><dt className="text-slate-600">{t('cash.cashRefundsN', { n: tot.refunds.cash.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.refunds.cash.sum)}</dd></>}
           {tot.cash_expenses.sum > 0 && <><dt className="text-slate-600">{t('cash.cashExpensesN', { n: tot.cash_expenses.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.cash_expenses.sum)}</dd></>}
-          <dt className="border-t border-slate-100 pt-1 font-semibold">{t('cash.expectedCashShort')}</dt><dd className="border-t border-slate-100 pt-1 text-right font-semibold tabular-nums">{formatSom(shift.expected_cash)}</dd>
+          <div aria-hidden="true" className="col-span-2 my-0.5 border-t border-slate-200" />
+          <dt className="font-semibold">{t('cash.expectedCashShort')}</dt><dd className="text-right font-semibold tabular-nums">{formatSom(shift.expected_cash)}</dd>
         </dl>
         <p className="text-xs text-slate-600">{t('cash.nonCashLine', { card: formatSom(tot.payments.card.sum), transfer: formatSom(tot.payments.transfer.sum) })}</p>
         <Field label={t('cash.countedCash')} required error={errors.counted_cash ?? (counted && tiyin == null ? t('cash.enterAmountNumber') : undefined)}>
-          {(id) => <Input id={id} inputMode="decimal" className="w-48" value={counted} onChange={(e) => { setCounted(e.target.value); setErrors({}); }} autoFocus />}
+          {(id) => <MoneyInput id={id} className="w-56" value={counted} onChange={(e) => { setCounted(e.target.value); setErrors({}); }} invalid={!!errors.counted_cash} autoFocus />}
         </Field>
-        {diff != null && <Alert tone={diff === 0 ? 'green' : 'yellow'} title={diff === 0 ? t('cash.cashMatches') : t('cash.diff', { diff: `${diff > 0 ? '+' : ''}${formatSom(diff)}` })}>{diff === 0 ? t('cash.diffZero') : diff > 0 ? t('cash.diffOver') : t('cash.diffShort')}</Alert>}
+        {diff != null && <Alert tone={diff === 0 ? 'green' : diff < 0 ? 'red' : 'yellow'} title={diff === 0 ? t('cash.cashMatches') : t('cash.diff', { diff: `${diff > 0 ? '+' : ''}${formatSom(diff)}` })}>{diff === 0 ? t('cash.diffZero') : diff > 0 ? t('cash.diffOver') : t('cash.diffShort')}</Alert>}
         {diff != null && (diff !== 0 || errors.note) && (
           <Field label={t('cash.diffReason')} required error={errors.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('cash.diffReasonPlaceholder')} />}</Field>
         )}
         <p className="text-xs text-slate-600">{t('cash.closedShiftFooter')}</p>
+        {!ready && counted.trim() !== '' && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </div>
     </Modal>
   );
@@ -155,17 +158,19 @@ function CashExpenseModal({ shift, onClose }: { shift: Shift; onClose: () => voi
     onSuccess: () => { invalidate(qc); toast.success(t('cash.expenseSaved')); onClose(); },
     onError: (e) => setErr((e as Error).message),
   });
+  const ready = !!tiyin && !!note.trim();
   const [before, after] = t('cash.cashExpenseText', { n: shift.number }).split('{amount}');
   return (
-    <Modal open onClose={onClose} dirty={!!amount} title={t('cash.cashExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!tiyin || !note.trim()} onClick={() => m.mutate()}>{t('cash.write')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.cashExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => m.mutate()}>{t('cash.write')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
         <p className="text-sm text-slate-600">{before}<b>{formatSom(shift.expected_cash)}</b>{after}</p>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('cash.category')} required>{(id) => <Select id={id} value={category} onChange={(e) => setCategory(e.target.value)}>{EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{expenseCategoryLabel(t, c)}</option>)}</Select>}</Field>
-          <Field label={t('cash.amountSomComma')} required error={amount && tiyin == null ? t('cash.enterNumber') : undefined}>{(id) => <Input id={id} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
+          <Field label={t('cash.amountSomComma')} required error={amount && tiyin == null ? t('cash.enterNumber') : undefined}>{(id) => <MoneyInput id={id} value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
         </div>
         <Field label={t('cash.whatFor')} required>{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('cash.whatForPlaceholder')} />}</Field>
+        {!ready && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </div>
     </Modal>
   );

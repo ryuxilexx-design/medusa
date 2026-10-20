@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, KeyRound, Power } from 'lucide-react';
 import { normalizeLogin, type MessageKey, type Role } from '@meduza/contracts';
@@ -34,6 +34,9 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<'reset' | 'status' | null>(null);
+  const confirmBtn = useRef<HTMLButtonElement>(null);
+  // the confirmation replaces the footer actions: move focus to its main button so the keyboard follows
+  useEffect(() => { if (confirm) setTimeout(() => confirmBtn.current?.focus(), 30); }, [confirm]);
 
   useEffect(() => {
     if (!open) return;
@@ -114,13 +117,15 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
   });
   const submit = () => { setFormError(null); if (validate()) save.mutate(); };
   const canManage = staff && !staff.is_self;
+  // demo-card staff keep their role and status so every visitor can sign in with the role cards (server: 403)
+  const canChangeStatus = canManage && !staff.demo_card;
 
   return (
     <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={isNew ? t('admin.staff.add') : t('admin.form.editTitle', { name: staff!.full_name })}
       footer={<>
-        {canManage && !confirm && <div className="mr-auto flex gap-2">
-          {staff.login && <Button size="sm" icon={<KeyRound className="h-4 w-4" />} onClick={() => setConfirm('reset')}>{t('admin.form.resetPassword')}</Button>}
-          <Button size="sm" variant={staff.status === 'active' ? 'danger' : 'secondary'} icon={<Power className="h-4 w-4" />} onClick={() => setConfirm('status')}>{staff.status === 'active' ? t('admin.form.deactivate') : t('admin.form.activate')}</Button>
+        {canManage && !confirm && (staff.login || canChangeStatus) && <div className="mr-auto flex flex-wrap gap-2">
+          {staff.login && <Button icon={<KeyRound className="h-4 w-4" />} onClick={() => setConfirm('reset')}>{t('admin.form.resetPassword')}</Button>}
+          {canChangeStatus && <Button variant={staff.status === 'active' ? 'danger' : 'secondary'} icon={<Power className="h-4 w-4" />} onClick={() => setConfirm('status')}>{staff.status === 'active' ? t('admin.form.deactivate') : t('admin.form.activate')}</Button>}
         </div>}
         <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button variant="primary" loading={save.isPending} disabled={!isNew && !dirty} onClick={submit}>{isNew ? t('admin.form.addSubmit') : t('common.save')}</Button>
@@ -130,7 +135,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
         {confirm === 'reset' && staff && (
           <Alert tone="yellow" title={t('admin.form.resetTitle')}>
             {t('admin.form.resetText', { name: staff.full_name })}
-            <div className="mt-2 flex gap-2"><Button size="sm" variant="primary" loading={reset.isPending} onClick={() => reset.mutate()}>{t('admin.form.resetYes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
+            <div className="mt-2 flex gap-2"><Button ref={confirmBtn} size="sm" variant="primary" loading={reset.isPending} onClick={() => reset.mutate()}>{t('admin.form.resetYes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
           </Alert>
         )}
         {confirm === 'status' && staff && (
@@ -138,22 +143,22 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
             {staff.status === 'active'
               ? `${t('admin.form.deactivateText', { name: staff.full_name })}${staff.doctor_id ? ` ${t('admin.form.deactivateDoctor')}` : ''} ${t('admin.form.historyKept')}`
               : t('admin.form.activateText', { name: staff.full_name })}
-            <div className="mt-2 flex gap-2"><Button size="sm" variant={staff.status === 'active' ? 'danger' : 'primary'} loading={status.isPending} onClick={() => status.mutate()}>{t('admin.form.yes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
+            <div className="mt-2 flex gap-2"><Button ref={confirmBtn} size="sm" variant={staff.status === 'active' ? 'danger' : 'primary'} loading={status.isPending} onClick={() => status.mutate()}>{staff.status === 'active' ? t('admin.form.deactivateYes') : t('admin.form.activateYes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
           </Alert>
         )}
-        {staff?.is_self && <p className="text-xs text-slate-600">{t('admin.form.selfNote')}</p>}
-        {staff?.demo_card && !staff.is_self && <p className="text-xs text-slate-600">{t('admin.form.demoNote')}</p>}
+        {staff?.is_self && <p className="text-sm text-slate-600">{t('admin.form.selfNote')}{me.auth_kind === 'password' ? ` ${t('admin.form.selfPassword')}` : ''}</p>}
+        {staff?.demo_card && !staff.is_self && <p className="text-sm text-slate-600">{t('admin.form.demoNote')}</p>}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label={t('admin.form.name')} required error={errors.full_name}>
             {(id) => <Input id={id} value={v.full_name} onChange={set('full_name')} invalid={!!errors.full_name} placeholder={t('admin.form.namePlaceholder')} />}
           </Field>
           <Field label={t('admin.form.role')} required error={errors.role} hint={!isNew && staff?.role === 'doctor' ? t('admin.form.roleFixed') : undefined}>
-            {(id) => <Select id={id} value={v.role} onChange={set('role')} disabled={!isNew && (staff!.role === 'doctor' || staff!.is_self)}>
+            {(id) => <Select id={id} value={v.role} onChange={set('role')} disabled={!isNew && (staff!.role === 'doctor' || staff!.is_self || staff!.demo_card)}>
               {(isNew ? ROLES : staff!.role === 'doctor' ? ['doctor' as Role] : ROLES.filter((r) => r !== 'doctor')).map((r) => <option key={r} value={r}>{t(`role.${r}` as MessageKey)}</option>)}
             </Select>}
           </Field>
-          <Field label={t('admin.form.login')} required error={errors.login} hint={t('admin.form.loginHint', { example: 'dilnoza.k' })}>
+          <Field label={t('admin.form.login')} required={isNew || !!initial.login} error={errors.login} hint={t('admin.form.loginHint', { example: 'dilnoza.k' })}>
             {(id) => <Input id={id} value={v.login} onChange={set('login')} invalid={!!errors.login} autoComplete="off" />}
           </Field>
           <Field label={t('admin.form.position')} error={errors.title}>
@@ -162,38 +167,39 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
         </div>
 
         <fieldset disabled={!!staff?.is_self}>
-          <legend className="text-[0.8125rem] font-medium text-slate-700">{t('admin.form.branches')} <span className="text-red-600">*</span></legend>
+          <legend className="text-sm font-semibold text-slate-800">{t('admin.form.branches')}<span className="text-red-700" aria-hidden="true"> *</span></legend>
           <div className="mt-1 flex flex-wrap gap-2">
             {me.branches.map((b) => (
-              <label key={b.id} className={cx('flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm', v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 text-brand-900' : 'border-slate-300')}>
-                <input type="checkbox" className="accent-brand-600" checked={v.branch_ids.includes(b.id)} onChange={() => toggle('branch_ids', b.id)} />{b.name}
+              <label key={b.id} className={cx('flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border-2 px-3 text-[0.9375rem] focus-within:ring-4 focus-within:ring-amber-300',
+                v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 text-brand-900' : errors.branch_ids ? 'border-red-600' : 'border-slate-300')}>
+                <input type="checkbox" className="h-5 w-5 accent-brand-600 focus:outline-none" checked={v.branch_ids.includes(b.id)} onChange={() => toggle('branch_ids', b.id)} aria-invalid={!!errors.branch_ids || undefined} />{b.name}
               </label>
             ))}
           </div>
-          {errors.branch_ids && <p className="mt-1 text-xs text-red-600" role="alert">{errors.branch_ids}</p>}
+          {errors.branch_ids && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{errors.branch_ids}</p>}
         </fieldset>
 
         {isDoctor && (
           <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
               <Field label={t('admin.form.specialty')} required error={errors['doctor.specialty']}>
                 {(id) => <Input id={id} value={v.specialty} onChange={set('specialty')} invalid={!!errors['doctor.specialty']} placeholder={t('admin.form.specialtyPlaceholder')} />}
               </Field>
-              <Field label={t('admin.form.share')} error={errors['doctor.share_percent']} hint={t('admin.form.shareHint')}>
+              <Field label={t('admin.form.share')} required error={errors['doctor.share_percent']} hint={t('admin.form.shareHint')}>
                 {(id) => <Input id={id} inputMode="decimal" value={v.share_percent} onChange={set('share_percent')} invalid={!!errors['doctor.share_percent']} />}
               </Field>
             </div>
             <div>
-              <div className="text-[0.8125rem] font-medium text-slate-700">{t('admin.form.services')} <span className="font-normal text-slate-600">({t('admin.form.servicesPicked', { n: v.service_ids.length })})</span></div>
-              {services.isLoading ? <p className="mt-1 text-xs text-slate-600">{t('common.loading')}</p> : (
-                <div className="mt-1 max-h-56 space-y-2 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
+              <div className="text-sm font-semibold text-slate-800">{t('admin.form.services')} <span className="font-normal text-slate-600">({t('admin.form.servicesPicked', { n: v.service_ids.length })})</span></div>
+              {services.isLoading ? <p className="mt-1 text-sm text-slate-600">{t('common.loading')}</p> : (
+                <div className="mt-1 space-y-2 rounded-lg border border-slate-200 bg-white p-2">
                   {Object.entries(grouped).map(([cat, list]) => (
                     <div key={cat}>
                       <div className="text-[0.8125rem] font-semibold text-slate-600">{t(`service.${cat}` as MessageKey)}</div>
                       <div className="mt-1 grid grid-cols-1 gap-x-3 sm:grid-cols-2">
                         {list.map((s) => (
-                          <label key={s.id} className="flex cursor-pointer items-center gap-2 py-0.5 text-[0.8125rem]">
-                            <input type="checkbox" className="accent-brand-600" checked={v.service_ids.includes(s.id)} onChange={() => toggle('service_ids', s.id)} />
+                          <label key={s.id} className="flex min-h-9 cursor-pointer items-center gap-2 text-sm">
+                            <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={v.service_ids.includes(s.id)} onChange={() => toggle('service_ids', s.id)} />
                             <span className="truncate">{s.name}</span>
                           </label>
                         ))}
@@ -202,11 +208,11 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
                   ))}
                 </div>
               )}
-              {isNew && <p className="mt-1 text-xs text-slate-600">{t('admin.form.scheduleNext')}</p>}
+              {isNew && <p className="mt-1 text-[0.8125rem] text-slate-600">{t('admin.form.scheduleNext')}</p>}
             </div>
           </div>
         )}
-        {isNew && <p className="text-xs text-slate-600">{t('admin.form.tempOnce')}</p>}
+        {isNew && <p className="text-[0.8125rem] text-slate-600">{t('admin.form.tempOnce')}</p>}
       </div>
     </Modal>
   );
@@ -215,19 +221,21 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
 /** Shows a freshly issued temporary password once. It is not stored anywhere in the browser. */
 export function TempPasswordModal({ issued, onClose }: { issued: Issued | null; onClose: () => void }) {
   const t = useT();
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
   useEffect(() => setCopied(false), [issued]);
   if (!issued) return null;
   const text = `Med.uz.ai\n${t('admin.temp.clipboard', { login: loginView(issued.login), password: issued.temp_password })}`;
-  const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch { setCopied(false); } };
+  const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch { setCopied(false); toast.error(new Error(t('admin.temp.copyFailed'))); } };
   return (
-    <Modal open onClose={onClose} title={t('admin.temp.title')} footer={<Button variant="primary" onClick={onClose}>{t('admin.temp.done')}</Button>}>
+    // shown once: until it is copied, Escape or a click outside asks before closing
+    <Modal open onClose={onClose} dirty={!copied} title={t('admin.temp.title')} footer={<Button variant="primary" onClick={onClose}>{t('admin.temp.done')}</Button>}>
       <p className="text-sm text-slate-700">{t('admin.temp.for', { name: issued.name })}</p>
       <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-[0.9375rem]">
         <div><span className="text-slate-600">{t('admin.temp.login')} </span>{loginView(issued.login)}</div>
         <div><span className="text-slate-600">{t('admin.temp.password')} </span><span className="select-all font-semibold tracking-wider text-slate-900">{issued.temp_password}</span></div>
       </div>
-      <Button size="sm" className="mt-3" icon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={copy}>{copied ? t('admin.temp.copied') : t('admin.temp.copy')}</Button>
+      <Button className="mt-3" icon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={copy}>{copied ? t('admin.temp.copied') : t('admin.temp.copy')}</Button>
       <div className="mt-4"><Alert tone="yellow" title={t('admin.temp.onceTitle')}>{t('admin.temp.onceText')}</Alert></div>
     </Modal>
   );

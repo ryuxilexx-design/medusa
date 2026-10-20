@@ -62,6 +62,10 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     enabled: open && !!doctorId && !!date,
   });
 
+  const clearError = (k: string) => setErrors((x) => (x[k] ? { ...x, [k]: '' } : x));
+  const pickPatient = (p: BookingInit['patient'] | null) => { setPatient(p); if (p) clearError('patient_id'); };
+  // the service is also filled automatically when a doctor is picked: a filled field never keeps its «choose» error
+  useEffect(() => { if (serviceId) setErrors((x) => (x.service_id ? { ...x, service_id: '' } : x)); }, [serviceId]);
   const dq = useDebounced(search, 300);
   const found = useQuery({ queryKey: ['patients', 'pick', dq], queryFn: () => api(`/patients${qs({ search: dq, page_size: 6 })}`).then((r) => r.data as any[]), enabled: open && !patient && dq.trim().length >= 2 });
 
@@ -101,33 +105,33 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
           <div className="space-y-3 md:col-span-2">
             {formError && <Alert tone="red">{formError}</Alert>}
             <Field label={t('registrar.patient')} required error={errors.patient_id}>{(id) => patient ? (
-              <div className="flex items-center justify-between rounded-md border border-slate-300 bg-slate-50 px-3 py-1.5 text-sm">
-                <span><b>{fullName(patient)}</b> <span className="text-slate-600">{pid(patient.patient_number)}</span></span>
-                {!reschedule && !init?.patient && <button className="text-xs font-medium text-brand-700 hover:underline" onClick={() => setPatient(null)}>{t('registrar.change')}</button>}
+              <div className="flex min-h-11 items-center justify-between gap-2 rounded-lg border-2 border-slate-200 bg-slate-50 py-1 pl-3 pr-1 text-[0.9375rem]">
+                <span className="min-w-0"><b>{fullName(patient)}</b> <span className="text-slate-600">{pid(patient.patient_number)}</span></span>
+                {!reschedule && !init?.patient && <Button size="sm" variant="ghost" onClick={() => pickPatient(null)}>{t('registrar.change')}</Button>}
               </div>
             ) : (
               <div>
                 <Input id={id} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.bk.patientSearch')} autoComplete="off" />
-                <div className="mt-1 rounded-md border border-slate-200">
+                <div className="mt-1 overflow-hidden rounded-lg border border-slate-200">
                   {dq.trim().length < 2 ? <p className="px-3 py-2 text-xs text-slate-600">{t('registrar.bk.min2')}</p>
                     : found.isLoading ? <Skeleton className="m-2 h-6" />
                     : found.data?.length ? found.data.map((p) => (
-                      <button key={p.id} type="button" onClick={() => setPatient(p)} className="block w-full px-3 py-1.5 text-left text-sm hover:bg-brand-50 focus:bg-brand-50 focus:outline-none">
+                      <button key={p.id} type="button" onClick={() => pickPatient(p)} className="block min-h-9 w-full px-3 py-1.5 text-left text-sm hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">
                         <b>{fullName(p)}</b> <span className="text-slate-600">{pid(p.patient_number)}, {fmtDate(p.birth_date)}</span>
                       </button>
                     )) : <p className="px-3 py-2 text-xs text-slate-600">{t('registrar.patientNotFound')}</p>}
-                  <button type="button" onClick={() => setNewPatient(true)} className="block w-full border-t px-3 py-1.5 text-left text-sm font-medium text-brand-700 hover:bg-brand-50">{t('registrar.bk.newPatient')}</button>
+                  <button type="button" onClick={() => setNewPatient(true)} className="block min-h-9 w-full border-t border-slate-200 px-3 py-1.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{t('registrar.bk.newPatient')}</button>
                 </div>
               </div>
             )}</Field>
             <Field label={t('registrar.doctor')} required error={errors.doctor_id}>{(id) => (
-              <Select id={id} value={doctorId} onChange={(e) => { setDoctorId(e.target.value); setTime(''); }}>
+              <Select id={id} value={doctorId} invalid={!!errors.doctor_id} onChange={(e) => { setDoctorId(e.target.value); setTime(''); clearError('doctor_id'); }}>
                 <option value="">{t('registrar.bk.choose')}</option>
                 {doctors.data?.filter((d) => d.service_ids?.length).map((d) => <option key={d.id} value={d.id}>{d.display_name} — {d.specialty}</option>)}
               </Select>
             )}</Field>
             <Field label={t('registrar.service')} required error={errors.service_id}>{(id) => (
-              <Select id={id} value={serviceId} onChange={(e) => { setServiceId(e.target.value); setDuration(''); setTime(''); }} disabled={!doctor}>
+              <Select id={id} value={serviceId} invalid={!!errors.service_id} onChange={(e) => { setServiceId(e.target.value); setDuration(''); setTime(''); clearError('service_id'); }} disabled={!doctor}>
                 {!doctor && <option>{t('registrar.bk.doctorFirst')}</option>}
                 {doctorServices.map((s) => <option key={s.id} value={s.id}>{s.name}, {formatSom(s.price)}, {t('duration.min', { n: s.duration_min })}</option>)}
               </Select>
@@ -140,33 +144,38 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
           </div>
           <div className="md:col-span-3">
             <div className="mb-2 flex items-baseline justify-between">
-              <span className="text-[0.8125rem] font-medium text-slate-700">{t('registrar.bk.freeSlots')} <span className="text-red-600">*</span></span>
+              <span className="text-sm font-semibold text-slate-800">{t('registrar.bk.freeSlots')}<span className="text-red-700" aria-hidden="true"> *</span></span>
               <span className="text-xs text-slate-600">{longDate(date)}</span>
             </div>
-            {!doctorId ? <p className="rounded-md border border-dashed p-6 text-center text-sm text-slate-600">{t('registrar.bk.pickDoctorDate')}</p>
+            {!doctorId ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.pickDoctorDate')}</p>
               : avail.isLoading ? <div className="grid grid-cols-5 gap-1.5">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
               : avail.isError ? <Alert tone="red">{(avail.error as Error).message}</Alert>
-              : !avail.data?.working ? <p className="rounded-md border border-dashed p-6 text-center text-sm text-slate-600">{t('registrar.bk.doctorOff')}</p>
+              : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.doctorOff')}</p>
               : (
                 <>
-                  <p className="mb-2 text-xs text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, {t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}{avail.data.break_start ? `, ${t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}` : ''}</p>
+                  <p className="mb-2 text-[0.8125rem] text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, <span className="whitespace-nowrap">{t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}</span>{avail.data.break_start && <>, <span className="whitespace-nowrap">{t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}</span></>}</p>
                   {avail.data.branch_id && !me.branches.some((b: any) => b.id === avail.data.branch_id) && <Alert tone="red">{t('registrar.bk.noBranchAccess')}</Alert>}
-                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
-                    {avail.data.slots.map((s: any) => {
-                      const disabled = !s.free || s.past;
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6" role="group" aria-label={t('registrar.bk.freeSlots')}>
+                    {/* past slots are not shown: they can never be booked */}
+                    {avail.data.slots.filter((s: any) => !s.past).map((s: any) => {
+                      const label = !s.free ? t('registrar.bk.slotBusy') : t('registrar.bk.slotFree');
                       return (
-                        <button key={s.time} type="button" disabled={disabled} onClick={() => { setTime(s.time); setErrors((x) => ({ ...x, start_time: '' })); }}
-                          title={!s.free ? t('registrar.bk.slotBusy') : s.past ? t('registrar.bk.slotPast') : t('registrar.bk.slotFree')}
-                          className={cx('h-8 rounded-md border text-[0.8125rem] tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
-                            time === s.time ? 'border-brand-600 bg-brand-600 text-white' : !s.free ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 line-through' : s.past ? 'cursor-not-allowed border-slate-100 text-slate-300' : 'border-slate-300 bg-white hover:border-brand-500 hover:bg-brand-50')}>
+                        <button key={s.time} type="button" disabled={!s.free} aria-pressed={time === s.time} aria-label={`${s.time}, ${label}`} onClick={() => { setTime(s.time); clearError('start_time'); }}
+                          className={cx('min-h-9 rounded-lg border-2 text-sm font-medium tabular-nums focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+                            time === s.time ? 'border-brand-600 bg-brand-600 text-white' : !s.free ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500 line-through' : 'border-slate-300 bg-white text-slate-900 hover:border-brand-500 hover:bg-brand-50')}>
                           {s.time}
                         </button>
                       );
                     })}
                   </div>
-                  {!avail.data.slots.some((s: any) => s.free && !s.past) && <p className="mt-2 text-xs text-amber-700">{t('registrar.bk.noFreeLeft')}</p>}
-                  {errors.start_time && <p className="mt-2 text-xs text-red-600">{errors.start_time}</p>}
-                  <p className="mt-3 text-xs text-slate-600">{t('registrar.bk.slotsHint')}</p>
+                  {!avail.data.slots.some((s: any) => s.free && !s.past) && <p className="mt-2 text-sm font-medium text-amber-800">{t('registrar.bk.noFreeLeft')}</p>}
+                  {errors.start_time && <p className="mt-2 text-sm font-medium text-red-700" role="alert">{errors.start_time}</p>}
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-slate-700" aria-hidden="true">
+                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-slate-300 bg-white" />{t('registrar.bk.slotFree')}</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-brand-600 bg-brand-600" />{t('registrar.bk.slotChosen')}</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-slate-200 bg-slate-100 text-center text-[0.625rem] leading-3 text-slate-500 line-through">00</span>{t('registrar.bk.slotBusy')}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600">{t('registrar.bk.slotsHint')}</p>
                   {service && <p className="mt-1 text-xs text-slate-600">{t('registrar.bk.priceLine', { category: t(`service.${service.category}` as MessageKey), price: formatSom(service.price) })}</p>}
                   {reschedule && <p className="mt-1 text-xs text-slate-600">{t('registrar.bk.currentTime', { at: `${fmtDate(reschedule.starts_at)} ${fmtTime(reschedule.starts_at)}` })}</p>}
                 </>
@@ -176,7 +185,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
       </Modal>
       <PatientFormModal open={newPatient} onClose={() => setNewPatient(false)} onSaved={async (id) => {
         const p = await api(`/patients/${id}`).then((r) => r.data);
-        setPatient(p);
+        pickPatient(p);
       }} />
     </>
   );

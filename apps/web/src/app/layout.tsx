@@ -5,7 +5,8 @@ import './globals.css';
 import { isLocale, LOCALE_TAG, type Locale } from '@meduza/contracts';
 import { Providers } from './providers';
 
-export const metadata: Metadata = { title: 'Med.uz.ai — klinika boshqaruv platformasi', description: 'Med.uz.ai demo muhit · Sun’iy ma’lumotlar' };
+// no static title here: each screen renders its own <title> («<page> — Med.uz.ai», in the reader's language)
+export const metadata: Metadata = { description: 'Med.uz.ai demo muhit · Sun’iy ma’lumotlar' };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // the language chosen before (cookie, UI preference only) renders on the first paint — no flash of another language

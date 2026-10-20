@@ -1,7 +1,7 @@
 'use client';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellRing, Bot, Phone, RefreshCw, Send } from 'lucide-react';
+import { BellRing, Bot, CheckCircle2, MinusCircle, Phone, RefreshCw, Send } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime, formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
@@ -43,17 +43,17 @@ export function TelegramSettings() {
   const active = s.bot?.status === 'active';
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
-      <div className="space-y-5">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_25rem]">
+      <div className="min-w-0 space-y-5">
         <section>
           <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.clinicBot')}</h3>
-          <p className="mt-1 text-[0.8125rem] text-slate-600">{t('admin.tg.intro')}</p>
+          <p className="mt-1 text-sm text-slate-600">{t('admin.tg.intro')}</p>
           {s.bot ? (
             <div className="mt-3 rounded-lg border border-slate-200 p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Bot className="h-4 w-4 text-slate-500" /><span className="font-medium">@{s.bot.username}</span>
-                {active ? <Badge tone="green">{t('admin.tg.statusOn')}</Badge> : <Badge>{t('admin.tg.statusOff')}</Badge>}
-                <span className="text-xs text-slate-600">{fmtDateTime(s.bot.updated_at)}</span>
+                <Bot className="h-5 w-5 text-slate-600" aria-hidden="true" /><span className="font-medium">@{s.bot.username}</span>
+                {active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.tg.statusOn')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.tg.statusOff')}</Badge>}
+                <span className="text-[0.8125rem] text-slate-600">{t('admin.tg.updatedAt', { at: fmtDateTime(s.bot.updated_at) })}</span>
                 {active && !confirmOff && <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirmOff(true)}>{t('admin.tg.turnOff')}</Button>}
               </div>
               {confirmOff && (
@@ -66,7 +66,7 @@ export function TelegramSettings() {
           ) : null}
           {!active && (
             <div className="mt-3 space-y-3 rounded-lg border border-dashed border-slate-300 p-3">
-              <ol className="list-decimal space-y-1 pl-5 text-[0.8125rem] text-slate-700">
+              <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">
                 <li>{rich(t('admin.tg.step1'), { botfather: <b>@BotFather</b>, newbot: <code>/newbot</code>, suffix: <code>…_bot</code> })}</li>
                 <li>{t('admin.tg.step2', { botfather: 'BotFather' })}</li>
               </ol>
@@ -79,20 +79,28 @@ export function TelegramSettings() {
               </form>
             </div>
           )}
-          {!s.workers && <p className="mt-2 text-xs text-amber-800">{t('admin.tg.workersOff')}</p>}
+          {!s.workers && (
+            <div className="mt-2 text-[0.8125rem] text-amber-900">
+              <p>{t('admin.tg.workersOff')}</p>
+              <details className="mt-1 text-slate-600"><summary className="cursor-pointer rounded focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
+                <p className="mt-1">{rich(t('admin.tg.adminDetails'), { setting: <code>TELEGRAM_WORKERS=off</code> })}</p></details>
+            </div>
+          )}
         </section>
 
         <section>
           <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.last7')}</h3>
-          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-5">
             {[[t('admin.tg.statChats'), s.stats.linked_chats], [t('admin.tg.statBookings'), s.stats.bookings_7d], [t('admin.tg.statSent'), s.stats.sent_7d], [t('admin.tg.statConfirmed'), s.stats.confirmed_7d], [t('admin.tg.statFailed'), s.stats.failed_7d]].map(([k, v]) => (
-              <div key={k as string} className="rounded-md border border-slate-200 px-3 py-2"><dt className="text-2xs text-slate-600">{k}</dt><dd className="text-lg font-semibold tabular-nums">{v}</dd></div>
+              <div key={k as string} className="flex min-w-0 flex-col justify-between gap-1 rounded-lg border border-slate-200 px-3 py-2">
+                <dt className="break-words text-[0.8125rem] leading-snug text-slate-600">{k}</dt><dd className="text-xl font-semibold tabular-nums text-slate-900">{v}</dd>
+              </div>
             ))}
           </dl>
-          <p className="mt-1 text-xs text-slate-600">{t('admin.tg.statsNote')}</p>
+          <p className="mt-1 text-[0.8125rem] text-slate-600">{t('admin.tg.statsNote')}</p>
         </section>
 
-        <section className="text-[0.8125rem] text-slate-600">
+        <section className="text-sm text-slate-600">
           <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.how')}</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5">
             <li>{t('admin.tg.how1')}</li>
@@ -181,32 +189,32 @@ function Simulator() {
   for (const m of msgs) if (m.direction === 'out' && m.markup) { if (m.markup.keyboard) replyKb = m.markup.keyboard; else if (m.markup.remove_keyboard) replyKb = null; }
 
   return (
-    <section aria-label={t('admin.tg.simAria')} className="self-start xl:sticky xl:top-[72px]">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.simTitle')} <span className="font-normal text-slate-600">· {t('admin.tg.simDemo')}</span></h3>
-        <div className="flex gap-1">
+    <section aria-label={t('admin.tg.simAria')} className="min-w-0 self-start xl:sticky xl:top-24">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+        <h3 className="whitespace-nowrap text-sm font-semibold text-slate-900">{t('admin.tg.simTitle')} <span className="font-normal text-slate-600">· {t('admin.tg.simDemo')}</span></h3>
+        <div className="flex flex-wrap gap-1">
           <Button size="sm" variant="ghost" icon={<BellRing className="h-4 w-4" />} loading={runWorkers.isPending} onClick={() => runWorkers.mutate()} title={t('admin.tg.remindersTitle')}>{t('admin.tg.reminders')}</Button>
           <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void newChat().catch((e) => toast.error(e))}>{t('admin.tg.newChat')}</Button>
         </div>
       </div>
-      <div className="flex h-[620px] flex-col overflow-hidden rounded-[22px] border-4 border-slate-800 bg-[#dfe7ee] shadow-lg">
+      <div className="flex h-[min(38rem,calc(100dvh-10rem))] min-h-[24rem] flex-col overflow-hidden rounded-[1.375rem] border-4 border-slate-800 bg-[#dfe7ee] shadow-lg">
         <div className="flex items-center gap-2 bg-[#517da2] px-3 py-2 text-white">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20"><Bot className="h-4 w-4" /></div>
-          <div className="leading-tight"><div className="text-sm font-semibold">{me.clinic_name}</div><div className="text-2xs text-white/80">{t('admin.tg.simHeader')}</div></div>
+          <div className="min-w-0 leading-tight"><div className="truncate text-sm font-semibold">{me.clinic_name}</div><div className="text-xs text-white/90">{t('admin.tg.simHeader')}</div></div>
         </div>
         <div ref={scroller} className="flex-1 space-y-2 overflow-y-auto px-2 py-3" aria-live="polite">
-          {!msgs.length && <p className="mt-16 text-center text-xs text-slate-600">{rich(t('admin.tg.simStart'), { cmd: <b>/start</b> })}</p>}
+          {!msgs.length && <p className="mt-16 text-center text-[0.8125rem] text-slate-700">{rich(t('admin.tg.simStart'), { cmd: <b>/start</b> })}</p>}
           {msgs.map((m) => m.markup?.toast ? (
-            <div key={m.id} className="text-center"><span className="rounded-full bg-slate-700/70 px-2 py-0.5 text-2xs text-white">{m.text}</span></div>
+            <div key={m.id} className="text-center"><span className="rounded-full bg-slate-700/80 px-2 py-0.5 text-xs text-white">{m.text}</span></div>
           ) : (
             <div key={m.id} className={cx('flex flex-col', m.direction === 'in' ? 'items-end' : 'items-start')}>
-              <div className={cx('max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-1.5 text-[0.8125rem] leading-snug shadow-sm', m.direction === 'in' ? 'rounded-br-sm bg-[#effdde] text-slate-900' : 'rounded-bl-sm bg-white text-slate-900')}>{m.text}</div>
+              <div className={cx('max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-1.5 text-[0.8125rem] leading-snug shadow-sm', m.direction === 'in' ? 'rounded-br-sm bg-[#effdde] text-slate-900' : 'rounded-bl-sm bg-white text-slate-900')}>{m.text}</div>
               {m.markup?.inline_keyboard && (
                 <div className="mt-1 flex w-[85%] flex-col gap-1">
                   {m.markup.inline_keyboard.map((row: any[], i: number) => (
                     <div key={i} className="flex gap-1">
                       {row.map((b) => <button key={b.callback_data} type="button" disabled={busy} onClick={() => send({ callback_data: b.callback_data, label: b.text })}
-                        className="flex-1 truncate rounded-md bg-white/70 px-2 py-1.5 text-[0.75rem] font-medium text-[#3a6d99] shadow-sm hover:bg-white disabled:opacity-60">{b.text}</button>)}
+                        className="min-h-9 min-w-0 flex-1 truncate rounded-md bg-white/80 px-2 py-1.5 text-[0.8125rem] font-medium text-[#2f5f8a] shadow-sm hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:opacity-60">{b.text}</button>)}
                     </div>
                   ))}
                 </div>
@@ -215,11 +223,13 @@ function Simulator() {
           ))}
         </div>
         {contactOpen && (
-          <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!phone.trim()) return; setContactOpen(false); void send({ contact_phone: phone.trim() }); }}>
-            <Phone className="h-4 w-4 shrink-0 text-slate-500" />
-            <Input aria-label={t('admin.tg.sharePhoneAria')} className="h-8 text-[0.8125rem]" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" autoFocus />
-            <Button size="sm" type="button" variant="ghost" onClick={() => void demoPhone()} title={t('admin.tg.demoPhoneTitle')}>{t('admin.tg.demoPhone')}</Button>
-            <Button size="sm" type="submit" variant="primary">{t('admin.tg.share')}</Button>
+          <form className="flex flex-wrap items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!phone.trim()) return; setContactOpen(false); void send({ contact_phone: phone.trim() }); }}>
+            <Phone className="h-4 w-4 shrink-0 text-slate-600" aria-hidden="true" />
+            <Input aria-label={t('admin.tg.sharePhoneAria')} className="h-9 w-auto min-w-[10rem] flex-1 text-[0.8125rem]" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" autoFocus />
+            <div className="flex gap-1">
+              <Button size="sm" type="button" variant="ghost" onClick={() => void demoPhone()} aria-label={t('admin.tg.demoPhoneTitle')}>{t('admin.tg.demoPhone')}</Button>
+              <Button size="sm" type="submit" variant="primary">{t('admin.tg.share')}</Button>
+            </div>
           </form>
         )}
         {replyKb && !contactOpen && (
@@ -227,18 +237,18 @@ function Simulator() {
             {replyKb.map((row, i) => (
               <div key={i} className="flex gap-1">
                 {row.map((b) => <button key={b.text} type="button" disabled={busy} onClick={() => (b.request_contact ? setContactOpen(true) : void send({ text: b.text }))}
-                  className="flex-1 truncate rounded-md bg-white px-2 py-1.5 text-[0.75rem] text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60">{b.text}</button>)}
+                  className="min-h-9 min-w-0 flex-1 truncate rounded-md bg-white px-2 py-1.5 text-[0.8125rem] text-slate-800 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:opacity-60">{b.text}</button>)}
               </div>
             ))}
           </div>
         )}
         <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; const msg = text.trim(); setText(''); void send({ text: msg }); }}>
           <input aria-label={t('admin.tg.messageAria')} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('admin.tg.messagePlaceholder')} maxLength={2000}
-            className="h-9 flex-1 rounded-full bg-slate-100 px-3 text-[0.8125rem] focus:outline-none focus:ring-2 focus:ring-[#517da2]" />
-          <button type="submit" disabled={busy || !text.trim()} aria-label={t('admin.tg.send')} className="rounded-full p-2 text-[#517da2] hover:bg-slate-100 disabled:opacity-40"><Send className="h-4 w-4" /></button>
+            className="h-9 min-w-0 flex-1 rounded-full bg-slate-100 px-3 text-[0.8125rem] placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-amber-300" />
+          <button type="submit" disabled={busy || !text.trim()} aria-label={t('admin.tg.send')} className="rounded-full p-2 text-[#2f5f8a] hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:opacity-40"><Send className="h-5 w-5" /></button>
         </form>
       </div>
-      <p className="mt-2 text-xs text-slate-600">{t('admin.tg.simNote')}</p>
+      <p className="mt-2 text-[0.8125rem] text-slate-600">{t('admin.tg.simNote')}</p>
     </section>
   );
 }

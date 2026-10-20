@@ -7,7 +7,7 @@ export const shell = {
   'pref.saveFailed': ['Sozlama saqlanmadi: {msg}', 'Настройка не сохранена: {msg}'],
 
   // login
-  'login.title': ['Klinikaning bemor, xizmat va moliya jarayoni — bitta tizimda', 'Пациенты, услуги и финансы клиники — в одной системе'],
+  'login.title': ['Klinikaning bemor, xizmat va moliya jarayoni\u00a0— bitta tizimda', 'Пациенты, услуги и финансы клиники\u00a0— в\u00a0одной системе'],
   'login.subtitle': ['Har bir xodim o‘z vazifasiga mos ish joyini ko‘radi; ruxsatlar serverda tekshiriladi.', 'Каждый сотрудник видит рабочее место под свою роль; права проверяются на сервере.'],
   'login.demoHeading': ['Demo: rolni tanlab kirish', 'Демо: вход по роли'],
   'login.accessCode': ['Demo kirish kodi', 'Код доступа к демо'],
@@ -29,6 +29,9 @@ export const shell = {
   'login.membership': ['Klinika va rol', 'Клиника и роль'],
   'login.membershipHint': ['Siz bir nechta klinika yoki rolda ishlaysiz', 'Вы работаете в нескольких клиниках или ролях'],
   'login.missing': ['Telefon yoki login va parolni kiriting', 'Введите телефон или логин и пароль'],
+  'login.missingLogin': ['Telefon raqam yoki loginni kiriting', 'Введите телефон или логин'],
+  'login.missingPassword': ['Parolni kiriting', 'Введите пароль'],
+  'login.pageTitle': ['Kirish', 'Вход'],
   'login.failed': ['Kirib bo‘lmadi', 'Не удалось войти'],
   'login.forgot': ['Parolni unutdingizmi? Klinika rahbari yangi vaqtinchalik parol beradi.', 'Забыли пароль? Руководитель клиники выдаст новый временный пароль.'],
 
@@ -48,6 +51,7 @@ export const shell = {
   // app frame
   'nav.menu': ['Asosiy menyu', 'Главное меню'],
   'nav.open': ['Menyuni ochish', 'Открыть меню'],
+  'nav.close': ['Menyuni yopish', 'Закрыть меню'],
   'nav.home': ['Med.uz.ai — bosh sahifa', 'Med.uz.ai — главная'],
   'nav.dashboard': ['Umumiy ko‘rinish', 'Обзор'],
   'nav.patients': ['Bemorlar', 'Пациенты'],
@@ -68,8 +72,8 @@ export const shell = {
   'nav.myPatients': ['Mening bemorlarim', 'Мои пациенты'],
   'shell.allBranches': ['Barcha filiallar', 'Все филиалы'],
   'shell.branch': ['Filial', 'Филиал'],
-  'shell.search': ['Bemor: ism, telefon yoki ID', 'Пациент: ФИО, телефон или ID'],
-  'shell.searchLabel': ['Bemor qidirish', 'Поиск пациента'],
+  'shell.search': ['Bemorni qidirish', 'Поиск пациента'],
+  'shell.searchLabel': ['Bemorni qidirish: ism, telefon yoki ID', 'Поиск пациента: ФИО, телефон или ID'],
   'shell.logout': ['Chiqish', 'Выйти'],
   'shell.logoutDemo': ['Chiqish / rolni almashtirish', 'Выйти / сменить роль'],
   'shell.demoClock': ['Demo vaqti: {date}, {time}', 'Демо-время: {date}, {time}'],

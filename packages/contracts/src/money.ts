@@ -8,8 +8,10 @@ export function formatSom(tiyin: number | null | undefined, withCurrency = true,
   if (tiyin == null || Number.isNaN(tiyin)) return '—';
   const som = tiyin / TIYIN_PER_SOM;
   const whole = Number.isInteger(som);
-  const s = som.toLocaleString('ru-RU', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 }).replace(/ /g, ' ');
-  return withCurrency ? `${s} ${SOM_WORD[locale] ?? SOM_WORD.uz}` : s;
+  const s = som.toLocaleString('ru-RU', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 }).replace(/[\s\u202f]/g, '\u00a0'); // no-break spaces: «1 250 000» never splits across lines
+  // a real minus sign (U+2212), the same one the UI puts in front of outflows
+  const signed = s.replace(/^-/, '−');
+  return withCurrency ? `${signed}\u00a0${SOM_WORD[locale] ?? SOM_WORD.uz}` : signed;
 }
 
 /** Parses a user-entered so'm amount ("150 000", "150000,50") into tiyin. Returns null when invalid. */

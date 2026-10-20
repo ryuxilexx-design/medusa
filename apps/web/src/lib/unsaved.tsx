@@ -47,8 +47,9 @@ export function NavigationGuard() {
   }, [router]);
   return (
     <Modal open={!!pending} onClose={() => setPending(null)} title={t('state.unsavedTitle')}
-      footer={<><Button variant="primary" onClick={() => setPending(null)}>{t('state.unsavedStay')}</Button>
-        <Button variant="danger" onClick={() => { const go = pending; dirty.clear(); setPending(null); go?.(); }}>{t('state.unsavedLeave')}</Button></>}>
+      footer={<><Button variant="danger" onClick={() => { const go = pending; dirty.clear(); setPending(null); go?.(); }}>{t('state.unsavedLeave')}</Button>
+        {/* same order as every dialog: the way out on the left, the recommended action on the right (and focused first) */}
+        <Button variant="primary" data-autofocus onClick={() => setPending(null)}>{t('state.unsavedStay')}</Button></>}>
       <p className="text-base text-slate-800">{t('state.unsavedText')}</p>
     </Modal>
   );

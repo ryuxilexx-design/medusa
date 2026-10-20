@@ -7,5 +7,5 @@ dist
 e2e/shots
 e2e/node_modules
 backups/
-.next-e2e
+.next-*
 .claude/settings.local.json

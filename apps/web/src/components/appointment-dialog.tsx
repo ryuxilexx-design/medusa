@@ -7,7 +7,7 @@ import { Ban, CalendarClock, PlayCircle, UserCheck, UserX } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, fmtDateTime, fmtTime, formatPhone, formatSom, fullName, pid, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, Field, KeyVal, Modal, Textarea, useToast } from './ui';
+import { Alert, Button, Field, KeyVal, LinkButton, Modal, Textarea, useToast } from './ui';
 import { AppointmentStatus, InvoiceStatus, SourceMark } from './status';
 import { BookingModal } from './booking';
 import { useT } from '@/lib/i18n';
@@ -46,17 +46,17 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
 
   return (
     <>
-      <Modal open={!!appt && !resched} onClose={onClose} title={<span className="flex items-center gap-2">{t('registrar.ap.title', { date: fmtDate(appt.starts_at), time: fmtTime(appt.starts_at) })} <AppointmentStatus status={appt.status} /></span>}
+      <Modal open={!!appt && !resched} onClose={onClose} width="max-w-3xl" title={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('registrar.ap.title', { date: fmtDate(appt.starts_at), time: fmtTime(appt.starts_at) })} <AppointmentStatus status={appt.status} /></span>}
         footer={
-          <div className="flex w-full flex-wrap items-center justify-between gap-2">
-            <Link href={`/patients/${appt.patient_id}`} className="text-sm font-medium text-brand-700 hover:underline">{t('registrar.ap.patientProfile')}</Link>
-            <div className="flex flex-wrap gap-2">
-              {staff && appt.status === 'scheduled' && <Button icon={<CalendarClock className="h-4 w-4" />} onClick={() => setResched(true)}>{t('registrar.ap.reschedule')}</Button>}
-              {staff && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setCancel(true)}>{t('registrar.ap.cancel')}</Button>}
-              {staff && appt.status === 'scheduled' && localDate(appt.starts_at) <= me.today && <Button variant="danger" icon={<UserX className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'no-show'} onClick={() => act.mutate({ id: appt.id, action: 'no-show', body: { version: appt.version } }, done())}>{t('registrar.noShow')}</Button>}
-              {staff && appt.status === 'scheduled' && isToday && <Button variant="primary" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'check-in'} onClick={() => act.mutate({ id: appt.id, action: 'check-in', body: { version: appt.version } }, done())}>{t('registrar.checkIn')}</Button>}
-              {me.role === 'doctor' && appt.status === 'arrived' && <Button variant="primary" icon={<PlayCircle className="h-4 w-4" />} onClick={() => router.push(`/doctor?appointment=${appt.id}`)}>{t('registrar.startVisit')}</Button>}
-              {me.role === 'doctor' && ['in_progress', 'completed'].includes(appt.status) && <Button variant="primary" onClick={() => router.push(`/doctor?appointment=${appt.id}`)}>{t('registrar.ap.openInRoom')}</Button>}
+          <div className="flex w-full flex-wrap items-center gap-2">
+            {staff && appt.status === 'scheduled' && <Button icon={<CalendarClock className="h-4 w-4" />} onClick={() => setResched(true)}>{t('registrar.ap.reschedule')}</Button>}
+            {staff && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setCancel(true)}>{t('registrar.ap.cancel')}</Button>}
+            {staff && appt.status === 'scheduled' && localDate(appt.starts_at) <= me.today && <Button variant="danger" icon={<UserX className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'no-show'} onClick={() => act.mutate({ id: appt.id, action: 'no-show', body: { version: appt.version } }, done())}>{t('registrar.noShow')}</Button>}
+            {/* the one primary action sits on the right and gets the first focus */}
+            <div className="ml-auto flex gap-2">
+              {staff && appt.status === 'scheduled' && isToday && <Button data-autofocus variant="primary" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'check-in'} onClick={() => act.mutate({ id: appt.id, action: 'check-in', body: { version: appt.version } }, done())}>{t('registrar.checkIn')}</Button>}
+              {me.role === 'doctor' && appt.status === 'arrived' && <Button data-autofocus variant="primary" icon={<PlayCircle className="h-4 w-4" />} onClick={() => router.push(`/doctor?appointment=${appt.id}`)}>{t('registrar.startVisit')}</Button>}
+              {me.role === 'doctor' && ['in_progress', 'completed'].includes(appt.status) && <Button data-autofocus variant="primary" onClick={() => router.push(`/doctor?appointment=${appt.id}`)}>{t('registrar.ap.openInRoom')}</Button>}
             </div>
           </div>
         }>
@@ -72,9 +72,10 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
             <KeyVal k={t('registrar.time')} v={`${fmtTime(appt.starts_at)}–${fmtTime(appt.ends_at)}`} />
             <KeyVal k={t('registrar.ap.branchRoom')} v={`${appt.branch_name}${appt.room_name ? ', ' + appt.room_name : ''}`} />
             {appt.queue_number && <KeyVal k={t('registrar.ap.queue')} v={t('registrar.ap.queueValue', { n: appt.queue_number, time: fmtTime(appt.arrived_at) })} />}
-            {appt.invoice && <KeyVal k={t('registrar.invoice')} v={<span className="inline-flex items-center gap-2"><Link className="text-brand-700 hover:underline" href={`/cashier/${appt.invoice.id}`}>№{appt.invoice.invoice_number} · {formatSom(appt.invoice.total)}</Link><InvoiceStatus status={appt.invoice.status} /></span>} />}
+            {appt.invoice && <KeyVal k={t('registrar.invoice')} v={<span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1"><Link className="whitespace-nowrap rounded text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" href={`/cashier/${appt.invoice.id}`}>№{appt.invoice.invoice_number} · {formatSom(appt.invoice.total)}</Link><InvoiceStatus status={appt.invoice.status} /></span>} />}
           </div>
         </div>
+        <div className="mt-2"><LinkButton size="sm" variant="ghost" className="-ml-3" href={`/patients/${appt.patient_id}`}>{t('registrar.ap.patientProfile')}</LinkButton></div>
         {appt.note && <p className="mt-3 text-sm text-slate-600"><span className="text-slate-600">{t('registrar.ap.noteLabel')}</span> {appt.note}</p>}
         {appt.cancel_reason && <p className="mt-2 text-sm text-slate-600"><span className="text-slate-600">{t('registrar.ap.cancelReasonLabel')}</span> {appt.cancel_reason}</p>}
         {staff && appt.status === 'scheduled' && !isToday && <p className="mt-3 text-xs text-slate-600">{t('registrar.ap.checkInToday')}</p>}

@@ -1,6 +1,5 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Wallet } from 'lucide-react';
@@ -10,7 +9,7 @@ import { addDays, fmtDateTime, formatSom, fullName, pid } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, Table, Td, Th } from '@/components/ui';
+import { Card, EmptyState, ErrorState, Input, LinkButton, LoadingRows, PageHeader, Pagination, Select, Table, Td, Th } from '@/components/ui';
 import { InvoiceStatus } from '@/components/status';
 import { ShiftPanel } from '@/components/cash-shift';
 
@@ -38,7 +37,7 @@ function Cashier() {
       {me.role === 'cashier' && <ShiftPanel />}
       <Card padded={false}>
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3">
-          <div className="relative min-w-[220px] flex-1"><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" /><Input className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('cash.searchPlaceholder')} aria-label={t('cash.search')} /></div>
+          <div className="relative min-w-[14rem] flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" /><Input className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('cash.searchPlaceholder')} aria-label={t('cash.search')} /></div>
           <Select aria-label={t('cash.status')} className="w-auto" value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">{t('cash.allStatuses')}</option><option value="debt">{t('cash.debtFilter')}</option>
             {Object.keys(INVOICE_STATUS_LABEL).map((k) => <option key={k} value={k}>{t(`status.invoice.${k}` as MessageKey)}</option>)}
@@ -55,16 +54,18 @@ function Cashier() {
         {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data.data.length ? <EmptyState icon={<Wallet className="h-8 w-8" />} title={t('cash.emptyTitle')} text={t('cash.emptyText')} /> : (
           <>
             <Table>
-              <thead><tr><Th>{t('cash.colPatient')}</Th><Th>{t('cash.colInvoice')}</Th><Th>{t('cash.colServices')}</Th><Th right>{t('cash.colTotal')}</Th><Th right>{t('cash.colPaid')}</Th><Th right>{t('cash.colDue')}</Th><Th>{t('cash.status')}</Th><Th right>{t('cash.colAction')}</Th></tr></thead>
+              <thead><tr><Th>{t('cash.colPatient')}</Th><Th>{t('cash.colInvoice')}</Th><Th className="hidden 2xl:table-cell">{t('cash.colServices')}</Th><Th right>{t('cash.colTotal')}</Th><Th right>{t('cash.colPaid')}</Th><Th right>{t('cash.colDue')}</Th><Th>{t('cash.status')}</Th><Th right className="right-0 z-10">{t('cash.colAction')}</Th></tr></thead>
               <tbody>{q.data.data.map((i: any) => (
-                <tr key={i.id} className="hover:bg-slate-50">
-                  <Td><div className="font-medium">{fullName(i)}</div><div className="text-xs text-slate-600">{pid(i.patient_number)}, {i.branch_name}</div></Td>
-                  <Td className="whitespace-nowrap"><div className="tabular-nums">№{i.invoice_number}</div><div className="text-xs text-slate-600">{fmtDateTime(i.created_at)}</div></Td>
-                  <Td className="max-w-[260px]"><div className="truncate" title={i.services}>{i.services}</div></Td>
+                <tr key={i.id} className="group hover:bg-slate-50">
+                  <Td><div className="whitespace-nowrap font-medium">{fullName(i)}</div><div className="text-xs text-slate-600">{pid(i.patient_number)}, {i.branch_name}</div></Td>
+                  <Td className="whitespace-nowrap"><div className="tabular-nums">№{i.invoice_number}</div><div className="text-xs text-slate-600">{fmtDateTime(i.created_at)}</div><div className="w-0 min-w-full truncate text-xs text-slate-600 2xl:hidden">{i.services}</div></Td>
+                  <Td className="hidden max-w-[16rem] 2xl:table-cell"><div className="truncate">{i.services}</div></Td>
                   <Td right>{formatSom(i.total)}</Td><Td right>{formatSom(i.paid_amount)}</Td>
                   <Td right className={i.status !== 'void' && i.due > 0 ? 'font-semibold text-red-700' : ''}>{i.status === 'void' ? '—' : formatSom(i.due)}</Td>
                   <Td><InvoiceStatus status={i.status} /></Td>
-                  <Td right><Link href={`/cashier/${i.id}`} className="rounded-md px-2 py-1 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">{me.role === 'cashier' && ['unpaid', 'partially_paid'].includes(i.status) ? t('cash.pay') : t('cash.open')}</Link></Td>
+                  <Td right className="sticky right-0 bg-white group-hover:bg-slate-50">{me.role === 'cashier' && ['unpaid', 'partially_paid'].includes(i.status)
+                    ? <LinkButton size="sm" href={`/cashier/${i.id}`}>{t('cash.pay')}</LinkButton>
+                    : <LinkButton size="sm" variant="ghost" href={`/cashier/${i.id}`}>{t('cash.open')}</LinkButton>}</Td>
                 </tr>
               ))}</tbody>
             </Table>

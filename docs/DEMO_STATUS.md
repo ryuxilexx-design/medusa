@@ -4,6 +4,20 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 00000000. 0.8.1: UI/UX auditi va tuzatishlar
+
+5 ta auditor (shifokor va karkas, registratura, kassa, klinik, boshqaruv) har bir ekranni 1366, 1920 va 390 px kenglikda, uch tilda skrinshot bilan tekshirdi: ~117 topilma va mayda nuqsonlar. Hammasi tuzatildi va har bir bo‘lim «oldin/keyin» skrinshotlari bilan qayta tekshirildi. axe-core (WCAG 2.1 AA) 21 ta ekranda 3 xil xato topdi — tuzatildi.
+
+| Asosiy tuzatishlar | |
+|---|---|
+| Modal oynalar | Portal orqali, ekranga sig‘adi (asosiy tugma doim ko‘rinadi), fokus oyna ichida, sarlavha ekran o‘quvchiga bog‘langan |
+| 1366 px ekran | Jadvallarda amallar, holat va summa ustunlari endi kesilmaydi (kassa, bemorlar, navbat, xodimlar, hisobotlar, smenalar) |
+| Telefon (390 px) | Hech bir sahifa yon tomonga toshmaydi; menyu yopish tugmasi va Esc bilan |
+| Summa | «1 250 000 so‘m» hech qachon qatorga bo‘linmaydi; minus — haqiqiy «−» |
+| Sana va vaqt maydonlari | Yil va daqiqa to‘liq ko‘rinadi (umumiy `DateRange`); summa maydonlari bir xil (`MoneyInput`) |
+| Tugma so‘zlari | Amal va holat aralashmaydi: «Keldi deb belgilash», «Smenani yopish», «Qabulni bekor qilish», «Hisobni bekor qilish» |
+| Klaviatura va o‘qilishi | MKB-10 qidiruvi strelkalar bilan, jadval katakchalari va qatorlar tugma, sariq fokus halqasi hamma joyda |
+
 ## 0000000. 0.8 relizda nima qo‘shildi: uch til va sodda dizayn
 
 | Imkoniyat | Holat | Qanday tekshirildi |

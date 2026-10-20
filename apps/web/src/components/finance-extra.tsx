@@ -2,14 +2,15 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Plus, Printer } from 'lucide-react';
+import { Ban, DoorOpen, Plus, Printer } from 'lucide-react';
 import { EXPENSE_CATEGORIES, EXPENSE_PAID_FROM_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, Select, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, Select, Skeleton, Table, Td, Th, useToast } from '@/components/ui';
 import { CloseShiftModal, expenseCategoryLabel, type Shift } from '@/components/cash-shift';
+import { MoneyInput } from '@/components/money-input';
 
 type Summary = { payments: { total: number; count: number }; refunds: { total: number; count: number }; net_revenue: number; expenses: { total: number }; net_result: number };
 
@@ -17,10 +18,11 @@ type Summary = { payments: { total: number; count: number }; refunds: { total: n
 export function FinanceSummary({ from, to, branchId }: { from: string; to: string; branchId: string }) {
   const t = useT();
   const q = useQuery({ queryKey: ['finance-summary', from, to, branchId], queryFn: () => api<{ data: Summary }>(`/finance/summary${qs({ from, to, branch_id: branchId })}`).then((r) => r.data) });
-  if (!q.data) return null;
+  // keep the panel's height while loading so the tabs below do not jump
+  if (!q.data) return <div className="flex flex-wrap gap-x-8 gap-y-2 border-b border-slate-100 px-4 py-3" aria-busy={q.isLoading || undefined}>{[0, 1, 2, 3, 4].map((i) => <div key={i} className="min-w-[8rem] space-y-1.5"><Skeleton className="h-4 w-24" /><Skeleton className="h-6 w-32" /></div>)}</div>;
   const s = q.data;
   const cell = (label: string, value: number, tone?: string, sign = '') => (
-    <div className="min-w-[140px]"><div className="text-[0.8125rem] font-semibold text-slate-600">{label}</div><div className={cx('text-lg font-semibold tabular-nums', tone)}>{sign}{formatSom(value)}</div></div>
+    <div className="min-w-[8rem]"><div className="text-[0.8125rem] font-semibold text-slate-600">{label}</div><div className={cx('text-lg font-semibold tabular-nums', tone)}>{sign}{formatSom(value)}</div></div>
   );
   return (
     <div className="flex flex-wrap gap-x-8 gap-y-2 border-b border-slate-100 px-4 py-3" aria-label={t('cash.financeResult')}>
@@ -68,18 +70,20 @@ export function ShiftsTab({ from, to, branchId }: { from: string; to: string; br
   return !q.data!.length ? <EmptyState title={t('cash.noShiftsPeriod')} /> : (
     <>
       <Table>
-        <thead><tr><Th>№</Th><Th>{t('role.cashier')}</Th><Th>{t('cash.branch')}</Th><Th>{t('cash.colOpened')}</Th><Th>{t('cash.colClosed')}</Th><Th right>{t('cash.colCashIncome')}</Th><Th right>{t('cash.expectedCashShort')}</Th><Th right>{t('cash.colCounted')}</Th><Th right>{t('cash.colDiff')}</Th><Th /></tr></thead>
+        <thead><tr><Th>№</Th><Th>{t('cash.colCashierBranch')}</Th><Th>{t('cash.colOpenedClosed')}</Th><Th right>{t('cash.colCashIncome')}</Th><Th right>{t('cash.colExpected')}</Th><Th right>{t('cash.colCounted')}</Th><Th right>{t('cash.colDiff')}</Th><Th className="right-0 z-10" /></tr></thead>
         <tbody>{q.data!.map((s) => (
-          <tr key={s.id}>
-            <Td className="tabular-nums">{s.number}</Td><Td>{s.cashier_name}</Td><Td>{s.branch_name}</Td>
-            <Td className="whitespace-nowrap">{fmtDateTime(s.opened_at)}</Td>
-            <Td className="whitespace-nowrap">{s.status === 'open' ? <Badge tone="green">{t('cash.shiftOpenBadge')}</Badge> : fmtDateTime((s as any).closed_at)}</Td>
+          <tr key={s.id} className="group hover:bg-slate-50">
+            <Td className="tabular-nums">{s.number}</Td>
+            <Td><div className="whitespace-nowrap">{s.cashier_name}</div><div className="whitespace-nowrap text-xs text-slate-600">{s.branch_name}</div></Td>
+            <Td className="whitespace-nowrap tabular-nums"><div>{fmtDateTime(s.opened_at)}</div><div className="text-xs text-slate-600">{s.status === 'open' ? <Badge tone="green" icon={<DoorOpen className="h-3.5 w-3.5" />}>{t('cash.shiftOpenBadge')}</Badge> : fmtDateTime((s as any).closed_at)}</div></Td>
             <Td right>{formatSom(s.totals.payments.cash.sum)}</Td><Td right>{formatSom(s.expected_cash)}</Td>
             <Td right>{s.counted_cash == null ? '—' : formatSom(s.counted_cash)}</Td>
-            <Td right className={cx('font-medium', s.difference ? (s.difference > 0 ? 'text-amber-700' : 'text-red-700') : 'text-slate-600')}>{s.difference == null ? '—' : s.difference === 0 ? '0' : `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`}</Td>
-            <Td right className="whitespace-nowrap">
-              <Link href={`/print/shift/${s.id}`} target="_blank" className="inline-flex items-center gap-1 text-[0.8125rem] font-medium text-brand-700 hover:underline"><Printer className="h-3.5 w-3.5" />{t('cash.report')}</Link>
-              {me.role === 'manager' && s.status === 'open' && <Button size="sm" variant="ghost" className="ml-2" onClick={() => setClosing(s)}>{t('common.close')}</Button>}
+            <Td right className={cx('font-medium', s.difference ? (s.difference > 0 ? 'text-amber-700' : 'text-red-700') : 'text-slate-600')}>{s.difference == null ? '—' : `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`}</Td>
+            <Td right className="sticky right-0 bg-white group-hover:bg-slate-50">
+              <div className="flex flex-col items-end gap-1">
+                <LinkButton size="sm" variant="ghost" href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('cash.report')}</LinkButton>
+                {me.role === 'manager' && s.status === 'open' && <Button size="sm" onClick={() => setClosing(s)}>{t('cash.closeShift')}</Button>}
+              </div>
             </Td>
           </tr>
         ))}</tbody>
@@ -107,13 +111,15 @@ export function ExpenseRowActions({ e }: { e: any }) {
     onError: (err) => toast.error(err),
   });
   if (e.status !== 'active') return null;
-  const locked = e.shift_status === 'closed';
+  // a closed shift's cash expense cannot change: say so in the row instead of a tooltip on a disabled button
+  if (e.shift_status === 'closed') return <span className="whitespace-nowrap text-xs text-slate-600">{t('cash.expenseLockedShort')}</span>;
   return (
     <>
-      <Button size="sm" variant="ghost" icon={<Ban className="h-3.5 w-3.5" />} disabled={locked} title={locked ? t('cash.expenseLocked') : undefined} onClick={() => setOpen(true)}>{t('cash.cancelExpense')}</Button>
-      <Modal open={open} onClose={() => setOpen(false)} title={t('cash.cancelExpenseTitle', { category: expenseCategoryLabel(t, e.category), amount: formatSom(e.amount) })}
-        footer={<><Button onClick={() => setOpen(false)}>{t('common.back')}</Button><Button variant="danger" loading={m.isPending} disabled={reason.trim().length < 3} onClick={() => m.mutate()}>{t('cash.cancelExpense')}</Button></>}>
+      <Button size="sm" variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setOpen(true)}>{t('cash.cancelExpense')}</Button>
+      <Modal open={open} onClose={() => setOpen(false)} dirty={!!reason.trim()} title={t('cash.cancelExpenseTitle', { category: expenseCategoryLabel(t, e.category), amount: formatSom(e.amount) })}
+        footer={<><Button onClick={() => setOpen(false)}>{t('common.back')}</Button><Button variant="danger" loading={m.isPending} disabled={reason.trim().length < 3} onClick={() => m.mutate()}>{t('cash.cancelExpenseConfirm')}</Button></>}>
         <Field label={t('cash.colReason')} required>{(id) => <Input id={id} value={reason} onChange={(ev) => setReason(ev.target.value)} placeholder={t('cash.cancelExpensePlaceholder')} />}</Field>
+        {reason.trim().length < 3 && <p className="mt-2 text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </Modal>
     </>
   );
@@ -136,6 +142,7 @@ export function ExpenseModal({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const shifts = useQuery({ queryKey: ['cash-shifts', 'open', branch], queryFn: () => api<{ data: Shift[] }>(`/cash-shifts?status=open&branch_id=${branch}`).then((r) => r.data), enabled: paidFrom === 'cash_drawer' && !!branch });
   const chosenShift = shiftId || (shifts.data?.length === 1 ? shifts.data[0].id : '');
+  const drawer = shifts.data?.find((s) => s.id === chosenShift);
   const tiyin = amount.trim() ? parseSomToTiyin(amount) : null;
   const m = useMutation({
     mutationFn: () => api('/expenses', { method: 'POST', body: { branch_id: branch, category, amount: tiyin, occurred_on: paidFrom === 'cash_drawer' ? undefined : date, paid_from: paidFrom, shift_id: paidFrom === 'cash_drawer' ? chosenShift || undefined : undefined, note: note.trim() || null } }),
@@ -144,28 +151,29 @@ export function ExpenseModal({ onClose }: { onClose: () => void }) {
   });
   const ready = !!branch && !!tiyin && (paidFrom !== 'cash_drawer' || !!chosenShift);
   return (
-    <Modal open onClose={onClose} dirty={!!amount} title={t('cash.addExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.add')}</Button></>}>
+    <Modal open onClose={onClose} dirty={!!(amount || note)} title={t('cash.addExpense')} footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.add')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {me.branches.length > 1 && <Field label={t('cash.branch')} required error={errors.branch_id}>{(id) => <Select id={id} value={branch} onChange={(e) => setBranch(e.target.value)}>{me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select>}</Field>}
           <Field label={t('cash.category')} required>{(id) => <Select id={id} value={category} onChange={(e) => setCategory(e.target.value)}>{EXPENSE_CATEGORIES.map((c) => <option key={c} value={c}>{expenseCategoryLabel(t, c)}</option>)}</Select>}</Field>
-          <Field label={t('cash.amountSomComma')} required error={errors.amount ?? (amount && tiyin == null ? t('cash.enterNumber') : undefined)}>{(id) => <Input id={id} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />}</Field>
+          <Field label={t('cash.amountSomComma')} required error={errors.amount ?? (amount && tiyin == null ? t('cash.enterNumber') : undefined)}>{(id) => <MoneyInput id={id} value={amount} onChange={(e) => setAmount(e.target.value)} invalid={!!errors.amount} />}</Field>
           <Field label={t('cash.paidFromField')} required>{(id) => <Select id={id} value={paidFrom} onChange={(e) => setPaidFrom(e.target.value)}>{Object.keys(EXPENSE_PAID_FROM_LABEL).map((k) => <option key={k} value={k}>{t(`cash.paidFrom.${k}` as MessageKey)}</option>)}</Select>}</Field>
           {paidFrom === 'cash_drawer'
-            ? <Field label={t('cash.fromDrawer')} required error={errors.shift_id}>{(id) => shifts.data?.length === 0
+            ? <Field className="sm:col-span-2" label={t('cash.fromDrawer')} required error={errors.shift_id} hint={drawer ? t('cash.drawerHint', { amount: formatSom(drawer.expected_cash) }) : undefined}>{(id) => shifts.data?.length === 0
                 ? <p id={id} className="text-sm text-amber-700">{t('cash.noOpenDrawerDot')}</p>
                 : <Select id={id} value={chosenShift} onChange={(e) => setShiftId(e.target.value)}>{(shifts.data?.length ?? 0) > 1 && <option value="">{t('cash.choose')}</option>}{(shifts.data ?? []).map((s) => <option key={s.id} value={s.id}>{t('cash.shiftOptionShort', { n: s.number, cashier: s.cashier_name })}</option>)}</Select>}</Field>
             : <Field label={t('cash.colDate')} required error={errors.occurred_on}>{(id) => <Input id={id} type="date" max={me.today} value={date} onChange={(e) => setDate(e.target.value)} />}</Field>}
         </div>
         <Field label={t('cash.note')}>{(id) => <Input id={id} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('cash.expenseNotePlaceholder')} />}</Field>
+        {!ready && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </div>
     </Modal>
   );
 }
 
 export const expenseStatusCell = (e: any, t: ReturnType<typeof useT>) => e.status === 'void'
-  ? <Badge>{e.void_reason ? t('cash.expenseCancelledReason', { reason: e.void_reason }) : t('cash.expenseCancelled')}</Badge>
+  ? <div><Badge icon={<Ban className="h-3.5 w-3.5" />}>{t('cash.expenseCancelled')}</Badge>{e.void_reason && <div className="mt-1 text-xs text-slate-600">{e.void_reason}</div>}</div>
   : <span className="text-xs text-slate-600">{[
       EXPENSE_PAID_FROM_LABEL[e.paid_from] ? t(`cash.paidFrom.${e.paid_from}` as MessageKey) : '',
       e.shift_number ? t('cash.shiftNo', { n: e.shift_number }) : '',

@@ -99,7 +99,10 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
     return !Object.keys(e).length;
   }
   const submit = (confirm = false) => { setFormError(null); if (validate()) save.mutate(confirm); };
-  const err = (wd: number) => Object.entries(errors).filter(([k]) => k.startsWith(`${wd}.`)).map(([, v]) => v)[0];
+  // each message sits under the cells it is about: branch/room, working hours, break
+  const err = (wd: number, fields: string[]) => fields.map((f) => errors[`${wd}.${f}`]).find(Boolean);
+  const errLine = (m?: string) => m ? <p className="mt-1 text-sm font-medium text-red-700" role="alert">{m}</p> : null;
+  const timeCls = 'h-11 w-[7.5rem] tabular-nums';
 
   return (
     <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-5xl" title={t('registrar.sched.title', { name: doctor.display_name })}
@@ -125,37 +128,37 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
           </Alert>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[56rem] text-sm">
             <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600">
               <th className="py-1 pr-2">{t('registrar.sched.day')}</th><th className="px-1">{t('registrar.branch')}</th><th className="px-1">{t('registrar.sched.room')}</th><th className="px-1">{t('registrar.sched.hours')}</th><th className="px-1">{t('registrar.sched.breakOptional')}</th>
             </tr></thead>
             <tbody>{ORDER.map((wd) => {
-              const r = rows[wd], e = err(wd), day = weekdayName(wd);
+              const r = rows[wd], day = weekdayName(wd);
               const branchRooms = (rooms.data ?? []).filter((x) => x.branch_id === r.branch_id);
               return (
                 <tr key={wd} className={cx('border-t border-slate-100 align-top', !r.on && 'text-slate-600')}>
-                  <td className="py-2 pr-2">
-                    <label className="flex cursor-pointer items-center gap-2 whitespace-nowrap font-medium">
-                      <input type="checkbox" className="accent-brand-600" checked={r.on} onChange={(ev) => set(wd, 'on', ev.target.checked)} aria-label={t('registrar.sched.ariaOn', { day })} />{day}
+                  <td className="py-1.5 pr-2">
+                    <label className="flex min-h-11 cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-lg font-medium focus-within:ring-4 focus-within:ring-amber-300">
+                      <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600 focus:outline-none" checked={r.on} onChange={(ev) => set(wd, 'on', ev.target.checked)} aria-label={t('registrar.sched.ariaOn', { day })} />{day}
                     </label>
-                    {!r.on && <span className="ml-6 text-xs">{t('registrar.sched.dayOff')}</span>}
+                    {!r.on && <span className="ml-[1.875rem] text-[0.8125rem]">{t('registrar.sched.dayOff')}</span>}
                   </td>
                   {r.on ? <>
-                    <td className="px-1 py-1.5"><Select aria-label={t('registrar.sched.ariaBranch', { day })} className="h-8 text-[0.8125rem]" value={r.branch_id} onChange={(ev) => set(wd, 'branch_id', ev.target.value)} invalid={!!errors[`${wd}.branch_id`]}>
+                    <td className="px-1 py-1.5"><Select aria-label={t('registrar.sched.ariaBranch', { day })} value={r.branch_id} onChange={(ev) => set(wd, 'branch_id', ev.target.value)} invalid={!!errors[`${wd}.branch_id`]}>
                       {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-                    </Select></td>
-                    <td className="px-1 py-1.5"><Select aria-label={t('registrar.sched.ariaRoom', { day })} className="h-8 text-[0.8125rem]" value={r.room_id} onChange={(ev) => set(wd, 'room_id', ev.target.value)} invalid={!!errors[`${wd}.room_id`]}>
+                    </Select>{errLine(err(wd, ['branch_id']))}</td>
+                    <td className="px-1 py-1.5"><Select key={rooms.isSuccess ? 'rooms' : 'loading'} aria-label={t('registrar.sched.ariaRoom', { day })} value={r.room_id} onChange={(ev) => set(wd, 'room_id', ev.target.value)} invalid={!!errors[`${wd}.room_id`]}>
                       <option value="">{t('registrar.sched.noRoom')}</option>
                       {branchRooms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-                    </Select></td>
+                    </Select>{errLine(err(wd, ['room_id']))}</td>
                     <td className="px-1 py-1.5"><div className="flex items-center gap-1">
-                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaStart', { day })} className="h-8 w-[104px] text-[0.8125rem]" value={r.start} onChange={(ev) => set(wd, 'start', ev.target.value)} invalid={!!errors[`${wd}.start`]} />–
-                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaEnd', { day })} className="h-8 w-[104px] text-[0.8125rem]" value={r.end} onChange={(ev) => set(wd, 'end', ev.target.value)} invalid={!!errors[`${wd}.end`]} />
-                    </div></td>
+                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaStart', { day })} className={timeCls} value={r.start} onChange={(ev) => set(wd, 'start', ev.target.value)} invalid={!!errors[`${wd}.start`]} />–
+                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaEnd', { day })} className={timeCls} value={r.end} onChange={(ev) => set(wd, 'end', ev.target.value)} invalid={!!errors[`${wd}.end`]} />
+                    </div>{errLine(err(wd, ['start', 'end']))}</td>
                     <td className="px-1 py-1.5"><div className="flex items-center gap-1">
-                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaBreakStart', { day })} className="h-8 w-[104px] text-[0.8125rem]" value={r.break_start} onChange={(ev) => set(wd, 'break_start', ev.target.value)} invalid={!!errors[`${wd}.break_start`]} />–
-                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaBreakEnd', { day })} className="h-8 w-[104px] text-[0.8125rem]" value={r.break_end} onChange={(ev) => set(wd, 'break_end', ev.target.value)} invalid={!!errors[`${wd}.break_end`]} />
-                    </div>{e && <p className="mt-1 text-xs text-red-600" role="alert">{e}</p>}</td>
+                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaBreakStart', { day })} className={timeCls} value={r.break_start} onChange={(ev) => set(wd, 'break_start', ev.target.value)} invalid={!!errors[`${wd}.break_start`]} />–
+                      <Input type="time" step={300} aria-label={t('registrar.sched.ariaBreakEnd', { day })} className={timeCls} value={r.break_end} onChange={(ev) => set(wd, 'break_end', ev.target.value)} invalid={!!errors[`${wd}.break_end`]} />
+                    </div>{errLine(err(wd, ['break_start', 'break_end']))}</td>
                   </> : <td colSpan={4} />}
                 </tr>
               );

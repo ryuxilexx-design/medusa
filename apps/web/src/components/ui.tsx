@@ -1,6 +1,7 @@
 'use client';
 import { createContext, forwardRef, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
 import { ApiError } from '@/lib/api';
 import { useT } from '@/lib/i18n';
@@ -28,32 +29,38 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button({ 
   );
 });
 
-export function LinkButton({ href, children, variant = 'secondary', icon, className, size = 'md' }: { href: string; children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost'; icon?: React.ReactNode; className?: string; size?: 'sm' | 'md' }) {
+export function LinkButton({ href, children, variant = 'secondary', icon, className, size = 'md', target }: { href: string; children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost'; icon?: React.ReactNode; className?: string; size?: 'sm' | 'md'; target?: '_blank' }) {
   const styles = { primary: 'bg-brand-600 text-white hover:bg-brand-700 border-brand-600', secondary: 'bg-white text-slate-800 hover:border-slate-500 border-slate-300', ghost: 'border-transparent text-brand-700 hover:bg-brand-50' }[variant];
-  return <Link href={href} className={cx('inline-flex items-center justify-center gap-2 rounded-lg border-2 font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 whitespace-nowrap', size === 'sm' ? 'min-h-9 px-3 text-sm' : 'min-h-11 px-4 text-[0.9375rem]', styles, className)}>{icon}{children}</Link>;
+  return <Link href={href} target={target} rel={target ? 'noopener' : undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-lg border-2 font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 whitespace-nowrap', size === 'sm' ? 'min-h-9 px-3 text-sm' : 'min-h-11 px-4 text-[0.9375rem]', styles, className)}>{icon}{children}</Link>;
 }
 
 // ---------- Form fields ----------
+/** Lets Input/Textarea/Select inside a Field point screen readers at its error or hint (aria-describedby). */
+const FieldCtx = createContext<{ describedBy?: string }>({});
 export function Field({ label, error, hint, required, children, className }: { label: string; error?: string; hint?: string; required?: boolean; children: (id: string) => React.ReactNode; className?: string }) {
   const id = useId();
+  const msgId = `${id}-msg`;
   return (
     <div className={cx('flex flex-col gap-1', className)}>
       <label htmlFor={id} className="text-sm font-semibold text-slate-800">{label}{required && <span className="text-red-700" aria-hidden="true"> *</span>}</label>
-      {children(id)}
-      {error ? <p className="text-sm font-medium text-red-700" role="alert">{error}</p> : hint ? <p className="text-[0.8125rem] text-slate-600">{hint}</p> : null}
+      <FieldCtx.Provider value={{ describedBy: error || hint ? msgId : undefined }}>{children(id)}</FieldCtx.Provider>
+      {error ? <p id={msgId} className="text-sm font-medium text-red-700" role="alert">{error}</p> : hint ? <p id={msgId} className="text-[0.8125rem] text-slate-600">{hint}</p> : null}
     </div>
   );
 }
 const W = (c?: string) => (c && /(^|\s)w-/.test(c) ? '' : 'w-full');
-const inputBase = 'rounded-lg border-2 bg-white px-3 text-[0.9375rem] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-brand-100 focus:border-brand-600 disabled:bg-slate-50 disabled:text-slate-600';
+const inputBase = 'rounded-lg border-2 bg-white px-3 text-[0.9375rem] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-amber-300 focus:border-brand-600 disabled:bg-slate-50 disabled:text-slate-600';
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(function Input({ className, invalid, ...p }, ref) {
-  return <input ref={ref} className={cx(inputBase, W(className), 'h-11', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} {...p} />;
+  const f = useContext(FieldCtx);
+  return <input ref={ref} className={cx(inputBase, W(className), 'h-11', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} aria-describedby={f.describedBy} {...p} />;
 });
 export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(function Textarea({ className, invalid, ...p }, ref) {
-  return <textarea ref={ref} className={cx(inputBase, W(className), 'py-2.5 leading-relaxed', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} {...p} />;
+  const f = useContext(FieldCtx);
+  return <textarea ref={ref} className={cx(inputBase, W(className), 'py-2.5 leading-relaxed', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} aria-describedby={f.describedBy} {...p} />;
 });
 export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(function Select({ className, invalid, children, ...p }, ref) {
-  return <select ref={ref} className={cx(inputBase, W(className), 'h-11 pr-8', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} {...p}>{children}</select>;
+  const f = useContext(FieldCtx);
+  return <select ref={ref} className={cx(inputBase, W(className), 'h-11 pr-8', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} aria-describedby={f.describedBy} {...p}>{children}</select>;
 });
 
 // ---------- Badges ----------
@@ -71,7 +78,7 @@ export function Badge({ tone = 'gray', children, icon, className }: { tone?: Ton
 export function Card({ children, className, title, actions, padded = true }: { children: React.ReactNode; className?: string; title?: React.ReactNode; actions?: React.ReactNode; padded?: boolean }) {
   return (
     <section className={cx('rounded-xl border border-slate-200 bg-white', className)}>
-      {(title || actions) && <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3"><h2 className="text-base font-bold text-slate-900">{title}</h2><div className="flex items-center gap-2">{actions}</div></header>}
+      {(title || actions) && <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-4 py-3"><h2 className="text-base font-bold text-slate-900">{title}</h2><div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div></header>}
       <div className={padded ? 'p-4' : ''}>{children}</div>
     </section>
   );
@@ -121,7 +128,8 @@ export function Alert({ tone = 'yellow', children, title }: { tone?: 'yellow' | 
 
 // ---------- Table ----------
 export function Table({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cx('overflow-x-auto', className)}><table className="w-full text-left text-sm">{children}</table></div>;
+  // focusable, so a wide table can be scrolled sideways with the keyboard
+  return <div tabIndex={0} className={cx('overflow-x-auto rounded-[inherit] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', className)}><table className="w-full text-left text-sm">{children}</table></div>;
 }
 export function Th({ children, className, right }: { children?: React.ReactNode; className?: string; right?: boolean }) {
   return <th scope="col" className={cx('sticky top-0 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-[0.8125rem] font-semibold text-slate-600 whitespace-nowrap', right && 'text-right', className)}>{children}</th>;
@@ -146,8 +154,11 @@ export function Pagination({ page, pageSize, total, onPage }: { page: number; pa
 
 // ---------- Tabs ----------
 export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode; count?: number }[] }) {
+  const list = useRef<HTMLDivElement>(null);
+  // a selected tab outside the visible strip (narrow card, link to ?status=…) is scrolled into view
+  useEffect(() => { list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [value]);
   return (
-    <div className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
+    <div ref={list} className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
       {items.map((it) => (
         <button key={it.value} role="tab" aria-selected={value === it.value} onClick={() => onChange(it.value)}
           className={cx('-mb-px whitespace-nowrap border-b-[3px] px-3 py-2.5 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', value === it.value ? 'border-brand-600 text-brand-800' : 'border-transparent text-slate-600 hover:text-slate-900')}>
@@ -163,35 +174,52 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-l
   open: boolean; onClose: () => void; title: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode; width?: string; dirty?: boolean;
 }) {
   const t = useT();
+  const titleId = useId();
   const [confirming, setConfirming] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const tryClose = useCallback(() => { if (dirty) setConfirming(true); else onClose(); }, [dirty, onClose]);
   useEffect(() => {
     if (!open) { setConfirming(false); return; }
     const prev = document.activeElement as HTMLElement | null;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); tryClose(); } };
+    const focusables = () => [...(panel.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])') ?? [])]
+      .filter((el) => el.offsetParent !== null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); tryClose(); return; }
+      if (e.key !== 'Tab') return;
+      // keep Tab inside the dialog: the page behind is not reachable while it is open
+      const els = focusables();
+      if (!els.length) return;
+      const first = els[0], last = els[els.length - 1], active = document.activeElement;
+      if (e.shiftKey && (active === first || !panel.current?.contains(active))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !panel.current?.contains(active))) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
-    setTimeout(() => panel.current?.querySelector<HTMLElement>('input,select,textarea,button:not([data-close])')?.focus(), 30);
+    // first focus: an explicit autofocus, else the first text field, else the first action (never the close X)
+    setTimeout(() => (panel.current?.querySelector<HTMLElement>('[autofocus],[data-autofocus]')
+      ?? panel.current?.querySelector<HTMLElement>('textarea:not([disabled]),input:not([disabled]):not([type=checkbox]):not([type=radio]),select:not([disabled])')
+      ?? panel.current?.querySelector<HTMLElement>('button:not([data-close]):not([disabled])'))?.focus(), 30);
     return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
   }, [open, tryClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 pt-[6vh] print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) tryClose(); }}>
-      <div ref={panel} role="dialog" aria-modal="true" className={cx('w-full rounded-xl bg-white shadow-xl', width)}>
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
-          <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-          <button data-close onClick={tryClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
+  if (!open || typeof document === 'undefined') return null;
+  // rendered at the end of <body>: never inherits table/space-y styles of the place that opened it
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 pt-[4vh] print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) tryClose(); }}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx('flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-xl bg-white text-left shadow-xl', width)}>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
+          <h2 id={titleId} className="min-w-0 text-lg font-bold text-slate-900">{title}</h2>
+          <button data-close onClick={tryClose} className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
         </div>
         {confirming && (
-          <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-sm text-amber-900">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-sm text-amber-900">
             <span>{t('state.unsavedClose')}</span>
             <div className="flex gap-2"><Button size="sm" onClick={() => setConfirming(false)}>{t('common.stay')}</Button><Button size="sm" variant="danger" onClick={onClose}>{t('common.close')}</Button></div>
           </div>
         )}
-        <div className="max-h-[75vh] overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        {footer && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-xl border-t border-slate-100 bg-slate-50/60 px-5 py-3">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
