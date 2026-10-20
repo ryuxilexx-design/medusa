@@ -131,6 +131,33 @@ test('ulash: /start kontakt so‘raydi; kontaktsiz menyu yo‘q; o‘z raqami bi
   assert.match((await out(c2)).at(-1).text, /\+998/);
 });
 
+test('til: bemor o‘zbek kirillni tanlaydi — menyu va xabarlar kirillda, ismlar o‘zgarmaydi; yozilish ishlaydi', async () => {
+  const p = await uniquePhone();
+  const chat = await linked(p.phone);
+  await say(chat, '🌐 Til / Язык');
+  assert.match((await out(chat)).at(-1).text, /Тилни танланг/);
+  await press(chat, 'Ўзбекча');
+  const menu = (await out(chat)).at(-1);
+  const labels = menu.markup.keyboard.flat().map((b) => b.text);
+  assert.ok(labels.includes('📅 Қабулга ёзилиш'), JSON.stringify(labels));
+  assert.equal((await pool.query(`SELECT lang FROM telegram_chats WHERE phone = $1`, [p.phone])).rows[0].lang, 'uz-Cyrl');
+  // the Cyrillic menu label works like the Latin one; a booking confirmation keeps names as stored
+  await say(chat, '📅 Қабулга ёзилиш');
+  const first = (await out(chat)).at(-1);
+  if (first.text.includes('Ким учун')) await press(chat, (t) => !t.includes('➕'));
+  await press(chat, (t) => t.includes('сўм'));
+  await press(chat, (t) => t.includes('·'));
+  await press(chat, (t) => /^\d\d\.\d\d /.test(t));
+  await press(chat, (t) => /^\d\d:\d\d$/.test(t));
+  const confirm = (await out(chat)).at(-1).text;
+  assert.match(confirm, /Маълумотларни текширинг/);
+  assert.ok(confirm.includes(`${p.last_name} ${p.first_name}`), 'bemor ismi lotinda qoldi: ' + confirm);
+  await press(chat, '✅ Тасдиқлаш');
+  const all = await texts(chat);
+  assert.match(all, /Қабулга ёзилдингиз/);
+  assert.match(all, /Шифокор вақтини тежаш/, 'so‘rovnoma taklifi ham kirillda');
+});
+
 test('boshqa odamning kontakti qabul qilinmaydi (engine darajasida)', async () => {
   const bot = await bots.simulator(SEED_IDS.tenant);
   const t = bots.transportFor(bot);

@@ -1,10 +1,12 @@
-import { translate, type Locale } from '@meduza/contracts';
-export { formatSom, formatPhone, parseSomToTiyin } from '@meduza/contracts';
+import { formatSom as formatSomIn, translate, type Locale } from '@meduza/contracts';
+export { formatPhone, parseSomToTiyin } from '@meduza/contracts';
 
 /** The interface language for the helpers below; set by I18nProvider before its children render. */
 let current: Locale = 'uz';
 export function setFormatLocale(l: Locale) { current = l; }
 export const formatLocale = () => current;
+/** Money in the interface language: «1 250 000 so‘m» / «сўм» / «сум». */
+export const formatSom = (tiyin: number | null | undefined, withCurrency = true) => formatSomIn(tiyin, withCurrency, current);
 
 const TZ = 'Asia/Tashkent';
 const dtf = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('ru-RU', { timeZone: TZ, ...o });

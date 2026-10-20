@@ -1,6 +1,7 @@
 // Interface language and text size in the browser: pick Russian on the login page → the doctor's workplace opens in
 // Russian; switch to Uzbek Cyrillic in the header → it survives a reload (saved for the session); «Крупный/Katta»
 // text size enlarges everything and is kept; patient data is never transliterated.
+import { createRequire } from 'node:module';
 import { launch, newPage, login, shot, settle, sleep, check, waitText, BASE } from './lib.mjs';
 const errors = [];
 const b = await launch();
@@ -58,6 +59,33 @@ try {
   await waitText(p, 'Bugungi bemorlar');
   check(true, 'O‘zbek (lotin) tiliga qaytdi');
   await shot(p, 'i18n-05-doctor-uz');
+
+  // every screen of every role in Russian: no Uzbek interface sentence may remain (data — names, services — may)
+  const { MESSAGES } = createRequire(import.meta.url)('../packages/contracts/dist/index.js');
+  const uzPhrases = Object.values(MESSAGES).map((e) => e[0]).filter((x) => x.length >= 14 && x.includes(' ') && !x.includes('{') && /[a-z]/.test(x));
+  const ROLES = { 'Руководитель': ['/dashboard', '/patients', '/schedule', '/queue', '/lab', '/cashier', '/finance', '/staff', '/inventory', '/reports', '/settings'],
+    'Регистратор': ['/patients', '/schedule', '/queue', '/lab', '/cashier'], 'Кассир': ['/cashier', '/finance', '/queue', '/patients'],
+    'Лаборатория': ['/lab'], 'Врач': ['/doctor', '/diagnostics', '/reports', '/schedule', '/patients'] };
+  const leaks = [];
+  for (const [role, pages] of Object.entries(ROLES)) {
+    const r = await newPage(b, errors);
+    await r.setCookie({ name: 'meduza_lang', value: 'ru', url: BASE });
+    await login(r, role);
+    for (const path of pages) {
+      await r.goto(BASE + path, { waitUntil: 'networkidle0' }); await settle(r);
+      // a label is a leaf element's whole text; a long sentence counts anywhere. Data (note texts, service names) holds
+      // Uzbek words too, so a short phrase inside a longer data text is not a leak.
+      const { body, leaves } = await r.evaluate(() => ({
+        body: document.body.innerText,
+        leaves: [...document.querySelectorAll('body *')].filter((e) => e.children.length === 0 && e.offsetParent !== null).map((e) => e.textContent.trim()),
+      }));
+      const leafSet = new Set(leaves);
+      for (const ph of uzPhrases) if (leafSet.has(ph) || (ph.length >= 30 && body.includes(ph))) leaks.push(`${role} ${path}: «${ph}»`);
+      await shot(r, `i18n-ru${path.replace(/\//g, '-')}-${role === 'Руководитель' ? 'manager' : role === 'Регистратор' ? 'registrar' : role === 'Кассир' ? 'cashier' : role === 'Лаборатория' ? 'lab' : 'doctor'}`);
+    }
+    await r.close();
+  }
+  check(leaks.length === 0, `Ruscha sahifalarda o‘zbekcha interfeys jumlasi qolmagan${leaks.length ? ':\n  ' + [...new Set(leaks)].join('\n  ') : ''}`);
 } catch (e) {
   for (const [i, pg] of (await b.pages()).entries()) await pg.screenshot({ path: new URL(`./shots/i18n-fail-${i}.png`, import.meta.url).pathname }).catch(() => undefined);
   throw e;

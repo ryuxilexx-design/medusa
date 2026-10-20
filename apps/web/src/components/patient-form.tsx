@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api';
 import { fmtDate, formatPhone, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { Alert, Button, Field, Input, Modal, Select, Textarea, useToast } from './ui';
+import { useT } from '@/lib/i18n';
 
 export type PatientFormValue = {
   last_name: string; first_name: string; middle_name: string; birth_date: string; sex: string; phone: string;
@@ -18,6 +19,7 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
   const { me } = useSession();
   const qc = useQueryClient();
   const toast = useToast();
+  const t = useT();
   const [v, setV] = useState<PatientFormValue>(EMPTY);
   const [initial, setInitial] = useState<PatientFormValue>(EMPTY);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -36,12 +38,12 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
 
   function validate(): boolean {
     const e: Record<string, string> = {};
-    if (v.last_name.trim().length < 2) e.last_name = 'Familiya kamida 2 belgi';
-    if (v.first_name.trim().length < 2) e.first_name = 'Ism kamida 2 belgi';
-    if (!v.birth_date) e.birth_date = 'Tug‘ilgan sana majburiy';
-    else if (v.birth_date > me.today) e.birth_date = 'Kelajak sanasi bo‘lishi mumkin emas';
+    if (v.last_name.trim().length < 2) e.last_name = t('registrar.form.lastNameMin');
+    if (v.first_name.trim().length < 2) e.first_name = t('registrar.form.firstNameMin');
+    if (!v.birth_date) e.birth_date = t('registrar.form.birthRequired');
+    else if (v.birth_date > me.today) e.birth_date = t('registrar.form.birthFuture');
     const digits = v.phone.replace(/[\s\-()+]/g, '');
-    if (v.phone.trim() && !(digits.length === 9 || (digits.length === 12 && digits.startsWith('998')))) e.phone = '+998 va 9 raqam, masalan +998 90 123 45 67';
+    if (v.phone.trim() && !(digits.length === 9 || (digits.length === 12 && digits.startsWith('998')))) e.phone = t('registrar.form.phoneFormat');
     setErrors(e);
     return !Object.keys(e).length;
   }
@@ -55,51 +57,51 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
     onSuccess: (r: any) => {
       qc.invalidateQueries({ queryKey: ['patients'] });
       qc.invalidateQueries({ queryKey: ['patient'] });
-      toast.success(patient ? 'Bemor ma’lumotlari saqlandi' : `Bemor ${pid(r.data.patient_number)} yaratildi`);
+      toast.success(patient ? t('registrar.form.savedToast') : t('registrar.form.createdToast', { id: pid(r.data.patient_number) }));
       onSaved?.(patient ? patient.id : r.data.id, !patient);
       onClose();
     },
     onError: (e) => {
       if (e instanceof ApiError && e.code === 'DUPLICATE_WARNING') { setDups(e.details?.candidates ?? []); return; }
       if (e instanceof ApiError && e.fields) setErrors(e.fields);
-      setFormError(e instanceof Error ? e.message : 'Saqlanmadi');
+      setFormError(e instanceof Error ? e.message : t('registrar.notSaved'));
     },
   });
   const submit = (confirm = false) => { setFormError(null); if (validate()) save.mutate(confirm); };
 
   return (
-    <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={patient ? 'Bemor ma’lumotlarini tahrirlash' : 'Bemor qo‘shish'}
-      footer={dups ? null : <><Button onClick={onClose}>Bekor qilish</Button><Button variant="primary" loading={save.isPending} onClick={() => submit(false)}>{patient ? 'Saqlash' : 'Bemorni saqlash'}</Button></>}>
+    <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={patient ? t('registrar.form.editTitle') : t('registrar.addPatient')}
+      footer={dups ? null : <><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="primary" loading={save.isPending} onClick={() => submit(false)}>{patient ? t('common.save') : t('registrar.form.savePatient')}</Button></>}>
       {dups ? (
         <div className="space-y-3">
-          <Alert title="O‘xshash bemor topildi">Telefon yoki F.I.Sh. + tug‘ilgan sana mos keladi. Oilaviy umumiy telefon bo‘lishi mumkin — mavjud profilni oching yoki alohida bemor sifatida saqlang.</Alert>
+          <Alert title={t('registrar.form.dupTitle')}>{t('registrar.form.dupText')}</Alert>
           <ul className="divide-y rounded-md border">
             {dups.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <div><span className="font-medium">{fullName(d, true)}</span> <span className="text-slate-500">{pid(d.patient_number)} · {fmtDate(d.birth_date)} · {formatPhone(d.phone)}</span>
-                  <div className="text-xs text-slate-500">{d.match === 'phone' ? 'Telefon mos' : 'F.I.Sh. va tug‘ilgan sana mos'}</div></div>
-                <Link href={`/patients/${d.id}`} onClick={onClose} className="text-sm font-medium text-brand-700 hover:underline">Profilni ochish</Link>
+                <div><span className="font-medium">{fullName(d, true)}</span> <span className="text-slate-600">{pid(d.patient_number)}, {fmtDate(d.birth_date)}, {formatPhone(d.phone)}</span>
+                  <div className="text-xs text-slate-600">{d.match === 'phone' ? t('registrar.form.dupPhone') : t('registrar.form.dupNameBirth')}</div></div>
+                <Link href={`/patients/${d.id}`} onClick={onClose} className="text-sm font-medium text-brand-700 hover:underline">{t('registrar.form.openProfile')}</Link>
               </li>
             ))}
           </ul>
           <div className="flex justify-end gap-2">
-            <Button onClick={() => setDups(null)}>Formaga qaytish</Button>
-            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(true)}>Baribir yangi bemor yaratish</Button>
+            <Button onClick={() => setDups(null)}>{t('registrar.form.backToForm')}</Button>
+            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(true)}>{t('registrar.form.createAnyway')}</Button>
           </div>
         </div>
       ) : (
         <form className="grid grid-cols-1 gap-3 sm:grid-cols-3" onSubmit={(e) => { e.preventDefault(); submit(false); }} noValidate>
           {formError && <div className="sm:col-span-3"><Alert tone="red">{formError}</Alert></div>}
-          <Field label="Familiya" required error={errors.last_name}>{(id) => <Input id={id} value={v.last_name} onChange={set('last_name')} invalid={!!errors.last_name} autoComplete="off" />}</Field>
-          <Field label="Ism" required error={errors.first_name}>{(id) => <Input id={id} value={v.first_name} onChange={set('first_name')} invalid={!!errors.first_name} autoComplete="off" />}</Field>
-          <Field label="Otasining ismi" error={errors.middle_name}>{(id) => <Input id={id} value={v.middle_name} onChange={set('middle_name')} placeholder="ixtiyoriy" />}</Field>
-          <Field label="Tug‘ilgan sana" required error={errors.birth_date}>{(id) => <Input id={id} type="date" max={me.today} value={v.birth_date} onChange={set('birth_date')} invalid={!!errors.birth_date} />}</Field>
-          <Field label="Jins" error={errors.sex}>{(id) => <Select id={id} value={v.sex} onChange={set('sex')}><option value="unspecified">Ko‘rsatilmagan</option><option value="female">Ayol</option><option value="male">Erkak</option></Select>}</Field>
-          <Field label="Telefon" error={errors.phone} hint="Ixtiyoriy · +998 XX XXX XX XX">{(id) => <Input id={id} value={v.phone} onChange={set('phone')} invalid={!!errors.phone} inputMode="tel" placeholder="+998 90 123 45 67" />}</Field>
-          <Field label="Aloqa vakili (ism)" className="sm:col-span-2" error={errors.contact_name} hint="Voyaga yetmagan yoki alohida aloqa zarur bo‘lsa">{(id) => <Input id={id} value={v.contact_name} onChange={set('contact_name')} />}</Field>
-          <Field label="Vakil telefoni" error={errors.contact_phone}>{(id) => <Input id={id} value={v.contact_phone} onChange={set('contact_phone')} inputMode="tel" />}</Field>
-          <Field label="Manzil" className="sm:col-span-3" error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
-          <Field label="Izoh" className="sm:col-span-3" error={errors.note} hint="Ma’muriy izoh. Klinik xulosani bu yerga yozmang.">{(id) => <Textarea id={id} rows={2} value={v.note} onChange={set('note')} />}</Field>
+          <Field label={t('registrar.form.lastName')} required error={errors.last_name}>{(id) => <Input id={id} value={v.last_name} onChange={set('last_name')} invalid={!!errors.last_name} autoComplete="off" />}</Field>
+          <Field label={t('registrar.form.firstName')} required error={errors.first_name}>{(id) => <Input id={id} value={v.first_name} onChange={set('first_name')} invalid={!!errors.first_name} autoComplete="off" />}</Field>
+          <Field label={t('registrar.form.middleName')} error={errors.middle_name}>{(id) => <Input id={id} value={v.middle_name} onChange={set('middle_name')} placeholder={t('common.optional')} />}</Field>
+          <Field label={t('registrar.form.birthDate')} required error={errors.birth_date}>{(id) => <Input id={id} type="date" max={me.today} value={v.birth_date} onChange={set('birth_date')} invalid={!!errors.birth_date} />}</Field>
+          <Field label={t('registrar.form.sex')} error={errors.sex}>{(id) => <Select id={id} value={v.sex} onChange={set('sex')}><option value="unspecified">{t('sex.unspecified')}</option><option value="female">{t('sex.female')}</option><option value="male">{t('sex.male')}</option></Select>}</Field>
+          <Field label={t('registrar.phone')} error={errors.phone} hint={t('registrar.form.phoneHint')}>{(id) => <Input id={id} value={v.phone} onChange={set('phone')} invalid={!!errors.phone} inputMode="tel" placeholder="+998 90 123 45 67" />}</Field>
+          <Field label={t('registrar.form.contactName')} className="sm:col-span-2" error={errors.contact_name} hint={t('registrar.form.contactHint')}>{(id) => <Input id={id} value={v.contact_name} onChange={set('contact_name')} />}</Field>
+          <Field label={t('registrar.form.contactPhone')} error={errors.contact_phone}>{(id) => <Input id={id} value={v.contact_phone} onChange={set('contact_phone')} inputMode="tel" />}</Field>
+          <Field label={t('registrar.form.address')} className="sm:col-span-3" error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
+          <Field label={t('registrar.note')} className="sm:col-span-3" error={errors.note} hint={t('registrar.form.noteHint')}>{(id) => <Textarea id={id} rows={2} value={v.note} onChange={set('note')} />}</Field>
           <button type="submit" className="hidden" />
         </form>
       )}

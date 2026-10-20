@@ -1,9 +1,10 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PAYMENT_METHOD_LABEL, REFUND_REASON_LABEL } from '@meduza/contracts';
+import { PAYMENT_METHOD_LABEL, REFUND_REASON_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey } from '@/lib/api';
 import { formatSom, parseSomToTiyin } from '@/lib/format';
+import { useT } from '@/lib/i18n';
 import { Alert, Button, Field, Input, Modal, Select, Textarea, useToast } from '@/components/ui';
 import type { Shift } from '@/components/cash-shift';
 
@@ -13,6 +14,7 @@ import type { Shift } from '@/components/cash-shift';
  * One idempotency key per intended refund: a retried request cannot pay out twice.
  */
 export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void }) {
+  const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const payable = (inv.payments as any[]).filter((p) => Number(p.refundable) > 0);
@@ -40,7 +42,7 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
     }),
     onSuccess: (r) => {
       ['invoices', 'invoice', 'payments', 'dashboard', 'cash-shift', 'cash-shifts', 'finance-summary', 'refunds'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-      toast.success(r.data.replayed ? 'Qaytarish avvalroq yozilgan ekan — ikkinchi marta berilmadi' : `Qaytarish №${r.data.refund.refund_number} yozildi`);
+      toast.success(r.data.replayed ? t('cash.refundReplayed') : t('cash.refundSaved', { n: r.data.refund.refund_number }));
       onClose();
     },
     onError: (e) => {
@@ -51,42 +53,42 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
   });
 
   if (!payable.length) return (
-    <Modal open onClose={onClose} title="Pulni qaytarish" footer={<Button onClick={onClose}>Yopish</Button>}><p className="text-sm text-slate-600">Bu hisob bo‘yicha qaytariladigan to‘lov yo‘q.</p></Modal>
+    <Modal open onClose={onClose} title={t('cash.refund')} footer={<Button onClick={onClose}>{t('common.close')}</Button>}><p className="text-sm text-slate-600">{t('cash.nothingToRefund')}</p></Modal>
   );
   const ready = !!paymentId && tiyin != null && tiyin > 0 && !tooMuch && reason.trim().length >= 3 && (method !== 'cash' || !!chosenShift);
   return (
-    <Modal open onClose={onClose} dirty={!!reason} title={`Hisob №${inv.invoice_number}: pulni qaytarish`}
-      footer={<><Button onClick={onClose}>Bekor qilish</Button><Button variant="danger" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>Qaytarish</Button></>}>
+    <Modal open onClose={onClose} dirty={!!reason} title={t('cash.refundTitle', { n: inv.invoice_number })}
+      footer={<><Button onClick={onClose}>{t('common.cancel')}</Button><Button variant="danger" loading={m.isPending} disabled={!ready} onClick={() => { setErr(null); setErrors({}); m.mutate(); }}>{t('cash.doRefund')}</Button></>}>
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
-        <p className="text-sm text-slate-600">Qaytarilgan summa hisobdan ham ayriladi — qarz paydo bo‘lmaydi. Qaytarish o‘chirilmaydi va audit jurnalida turadi.</p>
-        <Field label="Qaysi to‘lovdan" required error={errors.payment_id}>
+        <p className="text-sm text-slate-600">{t('cash.refundIntro')}</p>
+        <Field label={t('cash.fromPayment')} required error={errors.payment_id}>
           {(id) => <Select id={id} value={paymentId} onChange={(e) => { setPaymentId(e.target.value); const p = payable.find((x) => x.id === e.target.value); if (p) { setAmount(String(Number(p.refundable) / 100)); setMethod(p.method); } }}>
-            {payable.map((p) => <option key={p.id} value={p.id}>Qayd №{p.receipt_number} · {PAYMENT_METHOD_LABEL[p.method]} · {formatSom(p.amount)} (qaytarish mumkin: {formatSom(Number(p.refundable))})</option>)}
+            {payable.map((p) => <option key={p.id} value={p.id}>{t('cash.paymentOption', { receipt: p.receipt_number, method: t(`payment.${p.method}` as MessageKey), amount: formatSom(p.amount), refundable: formatSom(Number(p.refundable)) })}</option>)}
           </Select>}
         </Field>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Summa, so‘m" required error={errors.amount ?? (tooMuch ? `Ko‘pi bilan ${formatSom(max)}` : amount && tiyin == null ? 'Raqam kiriting' : undefined)}>
+          <Field label={t('cash.amountSomComma')} required error={errors.amount ?? (tooMuch ? t('cash.atMost', { max: formatSom(max) }) : amount && tiyin == null ? t('cash.enterNumber') : undefined)}>
             {(id) => <Input id={id} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} invalid={tooMuch} />}
           </Field>
-          <Field label="Qanday qaytariladi" required>
-            {(id) => <Select id={id} value={method} onChange={(e) => setMethod(e.target.value)}>{Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}
+          <Field label={t('cash.refundMethod')} required>
+            {(id) => <Select id={id} value={method} onChange={(e) => setMethod(e.target.value)}>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>}
           </Field>
         </div>
         {method === 'cash' && (
           openShifts.length === 0 && !shifts.isLoading
-            ? <Alert tone="yellow" title="Bu filialda ochiq kassa yo‘q">Naqd pul kassadan beriladi — kassir smenani ochgach qaytaring yoki karta/o‘tkazma tanlang.</Alert>
-            : <Field label="Qaysi kassadan" required error={errors.shift_id}>
+            ? <Alert tone="yellow" title={t('cash.noOpenDrawer')}>{t('cash.noOpenDrawerText')}</Alert>
+            : <Field label={t('cash.fromDrawer')} required error={errors.shift_id}>
                 {(id) => <Select id={id} value={chosenShift} onChange={(e) => setShiftId(e.target.value)}>
-                  {openShifts.length > 1 && <option value="">— tanlang —</option>}
-                  {openShifts.map((s) => <option key={s.id} value={s.id}>Smena №{s.number} · {s.cashier_name} · kassada {formatSom(s.expected_cash)}</option>)}
+                  {openShifts.length > 1 && <option value="">{t('cash.choose')}</option>}
+                  {openShifts.map((s) => <option key={s.id} value={s.id}>{t('cash.shiftOption', { n: s.number, cashier: s.cashier_name, amount: formatSom(s.expected_cash) })}</option>)}
                 </Select>}
               </Field>
         )}
-        <Field label="Sabab" required>
-          {(id) => <Select id={id} value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>{Object.entries(REFUND_REASON_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>}
+        <Field label={t('cash.colReason')} required>
+          {(id) => <Select id={id} value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>{Object.keys(REFUND_REASON_LABEL).map((k) => <option key={k} value={k}>{t(`cash.refundReason.${k}` as MessageKey)}</option>)}</Select>}
         </Field>
-        <Field label="Izoh" required error={errors.reason}>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Masalan: UZI apparati ishlamadi, tekshiruv o‘tkazilmadi" />}</Field>
+        <Field label={t('cash.note')} required error={errors.reason}>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('cash.refundNotePlaceholder')} />}</Field>
       </div>
     </Modal>
   );

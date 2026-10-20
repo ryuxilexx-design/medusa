@@ -155,6 +155,15 @@ export const api = {
   'api.tgTokenRejected': ['Telegram bu tokenni qabul qilmadi', 'Telegram не принял этот токен'],
   'api.tgUnreachable': ['Telegram bilan bog‘lanib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.', 'Не удалось связаться с Telegram. Проверьте интернет и повторите.'],
 
+  // «Tezkor savollar» answers (numbers from SQL, sentence from these templates)
+  'api.report.payments': ['{date} kuni {n} ta to‘lov qayd etilgan, jami {sum}.', { one: '{date} проведён {n} платёж на сумму {sum}.', few: '{date} проведено {n} платежа на сумму {sum}.', many: '{date} проведено {n} платежей на сумму {sum}.' }],
+  'api.report.noPayments': ['{date} kuni hali to‘lov qayd etilmagan.', '{date} платежей пока нет.'],
+  'api.report.refunds': ['{n} ta qaytarish: {sum}. Sof tushum: {net}.', { one: '{n} возврат: {sum}. Чистая выручка: {net}.', few: '{n} возврата: {sum}. Чистая выручка: {net}.', many: '{n} возвратов: {sum}. Чистая выручка: {net}.' }],
+  'api.report.topServices': ['Oxirgi 30 kunda eng ko‘p summa bergan xizmatlar: {list}.', 'Услуги с наибольшей выручкой за последние 30 дней: {list}.'],
+  'api.report.noServices': ['Oxirgi 30 kunda bajarilgan xizmat yo‘q.', 'За последние 30 дней выполненных услуг нет.'],
+  'api.report.debt': ['Hozir {n} ta hisob bo‘yicha qarzdorlik bor, jami {sum}.', { one: 'Сейчас задолженность по {n} счёту, всего {sum}.', few: 'Сейчас задолженность по {n} счетам, всего {sum}.', many: 'Сейчас задолженность по {n} счетам, всего {sum}.' }],
+  'api.report.noDebt': ['Qarzdor hisob yo‘q.', 'Счетов с задолженностью нет.'],
+
   // field validation (packages/contracts schemas)
   'api.v.max': ['{label} {max} belgidan oshmasin', { one: '{label}: не более {max} символа', few: '{label}: не более {max} символов', many: '{label}: не более {max} символов' }],
   'api.v.min': ['{label} kamida {min} belgidan iborat bo‘lsin', { one: '{label}: не менее {min} символа', few: '{label}: не менее {min} символов', many: '{label}: не менее {min} символов' }],

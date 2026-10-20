@@ -33,7 +33,7 @@ const MAX_TG_PATIENTS_PER_PHONE = 6;
 const NAME_RE = /^[\p{L}][\p{L}'‘’ -]{1,39}$/u;
 const BOOKABLE = ['consultation', 'ultrasound', 'procedure'];
 
-const money = (tiyin: number, lang: Lang) => `${Math.round(tiyin / 100).toLocaleString('ru-RU').replace(/ /g, ' ')} ${lang === 'uz' ? 'so‘m' : 'сум'}`;
+const money = (tiyin: number, lang: Lang) => `${Math.round(tiyin / 100).toLocaleString('ru-RU').replace(/ /g, ' ')} ${lang === 'uz' ? 'so‘m' : lang === 'uz-Cyrl' ? 'сўм' : 'сум'}`;
 const capitalize = (s: string) => s.trim().replace(/\s+/g, ' ').replace(/(^|[\s-])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
 
 /** One processed update: DB client, chat, reply buffer. */
@@ -150,11 +150,11 @@ export class BotEngine {
       return this.showMenu(t);
     }
     if (!t.chat.phone) return t.send(t.t.needContact, this.contactKb(t.lang));
-    const isLabel = (k: 'menuBook' | 'menuMine' | 'menuAddress' | 'menuLang') => text === T.uz[k] || text === T.ru[k];
+    const isLabel = (k: 'menuBook' | 'menuMine' | 'menuAddress' | 'menuLang') => text === T.uz[k] || text === T['uz-Cyrl'][k] || text === T.ru[k];
     if (isLabel('menuBook')) return this.startBooking(t);
     if (isLabel('menuMine')) return this.showMine(t);
     if (isLabel('menuAddress')) return this.showAddresses(t);
-    if (isLabel('menuLang')) return t.send(T.uz.langPick, { inline_keyboard: [[{ text: 'O‘zbekcha', callback_data: 'lang:uz' }, { text: 'Русский', callback_data: 'lang:ru' }]] });
+    if (isLabel('menuLang')) return t.send(T.uz.langPick, { inline_keyboard: [[{ text: 'O‘zbekcha', callback_data: 'lang:uz' }, { text: 'Ўзбекча', callback_data: 'lang:uz-Cyrl' }, { text: 'Русский', callback_data: 'lang:ru' }]] });
     if (text === '/menu' || text === '/help') return this.showMenu(t);
 
     const step = t.chat.state.step;
@@ -205,7 +205,7 @@ export class BotEngine {
 
   private async onCallback(t: Turn, data: string) {
     if (!t.chat.phone) return t.send(t.t.needContact, this.contactKb(t.lang));
-    if (data === 'lang:uz' || data === 'lang:ru') {
+    if (data === 'lang:uz' || data === 'lang:uz-Cyrl' || data === 'lang:ru') {
       t.chat.lang = data.slice(5) as Lang;
       t.send(t.t.langSet);
       return this.showMenu(t);

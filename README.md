@@ -157,7 +157,7 @@ Bemor botda nima qila oladi:
 - **Qabuldan oldingi so‘rovnoma:** shikoyat, allergiya, ichayotgan dorilar. Javoblarni faqat shu qabul shifokori ko‘radi va bir bosishda qaydga qo‘shishi mumkin.
 - **Eslatmalar:** qabuldan bir kun oldin «Kelaman / Ko‘chirish / Bekor qilish» tugmalari bilan, 2 soat oldin qisqa eslatma.
 - **Klinikadan xabarlar:** klinika qabulni bekor qilsa yoki ko‘chirsa, bemorga xabar boradi. Tahlil tayyor bo‘lsa ham xabar boradi, lekin **qiymatlar Telegram’ga hech qachon yuborilmaydi**.
-- **Til:** o‘zbek va rus.
+- **Til:** o‘zbek (lotin), o‘zbek (kirill) va rus — bemor menyudagi «🌐 Til / Язык» orqali tanlaydi.
 
 Ishonchlilik:
 - Har bir Telegram xabari bir marta qayta ishlanadi. Javoblar faqat bazaga yozilgandan keyin yuboriladi.
@@ -165,6 +165,14 @@ Ishonchlilik:
 - Bitta chat daqiqasiga 30 tadan ko‘p xabar yubora olmaydi.
 
 Demo rejimida **simulyator** bor: haqiqiy bot mantig‘i ekranda, Telegram’siz. Uchrashuvda ko‘rsatish va sinov uchun.
+
+## Tillar va dizayn
+
+- **Uch til:** o‘zbek (lotin), o‘zbek (kirill), rus. Har bir xodim chap menyuning pastida tanlaydi; tanlov haqiqiy xodim akkauntida (istalgan qurilmada), demo kartada — faqat shu sessiyada saqlanadi. Kirish sahifasida ham til tanlanadi.
+- **Matn o‘lchami:** «Oddiy» (18 px) yoki «Katta» (20 px) — yoshi kattaroq shifokorlar uchun; xodimda saqlanadi.
+- **Bitta manba:** barcha interfeys matnlari `packages/contracts/src/i18n/messages/*.ts` da `[o‘zbekcha, ruscha]` juftligi. O‘zbek kirill lotindan qoidalar bo‘yicha avtomatik olinadi (o‘zlashma so‘zlar ro‘yxati bilan). Server xatolari va forma xatolari ham xodim tilida qaytadi.
+- **Ma’lumot o‘girilmaydi:** bemor, xodim, xizmat nomlari va qayd matnlari qanday yozilgan bo‘lsa, shunday ko‘rinadi.
+- **Dizayn:** Golos Text shrifti (ilova ichida, internetsiz), katta tugmalar, sariq fokus halqasi, holat — so‘z + belgi + rang, allergiya — qizil chiziq.
 
 ## Arxitektura qisqacha
 

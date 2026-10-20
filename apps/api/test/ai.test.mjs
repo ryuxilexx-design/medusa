@@ -126,6 +126,22 @@ test('qaydni tartiblash (jonli): SDK so‘rovi to‘g‘ri; bemor ismi va telefo
   assert.ok(!a.summary.includes('bosh og‘rig‘i'), 'audit’da klinik matn yo‘q');
 });
 
+test('AI shifokor tilida javob beradi: ruscha sessiyada ko‘rsatma rus tilida yozishni so‘raydi, «Kiritilmagan» belgisi o‘zgarmaydi', async () => {
+  assert.equal((await doctor.put('/me/preferences', { locale: 'ru' })).status, 200);
+  try {
+    const before = claude.calls.length;
+    const r = await doctor.post('/ai/note-draft', { text: 'Bemor 2 kundan beri yo‘taldan shikoyat qiladi, harorat 37.5.' });
+    assert.equal(r.status, 200, r.text);
+    const sys = JSON.stringify(claude.calls[before].body.system);
+    assert.match(sys, /rus tilida/); assert.match(sys, /Kiritilmagan/);
+    const icd = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya' });
+    assert.equal(icd.status, 200);
+    assert.match(JSON.stringify(claude.calls.at(-1).body.messages), /rus tilida/, 'MKB-10 izohi ham rus tilida so‘raladi');
+  } finally {
+    await doctor.put('/me/preferences', { locale: 'uz' });
+  }
+});
+
 test('xatolar: boshqa shifokor qabuli 403; rad etish, buzuq javob, noto‘g‘ri kalit — tushunarli xato va hisobda qayd', async () => {
   const text = 'Bemor 3 kundan beri yo‘taldan shikoyat qiladi, harorat 37.5.';
   assert.equal((await other.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id })).status, 403);

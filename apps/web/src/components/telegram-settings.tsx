@@ -1,10 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellRing, Bot, Phone, RefreshCw, Send } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime, formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, cx, Field, Input, LoadingRows, ErrorState, useToast } from '@/components/ui';
 
 type Status = {
@@ -13,8 +14,12 @@ type Status = {
   secrets_configured: boolean; simulator_available: boolean; workers: boolean;
 };
 
+/** A translated sentence whose {placeholders} are rendered as elements (bold names, code). */
+const rich = (s: string, parts: Record<string, React.ReactNode>) => s.split(/\{(\w+)\}/).map((x, i) => (i % 2 ? <Fragment key={i}>{parts[x]}</Fragment> : x));
+
 /** Settings → Telegram: connect the clinic's own bot (token stored encrypted on the server) and try it in the simulator. */
 export function TelegramSettings() {
+  const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const q = useQuery({ queryKey: ['telegram'], queryFn: () => api<{ data: Status }>('/telegram').then((r) => r.data), refetchInterval: 30_000 });
@@ -23,12 +28,12 @@ export function TelegramSettings() {
   const [confirmOff, setConfirmOff] = useState(false);
   const connect = useMutation({
     mutationFn: () => api<{ data: { username: string } }>('/telegram/bot', { method: 'POST', body: { token: token.trim() } }),
-    onSuccess: (r) => { setToken(''); setTokenError(null); qc.invalidateQueries({ queryKey: ['telegram'] }); toast.success(`@${r.data.username} ulandi`); },
+    onSuccess: (r) => { setToken(''); setTokenError(null); qc.invalidateQueries({ queryKey: ['telegram'] }); toast.success(t('admin.tg.connected', { bot: `@${r.data.username}` })); },
     onError: (e) => setTokenError(e instanceof ApiError && e.fields?.token ? e.fields.token : (e as Error).message),
   });
   const disconnect = useMutation({
     mutationFn: () => api('/telegram/bot', { method: 'DELETE' }),
-    onSuccess: () => { setConfirmOff(false); qc.invalidateQueries({ queryKey: ['telegram'] }); toast.success('Bot o‘chirildi'); },
+    onSuccess: () => { setConfirmOff(false); qc.invalidateQueries({ queryKey: ['telegram'] }); toast.success(t('admin.tg.disconnected')); },
     onError: (e) => { setConfirmOff(false); toast.error(e); },
   });
 
@@ -41,58 +46,58 @@ export function TelegramSettings() {
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
       <div className="space-y-5">
         <section>
-          <h3 className="text-sm font-semibold text-slate-900">Klinika boti</h3>
-          <p className="mt-1 text-[0.8125rem] text-slate-600">Bemorlar bot orqali qabulga yoziladi, qabullarini ko‘radi, ko‘chiradi yoki bekor qiladi. Bot qabuldan bir kun va 2 soat oldin eslatma, tahlil tayyor bo‘lganda xabar (qiymatlarsiz) yuboradi. Qabuldan oldin bemor 3 ta savolga javob beradi — javoblar faqat shu qabul shifokoriga ko‘rinadi.</p>
+          <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.clinicBot')}</h3>
+          <p className="mt-1 text-[0.8125rem] text-slate-600">{t('admin.tg.intro')}</p>
           {s.bot ? (
             <div className="mt-3 rounded-lg border border-slate-200 p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Bot className="h-4 w-4 text-slate-500" /><span className="font-medium">@{s.bot.username}</span>
-                {active ? <Badge tone="green">Ulangan</Badge> : <Badge>O‘chirilgan</Badge>}
-                <span className="text-xs text-slate-500">{fmtDateTime(s.bot.updated_at)}</span>
-                {active && !confirmOff && <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirmOff(true)}>O‘chirish</Button>}
+                {active ? <Badge tone="green">{t('admin.tg.statusOn')}</Badge> : <Badge>{t('admin.tg.statusOff')}</Badge>}
+                <span className="text-xs text-slate-600">{fmtDateTime(s.bot.updated_at)}</span>
+                {active && !confirmOff && <Button size="sm" variant="danger" className="ml-auto" onClick={() => setConfirmOff(true)}>{t('admin.tg.turnOff')}</Button>}
               </div>
               {confirmOff && (
-                <div className="mt-2"><Alert tone="yellow" title="Botni o‘chirasizmi?">Bot xabarlarga javob bermay qo‘yadi va eslatmalar yuborilmaydi. Yozilgan qabullar o‘zgarmaydi.
-                  <div className="mt-2 flex gap-2"><Button size="sm" variant="danger" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>Ha, o‘chirish</Button><Button size="sm" onClick={() => setConfirmOff(false)}>Yo‘q</Button></div>
+                <div className="mt-2"><Alert tone="yellow" title={t('admin.tg.offTitle')}>{t('admin.tg.offText')}
+                  <div className="mt-2 flex gap-2"><Button size="sm" variant="danger" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>{t('admin.tg.offYes')}</Button><Button size="sm" onClick={() => setConfirmOff(false)}>{t('admin.tg.no')}</Button></div>
                 </Alert></div>
               )}
-              {s.bot.last_error && <div className="mt-2"><Alert tone="red" title="Bot ishlamayapti">{s.bot.last_error}{s.bot.last_error_at ? ` (${fmtDateTime(s.bot.last_error_at)})` : ''}</Alert></div>}
+              {s.bot.last_error && <div className="mt-2"><Alert tone="red" title={t('admin.tg.broken')}>{s.bot.last_error}{s.bot.last_error_at ? ` (${fmtDateTime(s.bot.last_error_at)})` : ''}</Alert></div>}
             </div>
           ) : null}
           {!active && (
             <div className="mt-3 space-y-3 rounded-lg border border-dashed border-slate-300 p-3">
               <ol className="list-decimal space-y-1 pl-5 text-[0.8125rem] text-slate-700">
-                <li>Telegram’da <b>@BotFather</b> ni oching → <code>/newbot</code> → botga nom va <code>…_bot</code> bilan tugaydigan manzil bering.</li>
-                <li>BotFather bergan tokenni quyiga qo‘ying. Token serverda shifrlangan holda saqlanadi va qayta ko‘rsatilmaydi.</li>
+                <li>{rich(t('admin.tg.step1'), { botfather: <b>@BotFather</b>, newbot: <code>/newbot</code>, suffix: <code>…_bot</code> })}</li>
+                <li>{t('admin.tg.step2', { botfather: 'BotFather' })}</li>
               </ol>
-              {!s.secrets_configured && <Alert tone="yellow" title="Server sozlanmagan">Serverda <code>APP_SECRET_KEY</code> yo‘q — token xavfsiz saqlanmaydi, shuning uchun ulash o‘chirilgan. Administrator kalitni qo‘shishi kerak.</Alert>}
-              <form className="flex flex-col gap-2 sm:flex-row sm:items-start" onSubmit={(e) => { e.preventDefault(); setTokenError(null); if (!token.trim()) { setTokenError('Tokenni kiriting'); return; } connect.mutate(); }}>
-                <Field label="Bot tokeni" error={tokenError ?? undefined} className="flex-1">
+              {!s.secrets_configured && <Alert tone="yellow" title={t('admin.tg.noSecretsTitle')}>{rich(t('admin.tg.noSecrets'), { key: <code>APP_SECRET_KEY</code> })}</Alert>}
+              <form className="flex flex-col gap-2 sm:flex-row sm:items-start" onSubmit={(e) => { e.preventDefault(); setTokenError(null); if (!token.trim()) { setTokenError(t('admin.tg.enterToken')); return; } connect.mutate(); }}>
+                <Field label={t('admin.tg.token')} error={tokenError ?? undefined} className="flex-1">
                   {(id) => <Input id={id} type="password" autoComplete="off" spellCheck={false} value={token} onChange={(e) => { setToken(e.target.value); setTokenError(null); }} placeholder="123456789:AA…" disabled={!s.secrets_configured} invalid={!!tokenError} />}
                 </Field>
-                <Button type="submit" variant="primary" className="sm:mt-6" loading={connect.isPending} disabled={!s.secrets_configured}>Ulash</Button>
+                <Button type="submit" variant="primary" className="sm:mt-6" loading={connect.isPending} disabled={!s.secrets_configured}>{t('admin.tg.connect')}</Button>
               </form>
             </div>
           )}
-          {!s.workers && <p className="mt-2 text-xs text-amber-800">Fon jarayonlari o‘chirilgan (TELEGRAM_WORKERS=off): bot xabarlarni o‘qimaydi va eslatma yubormaydi.</p>}
+          {!s.workers && <p className="mt-2 text-xs text-amber-800">{t('admin.tg.workersOff')}</p>}
         </section>
 
         <section>
-          <h3 className="text-sm font-semibold text-slate-900">Oxirgi 7 kun</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.last7')}</h3>
           <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {[['Bog‘langan bemor chatlari', s.stats.linked_chats], ['Bot orqali yozilish', s.stats.bookings_7d], ['Yuborilgan xabar', s.stats.sent_7d], ['«Kelaman» tasdig‘i', s.stats.confirmed_7d], ['Yuborilmagan', s.stats.failed_7d]].map(([k, v]) => (
-              <div key={k as string} className="rounded-md border border-slate-200 px-3 py-2"><dt className="text-2xs text-slate-500">{k}</dt><dd className="text-lg font-semibold tabular-nums">{v}</dd></div>
+            {[[t('admin.tg.statChats'), s.stats.linked_chats], [t('admin.tg.statBookings'), s.stats.bookings_7d], [t('admin.tg.statSent'), s.stats.sent_7d], [t('admin.tg.statConfirmed'), s.stats.confirmed_7d], [t('admin.tg.statFailed'), s.stats.failed_7d]].map(([k, v]) => (
+              <div key={k as string} className="rounded-md border border-slate-200 px-3 py-2"><dt className="text-2xs text-slate-600">{k}</dt><dd className="text-lg font-semibold tabular-nums">{v}</dd></div>
             ))}
           </dl>
-          <p className="mt-1 text-xs text-slate-500">Bog‘langan chatlar — haqiqiy bot bo‘yicha. Simulyatordagi sinovlar yozilish va xabarlar soniga qo‘shiladi.</p>
+          <p className="mt-1 text-xs text-slate-600">{t('admin.tg.statsNote')}</p>
         </section>
 
         <section className="text-[0.8125rem] text-slate-600">
-          <h3 className="text-sm font-semibold text-slate-900">Qanday ishlaydi</h3>
+          <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.how')}</h3>
           <ul className="mt-1 list-disc space-y-1 pl-5">
-            <li>Bemor telefon raqamini Telegram orqali ulashadi (faqat o‘z raqamini) — shu raqamli bemor kartalari topiladi. Karta bo‘lmasa, bemor familiya, ism va tug‘ilgan sanani kiritadi.</li>
-            <li>Bot faqat ish jadvali bor shifokorlarning bo‘sh vaqtlarini (kamida 30 daqiqa keyingi) taklif qiladi. Qabul saytdagi bilan bir xil qoidalar bilan yoziladi, jadvalda «TG» belgisi bilan ko‘rinadi.</li>
-            <li>Klinika qabulni bekor qilsa yoki ko‘chirsa, bemorga xabar boradi. Tahlil natijasining qiymatlari Telegram’ga hech qachon yuborilmaydi.</li>
+            <li>{t('admin.tg.how1')}</li>
+            <li>{t('admin.tg.how2', { tg: 'TG' })}</li>
+            <li>{t('admin.tg.how3')}</li>
           </ul>
         </section>
       </div>
@@ -106,6 +111,7 @@ const CHAT_KEY = 'meduza.tgsim.chat';
 
 /** Phone-like chat that drives the real bot engine through the server (demo mode only). */
 function Simulator() {
+  const t = useT();
   const { me } = useSession();
   const toast = useToast();
   const [chatId, setChatId] = useState<number | null>(null);
@@ -161,7 +167,7 @@ function Simulator() {
   }
   const runWorkers = useMutation({
     mutationFn: () => api<{ data: { planned: number; sent: number; skipped: number; failed: number } }>('/telegram/sim/run-workers', { method: 'POST' }),
-    onSuccess: async (r) => { await pull(); toast.info(`Eslatmalar: ${r.data.planned} ta navbatga qo‘yildi, ${r.data.sent} ta yuborildi`); },
+    onSuccess: async (r) => { await pull(); toast.info(t('admin.tg.remindersToast', { planned: r.data.planned, sent: r.data.sent })); },
     onError: (e) => toast.error(e),
   });
   async function demoPhone() {
@@ -175,21 +181,21 @@ function Simulator() {
   for (const m of msgs) if (m.direction === 'out' && m.markup) { if (m.markup.keyboard) replyKb = m.markup.keyboard; else if (m.markup.remove_keyboard) replyKb = null; }
 
   return (
-    <section aria-label="Telegram simulyatori" className="self-start xl:sticky xl:top-[72px]">
+    <section aria-label={t('admin.tg.simAria')} className="self-start xl:sticky xl:top-[72px]">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-900">Simulyator <span className="font-normal text-slate-500">· demo</span></h3>
+        <h3 className="text-sm font-semibold text-slate-900">{t('admin.tg.simTitle')} <span className="font-normal text-slate-600">· {t('admin.tg.simDemo')}</span></h3>
         <div className="flex gap-1">
-          <Button size="sm" variant="ghost" icon={<BellRing className="h-4 w-4" />} loading={runWorkers.isPending} onClick={() => runWorkers.mutate()} title="Eslatma va xabarlarni hozir yuborish (odatda har daqiqada avtomatik)">Eslatmalar</Button>
-          <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void newChat().catch((e) => toast.error(e))}>Yangi suhbat</Button>
+          <Button size="sm" variant="ghost" icon={<BellRing className="h-4 w-4" />} loading={runWorkers.isPending} onClick={() => runWorkers.mutate()} title={t('admin.tg.remindersTitle')}>{t('admin.tg.reminders')}</Button>
+          <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} onClick={() => void newChat().catch((e) => toast.error(e))}>{t('admin.tg.newChat')}</Button>
         </div>
       </div>
       <div className="flex h-[620px] flex-col overflow-hidden rounded-[22px] border-4 border-slate-800 bg-[#dfe7ee] shadow-lg">
         <div className="flex items-center gap-2 bg-[#517da2] px-3 py-2 text-white">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20"><Bot className="h-4 w-4" /></div>
-          <div className="leading-tight"><div className="text-sm font-semibold">{me.clinic_name}</div><div className="text-2xs text-white/80">bot · simulyator</div></div>
+          <div className="leading-tight"><div className="text-sm font-semibold">{me.clinic_name}</div><div className="text-2xs text-white/80">{t('admin.tg.simHeader')}</div></div>
         </div>
         <div ref={scroller} className="flex-1 space-y-2 overflow-y-auto px-2 py-3" aria-live="polite">
-          {!msgs.length && <p className="mt-16 text-center text-xs text-slate-500">Boshlash uchun <b>/start</b> yuboring.</p>}
+          {!msgs.length && <p className="mt-16 text-center text-xs text-slate-600">{rich(t('admin.tg.simStart'), { cmd: <b>/start</b> })}</p>}
           {msgs.map((m) => m.markup?.toast ? (
             <div key={m.id} className="text-center"><span className="rounded-full bg-slate-700/70 px-2 py-0.5 text-2xs text-white">{m.text}</span></div>
           ) : (
@@ -211,9 +217,9 @@ function Simulator() {
         {contactOpen && (
           <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!phone.trim()) return; setContactOpen(false); void send({ contact_phone: phone.trim() }); }}>
             <Phone className="h-4 w-4 shrink-0 text-slate-500" />
-            <Input aria-label="Ulashiladigan telefon raqami" className="h-8 text-[0.8125rem]" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" autoFocus />
-            <Button size="sm" type="button" variant="ghost" onClick={() => void demoPhone()} title="Demo bazadagi tasodifiy bemor raqami">Demo</Button>
-            <Button size="sm" type="submit" variant="primary">Ulashish</Button>
+            <Input aria-label={t('admin.tg.sharePhoneAria')} className="h-8 text-[0.8125rem]" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+998 90 123 45 67" autoFocus />
+            <Button size="sm" type="button" variant="ghost" onClick={() => void demoPhone()} title={t('admin.tg.demoPhoneTitle')}>{t('admin.tg.demoPhone')}</Button>
+            <Button size="sm" type="submit" variant="primary">{t('admin.tg.share')}</Button>
           </form>
         )}
         {replyKb && !contactOpen && (
@@ -226,13 +232,13 @@ function Simulator() {
             ))}
           </div>
         )}
-        <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; const t = text.trim(); setText(''); void send({ text: t }); }}>
-          <input aria-label="Xabar" value={text} onChange={(e) => setText(e.target.value)} placeholder="Xabar yozing…" maxLength={2000}
+        <form className="flex items-center gap-2 border-t border-slate-300 bg-white px-2 py-2" onSubmit={(e) => { e.preventDefault(); if (!text.trim()) return; const msg = text.trim(); setText(''); void send({ text: msg }); }}>
+          <input aria-label={t('admin.tg.messageAria')} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('admin.tg.messagePlaceholder')} maxLength={2000}
             className="h-9 flex-1 rounded-full bg-slate-100 px-3 text-[0.8125rem] focus:outline-none focus:ring-2 focus:ring-[#517da2]" />
-          <button type="submit" disabled={busy || !text.trim()} aria-label="Yuborish" className="rounded-full p-2 text-[#517da2] hover:bg-slate-100 disabled:opacity-40"><Send className="h-4 w-4" /></button>
+          <button type="submit" disabled={busy || !text.trim()} aria-label={t('admin.tg.send')} className="rounded-full p-2 text-[#517da2] hover:bg-slate-100 disabled:opacity-40"><Send className="h-4 w-4" /></button>
         </form>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Simulyator haqiqiy bot mantig‘ini ishlatadi va demo klinikaga haqiqiy yozuv qiladi (demo reset tozalaydi). Telegram’ga hech narsa yuborilmaydi.</p>
+      <p className="mt-2 text-xs text-slate-600">{t('admin.tg.simNote')}</p>
     </section>
   );
 }

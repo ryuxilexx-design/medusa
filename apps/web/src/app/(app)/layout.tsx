@@ -124,7 +124,10 @@ function Shell({ children }: { children: React.ReactNode }) {
         {/* personal display settings stay in sight on every screen, without crowding the header */}
         <div className="space-y-2.5 border-t border-slate-100 p-3">
           <LanguagePicker signedIn className="w-full [&>select]:flex-1" />
-          <TextSizeToggle showLabel className="w-full [&>button]:flex-1" />
+          <div>
+            <div className="mb-1 text-[0.8125rem] font-semibold text-slate-600">{t('pref.textSize')}</div>
+            <TextSizeToggle className="w-full [&>button]:flex-1" />
+          </div>
           <div className="text-2xs text-slate-600">{t('shell.release')}</div>
         </div>
       </aside>

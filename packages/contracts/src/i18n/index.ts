@@ -7,12 +7,13 @@ import { cash } from './messages/cash';
 import { clinical } from './messages/clinical';
 import { admin } from './messages/admin';
 import { api } from './messages/api';
+import { print } from './messages/print';
 
 export * from './core';
 export { latinToCyrillic } from './translit';
 
 /** Every interface message. Each area keeps its own file; keys are prefixed by area, so they never collide. */
-export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api };
+export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print };
 export type MessageKey = keyof typeof MESSAGES;
 export const translate: (locale: Locale, key: MessageKey, params?: Params) => string = createTranslator(MESSAGES);
 

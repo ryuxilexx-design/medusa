@@ -1,12 +1,15 @@
 /** Money is transported as integer tiyin (1 so'm = 100 tiyin). */
 export const TIYIN_PER_SOM = 100;
 
-export function formatSom(tiyin: number | null | undefined, withCurrency = true): string {
+/** The currency word in each interface language (numbers are always grouped the same way: 1 250 000). */
+const SOM_WORD = { uz: 'so‘m', 'uz-Cyrl': 'сўм', ru: 'сум' } as const;
+
+export function formatSom(tiyin: number | null | undefined, withCurrency = true, locale: keyof typeof SOM_WORD = 'uz'): string {
   if (tiyin == null || Number.isNaN(tiyin)) return '—';
   const som = tiyin / TIYIN_PER_SOM;
   const whole = Number.isInteger(som);
   const s = som.toLocaleString('ru-RU', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 }).replace(/ /g, ' ');
-  return withCurrency ? `${s} so‘m` : s;
+  return withCurrency ? `${s} ${SOM_WORD[locale] ?? SOM_WORD.uz}` : s;
 }
 
 /** Parses a user-entered so'm amount ("150 000", "150000,50") into tiyin. Returns null when invalid. */

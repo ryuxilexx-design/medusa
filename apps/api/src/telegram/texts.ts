@@ -1,5 +1,6 @@
-// Patient-facing bot texts in Uzbek (Latin) and Russian. Keep them short: they are read on a phone.
-export type Lang = 'uz' | 'ru';
+// Patient-facing bot texts in Uzbek (Latin), Uzbek (Cyrillic, derived) and Russian. Keep them short: read on a phone.
+import { latinToCyrillic } from '@meduza/contracts';
+export type Lang = 'uz' | 'uz-Cyrl' | 'ru';
 
 const uz = {
   welcome: (clinic: string) => `Assalomu alaykum! Bu «${clinic}» klinikasining boti.\n\nBu yerda qabulga yozilasiz, qabullaringizni ko‘rasiz va eslatmalar olasiz.\n\nDavom etish uchun pastdagi tugma orqali telefon raqamingizni ulashing — shu raqam bo‘yicha klinikadagi kartangizni topamiz.`,
@@ -48,7 +49,7 @@ const uz = {
   addresses: (list: string) => `📍 Filiallarimiz:\n\n${list}`,
   stale: 'Bu tugma eskirgan. Menyudan qayta tanlang.', useButtons: 'Iltimos, tugmalardan birini tanlang 👇',
   unknown: 'Tushunmadim. Pastdagi menyudan tanlang 👇', error: 'Xatolik yuz berdi. Birozdan keyin qayta urinib ko‘ring.',
-  langPick: 'Tilni tanlang / Выберите язык:', langSet: 'Til: o‘zbekcha ✅',
+  langPick: 'Tilni tanlang / Тилни танланг / Выберите язык:', langSet: 'Til: o‘zbekcha ✅',
 };
 type Texts = typeof uz;
 
@@ -99,24 +100,44 @@ const ru: Texts = {
   addresses: (list) => `📍 Наши филиалы:\n\n${list}`,
   stale: 'Эта кнопка устарела. Выберите заново в меню.', useButtons: 'Пожалуйста, выберите одну из кнопок 👇',
   unknown: 'Не понял. Выберите в меню ниже 👇', error: 'Произошла ошибка. Попробуйте чуть позже.',
-  langPick: 'Tilni tanlang / Выберите язык:', langSet: 'Язык: русский ✅',
+  langPick: 'Tilni tanlang / Тилни танланг / Выберите язык:', langSet: 'Язык: русский ✅',
 };
 
-export const T: Record<Lang, Texts> = { uz, ru };
+/**
+ * Uzbek Cyrillic from the Latin texts. A template is converted with its arguments replaced by markers, then the real
+ * arguments (patient, doctor, service, clinic names — data) are put back unconverted.
+ */
+const M = '\u0001';
+function cyrillicOf<F>(v: F): F {
+  if (typeof v === 'string') return latinToCyrillic(v) as F;
+  if (typeof v !== 'function') return v;
+  return ((...args: unknown[]) => {
+    const kept: unknown[] = [];
+    const mark = (x: unknown) => { kept.push(x); return `${M}${kept.length - 1}${M}`; };
+    const masked = args.map((a) => (a && typeof a === 'object' ? new Proxy({}, { get: (_o, k) => mark((a as Record<string | symbol, unknown>)[k]) }) : typeof a === 'boolean' ? a : mark(a)));
+    const tpl = String((v as (...x: unknown[]) => unknown)(...masked));
+    return latinToCyrillic(tpl).replace(new RegExp(`${M}(\\d+)${M}`, 'g'), (_m, i) => String(kept[Number(i)]));
+  }) as F;
+}
+const cyrl = Object.fromEntries(Object.entries(uz).map(([k, v]) => [k, cyrillicOf(v)])) as Texts;
+cyrl.langSet = 'Тил: ўзбекча (кирилл) ✅';
+
+export const T: Record<Lang, Texts> = { uz, 'uz-Cyrl': cyrl, ru };
 export type Card = { patient: string; service: string; doctor: string; date: string; time: string; place: string };
 
-const MONTHS: Record<Lang, string[]> = {
+const MONTHS: Record<'uz' | 'ru', string[]> = {
   uz: ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun', 'iyul', 'avgust', 'sentabr', 'oktabr', 'noyabr', 'dekabr'],
   ru: ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'],
 };
-const DAYS: Record<Lang, string[]> = {
+const DAYS: Record<'uz' | 'ru', string[]> = {
   uz: ['yakshanba', 'dushanba', 'seshanba', 'chorshanba', 'payshanba', 'juma', 'shanba'],
   ru: ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'],
 };
 /** 'YYYY-MM-DD' → «19-oktabr, dushanba» / «19 октября, понедельник». */
-export function humanDate(date: string, lang: Lang, withDay = true) {
+export function humanDate(date: string, lang: Lang, withDay = true): string {
   const [, m, d] = date.split('-').map(Number);
   const wd = new Date(date + 'T00:00:00Z').getUTCDay();
+  if (lang === 'uz-Cyrl') return latinToCyrillic(humanDate(date, 'uz', withDay));
   const base = lang === 'uz' ? `${d}-${MONTHS.uz[m - 1]}` : `${d} ${MONTHS.ru[m - 1]}`;
   return withDay ? `${base}, ${DAYS[lang][wd]}` : base;
 }
@@ -124,6 +145,6 @@ export function humanDate(date: string, lang: Lang, withDay = true) {
 export function shortDate(date: string, lang: Lang) {
   const [, m, d] = date.split('-');
   const wd = new Date(date + 'T00:00:00Z').getUTCDay();
-  const short = lang === 'uz' ? ['Ya', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh'] : ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+  const short = lang === 'uz' ? ['Ya', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh'] : lang === 'uz-Cyrl' ? ['Як', 'Ду', 'Се', 'Чо', 'Па', 'Жу', 'Ша'] : ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
   return `${d}.${m} ${short[wd]}`;
 }

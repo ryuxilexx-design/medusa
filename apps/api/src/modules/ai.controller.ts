@@ -1,6 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, newsFeedbackSchema } from '@meduza/contracts';
+import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, newsFeedbackSchema, translate } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { config } from '../core/config';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
@@ -10,6 +10,7 @@ import { audit } from '../core/audit';
 import { addDays, dayStart, today } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { AiClient, freeTierError } from '../ai/ai-client';
+import { answerLanguage } from '../ai/lang';
 import { Icd10Service } from '../ai/icd10';
 import { NewsService, SPECIALTIES, specialtyByKey, specialtyOf } from '../ai/news';
 import { PatientIdentity, redact } from '../ai/redact';
@@ -85,7 +86,7 @@ export class AiController {
     }
     const patient = await this.patientOf(ctx, encounter_id);
     const { value, model } = await this.ai.json({
-      route: 'note_draft', system: NOTE_SYSTEM, user: redact(text, patient), schema: NOTE_SCHEMA, validate: noteZ,
+      route: 'note_draft', system: `${NOTE_SYSTEM}\n${answerLanguage(ctx.locale)} Bo‘sh bo‘lim uchun baribir aynan "Kiritilmagan" deb yoz.`, user: redact(text, patient), schema: NOTE_SCHEMA, validate: noteZ,
       effort: 'low', maxTokens: 4000, tenantId: ctx.tenantId, membershipId: ctx.membershipId,
     });
     await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, `AI loyihasi yaratildi (${model})`);
@@ -166,6 +167,9 @@ export class AiController {
     const { question, branch_id } = parse(aiReportSchema, body);
     const branches = branchScope(ctx, branch_id);
     const t = today();
+    // the sentence in the manager's language; numbers and service names are data, kept as they are
+    const L = ctx.locale;
+    const som = (v: number) => formatSom(v, true, L);
     let facts: Record<string, unknown>; let text: string; let link: string;
     if (question === 'revenue_today') {
       const P = [ctx.tenantId, branches, dayStart(t), dayStart(addDays(t, 1))];
@@ -173,20 +177,20 @@ export class AiController {
       const r = (await this.db.one(`SELECT coalesce(sum(amount),0)::bigint AS s, count(*)::int AS n FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4`, P))!;
       const net = Number(p.s) - Number(r.s);
       facts = { date: t, payments_total: Number(p.s), payments: p.n, refunds_total: Number(r.s), refunds: r.n, revenue: net };
-      text = (p.n ? `${t} kuni ${p.n} ta to‘lov qayd etilgan, jami ${formatSom(Number(p.s))}.` : `${t} kuni hali to‘lov qayd etilmagan.`)
-        + (r.n ? ` ${r.n} ta qaytarish: ${formatSom(Number(r.s))}. Sof tushum: ${formatSom(net)}.` : '');
+      text = (p.n ? translate(L, 'api.report.payments', { date: t, n: p.n, sum: som(Number(p.s)) }) : translate(L, 'api.report.noPayments', { date: t }))
+        + (r.n ? ' ' + translate(L, 'api.report.refunds', { n: r.n, sum: som(Number(r.s)), net: som(net) }) : '');
       link = `/finance?from=${t}&to=${t}`;
     } else if (question === 'top_services') {
       const rows = await this.db.rows(`SELECT o.service_name, sum(${NET_LINE})::bigint AS v FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
         WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND o.status IN ('completed','verified') AND i.status <> 'void'
         GROUP BY 1 ORDER BY v DESC LIMIT 3`, [ctx.tenantId, branches, dayStart(addDays(t, -29)), dayStart(addDays(t, 1))]);
       facts = { from: addDays(t, -29), to: t, top: rows.map((r) => ({ service: r.service_name, value: Number(r.v) })) };
-      text = rows.length ? `Oxirgi 30 kunda eng ko‘p summa bergan xizmatlar: ${rows.map((r, i) => `${i + 1}) ${r.service_name} — ${formatSom(Number(r.v))}`).join('; ')}.` : 'Oxirgi 30 kunda bajarilgan xizmat yo‘q.';
+      text = rows.length ? translate(L, 'api.report.topServices', { list: rows.map((r, i) => `${i + 1}) ${r.service_name} — ${som(Number(r.v))}`).join('; ') }) : translate(L, 'api.report.noServices');
       link = `/reports?period=30d`;
     } else {
       const r = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(total - paid_amount),0)::bigint AS s FROM invoices WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`, [ctx.tenantId, branches]))!;
       facts = { invoices: r.n, debt: Number(r.s) };
-      text = r.n ? `Hozir ${r.n} ta hisob bo‘yicha qarzdorlik bor, jami ${formatSom(Number(r.s))}.` : 'Qarzdor hisob yo‘q.';
+      text = r.n ? translate(L, 'api.report.debt', { n: r.n, sum: som(Number(r.s)) }) : translate(L, 'api.report.noDebt');
       link = `/cashier?debt=1`;
     }
     // In every mode the numbers above are computed by SQL; the sentence is a template, not a model output.

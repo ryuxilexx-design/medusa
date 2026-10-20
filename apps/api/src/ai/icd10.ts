@@ -2,7 +2,9 @@
 // returns is checked against that table, so an invented code can never reach a note.
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
+import type { Locale } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
+import { answerLanguage } from './lang';
 import { AiClient } from './ai-client';
 import { redact, PatientIdentity } from './redact';
 
@@ -71,7 +73,7 @@ export class Icd10Service {
   }
 
   /** Suggestions for a diagnosis text: AI over the code table when live, word matching otherwise. */
-  async suggest(text: string, ctx: { tenantId: string; membershipId: string }, patient?: PatientIdentity | null) {
+  async suggest(text: string, ctx: { tenantId: string; membershipId: string; locale?: Locale }, patient?: PatientIdentity | null) {
     const mode = this.ai.clinicalMode(ctx.tenantId);
     if (mode !== 'live') {
       const rows = await this.lexical(text, 3);
@@ -86,7 +88,7 @@ export class Icd10Service {
     const byCode = new Map(rows.map((r) => [r.code, r]));
     const list = rows.map((r) => `${r.code} — ${r.title_uz ?? ''} / ${r.title_ru}`).join('\n');
     const { value } = await this.ai.json({
-      route: 'icd10_suggest', system: SYSTEM(list), cacheSystem: true, user: `Tashxis: ${redact(text, patient)}`,
+      route: 'icd10_suggest', system: SYSTEM(list), cacheSystem: true, user: `Tashxis: ${redact(text, patient)}\n\nreason_uz: ${answerLanguage(ctx.locale)}`, // the long code list stays a cached, language-free system prompt
       schema: SUGGEST_SCHEMA, validate: suggestZ, effort: 'low', maxTokens: 2000, tenantId: ctx.tenantId, membershipId: ctx.membershipId,
     });
     const seen = new Set<string>();

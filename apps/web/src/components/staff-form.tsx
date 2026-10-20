@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, KeyRound, Power } from 'lucide-react';
-import { normalizeLogin, ROLE_LABEL, SERVICE_CATEGORY_LABEL, type Role } from '@meduza/contracts';
+import { normalizeLogin, type MessageKey, type Role } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
+import { useT } from '@/lib/i18n';
 import { Alert, Button, cx, Field, Input, Modal, Select, useToast } from '@/components/ui';
 
 export type StaffRow = {
@@ -22,6 +23,7 @@ const loginView = (l: string | null) => (l ? (l.startsWith('+998') ? formatPhone
 /** Create a staff account or edit one. Password reset and (de)activation live here too, never for one's own account. */
 export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boolean; staff: StaffRow | null; onClose: () => void; onIssued: (i: Issued) => void }) {
   const { me, branchId } = useSession();
+  const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const isNew = !staff;
@@ -56,13 +58,13 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
 
   function validate() {
     const e: Record<string, string> = {};
-    if (v.full_name.trim().length < 3) e.full_name = 'F.I.Sh. kamida 3 belgi';
-    if ((isNew || v.login.trim() || initial.login) && !normalizeLogin(v.login)) e.login = 'Telefon (+998 …) yoki lotin harflaridagi login (3–32 belgi)';
-    if (!v.branch_ids.length) e.branch_ids = 'Kamida bitta filialni tanlang';
+    if (v.full_name.trim().length < 3) e.full_name = t('admin.form.errName');
+    if ((isNew || v.login.trim() || initial.login) && !normalizeLogin(v.login)) e.login = t('admin.form.errLogin');
+    if (!v.branch_ids.length) e.branch_ids = t('admin.form.errBranches');
     if (isDoctor) {
-      if (v.specialty.trim().length < 2) e['doctor.specialty'] = 'Mutaxassislikni kiriting';
+      if (v.specialty.trim().length < 2) e['doctor.specialty'] = t('admin.form.errSpecialty');
       const p = Number(v.share_percent);
-      if (v.share_percent === '' || !Number.isFinite(p) || p < 0 || p > 100) e['doctor.share_percent'] = '0–100 oralig‘ida';
+      if (v.share_percent === '' || !Number.isFinite(p) || p < 0 || p > 100) e['doctor.share_percent'] = t('admin.form.errShare');
     }
     setErrors(e);
     return !Object.keys(e).length;
@@ -71,7 +73,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
   const done = (msg: string) => { qc.invalidateQueries({ queryKey: ['staff'] }); qc.invalidateQueries({ queryKey: ['doctors'] }); toast.success(msg); };
   const onError = (e: unknown) => {
     if (e instanceof ApiError && e.fields) setErrors(e.fields);
-    setFormError(e instanceof Error ? e.message : 'Saqlanmadi');
+    setFormError(e instanceof Error ? e.message : t('admin.form.notSaved'));
   };
 
   const save = useMutation({
@@ -94,7 +96,7 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
       return api(`/staff/${staff!.membership_id}`, { method: 'PATCH', body });
     },
     onSuccess: (r: any) => {
-      done(isNew ? 'Xodim qo‘shildi' : 'O‘zgarishlar saqlandi');
+      done(isNew ? t('admin.form.added') : t('admin.form.saved'));
       if (isNew) onIssued({ name: v.full_name.trim(), login: r.data.login, temp_password: r.data.temp_password });
       onClose();
     },
@@ -102,65 +104,65 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
   });
   const reset = useMutation({
     mutationFn: () => api(`/staff/${staff!.membership_id}/reset-password`, { method: 'POST', body: {} }),
-    onSuccess: (r: any) => { done('Vaqtinchalik parol berildi'); onIssued({ name: staff!.full_name, login: r.data.login, temp_password: r.data.temp_password }); onClose(); },
+    onSuccess: (r: any) => { done(t('admin.form.tempIssued')); onIssued({ name: staff!.full_name, login: r.data.login, temp_password: r.data.temp_password }); onClose(); },
     onError: (e) => { setConfirm(null); onError(e); },
   });
   const status = useMutation({
     mutationFn: () => api(`/staff/${staff!.membership_id}`, { method: 'PATCH', body: { status: staff!.status === 'active' ? 'inactive' : 'active' } }),
-    onSuccess: () => { done(staff!.status === 'active' ? 'Xodim faolsizlantirildi — sessiyalari yopildi' : 'Xodim faollashtirildi'); onClose(); },
+    onSuccess: () => { done(staff!.status === 'active' ? t('admin.form.deactivated') : t('admin.form.activated')); onClose(); },
     onError: (e) => { setConfirm(null); onError(e); },
   });
   const submit = () => { setFormError(null); if (validate()) save.mutate(); };
   const canManage = staff && !staff.is_self;
 
   return (
-    <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={isNew ? 'Xodim qo‘shish' : `${staff!.full_name} · tahrirlash`}
+    <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={isNew ? t('admin.staff.add') : t('admin.form.editTitle', { name: staff!.full_name })}
       footer={<>
         {canManage && !confirm && <div className="mr-auto flex gap-2">
-          {staff.login && <Button size="sm" icon={<KeyRound className="h-4 w-4" />} onClick={() => setConfirm('reset')}>Parolni tiklash</Button>}
-          <Button size="sm" variant={staff.status === 'active' ? 'danger' : 'secondary'} icon={<Power className="h-4 w-4" />} onClick={() => setConfirm('status')}>{staff.status === 'active' ? 'Faolsizlantirish' : 'Faollashtirish'}</Button>
+          {staff.login && <Button size="sm" icon={<KeyRound className="h-4 w-4" />} onClick={() => setConfirm('reset')}>{t('admin.form.resetPassword')}</Button>}
+          <Button size="sm" variant={staff.status === 'active' ? 'danger' : 'secondary'} icon={<Power className="h-4 w-4" />} onClick={() => setConfirm('status')}>{staff.status === 'active' ? t('admin.form.deactivate') : t('admin.form.activate')}</Button>
         </div>}
-        <Button onClick={onClose}>Bekor qilish</Button>
-        <Button variant="primary" loading={save.isPending} disabled={!isNew && !dirty} onClick={submit}>{isNew ? 'Xodimni qo‘shish' : 'Saqlash'}</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button variant="primary" loading={save.isPending} disabled={!isNew && !dirty} onClick={submit}>{isNew ? t('admin.form.addSubmit') : t('common.save')}</Button>
       </>}>
       <div className="space-y-4">
         {formError && <Alert tone="red">{formError}</Alert>}
         {confirm === 'reset' && staff && (
-          <Alert tone="yellow" title="Parolni tiklaysizmi?">
-            {staff.full_name} uchun yangi vaqtinchalik parol yaratiladi, eski parol ishlamay qoladi va ochiq sessiyalari yopiladi. Blok bo‘lsa, ochiladi.
-            <div className="mt-2 flex gap-2"><Button size="sm" variant="primary" loading={reset.isPending} onClick={() => reset.mutate()}>Ha, tiklash</Button><Button size="sm" onClick={() => setConfirm(null)}>Yo‘q</Button></div>
+          <Alert tone="yellow" title={t('admin.form.resetTitle')}>
+            {t('admin.form.resetText', { name: staff.full_name })}
+            <div className="mt-2 flex gap-2"><Button size="sm" variant="primary" loading={reset.isPending} onClick={() => reset.mutate()}>{t('admin.form.resetYes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
           </Alert>
         )}
         {confirm === 'status' && staff && (
-          <Alert tone={staff.status === 'active' ? 'red' : 'yellow'} title={staff.status === 'active' ? 'Xodimni faolsizlantirasizmi?' : 'Xodimni faollashtirasizmi?'}>
+          <Alert tone={staff.status === 'active' ? 'red' : 'yellow'} title={staff.status === 'active' ? t('admin.form.deactivateTitle') : t('admin.form.activateTitle')}>
             {staff.status === 'active'
-              ? `${staff.full_name} darhol tizimdan chiqariladi va qayta kira olmaydi.${staff.doctor_id ? ' Shifokorga yangi qabul yozilmaydi; mavjud qabullarini tekshiring.' : ''} Tarixiy yozuvlar saqlanadi.`
-              : `${staff.full_name} yana tizimga kira oladi.`}
-            <div className="mt-2 flex gap-2"><Button size="sm" variant={staff.status === 'active' ? 'danger' : 'primary'} loading={status.isPending} onClick={() => status.mutate()}>Ha</Button><Button size="sm" onClick={() => setConfirm(null)}>Yo‘q</Button></div>
+              ? `${t('admin.form.deactivateText', { name: staff.full_name })}${staff.doctor_id ? ` ${t('admin.form.deactivateDoctor')}` : ''} ${t('admin.form.historyKept')}`
+              : t('admin.form.activateText', { name: staff.full_name })}
+            <div className="mt-2 flex gap-2"><Button size="sm" variant={staff.status === 'active' ? 'danger' : 'primary'} loading={status.isPending} onClick={() => status.mutate()}>{t('admin.form.yes')}</Button><Button size="sm" onClick={() => setConfirm(null)}>{t('admin.form.no')}</Button></div>
           </Alert>
         )}
-        {staff?.is_self && <p className="text-xs text-slate-500">Bu sizning akkauntingiz: rol, holat va filiallarni boshqa rahbar o‘zgartiradi. Parol — yuqoridagi kalit belgisi orqali.</p>}
-        {staff?.demo_card && !staff.is_self && <p className="text-xs text-slate-500">Demo kartadagi xodim: barcha uchun demo ishlashi uchun uni o‘chirib yoki rolini o‘zgartirib bo‘lmaydi.</p>}
+        {staff?.is_self && <p className="text-xs text-slate-600">{t('admin.form.selfNote')}</p>}
+        {staff?.demo_card && !staff.is_self && <p className="text-xs text-slate-600">{t('admin.form.demoNote')}</p>}
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="F.I.Sh." required error={errors.full_name}>
-            {(id) => <Input id={id} value={v.full_name} onChange={set('full_name')} invalid={!!errors.full_name} placeholder="Familiya Ism Sharif" />}
+          <Field label={t('admin.form.name')} required error={errors.full_name}>
+            {(id) => <Input id={id} value={v.full_name} onChange={set('full_name')} invalid={!!errors.full_name} placeholder={t('admin.form.namePlaceholder')} />}
           </Field>
-          <Field label="Rol" required error={errors.role} hint={!isNew && staff?.role === 'doctor' ? 'Shifokor roli yaratilgandan keyin o‘zgarmaydi' : undefined}>
+          <Field label={t('admin.form.role')} required error={errors.role} hint={!isNew && staff?.role === 'doctor' ? t('admin.form.roleFixed') : undefined}>
             {(id) => <Select id={id} value={v.role} onChange={set('role')} disabled={!isNew && (staff!.role === 'doctor' || staff!.is_self)}>
-              {(isNew ? ROLES : staff!.role === 'doctor' ? ['doctor' as Role] : ROLES.filter((r) => r !== 'doctor')).map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+              {(isNew ? ROLES : staff!.role === 'doctor' ? ['doctor' as Role] : ROLES.filter((r) => r !== 'doctor')).map((r) => <option key={r} value={r}>{t(`role.${r}` as MessageKey)}</option>)}
             </Select>}
           </Field>
-          <Field label="Telefon yoki login" required error={errors.login} hint="Xodim shu bilan kiradi. Masalan: +998 90 123 45 67 yoki dilnoza.k">
+          <Field label={t('admin.form.login')} required error={errors.login} hint={t('admin.form.loginHint', { example: 'dilnoza.k' })}>
             {(id) => <Input id={id} value={v.login} onChange={set('login')} invalid={!!errors.login} autoComplete="off" />}
           </Field>
-          <Field label="Lavozim" error={errors.title}>
-            {(id) => <Input id={id} value={v.title} onChange={set('title')} placeholder="Masalan: Katta registrator" />}
+          <Field label={t('admin.form.position')} error={errors.title}>
+            {(id) => <Input id={id} value={v.title} onChange={set('title')} placeholder={t('admin.form.positionPlaceholder')} />}
           </Field>
         </div>
 
         <fieldset disabled={!!staff?.is_self}>
-          <legend className="text-[0.8125rem] font-medium text-slate-700">Filiallar <span className="text-red-600">*</span></legend>
+          <legend className="text-[0.8125rem] font-medium text-slate-700">{t('admin.form.branches')} <span className="text-red-600">*</span></legend>
           <div className="mt-1 flex flex-wrap gap-2">
             {me.branches.map((b) => (
               <label key={b.id} className={cx('flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm', v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 text-brand-900' : 'border-slate-300')}>
@@ -174,20 +176,20 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
         {isDoctor && (
           <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
-              <Field label="Mutaxassislik" required error={errors['doctor.specialty']}>
-                {(id) => <Input id={id} value={v.specialty} onChange={set('specialty')} invalid={!!errors['doctor.specialty']} placeholder="Masalan: Kardiolog" />}
+              <Field label={t('admin.form.specialty')} required error={errors['doctor.specialty']}>
+                {(id) => <Input id={id} value={v.specialty} onChange={set('specialty')} invalid={!!errors['doctor.specialty']} placeholder={t('admin.form.specialtyPlaceholder')} />}
               </Field>
-              <Field label="Ulush, %" error={errors['doctor.share_percent']} hint="Xizmat qiymatidan">
+              <Field label={t('admin.form.share')} error={errors['doctor.share_percent']} hint={t('admin.form.shareHint')}>
                 {(id) => <Input id={id} inputMode="decimal" value={v.share_percent} onChange={set('share_percent')} invalid={!!errors['doctor.share_percent']} />}
               </Field>
             </div>
             <div>
-              <div className="text-[0.8125rem] font-medium text-slate-700">Bajaradigan xizmatlari <span className="font-normal text-slate-500">· {v.service_ids.length} ta tanlangan</span></div>
-              {services.isLoading ? <p className="mt-1 text-xs text-slate-500">Yuklanmoqda…</p> : (
+              <div className="text-[0.8125rem] font-medium text-slate-700">{t('admin.form.services')} <span className="font-normal text-slate-600">({t('admin.form.servicesPicked', { n: v.service_ids.length })})</span></div>
+              {services.isLoading ? <p className="mt-1 text-xs text-slate-600">{t('common.loading')}</p> : (
                 <div className="mt-1 max-h-56 space-y-2 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
                   {Object.entries(grouped).map(([cat, list]) => (
                     <div key={cat}>
-                      <div className="text-2xs font-semibold uppercase tracking-wide text-slate-500">{SERVICE_CATEGORY_LABEL[cat] ?? cat}</div>
+                      <div className="text-[0.8125rem] font-semibold text-slate-600">{t(`service.${cat}` as MessageKey)}</div>
                       <div className="mt-1 grid grid-cols-1 gap-x-3 sm:grid-cols-2">
                         {list.map((s) => (
                           <label key={s.id} className="flex cursor-pointer items-center gap-2 py-0.5 text-[0.8125rem]">
@@ -200,11 +202,11 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
                   ))}
                 </div>
               )}
-              {isNew && <p className="mt-1 text-xs text-slate-500">Saqlangach ro‘yxatda shifokorni tanlang → «Jadvalni tahrirlash». Jadvalsiz shifokorga qabul yozilmaydi.</p>}
+              {isNew && <p className="mt-1 text-xs text-slate-600">{t('admin.form.scheduleNext')}</p>}
             </div>
           </div>
         )}
-        {isNew && <p className="text-xs text-slate-500">Saqlangach vaqtinchalik parol bir marta ko‘rsatiladi. Xodim birinchi kirishda o‘z parolini o‘rnatadi.</p>}
+        {isNew && <p className="text-xs text-slate-600">{t('admin.form.tempOnce')}</p>}
       </div>
     </Modal>
   );
@@ -212,20 +214,21 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
 
 /** Shows a freshly issued temporary password once. It is not stored anywhere in the browser. */
 export function TempPasswordModal({ issued, onClose }: { issued: Issued | null; onClose: () => void }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   useEffect(() => setCopied(false), [issued]);
   if (!issued) return null;
-  const text = `Med.uz.ai\nLogin: ${loginView(issued.login)}\nVaqtinchalik parol: ${issued.temp_password}\nBirinchi kirishda yangi parol o‘rnating.`;
+  const text = `Med.uz.ai\n${t('admin.temp.clipboard', { login: loginView(issued.login), password: issued.temp_password })}`;
   const copy = async () => { try { await navigator.clipboard.writeText(text); setCopied(true); } catch { setCopied(false); } };
   return (
-    <Modal open onClose={onClose} title="Vaqtinchalik parol" footer={<Button variant="primary" onClick={onClose}>Tushunarli, yopish</Button>}>
-      <p className="text-sm text-slate-700">{issued.name} uchun kirish ma’lumotlari:</p>
+    <Modal open onClose={onClose} title={t('admin.temp.title')} footer={<Button variant="primary" onClick={onClose}>{t('admin.temp.done')}</Button>}>
+      <p className="text-sm text-slate-700">{t('admin.temp.for', { name: issued.name })}</p>
       <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-[0.9375rem]">
-        <div><span className="text-slate-500">Login: </span>{loginView(issued.login)}</div>
-        <div><span className="text-slate-500">Parol: </span><span className="select-all font-semibold tracking-wider text-slate-900">{issued.temp_password}</span></div>
+        <div><span className="text-slate-600">{t('admin.temp.login')} </span>{loginView(issued.login)}</div>
+        <div><span className="text-slate-600">{t('admin.temp.password')} </span><span className="select-all font-semibold tracking-wider text-slate-900">{issued.temp_password}</span></div>
       </div>
-      <Button size="sm" className="mt-3" icon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={copy}>{copied ? 'Nusxa olindi' : 'Nusxa olish'}</Button>
-      <div className="mt-4"><Alert tone="yellow" title="Bu parol boshqa ko‘rsatilmaydi">Xodimga shaxsan bering. Birinchi kirishda u o‘z parolini o‘rnatadi. Yo‘qolsa — «Parolni tiklash».</Alert></div>
+      <Button size="sm" className="mt-3" icon={copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} onClick={copy}>{copied ? t('admin.temp.copied') : t('admin.temp.copy')}</Button>
+      <div className="mt-4"><Alert tone="yellow" title={t('admin.temp.onceTitle')}>{t('admin.temp.onceText')}</Alert></div>
     </Modal>
   );
 }

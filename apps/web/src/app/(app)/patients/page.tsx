@@ -11,11 +11,13 @@ import { useSession } from '@/lib/session';
 import { Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th } from '@/components/ui';
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal, BookingInit } from '@/components/booking';
+import { useT } from '@/lib/i18n';
 
 export default function PatientsPage() { return <Suspense><Patients /></Suspense>; }
 
 function Patients() {
   const { me } = useSession();
+  const t = useT();
   const router = useRouter();
   const sp = useSearchParams();
   const [search, setSearch] = useState(sp.get('search') ?? '');
@@ -31,37 +33,37 @@ function Patients() {
 
   return (
     <>
-      <PageHeader title={me.role === 'doctor' ? 'Mening bemorlarim' : 'Bemorlar'} subtitle={me.role === 'doctor' ? 'Sizga qabulga yozilgan bemorlar' : 'Ro‘yxat, qidiruv va bemor kartasi'}
-        actions={canEdit && <Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setForm({ open: true })}>Bemor qo‘shish</Button>} />
+      <PageHeader title={me.role === 'doctor' ? t('registrar.myPatients') : t('registrar.patients')} subtitle={me.role === 'doctor' ? t('registrar.myPatientsSub') : t('registrar.patientsSub')}
+        actions={canEdit && <Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setForm({ open: true })}>{t('registrar.addPatient')}</Button>} />
       <Card padded={false}>
         <div className="flex items-center gap-2 border-b border-slate-100 p-3">
           <div className="relative w-full max-w-md">
             <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-            <Input className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="F.I.Sh., telefon (+998 …) yoki bemor ID" aria-label="Qidirish" />
+            <Input className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
           </div>
-          {search && <Button variant="ghost" size="sm" onClick={() => { setSearch(''); router.replace('/patients'); }}>Tozalash</Button>}
+          {search && <Button variant="ghost" size="sm" onClick={() => { setSearch(''); router.replace('/patients'); }}>{t('registrar.clear')}</Button>}
         </div>
         {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data.data.length ? (
-          <EmptyState icon={<Users className="h-8 w-8" />} title={dq ? 'Bemor topilmadi' : 'Hali bemor yo‘q'} text={dq ? `«${dq}» bo‘yicha natija yo‘q.` : undefined}
-            action={canEdit && <Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setForm({ open: true })}>Bemor qo‘shish</Button>} />
+          <EmptyState icon={<Users className="h-8 w-8" />} title={dq ? t('registrar.patientNotFound') : t('registrar.noPatients')} text={dq ? t('registrar.noResults', { q: dq }) : undefined}
+            action={canEdit && <Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => setForm({ open: true })}>{t('registrar.addPatient')}</Button>} />
         ) : (
           <>
             <Table>
-              <thead><tr><Th>ID</Th><Th>F.I.Sh.</Th><Th>Tug‘ilgan sana / yosh</Th>{!minimal && <Th>Telefon</Th>}<Th>Oxirgi tashrif</Th><Th>Keyingi qabul</Th><Th right>Amallar</Th></tr></thead>
+              <thead><tr><Th>{t('registrar.colId')}</Th><Th>{t('registrar.fullName')}</Th><Th>{t('registrar.birthAge')}</Th>{!minimal && <Th>{t('registrar.phone')}</Th>}<Th>{t('registrar.lastVisit')}</Th><Th>{t('registrar.nextAppt')}</Th><Th right>{t('registrar.actions')}</Th></tr></thead>
               <tbody>
                 {q.data.data.map((p: any) => (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <Td className="tabular-nums text-slate-500">{pid(p.patient_number)}</Td>
+                    <Td className="tabular-nums text-slate-600">{pid(p.patient_number)}</Td>
                     <Td><Link href={`/patients/${p.id}`} className="font-medium text-slate-900 hover:text-brand-700 hover:underline">{fullName(p, true)}</Link></Td>
-                    <Td className="whitespace-nowrap">{fmtDate(p.birth_date)} <span className="text-slate-500">· {ageFrom(p.birth_date, me.today)}</span></Td>
+                    <Td className="whitespace-nowrap">{fmtDate(p.birth_date)}<span className="text-slate-600">, {ageFrom(p.birth_date, me.today)}</span></Td>
                     {!minimal && <Td className="whitespace-nowrap tabular-nums">{formatPhone(p.phone)}</Td>}
                     <Td className="whitespace-nowrap text-slate-600">{p.last_visit ? fmtDate(p.last_visit) : '—'}</Td>
                     <Td className="whitespace-nowrap text-slate-600">{p.next_appointment ? fmtDateTime(p.next_appointment) : '—'}</Td>
                     <Td right>
                       <div className="flex justify-end gap-1">
-                        <Link href={`/patients/${p.id}`} className="rounded px-2 py-1 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">Profil</Link>
-                        {canEdit && <Button size="sm" variant="ghost" icon={<CalendarPlus className="h-3.5 w-3.5" />} onClick={() => setBooking({ patient: p })}>Qabulga yozish</Button>}
-                        {canEdit && <Button size="sm" variant="ghost" aria-label="Tahrirlash" title="Asosiy ma’lumotni tahrirlash" onClick={() => setForm({ open: true, patient: p })}><Pencil className="h-3.5 w-3.5" /></Button>}
+                        <Link href={`/patients/${p.id}`} className="rounded px-2 py-1 text-[0.8125rem] font-medium text-brand-700 hover:bg-brand-50">{t('registrar.profile')}</Link>
+                        {canEdit && <Button size="sm" variant="ghost" icon={<CalendarPlus className="h-3.5 w-3.5" />} onClick={() => setBooking({ patient: p })}>{t('registrar.book')}</Button>}
+                        {canEdit && <Button size="sm" variant="ghost" aria-label={t('registrar.edit')} title={t('registrar.editBasic')} onClick={() => setForm({ open: true, patient: p })}><Pencil className="h-3.5 w-3.5" /></Button>}
                       </div>
                     </Td>
                   </tr>
