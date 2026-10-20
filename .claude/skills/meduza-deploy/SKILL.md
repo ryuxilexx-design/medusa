@@ -5,7 +5,7 @@ description: Deploy the current Med.uz.ai code to Railway (project 228e174f-…,
 
 # Deploy Med.uz.ai to Railway
 
-The Railway environment is called `production`, but it is a password-gated demo with synthetic data. One service `meduza` runs web (public, $PORT=8080) and API (internal 127.0.0.1:4000) via `npm run start`; build/start come from `railway.json`. Database schema migrates itself on API start; an empty database seeds itself (`AUTO_SEED=1`); existing data is kept.
+The Railway environment is called `production`, but it is a password-gated demo with synthetic data. One service `meduza` runs web (public, $PORT=8080) and API (internal 127.0.0.1:4000) via `npm run start`; build/start/healthcheck come from `.railway/railway.ts` (Railway Infrastructure as Code; variables are unmanaged there, so no secrets in the file). To change them: edit the file, `railway config plan`, then the user runs `railway config apply --yes` (applying is blocked for the agent). Database schema migrates itself on API start; an empty database seeds itself (`AUTO_SEED=1`); existing data is kept.
 
 ## Steps
 
