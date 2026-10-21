@@ -110,10 +110,11 @@ export function StatCard({ icon, label, value, sub, href, loading, tone = 'defau
     <div className={cx('surface flex h-full min-w-0 flex-col px-4 py-4 transition-colors 2xl:px-5', href && 'hover:!border-brand-300')}>
       <div className="flex items-center gap-2 text-[0.875rem] font-semibold text-slate-600">
         {icon && <span className={cx('shrink-0 [&>svg]:h-[1.125rem] [&>svg]:w-[1.125rem]', tone === 'danger' ? 'text-red-600' : tone === 'success' ? 'text-emerald-700' : 'text-brand-600')}>{icon}</span>}
-        <span className="truncate" title={label}>{label}</span>
+        {/* wraps on a narrow tile (two tiles per row on a phone) instead of being cut */}
+        <span className="line-clamp-2 leading-snug">{label}</span>
       </div>
       {loading ? <Skeleton className="mt-2.5 h-7 w-28" /> : <div className={cx('mt-2 text-[1.375rem] font-bold leading-none tabular-nums tracking-tight 2xl:text-[1.5rem]', tone === 'danger' ? 'text-red-700' : tone === 'success' ? 'text-emerald-800' : 'text-slate-900')}>{value}</div>}
-      {loading ? <Skeleton className="mt-2.5 h-3 w-32" /> : sub != null && <div className="mt-2 truncate text-[0.8125rem] text-slate-600">{sub}</div>}
+      {loading ? <Skeleton className="mt-2.5 h-3 w-32" /> : sub != null && <div className="mt-2 line-clamp-2 text-[0.8125rem] leading-snug text-slate-600">{sub}</div>}
     </div>
   );
   return href ? <Link href={href} className={cx('block rounded-[1.375rem] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', className)}>{body}</Link> : <div className={className}>{body}</div>;
@@ -194,7 +195,14 @@ export function Pagination({ page, pageSize, total, onPage }: { page: number; pa
 export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode; count?: number }[] }) {
   const list = useRef<HTMLDivElement>(null);
   // a selected tab outside the visible strip (narrow card, link to ?status=…) is scrolled into view
-  useEffect(() => { list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [value]);
+  // only the strip scrolls (sideways): scrollIntoView would also move the page under the floating bars on a phone
+  useEffect(() => {
+    const strip = list.current, el = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!strip || !el || strip.scrollWidth <= strip.clientWidth) return;
+    const left = el.offsetLeft - strip.offsetLeft, right = left + el.offsetWidth;
+    if (left < strip.scrollLeft) strip.scrollLeft = left - 8;
+    else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth + 8;
+  }, [value]);
   return (
     <div ref={list} className="flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-slate-100 p-1" role="tablist">
       {items.map((it) => (
@@ -266,7 +274,8 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-l
         )}
         <ModalCloseCtx.Provider value={tryClose}>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-          {footer && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-[1.75rem] border-t border-slate-100 bg-slate-50/70 px-5 py-3">{footer}</div>}
+          {/* on a phone the buttons share the row's width instead of wrapping onto two rows */}
+          {footer && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-[1.75rem] border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5 [&>*]:flex-1 sm:[&>*]:flex-none">{footer}</div>}
         </ModalCloseCtx.Provider>
       </div>
     </div>,
@@ -288,7 +297,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastCtx.Provider value={push}>
       {children}
       {/* errors are announced at once (role=alert, assertive); success and info politely */}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden" aria-live="polite">
+      {/* below lg the phone tab bar sits at the bottom: toasts stay above it */}
+      <div className="pointer-events-none fixed bottom-24 right-4 z-[60] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden lg:bottom-4" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} aria-live={t.tone === 'error' ? 'assertive' : undefined} className={cx('pointer-events-auto flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-[0.9375rem] font-medium shadow-lg backdrop-blur', t.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : t.tone === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900')}>
             {t.tone === 'success' ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" /> : t.tone === 'error' ? <XCircle className="mt-0.5 h-5 w-5 shrink-0" /> : <Info className="mt-0.5 h-5 w-5 shrink-0" />}

@@ -31,6 +31,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   const [newPatient, setNewPatient] = useState(false);
   // one key per booking dialog: a retry after a lost response returns the same appointment instead of a 409
   const requestKey = useRef(newIdempotencyKey());
+  const panel = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +93,9 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     if (!serviceId) e.service_id = t('registrar.bk.pickService');
     if (!time) e.start_time = t('registrar.bk.pickSlot');
     setErrors(e); setFormError(null);
-    if (!Object.keys(e).length) save.mutate();
+    if (!Object.keys(e).length) { if (!save.isPending) save.mutate(); return; }
+    // the first field with an error gets the focus: the patient search, a select, or the slot grid
+    setTimeout(() => panel.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-testid="slot-error"] ~ * button:not([disabled]), [data-testid="slot-error"] ~ p')?.focus(), 30);
   }
 
   const dirty = !!(time || note || (!init?.patient && patient));
@@ -101,22 +104,22 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     <>
       <Modal open={open && !newPatient} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-3xl" title={reschedule ? t('registrar.bk.rescheduleTitle') : t('registrar.book')}
         footer={<><ModalCancel /><Button variant="primary" loading={save.isPending} onClick={submit}>{reschedule ? t('registrar.bk.saveReschedule') : t('registrar.book')}</Button></>}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div ref={panel} className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <div className="space-y-3 md:col-span-2">
             {formError && <Alert tone="red">{formError}</Alert>}
             <Field label={t('registrar.patient')} required error={errors.patient_id}>{(id) => patient ? (
               <div className="flex min-h-11 items-center justify-between gap-2 rounded-lg border-2 border-slate-200 bg-slate-50 py-1 pl-3 pr-1 text-[0.9375rem]">
-                <span className="min-w-0"><b>{fullName(patient)}</b> <span className="text-slate-600">{pid(patient.patient_number)}</span></span>
+                <span className="min-w-0 [overflow-wrap:anywhere]"><b>{fullName(patient)}</b> <span className="text-slate-600">{pid(patient.patient_number)}</span></span>
                 {!reschedule && !init?.patient && <Button size="sm" variant="ghost" onClick={() => pickPatient(null)}>{t('registrar.change')}</Button>}
               </div>
             ) : (
               <div>
-                <Input id={id} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.bk.patientSearch')} autoComplete="off" />
+                <Input id={id} value={search} invalid={!!errors.patient_id} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.bk.patientSearch')} autoComplete="off" />
                 <div className="mt-1 overflow-hidden rounded-lg border border-slate-200">
                   {dq.trim().length < 2 ? <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.bk.min2')}</p>
                     : found.isLoading ? <Skeleton className="m-2 h-6" />
                     : found.data?.length ? found.data.map((p) => (
-                      <button key={p.id} type="button" onClick={() => pickPatient(p)} className="block min-h-9 w-full px-3 py-1.5 text-left text-sm hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">
+                      <button key={p.id} type="button" onClick={() => pickPatient(p)} className="block min-h-9 w-full px-3 py-1.5 text-left text-sm [overflow-wrap:anywhere] hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">
                         <b>{fullName(p)}</b> <span className="text-slate-600">{pid(p.patient_number)}, {fmtDate(p.birth_date)}</span>
                       </button>
                     )) : <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.patientNotFound')}</p>}
@@ -136,7 +139,8 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
                 {doctorServices.map((s) => <option key={s.id} value={s.id}>{s.name}, {formatSom(s.price)}, {t('duration.min', { n: s.duration_min })}</option>)}
               </Select>
             )}</Field>
-            <div className="grid grid-cols-2 gap-3">
+            {/* the date field keeps the room a native date input needs on a phone; the duration is a short number */}
+            <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] items-end gap-3">
               <Field label={t('registrar.date')} required error={errors.date}>{(id) => <Input id={id} type="date" min={me.today} value={date} onChange={(e) => { setDate(e.target.value); setTime(''); }} />}</Field>
               <Field label={t('registrar.bk.duration')} error={errors.duration_min} >{(id) => <Input id={id} type="number" min={5} max={240} step={5} disabled={!canEditDuration} value={duration === '' ? service?.duration_min ?? '' : duration} onChange={(e) => { setDuration(e.target.value ? Number(e.target.value) : ''); setTime(''); }} />}</Field>
             </div>
@@ -149,7 +153,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
             </div>
             {/* the slot error shows in every state of this column, also before a doctor is picked */}
             {errors.start_time && <p className="mb-2 text-sm font-medium text-red-700" role="alert" data-testid="slot-error">{errors.start_time}</p>}
-            {!doctorId ? <p className={cx('rounded-lg border-2 border-dashed p-6 text-center text-sm text-slate-600', errors.start_time ? 'border-red-300' : 'border-slate-200')}>{t('registrar.bk.pickDoctorDate')}</p>
+            {!doctorId ? <p tabIndex={-1} className={cx('rounded-lg border-2 border-dashed p-6 text-center text-sm text-slate-600 focus:outline-none', errors.start_time ? 'border-red-300' : 'border-slate-200')}>{t('registrar.bk.pickDoctorDate')}</p>
               : avail.isLoading ? <div className="grid grid-cols-5 gap-1.5">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
               : avail.isError ? <Alert tone="red">{(avail.error as Error).message}</Alert>
               : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.doctorOff')}</p>

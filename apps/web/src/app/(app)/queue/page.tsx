@@ -62,7 +62,7 @@ export default function QueuePage() {
                     <tr key={x.id} className={x.status === 'in_progress' ? 'bg-violet-50/50' : next ? 'bg-amber-50/50' : ''}>
                       <Td><span className={cx('inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-1.5 text-base font-bold tabular-nums', x.status === 'in_progress' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-white')}>{x.number}</span></Td>
                       <Td className="min-w-[11rem]">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-semibold text-slate-900">{fullName(x)}</span>{next && <Badge tone="yellow" icon={<ArrowRight className="h-3.5 w-3.5" />}>{t('registrar.q.next')}</Badge>}</div>
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-semibold text-slate-900 [overflow-wrap:anywhere]">{fullName(x)}</span>{next && <Badge tone="yellow" icon={<ArrowRight className="h-3.5 w-3.5" />}>{t('registrar.q.next')}</Badge>}</div>
                         <div className="whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{pid(x.patient_number)} · {t('registrar.q.apptAt', { time: fmtTime(x.starts_at) })}</div>
                       </Td>
                       <Td className="hidden whitespace-nowrap sm:table-cell"><div className="text-slate-900">{x.doctor_name}</div><div className="text-[0.8125rem] text-slate-600">{x.room_name ?? x.branch_name}</div></Td>
@@ -89,7 +89,7 @@ export default function QueuePage() {
                 {q.data.expected.map((a: any) => (
                   <li key={a.appointment_id} className="flex items-center gap-3 px-5 py-2.5">
                     <span className="w-12 shrink-0 text-[0.9375rem] font-bold tabular-nums text-slate-900">{fmtTime(a.starts_at)}</span>
-                    <div className="min-w-0 flex-1 leading-snug"><div className="font-medium text-slate-900">{fullName(a)}</div><div className="text-[0.8125rem] text-slate-600">{a.doctor_name}, {a.service_name}<SourceMark appt={a} /></div></div>
+                    <div className="min-w-0 flex-1 leading-snug"><div className="font-medium text-slate-900 [overflow-wrap:anywhere]">{fullName(a)}</div><div className="text-[0.8125rem] text-slate-600">{a.doctor_name}, {a.service_name}<SourceMark appt={a} /></div></div>
                     {staff && <Button size="sm" className="shrink-0" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.id === a.appointment_id}
                       onClick={() => act.mutate({ id: a.appointment_id, action: 'check-in', body: { version: a.version } })}><span className="hidden sm:inline">{t('registrar.checkIn')}</span><span className="sm:hidden">{t('registrar.q.arrived')}</span></Button>}
                   </li>

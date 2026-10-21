@@ -76,13 +76,13 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           </Card>
           <Card title={t('cash.colServices')} padded={false}>
             <Table>
-              <thead><tr><Th>{t('cash.colService')}</Th><Th className="hidden 2xl:table-cell">{t('cash.colType')}</Th><Th right className="hidden sm:table-cell">{t('cash.colQty')}</Th><Th right>{t('cash.colPrice')}</Th>{hasDiscount && <Th right>{t('cash.discount')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
+              <thead><tr><Th>{t('cash.colService')}</Th><Th className="hidden 2xl:table-cell">{t('cash.colType')}</Th><Th right className="hidden sm:table-cell">{t('cash.colQty')}</Th><Th right className="hidden sm:table-cell">{t('cash.colPrice')}</Th>{hasDiscount && <Th right>{t('cash.discount')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
               <tbody>
                 {inv.items.map((it: any) => (
-                  <tr key={it.id}><Td className="min-w-[10rem]">{it.description}<div className="mt-1 2xl:hidden"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></div></Td><Td className="hidden 2xl:table-cell"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></Td><Td right className="hidden sm:table-cell">{it.quantity}</Td><Td right>{formatSom(it.unit_price)}</Td>{hasDiscount && <Td right>{it.discount_share ? `−${formatSom(it.discount_share)}` : '—'}</Td>}<Td right className="font-medium">{formatSom(it.line_total)}</Td></tr>
+                  <tr key={it.id}><Td className="min-w-[10rem]">{it.description}<div className="mt-1 2xl:hidden"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></div></Td><Td className="hidden 2xl:table-cell"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></Td><Td right className="hidden sm:table-cell">{it.quantity}</Td><Td right className="hidden sm:table-cell">{formatSom(it.unit_price)}</Td>{hasDiscount && <Td right>{it.discount_share ? `−${formatSom(it.discount_share)}` : '—'}</Td>}<Td right className="font-medium">{formatSom(it.line_total)}</Td></tr>
                 ))}
               </tbody>
-              <tfoot><tr className="bg-slate-50 font-semibold text-slate-900"><td className="border-b border-slate-100 px-3 py-3">{t('cash.colTotal')}</td><td className="hidden border-b border-slate-100 2xl:table-cell" /><td className="hidden border-b border-slate-100 sm:table-cell" /><td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">{hasDiscount && formatSom(inv.subtotal)}</td>{hasDiscount && <td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">−{formatSom(inv.discount_amount)}</td>}<td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">{formatSom(inv.total)}</td></tr></tfoot>
+              <tfoot><tr className="bg-slate-50 font-semibold text-slate-900"><td className="border-b border-slate-100 px-3 py-3">{t('cash.colTotal')}</td><td className="hidden border-b border-slate-100 2xl:table-cell" /><td className="hidden border-b border-slate-100 sm:table-cell" /><td className="hidden whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums sm:table-cell">{hasDiscount && formatSom(inv.subtotal)}</td>{hasDiscount && <td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">−{formatSom(inv.discount_amount)}</td>}<td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">{formatSom(inv.total)}</td></tr></tfoot>
             </Table>
           </Card>
           <Card title={t('cash.payments')} padded={false}>
@@ -143,10 +143,13 @@ function PaymentForm({ inv }: { inv: any }) {
   const [pending, setPending] = useState<any>(null);
   // One idempotency key per intended payment: a retry after a lost response reuses it and cannot create a second payment.
   const key = useRef(newIdempotencyKey());
+  // a double click fires two submits before React re-renders the disabled button: only the first one goes out
+  const inflight = useRef(false);
   useUnsavedGuard(!!pending);
   useEffect(() => { if (!pending) setAmount(String(inv.due / 100)); }, [inv.due]); // eslint-disable-line react-hooks/exhaustive-deps
   const m = useMutation({
     mutationFn: (body: any) => api(`/invoices/${inv.id}/payments`, { method: 'POST', body, headers: { 'Idempotency-Key': key.current } }),
+    onSettled: () => { inflight.current = false; },
     onSuccess: (r: any) => {
       key.current = newIdempotencyKey();
       setPending(null); setLast(r.data.payment); setError(null); setFieldErr(null); setNote('');
@@ -168,11 +171,13 @@ function PaymentForm({ inv }: { inv: any }) {
   });
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (pending) { m.mutate(pending); return; }
+    if (inflight.current) return;
+    if (pending) { inflight.current = true; m.mutate(pending); return; }
     const tiyin = parseSomToTiyin(amount);
     if (tiyin == null || tiyin <= 0) { setFieldErr(t('cash.amountPositive')); return; }
     if (tiyin > inv.due) { setFieldErr(t('cash.amountOverDue', { due: formatSom(inv.due) })); return; }
     setFieldErr(null); setError(null);
+    inflight.current = true;
     m.mutate({ amount: tiyin, method, note: note || null });
   }
   function abandon() {

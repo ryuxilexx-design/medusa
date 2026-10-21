@@ -77,9 +77,9 @@ function Patients() {
                   <tr key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={(e) => openRow(e, p.id)}>
                     <Td className="hidden whitespace-nowrap tabular-nums text-slate-600 md:table-cell">{pid(p.patient_number)}</Td>
                     <Td>
-                      <Link href={`/patients/${p.id}`} className="rounded font-semibold text-slate-900 underline-offset-2 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 lg:whitespace-nowrap">{fullName(p, true)}</Link>
-                      {/* phone: the hidden columns in one short line under the name */}
-                      <div className="mt-0.5 text-[0.8125rem] tabular-nums text-slate-600 md:hidden">{pid(p.patient_number)} · {ageFrom(p.birth_date, me.today)}{!minimal && p.phone ? ` · ${formatPhone(p.phone)}` : ''}</div>
+                      <Link href={`/patients/${p.id}`} className="rounded font-semibold text-slate-900 underline-offset-2 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [overflow-wrap:anywhere]">{fullName(p, true)}</Link>
+                      {/* phone: the hidden columns in one short line under the name (a phone number never breaks in the middle) */}
+                      <div className="mt-0.5 text-[0.8125rem] tabular-nums text-slate-600 md:hidden">{pid(p.patient_number)} · {ageFrom(p.birth_date, me.today)}{!minimal && p.phone ? <> · <span className="whitespace-nowrap">{formatPhone(p.phone)}</span></> : ''}</div>
                     </Td>
                     <Td className="hidden whitespace-nowrap tabular-nums md:table-cell">{fmtDate(p.birth_date)}<span className="text-slate-600"> · {ageFrom(p.birth_date, me.today)}</span></Td>
                     {!minimal && <Td className="hidden whitespace-nowrap tabular-nums lg:table-cell">{p.phone ? formatPhone(p.phone) : <span className="text-slate-600">—</span>}</Td>}

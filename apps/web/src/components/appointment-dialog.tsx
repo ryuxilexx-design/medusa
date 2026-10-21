@@ -56,12 +56,12 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
       <Modal open={!!appt && !resched} onClose={onClose} width="max-w-3xl" title={<span className="flex flex-wrap items-center gap-x-2 gap-y-1">{t('registrar.ap.title', { date: fmtDate(appt.starts_at), time: fmtTime(appt.starts_at) })} <AppointmentStatus status={appt.status} /></span>}
         footer={
           <div className="flex w-full flex-wrap items-center gap-2">
-            {staff && appt.status === 'scheduled' && <Button icon={<CalendarClock className="h-4 w-4" />} onClick={() => setResched(true)}>{t('registrar.ap.reschedule')}</Button>}
-            {staff && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => { setNoShow(false); setCancel(true); }}>{t('registrar.ap.cancel')}</Button>}
-            {noShowOpen && !noShow && <Button variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-slate-900" icon={<UserX className="h-4 w-4" />} onClick={() => { setCancel(false); setNoShow(true); }}>{t('registrar.noShow')}</Button>}
+            {staff && !cancel && !noShow && appt.status === 'scheduled' && <Button icon={<CalendarClock className="h-4 w-4" />} onClick={() => setResched(true)}>{t('registrar.ap.reschedule')}</Button>}
+            {staff && !cancel && !noShow && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => { setNoShow(false); setCancel(true); }}>{t('registrar.ap.cancel')}</Button>}
+            {noShowOpen && !noShow && !cancel && <Button variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-slate-900" icon={<UserX className="h-4 w-4" />} onClick={() => { setCancel(false); setNoShow(true); }}>{t('registrar.noShow')}</Button>}
             {/* the one primary action sits on the right and gets the first focus */}
             <div className="ml-auto flex gap-2">
-              {staff && appt.status === 'scheduled' && isToday && <Button data-autofocus variant="primary" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'check-in'} onClick={() => act.mutate({ id: appt.id, action: 'check-in', body: { version: appt.version } }, done())}>{t('registrar.checkIn')}</Button>}
+              {staff && !cancel && !noShow && appt.status === 'scheduled' && isToday && <Button data-autofocus variant="primary" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'check-in'} onClick={() => act.mutate({ id: appt.id, action: 'check-in', body: { version: appt.version } }, done())}>{t('registrar.checkIn')}</Button>}
               {me.role === 'doctor' && appt.status === 'arrived' && <Button data-autofocus variant="primary" icon={<PlayCircle className="h-4 w-4" />} onClick={() => router.push(`/doctor?appointment=${appt.id}`)}>{t('registrar.startVisit')}</Button>}
               {me.role === 'doctor' && ['in_progress', 'completed'].includes(appt.status) && <Button data-autofocus variant="primary" onClick={() => router.push(`/doctor?appointment=${appt.id}`)}>{t('registrar.ap.openInRoom')}</Button>}
             </div>
@@ -69,7 +69,7 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
         }>
         <div className="grid grid-cols-1 gap-x-6 sm:grid-cols-2">
           <div className="divide-y divide-slate-100">
-            <KeyVal k={t('registrar.patient')} v={<span>{fullName(appt, true)} <span className="text-slate-600">{pid(appt.patient_number)}</span></span>} />
+            <KeyVal k={t('registrar.patient')} v={<span className="[overflow-wrap:anywhere]">{fullName(appt, true)} <span className="whitespace-nowrap text-slate-600">{pid(appt.patient_number)}</span></span>} />
             {appt.phone !== undefined && <KeyVal k={t('registrar.phone')} v={formatPhone(appt.phone)} />}
             <KeyVal k={t('registrar.service')} v={appt.service_name} />
             {(appt.source === 'telegram' || appt.patient_confirmed_at) && <KeyVal k={t('registrar.ap.telegram')} v={<span>{appt.source === 'telegram' ? t('registrar.ap.viaBot') : t('registrar.ap.byRegistry')}{appt.patient_confirmed_at ? `, ${t('registrar.ap.confirmed', { at: fmtDateTime(appt.patient_confirmed_at) })}` : ''}</span>} />}

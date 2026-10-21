@@ -51,7 +51,7 @@ export function CameraArrivals() {
           <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
             <div className="min-w-0 flex-1 basis-[16rem] leading-snug">
               <div className="flex flex-wrap items-baseline gap-x-2">
-                <Link href={`/patients/${a.patient_id}`} className="font-semibold text-slate-900 hover:text-brand-800 hover:underline">{fullName(a)}</Link>
+                <Link href={`/patients/${a.patient_id}`} className="font-semibold text-slate-900 [overflow-wrap:anywhere] hover:text-brand-800 hover:underline">{fullName(a)}</Link>
                 <span className="text-[0.8125rem] tabular-nums text-slate-600">{pid(a.patient_number)}</span>
               </div>
               <div className="text-[0.8125rem] text-slate-600">

@@ -45,6 +45,11 @@ const LABEL_OVERRIDE: Partial<Record<Role, Record<string, MessageKey>>> = {
   cashier: { '/finance': 'nav.myPayments' },
   doctor: { '/reports': 'nav.myActivity', '/schedule': 'nav.mySchedule', '/patients': 'nav.myPatients' },
 };
+// the phone tab bar has room for one short word under each icon («Umumiy ko‘rinish» does not fit)
+const TAB_SHORT: Partial<Record<MessageKey, MessageKey>> = {
+  'nav.dashboard': 'nav.tab.dashboard', 'nav.schedule': 'nav.tab.schedule', 'nav.doctor': 'nav.tab.doctor',
+  'nav.myPatients': 'nav.tab.myPatients', 'nav.mySchedule': 'nav.tab.mySchedule', 'nav.myPayments': 'nav.tab.myPayments',
+};
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -127,7 +132,7 @@ function ClinicInfo({ className }: { className?: string }) {
   return (
     <div className={cx('min-w-0 flex-col leading-tight', className)}>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[0.9375rem] font-bold text-slate-900">{me.clinic_name}</span>
+        <span className="truncate text-[0.9375rem] font-bold text-slate-900" title={me.clinic_name}>{me.clinic_name}</span>
         {me.demo && <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-px text-2xs font-semibold text-amber-900" title={t('shell.demoClockTitle')}>{t('shell.demoMark')}</span>}
       </span>
       <Clock />
@@ -179,12 +184,14 @@ function UserMenu({ onPassword }: { onPassword: () => void }) {
       <button ref={btn} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="true" data-testid="user-menu"
         className="flex min-h-11 items-center gap-2.5 rounded-full py-1 pl-1 pr-2 hover:bg-white/50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
         <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">{initials(me.name)}</span>
-        <span className="hidden max-w-[9.5rem] text-left leading-tight xl:block 2xl:max-w-[12rem]">
+        {/* the name only from 2xl: at 1366 px the patient search needs the room (the name is in the menu anyway) */}
+        <span className="hidden max-w-[12rem] text-left leading-tight 2xl:block">
           <span className="block truncate text-sm font-semibold text-slate-900">{me.name}</span>
           <span className="block truncate text-[0.8125rem] text-slate-600">{role}</span>
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
-        <span className="sr-only">{t('shell.userMenu')}</span>
+        {/* the name stays readable (screen readers, narrow screens) even while the visible label is hidden */}
+        <span className="sr-only 2xl:hidden">{me.name}, {role}. </span><span className="sr-only">{t('shell.userMenu')}</span>
       </button>
       {/* kept in the DOM while closed (hidden) */}
       <div hidden={!open} className="surface absolute right-0 top-full z-30 mt-3 w-72 p-2 !shadow-[0_24px_48px_-16px_rgba(10,30,70,0.4)]">
@@ -230,6 +237,16 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
     return () => document.removeEventListener('keydown', onKey);
   }, [navOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   function closeNav() { setNavOpen(false); burger.current?.focus(); }
+  // a short screen (1366×768) cannot show all 15 sections: a fade at the bottom says the list goes on
+  const navEl = useRef<HTMLElement>(null);
+  const [navMore, setNavMore] = useState(false);
+  useEffect(() => {
+    const el = navEl.current; if (!el) return;
+    const measure = () => setNavMore(el.scrollHeight - el.clientHeight - el.scrollTop > 4);
+    measure(); el.addEventListener('scroll', measure, { passive: true });
+    const ro = new ResizeObserver(measure); ro.observe(el);
+    return () => { el.removeEventListener('scroll', measure); ro.disconnect(); };
+  }, [items.length]);
   const search = (cls: string) => (
     <form className={cls} role="search" onSubmit={(e) => {
       e.preventDefault();
@@ -251,14 +268,14 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
       <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('glass fixed bottom-4 left-4 top-4 z-40 flex w-[16.5rem] flex-col transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1.5rem)]')}>
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 pl-5 pr-2">
           <Link href="/" className="rounded-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('nav.home')}><BrandLockup /></Link>
-          <Button variant="ghost" className="px-2.5 text-slate-700 lg:hidden" onClick={closeNav} aria-label={t('nav.close')}><X className="h-6 w-6" /></Button>
+          <Button variant="ghost" className="!px-2.5 text-slate-700 lg:hidden" onClick={closeNav} aria-label={t('nav.close')}><X className="h-6 w-6" /></Button>
         </div>
         {/* below xl the clinic and date leave the top bar and are shown here */}
         <ClinicInfo className="flex px-5 pb-3 xl:hidden" />
         {/* phone: the language is at the top of the menu (the top bar has no room for it) */}
         <div className="px-5 pb-2.5 md:hidden"><LanguagePicker signedIn className="w-full [&>select]:flex-1" /></div>
         {canSearch && search('relative mx-3 mt-3 sm:hidden')}
-        <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label={t('nav.menu')}>
+        <nav ref={navEl} className="flex-1 overflow-y-auto px-3 py-3" aria-label={t('nav.menu')}>
           {groups.map((g, gi) => (
             <div key={g.key} className={gi ? 'mt-4' : ''}>
               {groups.length > 1 && <div className="px-4 pb-1.5 text-[0.75rem] font-bold uppercase tracking-wider text-slate-600">{t(`nav.group.${g.key}` as MessageKey)}</div>}
@@ -267,7 +284,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
                 const Icon = it.icon;
                 return (
                   <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined}
-                    className={cx('mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+                    className={cx('mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [@media(max-height:820px)]:mb-0.5 [@media(max-height:820px)]:min-h-11',
                       active ? 'glass-on text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
                     <Icon className={cx('h-[1.375rem] w-[1.375rem] shrink-0', active ? 'text-brand-700' : 'text-slate-700')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
                   </Link>
@@ -276,13 +293,17 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
             </div>
           ))}
         </nav>
-        <div className="px-5 py-3 text-2xs text-slate-700">{t(me.demo ? 'shell.release' : 'shell.releaseProd')}</div>
+        <div className="relative px-5 py-3 text-2xs text-slate-700">
+          {navMore && <div aria-hidden="true" className="pointer-events-none !absolute inset-x-0 bottom-full h-12 bg-gradient-to-t from-white/80 to-transparent" />}
+          {t(me.demo ? 'shell.release' : 'shell.releaseProd')}
+        </div>
       </aside>
-      {navOpen && <div className="fixed inset-0 z-30 bg-slate-900/30 backdrop-blur-sm lg:hidden" onClick={closeNav} />}
+      {/* above the tab bar (z-30), so the drawer's backdrop also covers «Menyu» */}
+      {navOpen && <div className="fixed inset-0 z-[35] bg-slate-900/30 backdrop-blur-sm lg:hidden" onClick={closeNav} />}
 
       {/* the toolbar: a floating glass capsule; the content scrolls under it */}
       <header className="glass glass-pill sticky top-3 z-20 mx-3 flex min-h-[3.75rem] items-center gap-2.5 px-3 py-1.5 print:hidden sm:mx-4 lg:top-4 lg:mx-8 lg:gap-3 lg:px-4">
-        <Button ref={burger} variant="ghost" className="-ml-1 px-2.5 text-slate-700 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
+        <Button ref={burger} variant="ghost" className="-ml-1 !px-2.5 text-slate-700 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
         <ClinicInfo className="hidden max-w-[14rem] shrink xl:flex" />
         {me.branches.length > 1 ? (
           <Select aria-label={t('shell.branch')} className="glass-field min-w-0 flex-1 !rounded-full !border-0 !bg-transparent pr-7 text-sm font-semibold sm:w-auto sm:max-w-[12.5rem] sm:flex-none sm:text-[0.9375rem]" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -313,7 +334,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
           return (
             <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined}
               className={cx('min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold', i === 3 ? 'hidden sm:flex' : 'flex', active ? 'glass-on text-brand-800' : 'text-slate-900')}>
-              <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5rem] truncate sm:max-w-none">{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
+              <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5.5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
             </Link>
           );
         })}

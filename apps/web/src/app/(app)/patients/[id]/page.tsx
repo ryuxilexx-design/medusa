@@ -51,7 +51,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
           <div className="flex min-w-0 flex-1 basis-[22rem] items-center gap-4">
             <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-bold text-brand-700 sm:flex" aria-hidden="true">{pt.last_name?.[0]}{pt.first_name?.[0]}</div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold leading-tight text-slate-900">{fullName(pt, true)}</h1>
+              <h1 className="text-2xl font-bold leading-tight text-slate-900 [overflow-wrap:anywhere]">{fullName(pt, true)}</h1>
               {/* each fact carries its own separator, so a wrapped line never ends with a dangling dot */}
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-slate-700">
                 {[

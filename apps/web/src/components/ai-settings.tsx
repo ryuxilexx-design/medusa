@@ -99,11 +99,12 @@ export function AiSettings() {
           </ul>
         </Card>
       </div>
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex justify-end">
-          <Button size="sm" icon={<RefreshCw className="h-4 w-4" />} loading={refresh.isPending} onClick={() => refresh.mutate()}>{t('admin.ai.refreshNow')}</Button>
-        </div>
+      <div className="flex min-w-0 flex-col gap-3">
         <NewsCard canPick canRate={false} initial={5} />
+        {/* under the card, aligned with its right edge: the card header stays level with the left column */}
+        <div className="flex justify-end">
+          <Button icon={<RefreshCw className="h-4 w-4" />} loading={refresh.isPending} onClick={() => refresh.mutate()}>{t('admin.ai.refreshNow')}</Button>
+        </div>
       </div>
     </div>
   );

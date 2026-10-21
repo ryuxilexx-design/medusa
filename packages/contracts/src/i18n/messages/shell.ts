@@ -80,6 +80,13 @@ export const shell = {
   'nav.myActivity': ['Mening faoliyatim', 'Моя работа'],
   'nav.mySchedule': ['Mening jadvalim', 'Моё расписание'],
   'nav.myPatients': ['Mening bemorlarim', 'Мои пациенты'],
+  // short names for the phone tab bar (one word under an icon); the menu keeps the full names
+  'nav.tab.dashboard': ['Asosiy', 'Обзор'],
+  'nav.tab.schedule': ['Jadval', 'Расписание'],
+  'nav.tab.doctor': ['Kabinet', 'Кабинет'],
+  'nav.tab.myPatients': ['Bemorlar', 'Пациенты'],
+  'nav.tab.mySchedule': ['Jadval', 'Расписание'],
+  'nav.tab.myPayments': ['To‘lovlar', 'Платежи'],
   'shell.allBranches': ['Barcha filiallar', 'Все филиалы'],
   'shell.branch': ['Filial', 'Филиал'],
   'shell.search': ['Bemorni qidirish', 'Поиск пациента'],

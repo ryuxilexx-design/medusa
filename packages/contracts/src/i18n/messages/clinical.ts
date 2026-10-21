@@ -52,6 +52,8 @@ export const clinical = {
   'clinical.lab.refNote': ['Referens oraliqlar namunaviy — klinik foydalanishga tekshirilmagan. Natija o‘zi tashxis chiqarmaydi.', 'Референсные интервалы — образец, для клинического применения не проверены. Результат сам по себе не ставит диагноз.'],
   'clinical.lab.saveDraft': ['Qoralama saqlash', 'Сохранить черновик'],
   'clinical.lab.verify': ['Natijani tasdiqlash', 'Подтвердить результат'],
+  'clinical.lab.alreadyVerified': ['Bu natija boshqa oynada allaqachon tasdiqlangan.', 'Этот результат уже подтверждён в другом окне.'],
+  'clinical.lab.changedElsewhere': ['Bu buyurtma boshqa oynada o‘zgartirilgan ({msg}). Joriy holat yuklandi.', 'Этот заказ изменён в другом окне ({msg}). Загружено текущее состояние.'],
   'clinical.lab.saveFirst': ['Avval qoralamani saqlang', 'Сначала сохраните черновик'],
   'clinical.lab.enterFirst': ['Avval natijani kiriting va saqlang', 'Сначала введите и сохраните результат'],
   'clinical.lab.verifiedLocked': ['Tasdiqlangan natija oddiy tahrirlanmaydi.', 'Подтверждённый результат нельзя просто отредактировать.'],

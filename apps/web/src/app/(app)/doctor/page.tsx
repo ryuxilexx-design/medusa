@@ -82,7 +82,7 @@ function Cabinet() {
         )}
       </Card>
       {!selectedId ? <Card><EmptyState icon={<Stethoscope />} title={t('doctor.pickPatient')} /></Card>
-        : !appt ? (single.isError ? <Card><ErrorState error={single.error} /></Card> : <Card><LoadingRows /></Card>)
+        : !appt ? (single.isError || day.isError ? <Card><ErrorState error={single.isError ? single.error : day.error} onRetry={() => (single.isError ? single.refetch() : day.refetch())} /></Card> : <Card><LoadingRows /></Card>)
         : <Workspace key={appt.id} appt={appt} />}
       {/* side information: history and news, quiet, in a third column only on wide screens */}
       <div className="hidden space-y-5 2xl:block">{appt && <HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} />}<NewsCard /></div>
@@ -195,7 +195,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     onSuccess: ({ r, snapshot }: any) => { setVersion(r.data.version); setSavedAt(r.data.saved_at); setBase(snapshot); lastAttempt.current = null; setSaveError(null); setErrors({}); toast.success(t('note.savedToast', { time: fmtTime(r.data.saved_at) })); },
     onError: (e) => {
       if (e instanceof ApiError && e.code === 'STALE_STATE') { setConflict(form); setSaveError(null); return; }
-      setSaveError(t('note.saveFailed', { msg: (e as Error).message })); if (e instanceof ApiError && e.fields) setErrors(mapFields(e.fields));
+      setSaveError(t('note.saveFailed', { msg: sentence((e as Error).message) })); if (e instanceof ApiError && e.fields) setErrors(mapFields(e.fields));
     },
   });
   /** Loads the version saved in the other tab into the form; the doctor's own text stays beside it («Mening matnim»). */
@@ -222,7 +222,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
         const fresh = await enc.refetch();
         if (fresh.data?.note.status === 'signed') { setBase(form); ['appointments', 'queue', 'dashboard'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); setSaveError(null); toast.info(t('note.alreadySigned')); return; }
       }
-      setSaveError(t('note.signFailed', { msg: (e as Error).message })); if (e instanceof ApiError && e.fields) setErrors(mapFields(e.fields));
+      setSaveError(t('note.signFailed', { msg: sentence((e as Error).message) })); if (e instanceof ApiError && e.fields) setErrors(mapFields(e.fields));
     },
   });
 
@@ -252,7 +252,9 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   const vital = (k: 'bp_sys' | 'bp_dia' | 'pulse' | 'temp', cls: string, mode: 'numeric' | 'decimal' = 'numeric') => (
     <Input id={`${bpId}-${k}`} inputMode={mode} className={cls} value={form[k]} onChange={set(k)} invalid={!!errors[k]} placeholder="—" />
   );
-  const vitalErrors = (['bp_sys', 'bp_dia', 'pulse', 'temp'] as const).map((k) => errors[k]).filter(Boolean);
+  // the server names the field in Uzbek («Sistolik bosim: …»); show the label in the doctor's language instead
+  const VITAL_LABEL = { bp_sys: 'note.bpSys', bp_dia: 'note.bpDia', pulse: 'note.pulse', temp: 'note.temp' } as const;
+  const vitalErrors = (['bp_sys', 'bp_dia', 'pulse', 'temp'] as const).filter((k) => errors[k]).map((k) => `${t(VITAL_LABEL[k])}: ${errors[k].replace(/^[^:]+:\s*/, '')}`);
 
   return (
     <div className="space-y-5">
@@ -292,7 +294,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
                 {vital('temp', 'w-24', 'decimal')}
               </div>
             </div>
-            {vitalErrors.length > 0 && <p className="text-sm font-medium text-red-700" role="alert">{vitalErrors.join(' ')}</p>}
+            {vitalErrors.length > 0 && <ul className="space-y-0.5 text-sm font-medium text-red-700" role="alert">{vitalErrors.map((m) => <li key={m}>{m}</li>)}</ul>}
             {FIELDS.map((f) => f.key !== 'diagnosis' ? textField(f) : (
               <div key={f.key} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
                 {textField(f)}
@@ -328,7 +330,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
 
       {/* the two decisions of the visit, always in reach while the doctor writes, orders and issues documents */}
       {!signed && (
-        <div className="sticky bottom-0 z-10 space-y-2 surface/95 px-4 py-3 shadow-[0_-8px_24px_-16px_rgba(26,34,51,0.4)] backdrop-blur">
+        <div className="surface sticky bottom-[var(--tabbar)] z-10 space-y-2 px-4 py-3 lg:bottom-0" data-testid="note-actions">
           {saveError && <Alert tone="red">{saveError}</Alert>}
           {conflict && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900" role="alert" data-testid="note-conflict">
@@ -367,6 +369,8 @@ function sameNote(a: NoteForm, b: NoteForm) {
   return JSON.stringify(n(a)) === JSON.stringify(n(b));
 }
 function dirtyOf(a: NoteForm | null, b: NoteForm | null) { return !!a && !!b && JSON.stringify(a) !== JSON.stringify(b); }
+/** A server message is embedded in a sentence («Saqlanmadi: {msg} …»): make sure it ends with a full stop. */
+function sentence(m: string) { const s = m.trim(); return /[.!?…]$/.test(s) ? s : `${s}.`; }
 function mapFields(f: Record<string, string>) { const o: Record<string, string> = {}; for (const [k, v] of Object.entries(f)) o[k.replace('vitals.', '')] = v; return o; }
 
 /** After a two-tab conflict: the doctor's unsaved text beside the newer version, each differing part with «Copy». */

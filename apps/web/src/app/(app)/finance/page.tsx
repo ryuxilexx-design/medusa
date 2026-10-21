@@ -10,7 +10,7 @@ import { fmtDate, fmtDateTime, formatSom, fullName, pid } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, StatCard, Table, Tabs, Td, Th, Toolbar } from '@/components/ui';
+import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, StatCard, Table, Tabs, Td, Th, Toolbar } from '@/components/ui';
 import { InvoiceStatus } from '@/components/status';
 import { ExpenseModal, ExpensesTab, FinanceStats, FootRow, PeriodPicker, RefundsTab, ShiftsTab, StatRow } from '@/components/finance-extra';
 import { StatMoney } from '@/components/cash-shift';
@@ -69,31 +69,40 @@ function Finance() {
         <div className="px-3 pt-1"><Tabs value={tab} onChange={setTab} items={tabs} /></div>
 
         {tab === 'payments' && <>
-          <Toolbar>
+          <Toolbar actions={
+            // a plain download link (the browser saves the file), dressed as the other glass capsules
+            <a href={`/api/v1/payments/export.csv${qs(filters)}`} download aria-label={t('cash.csvExport', { format: 'CSV' })} title={t('cash.csvExport', { format: 'CSV' })} className="glass-btn inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full border-2 border-transparent px-5 text-[0.9375rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><Download className="h-4 w-4" />CSV</a>
+          }>
             {period}
             <Select aria-label={t('cash.colMethod')} className="w-full sm:w-auto sm:min-w-[11.5rem]" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">{t('cash.allMethods')}</option>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>
-            <a href={`/api/v1/payments/export.csv${qs(filters)}`} download aria-label={t('cash.csvExport', { format: 'CSV' })} title={t('cash.csvExport', { format: 'CSV' })} className="ml-auto inline-flex min-h-11 items-center justify-center gap-2 whitespace-nowrap rounded-lg border-2 border-slate-300 bg-white px-3 text-[0.9375rem] font-semibold text-slate-800 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><Download className="h-4 w-4" />CSV</a>
           </Toolbar>
           {pays.isLoading ? <LoadingRows /> : pays.isError ? <ErrorState error={pays.error} onRetry={() => pays.refetch()} /> : !pays.data.data.length ? <EmptyState compact title={t('cash.noPaymentsPeriod')} /> : (() => {
-            const cols = 5; // columns before «Summa»
+            // phone: receipt (with the time under it), patient (with invoice and method under it) and the amount — the amount is never off-screen
+            const gap = [{ className: 'hidden sm:table-cell' }, {}, { className: 'hidden md:table-cell' }, { className: 'hidden md:table-cell' }]; // columns between the first and «Summa»
             return <>
               <Table>
-                <thead><tr><Th>{t('cash.colReceipt')}</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colPatient')}</Th><Th>{t('cash.colInvoice')}</Th><Th>{t('cash.colMethod')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
+                <thead><tr><Th className="hidden sm:table-cell">{t('cash.colReceipt')}</Th><Th className="hidden sm:table-cell">{t('cash.colTime')}</Th><Th>{t('cash.colPatient')}</Th><Th className="hidden md:table-cell">{t('cash.colInvoice')}</Th><Th className="hidden md:table-cell">{t('cash.colMethod')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{pays.data.data.map((p: any) => (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <Td className="tabular-nums"><Link href={`/print/payment/${p.id}`} target="_blank" className="text-brand-700 hover:underline">{p.receipt_number}</Link></Td>
-                    <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(p.paid_at)}</Td>
-                    <Td><div className="whitespace-nowrap font-medium text-slate-900">{fullName(p)}</div><div className="text-[0.8125rem] text-slate-600">{pid(p.patient_number)}</div></Td>
-                    <Td><Link href={`/cashier/${p.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{p.invoice_number}</Link>{showBranch && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.branch_name}</div>}</Td>
-                    <Td><div className="whitespace-nowrap">{t(`payment.${p.method}` as MessageKey)}</div>{!cashier && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</div>}</Td>
+                    <Td className="hidden tabular-nums sm:table-cell"><Link href={`/print/payment/${p.id}`} target="_blank" className="text-brand-700 hover:underline">{p.receipt_number}</Link></Td>
+                    <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(p.paid_at)}</Td>
+                    <Td className="min-w-[9rem]"><div className="font-medium text-slate-900">{fullName(p)}</div><div className="text-[0.8125rem] text-slate-600">{pid(p.patient_number)}</div><div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden"><Link href={`/print/payment/${p.id}`} target="_blank" className="text-brand-700 hover:underline">{p.receipt_number}</Link> · {fmtDateTime(p.paid_at)}</div><div className="text-[0.8125rem] text-slate-600 md:hidden">№{p.invoice_number} · {t(`payment.${p.method}` as MessageKey)}</div></Td>
+                    <Td className="hidden md:table-cell"><Link href={`/cashier/${p.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{p.invoice_number}</Link>{showBranch && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.branch_name}</div>}</Td>
+                    <Td className="hidden md:table-cell"><div className="whitespace-nowrap">{t(`payment.${p.method}` as MessageKey)}</div>{!cashier && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</div>}</Td>
                     <Td right className="font-medium">{formatSom(p.amount)}</Td>
                   </tr>
                 ))}</tbody>
                 <tfoot>
                   {!cashier && pays.data.meta.by_method.length > 1 && pays.data.meta.by_method.map((m: any) => (
-                    <tr key={m.method} className="bg-slate-50 text-slate-700"><td colSpan={cols} className="border-b border-slate-100 px-3 py-2">{t(`payment.${m.method}` as MessageKey)} <span className="text-slate-600">({t('cash.nPayments', { n: m.n })})</span></td><td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right tabular-nums">{formatSom(Number(m.sum))}</td></tr>
+                    <tr key={m.method} className="bg-slate-50 text-slate-700">
+                      <td className="hidden border-b border-slate-100 sm:table-cell" />
+                      <td className="hidden border-b border-slate-100 sm:table-cell" />
+                      <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2">{t(`payment.${m.method}` as MessageKey)} <span className="text-slate-600">({t('cash.nPayments', { n: m.n })})</span></td>
+                      {gap.slice(2).map((g, i) => <td key={i} className={cx('border-b border-slate-100', g.className)} />)}
+                      <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right tabular-nums">{formatSom(Number(m.sum))}</td>
+                    </tr>
                   ))}
-                  <FootRow cells={[{ left: true, span: cols, value: t('cash.footPayments', { n: pays.data.meta.total }) }, { value: formatSom(pays.data.meta.sum) }]} />
+                  <FootRow cells={[{ className: 'hidden sm:table-cell' }, { className: 'hidden sm:table-cell' }, { left: true, value: t('cash.footPayments', { n: pays.data.meta.total }) }, ...gap.slice(2), { value: formatSom(pays.data.meta.sum) }]} />
                 </tfoot>
               </Table>
               <Pagination page={page} pageSize={20} total={pays.data.meta.total} onPage={setPage} />
@@ -107,15 +116,15 @@ function Finance() {
           </Toolbar>
           {debts.isLoading ? <LoadingRows /> : debts.isError ? <ErrorState error={debts.error} onRetry={() => debts.refetch()} /> : !debts.data.data.length ? <EmptyState compact title={t('cash.noDebts')} /> : <>
             <Table>
-              <thead><tr><Th>{t('cash.colPatient')}</Th><Th>{t('cash.colInvoice')}</Th><Th right>{t('cash.colTotal')}</Th><Th right>{t('cash.colPaid')}</Th><Th right>{t('cash.colDue')}</Th><Th>{t('cash.status')}</Th></tr></thead>
+              <thead><tr><Th>{t('cash.colPatient')}</Th><Th className="hidden sm:table-cell">{t('cash.colInvoice')}</Th><Th right className="hidden sm:table-cell">{t('cash.colTotal')}</Th><Th right className="hidden sm:table-cell">{t('cash.colPaid')}</Th><Th right>{t('cash.colDue')}</Th><Th className="hidden md:table-cell">{t('cash.status')}</Th></tr></thead>
               <tbody>{debts.data.data.map((i: any) => (
                 <tr key={i.id} className="hover:bg-slate-50">
-                  <Td><div className="whitespace-nowrap font-medium text-slate-900">{fullName(i)}</div><div className="text-[0.8125rem] text-slate-600">{pid(i.patient_number)}</div></Td>
-                  <Td><Link href={`/cashier/${i.id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{i.invoice_number}</Link><div className="whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{fmtDate(i.created_at)}{showBranch && `, ${i.branch_name}`}</div></Td>
-                  <Td right>{formatSom(i.total)}</Td><Td right>{formatSom(i.paid_amount)}</Td><Td right className="font-semibold text-red-700">{formatSom(i.due)}</Td><Td><InvoiceStatus status={i.status} /></Td>
+                  <Td className="min-w-[8rem]"><div className="font-medium text-slate-900">{fullName(i)}</div><div className="text-[0.8125rem] text-slate-600">{pid(i.patient_number)}</div><div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden"><Link href={`/cashier/${i.id}`} className="text-brand-700 hover:underline">№{i.invoice_number}</Link> · {fmtDate(i.created_at)}</div></Td>
+                  <Td className="hidden sm:table-cell"><Link href={`/cashier/${i.id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{i.invoice_number}</Link><div className="whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{fmtDate(i.created_at)}{showBranch && `, ${i.branch_name}`}</div></Td>
+                  <Td right className="hidden sm:table-cell">{formatSom(i.total)}</Td><Td right className="hidden sm:table-cell">{formatSom(i.paid_amount)}</Td><Td right className="font-semibold text-red-700">{formatSom(i.due)}</Td><Td className="hidden md:table-cell"><InvoiceStatus status={i.status} /></Td>
                 </tr>
               ))}</tbody>
-              <tfoot><FootRow cells={[{ left: true, span: 2, value: t('cash.totalInvoices', { n: debts.data.meta.total }) }, { value: formatSom(debts.data.meta.sums.total) }, { value: formatSom(debts.data.meta.sums.paid) }, { className: 'text-red-700', value: formatSom(debts.data.meta.sums.due) }, {}]} /></tfoot>
+              <tfoot><FootRow cells={[{ left: true, value: t('cash.totalInvoices', { n: debts.data.meta.total }) }, { className: 'hidden sm:table-cell' }, { className: 'hidden sm:table-cell', value: formatSom(debts.data.meta.sums.total) }, { className: 'hidden sm:table-cell', value: formatSom(debts.data.meta.sums.paid) }, { className: 'text-red-700', value: formatSom(debts.data.meta.sums.due) }, { className: 'hidden md:table-cell' }]} /></tfoot>
             </Table>
             <Pagination page={page} pageSize={20} total={debts.data.meta.total} onPage={setPage} />
           </>}

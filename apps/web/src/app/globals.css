@@ -11,6 +11,8 @@
   --glass-rim: rgba(255, 255, 255, 0.9);
   --glass-shadow: 0 1px 1px rgba(10, 30, 70, 0.06), 0 18px 40px -12px rgba(10, 30, 70, 0.30);
   --accent: #0a58ca;
+  /* height of the phone tab bar + its gap: sticky action bars sit above it (bottom: var(--tabbar)) */
+  --tabbar: 5rem;
 }
 /* 18px base for every reader; sizes are in rem, so they all follow the root. */
 html { font-size: 112.5%; }
@@ -74,7 +76,7 @@ body {
 .glass-field:focus-within { background: rgba(255, 255, 255, 0.82); }
 
 /* content layer */
-.surface { background: rgba(255, 255, 255, 0.96); border: 1px solid #fff; border-radius: 1.375rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 30px -18px rgba(15, 23, 42, 0.25); }
+.surface { background: #fff; border: 1px solid #fff; border-radius: 1.375rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 30px -18px rgba(15, 23, 42, 0.25); }
 
 /* no backdrop-filter (old browsers) or the person asked for less transparency: solid panels, same layout */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

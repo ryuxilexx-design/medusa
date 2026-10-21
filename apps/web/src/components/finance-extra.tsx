@@ -17,7 +17,7 @@ type T = ReturnType<typeof useT>;
 
 /** 2–4 key numbers in one row (one column on a phone, two on a tablet). */
 export function StatRow({ children, label }: { children: React.ReactNode; label?: string }) {
-  return <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
+  return <div className="mb-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
 }
 
 /** Period: two date fields + «Bugun / 7 kun / 30 kun» in one segmented control, all 44 px high. */
@@ -28,12 +28,13 @@ export function PeriodPicker({ from, to, onChange }: { from: string; to: string;
   return (
     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       <DateRange from={from} to={to} onFrom={(v) => onChange(v, to)} onTo={(v) => onChange(from, v)} />
-      <div className="grid h-11 w-full grid-cols-3 rounded-lg border-2 border-slate-300 bg-white p-0.5 sm:inline-grid sm:w-auto" role="group" aria-label={t('cash.period')}>
+      {/* the same capsule as the Tabs: inside a white card the segmented control is a soft pill, the chosen day white */}
+      <div className="grid h-11 w-full grid-cols-3 gap-0.5 rounded-full bg-slate-100 p-1 sm:inline-grid sm:w-auto" role="group" aria-label={t('cash.period')}>
         {presets.map(([label, d]) => {
           const on = to === me.today && from === addDays(me.today, -d);
           return (
             <button key={label} type="button" aria-pressed={on} onClick={() => onChange(addDays(me.today, -d), me.today)}
-              className={cx('whitespace-nowrap rounded-md px-2 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', on ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-slate-100')}>
+              className={cx('whitespace-nowrap rounded-full px-3.5 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', on ? 'bg-white text-brand-800 shadow-[0_2px_8px_rgba(15,23,42,0.12)]' : 'text-slate-700 hover:text-slate-900')}>
               {t(label)}
             </button>
           );
@@ -106,18 +107,20 @@ export function ShiftsTab({ from, to, branchId }: { from: string; to: string; br
   return (
     <>
       <Table>
-        <thead><tr><Th>№</Th><Th>{t('cash.colCashierBranch')}</Th><Th>{t('cash.colOpenedClosed')}</Th><Th right>{t('cash.colCashIncome')}</Th><Th right>{t('cash.colExpected')}</Th><Th right>{t('cash.colCounted')}</Th><Th right>{t('cash.colDiff')}</Th><Th className="right-0 z-10" /></tr></thead>
+        {/* phone: cashier, expected cash, difference and the actions; the other sums come back on wider screens */}
+        <thead><tr><Th className="hidden sm:table-cell">№</Th><Th>{t('cash.colCashierBranch')}</Th><Th className="hidden md:table-cell">{t('cash.colOpenedClosed')}</Th><Th right className="hidden lg:table-cell">{t('cash.colCashIncome')}</Th><Th right>{t('cash.colExpected')}</Th><Th right className="hidden 2xl:table-cell">{t('cash.colCounted')}</Th><Th right className="hidden sm:table-cell">{t('cash.colDiff')}</Th><Th className="right-0 z-10" /></tr></thead>
         <tbody>{q.data!.map((s) => (
           <tr key={s.id} className="group hover:bg-slate-50">
-            <Td className="tabular-nums">{s.number}</Td>
-            <Td><div className="whitespace-nowrap font-medium text-slate-900">{s.cashier_name}</div><div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{s.branch_name}</div></Td>
-            <Td className="whitespace-nowrap tabular-nums"><div>{fmtDateTime(s.opened_at)}</div><div className="text-[0.8125rem] text-slate-600">{s.status === 'open' ? <Badge tone="green" icon={<DoorOpen className="h-3.5 w-3.5" />}>{t('cash.shiftOpenBadge')}</Badge> : fmtDateTime((s as any).closed_at)}</div></Td>
-            <Td right>{formatSom(s.totals.payments.cash.sum)}</Td><Td right>{formatSom(s.expected_cash)}</Td>
-            <Td right>{s.counted_cash == null ? '—' : formatSom(s.counted_cash)}</Td>
-            <Td right className={cx('font-medium', s.difference ? (s.difference > 0 ? 'text-amber-700' : 'text-red-700') : 'text-slate-600')}>{s.difference == null ? '—' : `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`}</Td>
-            <Td right className="sticky right-0 bg-white group-hover:bg-slate-50">
-              <div className="flex items-center justify-end gap-1">
-                <LinkButton size="sm" variant="ghost" href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('cash.report')}</LinkButton>
+            <Td className="hidden tabular-nums sm:table-cell">{s.number}</Td>
+            <Td className="min-w-[8rem]"><div className="font-medium text-slate-900">{s.cashier_name}</div><div className="text-[0.8125rem] text-slate-600">{s.branch_name}</div>
+              <div className="mt-1 text-[0.8125rem] tabular-nums text-slate-600 md:hidden">{fmtDateTime(s.opened_at)}{s.status === 'open' ? <> · <span className="font-semibold text-emerald-800">{t('cash.shiftOpenBadge')}</span></> : null}</div></Td>
+            <Td className="hidden whitespace-nowrap tabular-nums md:table-cell"><div>{fmtDateTime(s.opened_at)}</div><div className="text-[0.8125rem] text-slate-600">{s.status === 'open' ? <Badge tone="green" icon={<DoorOpen className="h-3.5 w-3.5" />}>{t('cash.shiftOpenBadge')}</Badge> : fmtDateTime((s as any).closed_at)}</div></Td>
+            <Td right className="hidden lg:table-cell">{formatSom(s.totals.payments.cash.sum)}</Td><Td right>{formatSom(s.expected_cash)}</Td>
+            <Td right className="hidden 2xl:table-cell">{s.counted_cash == null ? '—' : formatSom(s.counted_cash)}</Td>
+            <Td right className={cx('hidden font-medium sm:table-cell', s.difference ? (s.difference > 0 ? 'text-amber-700' : 'text-red-700') : 'text-slate-600')}>{s.difference == null ? '—' : `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`}</Td>
+            <Td right className="!pl-1 sm:sticky sm:right-0 sm:bg-white sm:group-hover:bg-slate-50">
+              <div className="relative flex flex-wrap items-center justify-end gap-1">
+                <LinkButton size="sm" variant="ghost" href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}><span className="sr-only md:not-sr-only">{t('cash.report')}</span></LinkButton>
                 {me.role === 'manager' && s.status === 'open' && <Button size="sm" onClick={() => setClosing(s)}>{t('cash.closeShift')}</Button>}
               </div>
             </Td>
@@ -137,16 +140,16 @@ export function ExpensesTab({ from, to, branchId, showBranch }: { from: string; 
   if (!q.data.data.length) return <EmptyState compact title={t('cash.noExpensesPeriod')} />;
   return (
     <Table>
-      <thead><tr><Th>{t('cash.colDate')}</Th><Th>{t('cash.category')}</Th><Th>{t('cash.note')}</Th><Th>{t('cash.colSource')}</Th><Th right>{t('cash.colSum')}</Th><Th className="right-0 z-10" /></tr></thead>
+      <thead><tr><Th className="hidden sm:table-cell">{t('cash.colDate')}</Th><Th>{t('cash.category')}</Th><Th className="hidden md:table-cell">{t('cash.note')}</Th><Th className="hidden lg:table-cell">{t('cash.colSource')}</Th><Th right>{t('cash.colSum')}</Th><Th className="right-0 z-10" /></tr></thead>
       <tbody>{q.data.data.map((e: any) => (
         <tr key={e.id} className={cx('group hover:bg-slate-50', e.status === 'void' && 'text-slate-600')}>
-          <Td className="whitespace-nowrap tabular-nums">{fmtDate(e.occurred_at)}</Td><Td><Badge>{expenseCategoryLabel(t, e.category)}</Badge>{showBranch && <div className="mt-1 whitespace-nowrap text-[0.8125rem] text-slate-600">{e.branch_name}</div>}</Td>
-          <Td className="min-w-[10rem]">{e.note}</Td><Td className="min-w-[9rem]">{expenseStatusCell(e, t)}</Td>
+          <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDate(e.occurred_at)}</Td><Td><Badge>{expenseCategoryLabel(t, e.category)}</Badge><div className="mt-1 text-[0.8125rem] text-slate-600"><span className="tabular-nums sm:hidden">{fmtDate(e.occurred_at)}{showBranch && ' · '}</span>{showBranch && e.branch_name}</div>{e.note && <div className="mt-1 text-[0.8125rem] text-slate-700 md:hidden">{e.note}</div>}</Td>
+          <Td className="hidden min-w-[10rem] md:table-cell">{e.note}</Td><Td className="hidden min-w-[9rem] lg:table-cell">{expenseStatusCell(e, t)}</Td>
           <Td right className={e.status === 'void' ? 'line-through' : 'font-medium'}>{formatSom(e.amount)}</Td>
-          <Td right className="sticky right-0 bg-white group-hover:bg-slate-50"><ExpenseRowActions e={e} /></Td>
+          <Td right className="sm:sticky sm:right-0 sm:bg-white sm:group-hover:bg-slate-50"><ExpenseRowActions e={e} /></Td>
         </tr>
       ))}</tbody>
-      <tfoot><FootRow cells={[{ left: true, span: 4, value: t('cash.footExpenses') }, { value: formatSom(q.data.meta.total) }, {}]} /></tfoot>
+      <tfoot><FootRow cells={[{ className: 'hidden sm:table-cell' }, { left: true, value: t('cash.footExpenses') }, { className: 'hidden md:table-cell' }, { className: 'hidden lg:table-cell' }, { value: formatSom(q.data.meta.total) }, {}]} /></tfoot>
     </Table>
   );
 }
@@ -167,7 +170,7 @@ export function ExpenseRowActions({ e }: { e: any }) {
   if (e.shift_status === 'closed') return <span className="whitespace-nowrap text-[0.8125rem] text-slate-600">{t('cash.expenseLockedShort')}</span>;
   return (
     <>
-      <Button size="sm" variant="ghost" className="!text-slate-700 hover:!bg-red-50 hover:!text-red-700" icon={<Ban className="h-4 w-4" />} onClick={() => setOpen(true)}>{t('cash.cancelExpense')}</Button>
+      <Button size="sm" variant="ghost" className="!text-slate-700 hover:!bg-red-50 hover:!text-red-700" icon={<Ban className="h-4 w-4" />} title={t('cash.cancelExpense')} aria-label={t('cash.cancelExpense')} onClick={() => setOpen(true)}><span className="hidden 2xl:inline">{t('cash.cancelExpense')}</span></Button>
       <Modal open={open} onClose={() => setOpen(false)} dirty={!!reason.trim()} title={t('cash.cancelExpenseTitle', { category: expenseCategoryLabel(t, e.category), amount: formatSom(e.amount) })}
         footer={<><ModalCancel>{t('common.back')}</ModalCancel><Button variant="danger" loading={m.isPending} disabled={reason.trim().length < 3} onClick={() => m.mutate()}>{t('cash.cancelExpenseConfirm')}</Button></>}>
         <Field label={t('cash.colReason')} required>{(id) => <Input id={id} value={reason} onChange={(ev) => setReason(ev.target.value)} placeholder={t('cash.cancelExpensePlaceholder')} />}</Field>

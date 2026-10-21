@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
@@ -31,6 +31,9 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
   // consent at registration (new cards only); required on a real clinic's server (production), optional in the demo
   const [consent, setConsent] = useState<ConsentValue>(NO_CONSENT);
   const consentRequired = !me.demo;
+  const form = useRef<HTMLFormElement>(null);
+  // after a failed check the first field with an error gets the focus (and scrolls into view in the long form)
+  const focusFirstError = () => setTimeout(() => { const el = form.current?.querySelector<HTMLElement>('[aria-invalid="true"]'); el?.focus(); el?.scrollIntoView?.({ block: 'center' }); }, 30);
 
   useEffect(() => {
     if (!open) return;
@@ -48,11 +51,13 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
     if (v.first_name.trim().length < 2) e.first_name = t('registrar.form.firstNameMin');
     if (!v.birth_date) e.birth_date = t('registrar.form.birthRequired');
     else if (v.birth_date > me.today) e.birth_date = t('registrar.form.birthFuture');
+    else if (v.birth_date < '1900-01-01') e.birth_date = t('registrar.form.birthTooOld');
     const digits = v.phone.replace(/[\s\-()+]/g, '');
     if (v.phone.trim() && !(digits.length === 9 || (digits.length === 12 && digits.startsWith('998')))) e.phone = t('registrar.form.phoneFormat');
     if (!patient && consentRequired && !consent.data) e.consent = t('consent.form.required');
     setErrors(e);
-    return !Object.keys(e).length;
+    if (Object.keys(e).length) { focusFirstError(); return false; }
+    return true;
   }
 
   const save = useMutation({
@@ -71,11 +76,12 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
     },
     onError: (e) => {
       if (e instanceof ApiError && e.code === 'DUPLICATE_WARNING') { setDups(e.details?.candidates ?? []); return; }
-      if (e instanceof ApiError && e.fields) setErrors(e.fields);
+      if (e instanceof ApiError && e.fields) { setErrors(e.fields); focusFirstError(); }
       setFormError(e instanceof Error ? e.message : t('registrar.notSaved'));
     },
   });
-  const submit = (confirm = false) => { setFormError(null); if (validate()) save.mutate(confirm); };
+  // a second click while the first request is on its way never sends a second patient
+  const submit = (confirm = false) => { if (save.isPending) return; setFormError(null); if (validate()) save.mutate(confirm); };
 
   return (
     <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-2xl" title={patient ? t('registrar.form.editTitle') : t('registrar.addPatient')}
@@ -86,19 +92,20 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
           <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {dups.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <div><span className="font-medium">{fullName(d, true)}</span> <span className="text-slate-600">{pid(d.patient_number)}, {fmtDate(d.birth_date)}, {formatPhone(d.phone)}</span>
+                <div className="min-w-0 [overflow-wrap:anywhere]"><span className="font-medium">{fullName(d, true)}</span> <span className="text-slate-600">{pid(d.patient_number)}, {fmtDate(d.birth_date)}, {formatPhone(d.phone)}</span>
                   <div className="text-xs text-slate-600">{d.match === 'phone' ? t('registrar.form.dupPhone') : t('registrar.form.dupNameBirth')}</div></div>
                 <Link href={`/patients/${d.id}`} onClick={onClose} className="shrink-0 rounded text-sm font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('registrar.form.openProfile')}</Link>
               </li>
             ))}
           </ul>
-          <div className="flex justify-end gap-2">
+          {/* two wide buttons: on a phone they stack instead of pushing the first one off the screen */}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button onClick={() => setDups(null)}>{t('registrar.form.backToForm')}</Button>
-            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(true)}>{t('registrar.form.createAnyway')}</Button>
+            <Button variant="primary" className="!whitespace-normal" loading={save.isPending} onClick={() => save.mutate(true)}>{t('registrar.form.createAnyway')}</Button>
           </div>
         </div>
       ) : (
-        <form className="grid grid-cols-1 gap-3 sm:grid-cols-3" onSubmit={(e) => { e.preventDefault(); submit(false); }} noValidate>
+        <form ref={form} className="grid grid-cols-1 gap-3 sm:grid-cols-3" onSubmit={(e) => { e.preventDefault(); submit(false); }} noValidate>
           {formError && <div className="sm:col-span-3"><Alert tone="red">{formError}</Alert></div>}
           <Field label={t('registrar.form.lastName')} required error={errors.last_name}>{(id) => <Input id={id} value={v.last_name} onChange={set('last_name')} invalid={!!errors.last_name} autoComplete="off" />}</Field>
           <Field label={t('registrar.form.firstName')} required error={errors.first_name}>{(id) => <Input id={id} value={v.first_name} onChange={set('first_name')} invalid={!!errors.first_name} autoComplete="off" />}</Field>
@@ -107,7 +114,7 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
           <Field label={t('registrar.form.sex')} error={errors.sex}>{(id) => <Select id={id} value={v.sex} onChange={set('sex')}><option value="unspecified">{t('sex.unspecified')}</option><option value="female">{t('sex.female')}</option><option value="male">{t('sex.male')}</option></Select>}</Field>
           <Field label={t('registrar.phone')} error={errors.phone} hint={t('registrar.form.phoneHint')}>{(id) => <Input id={id} value={v.phone} onChange={set('phone')} invalid={!!errors.phone} inputMode="tel" placeholder="+998 90 123 45 67" />}</Field>
           <Field label={t('registrar.form.contactName')} className="sm:col-span-2" error={errors.contact_name} hint={t('registrar.form.contactHint')}>{(id) => <Input id={id} value={v.contact_name} onChange={set('contact_name')} />}</Field>
-          <Field label={t('registrar.form.contactPhone')} error={errors.contact_phone}>{(id) => <Input id={id} value={v.contact_phone} onChange={set('contact_phone')} inputMode="tel" />}</Field>
+          <Field label={t('registrar.form.contactPhone')} error={errors.contact_phone}>{(id) => <Input id={id} value={v.contact_phone} onChange={set('contact_phone')} invalid={!!errors.contact_phone} inputMode="tel" />}</Field>
           <Field label={t('registrar.form.address')} className="sm:col-span-3" error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
           <Field label={t('registrar.note')} className="sm:col-span-3" error={errors.note} hint={t('registrar.form.noteHint')}>{(id) => <Textarea id={id} rows={2} value={v.note} onChange={set('note')} />}</Field>
           {!patient && <ConsentFields value={consent} required={consentRequired} error={errors.consent} onChange={(c) => { setConsent(c); setErrors((x) => ({ ...x, consent: '' })); }} />}

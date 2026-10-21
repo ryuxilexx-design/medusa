@@ -54,9 +54,10 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
       <label htmlFor={`${listId}-q`} className="block text-sm font-semibold text-slate-800">{t('icd.label')}</label>
       {value.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
+          {/* the whole title stays readable (Russian ICD names are long): the chip wraps instead of cutting the text */}
           {value.map((x) => (
-            <span key={x.code} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-900">
-              <b className="tabular-nums">{x.code}</b><span className="max-w-[17rem] truncate">{x.title}</span>
+            <span key={x.code} className="inline-flex max-w-full items-start gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-900">
+              <b className="shrink-0 pt-0.5 tabular-nums">{x.code}</b><span className="min-w-0 pt-0.5 leading-snug">{x.title}</span>
               {!disabled && <button type="button" aria-label={t('icd.remove', { code: x.code })} className="rounded-full p-1 text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={() => onChange(value.filter((v) => v.code !== x.code))}><X className="h-4 w-4" /></button>}
             </span>
           ))}

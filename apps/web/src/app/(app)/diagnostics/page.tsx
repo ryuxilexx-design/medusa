@@ -113,7 +113,7 @@ function Report({ id }: { id: string }) {
       </div>
       {/* the two decisions stay visible at the bottom of the report, even when the text is long */}
       {d.can_edit && (
-        <div className="sticky bottom-0 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-b-xl border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur">
+        <div className="sticky bottom-[var(--tabbar)] flex flex-wrap items-center gap-x-4 gap-y-2 rounded-b-[inherit] border-t border-slate-200 bg-white px-5 py-3 lg:bottom-0">
           <span id="sign-why" className="w-full text-[0.8125rem] text-slate-600 sm:w-auto sm:flex-1">{incomplete ? t('clinical.uzi.fillBoth') : ''}</span>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <Button className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" icon={<Save className="hidden h-5 w-5 sm:block" />} disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>{t('clinical.uzi.saveDraft')}</Button>

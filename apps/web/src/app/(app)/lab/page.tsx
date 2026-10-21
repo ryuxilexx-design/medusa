@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Check, CheckCircle2, ChevronRight, FlaskConical, Printer, Save, Search, TestTube } from 'lucide-react';
@@ -103,21 +103,29 @@ function OrderDetail({ id }: { id: string }) {
   const [base, setBase] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
+  // a 409 (changed in another window) reloads the order; the explanation must survive that reload
+  const afterReload = useRef<string | null>(null);
   useEffect(() => {
     if (!o.data) return;
     const v = Object.fromEntries((o.data.lab_template ?? []).map((p: any) => [p.code, (o.data.values ?? []).find((x: any) => x.code === p.code)?.value ?? '']));
-    setValues(v); setComment(o.data.comment ?? ''); setBase(JSON.stringify([v, o.data.comment ?? ''])); setErrors({}); setErr(null);
+    setValues(v); setComment(o.data.comment ?? ''); setBase(JSON.stringify([v, o.data.comment ?? ''])); setErrors({}); setErr(afterReload.current); afterReload.current = null;
   }, [o.data]);
   const dirty = JSON.stringify([values, comment]) !== base;
   useUnsavedGuard(dirty && me.role === 'lab');
   const refresh = () => ['orders', 'encounter', 'doctor-history', 'dashboard', 'patient'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
-  const onErr = (e: unknown) => { setErr((e as Error).message); if (e instanceof ApiError && e.fields) setErrors(e.fields); if (e instanceof ApiError && e.status === 409) o.refetch(); };
+  const onErr = (e: unknown) => {
+    if (e instanceof ApiError && e.status === 409) { afterReload.current = t('clinical.lab.changedElsewhere', { msg: e.message }); setErr(afterReload.current); o.refetch(); return; }
+    // field errors are shown next to the table; the general line only when there is nothing more specific
+    if (e instanceof ApiError && e.fields && Object.keys(e.fields).length) { setErrors(e.fields); setErr(null); return; }
+    setErr((e as Error).message);
+  };
   const collect = useMutation({ mutationFn: () => api(`/orders/${id}/collect`, { method: 'POST' }), onSuccess: () => { refresh(); toast.success(t('clinical.lab.collect')); }, onError: onErr });
   const save = useMutation({
     mutationFn: () => api(`/orders/${id}/result`, { method: 'PUT', body: { values: Object.entries(values).map(([code, value]) => ({ code, value })), comment: comment || null } }),
     onSuccess: () => { refresh(); setErr(null); setErrors({}); toast.success(t('clinical.lab.draftSaved')); }, onError: onErr,
   });
-  const verify = useMutation({ mutationFn: () => api(`/orders/${id}/verify`, { method: 'POST' }), onSuccess: () => { refresh(); toast.success(t('clinical.lab.verifiedToast')); }, onError: onErr });
+  // the server answers `already` when another window verified first: that is information, not this person's success
+  const verify = useMutation({ mutationFn: () => api(`/orders/${id}/verify`, { method: 'POST' }), onSuccess: (r: any) => { refresh(); if (r?.data?.already) toast.info(t('clinical.lab.alreadyVerified')); else toast.success(t('clinical.lab.verifiedToast')); }, onError: onErr });
 
   if (o.isLoading) return <Card><LoadingRows /></Card>;
   if (o.isError) return <Card><ErrorState error={o.error} onRetry={() => o.refetch()} /></Card>;
@@ -128,6 +136,7 @@ function OrderDetail({ id }: { id: string }) {
   // a parameter with a numeric reference range expects a number; free-text parameters (e.g. colour) are left alone
   const notNumber = (p: any, v: string) => v.trim() !== '' && (p.ref_low != null || p.ref_high != null) && isNaN(Number(v.trim().replace(',', '.')));
   const nonNumeric = (d.lab_template ?? []).filter((p: any) => notNumber(p, values[p.code] ?? '')).map((p: any) => p.name);
+  const serverFieldErrors = Object.entries(errors).filter(([k, v]) => v && !(k.startsWith('values.') && notNumber(d.lab_template?.[Number(k.split('.')[1])] ?? {}, values[d.lab_template?.[Number(k.split('.')[1])]?.code] ?? ''))).map(([, v]) => v);
   const verifyBlocked = dirty ? t('clinical.lab.saveFirst') : d.status !== 'draft_result' ? t('clinical.lab.enterFirst') : null;
   const steps = ['ordered', 'sample_collected', 'draft_result', 'verified'];
   const at = steps.indexOf(d.status);
@@ -197,17 +206,18 @@ function OrderDetail({ id }: { id: string }) {
             </table>
             </div>
             {nonNumeric.length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{t('clinical.lab.needNumber', { names: nonNumeric.join(', ') })}</p>}
-            {Object.values(errors).filter(Boolean).length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{Object.values(errors).join('; ')}</p>}
+            {/* server field errors, except the ones the line above already explains */}
+            {serverFieldErrors.length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{serverFieldErrors.join('; ')}</p>}
             <div className="mt-3"><label className="text-[0.8125rem] font-medium text-slate-700" htmlFor="lab-comment">{t('clinical.lab.comment')}</label><Textarea id="lab-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
             <p className="mt-2 text-xs text-slate-600">{t('clinical.lab.refNote')}</p>
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
               {verifyBlocked && <p id="verify-why" className="mr-auto text-sm text-slate-600">{verifyBlocked}</p>}
-              <Button className="max-sm:w-full" icon={<Save className="h-4 w-4" />} loading={save.isPending} disabled={!dirty} onClick={() => save.mutate()}>{t('clinical.lab.saveDraft')}</Button>
+              <Button className="max-sm:w-full" icon={<Save className="h-4 w-4" />} loading={save.isPending} disabled={!dirty || nonNumeric.length > 0} onClick={() => save.mutate()}>{t('clinical.lab.saveDraft')}</Button>
               <Button className="max-sm:w-full" variant="success" icon={<CheckCircle2 className="h-4 w-4" />} loading={verify.isPending} disabled={!!verifyBlocked} aria-describedby={verifyBlocked ? 'verify-why' : undefined} onClick={() => verify.mutate()}>{t('clinical.lab.verify')}</Button>
             </div>
           </div>
         )}
-        {d.status === 'verified' && d.values && <div><div className="overflow-x-auto"><LabValues values={d.values} /></div>{d.comment && <p className="mt-2 text-sm"><span className="text-slate-600">{t('clinical.f.comment')}</span> {d.comment}</p>}<p className="mt-2 text-xs text-slate-600">{t('clinical.lab.verifiedLocked')}</p></div>}
+        {d.status === 'verified' && d.values && <div><div className="sm:hidden"><LabValues values={d.values} compact /></div><div className="hidden overflow-x-auto sm:block"><LabValues values={d.values} /></div>{d.comment && <p className="mt-2 text-sm"><span className="text-slate-600">{t('clinical.f.comment')}</span> {d.comment}</p>}<p className="mt-2 text-xs text-slate-600">{t('clinical.lab.verifiedLocked')}</p></div>}
       </div>
     </Card>
   );

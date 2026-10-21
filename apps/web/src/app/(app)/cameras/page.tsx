@@ -323,7 +323,7 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras, snapshotDays 
                 <Td className="hidden md:table-cell"><div className="text-slate-900">{r.camera_name}</div><div className="text-[0.8125rem] text-slate-600">{[r.location, showBranch ? r.branch_name : null].filter(Boolean).join(' · ') || '—'}</div></Td>
                 <Td right className="!py-1.5">
                   {r.acked_at ? (
-                    <span className="inline-flex items-center gap-1.5 whitespace-normal text-left text-[0.8125rem] text-slate-700"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />{t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}</span>
+                    <span className="relative inline-flex items-center gap-1.5 whitespace-normal text-left text-[0.8125rem] text-slate-700" title={t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" /><span className="sr-only md:not-sr-only">{t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}</span></span>
                   ) : r.alert ? (
                     <Button size="sm" icon={<Check className={ic} />} aria-label={t('cam.sec.ack')} loading={ack.isPending && ack.variables === r.id} onClick={() => ack.mutate(r.id)}><span className="hidden sm:inline">{t('cam.sec.ack')}</span></Button>
                   ) : null}

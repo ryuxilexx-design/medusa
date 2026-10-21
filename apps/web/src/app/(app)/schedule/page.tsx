@@ -77,7 +77,19 @@ function Schedule() {
   return (
     <>
       <PageHeader title={me.role === 'doctor' ? t('registrar.mySchedule') : t('registrar.schedule')} subtitle={longDate(date)}
-        actions={staff && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBooking({ date })}>{t('registrar.book')}</Button>} />
+        actions={<>
+          {/* day grid / list: a glass segmented control in the control layer, so the filter row stays one line at 1366 */}
+          <div role="group" aria-label={t('registrar.view')} className="glass-field inline-flex h-12 items-center gap-0.5 rounded-full p-1">
+            {([['grid', LayoutGrid, t('registrar.viewDay')], ['list', List, t('registrar.viewList')]] as const).map(([v, Icon, label]) => (
+              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
+                className={cx('inline-flex h-10 items-center gap-2 rounded-full px-4 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+                  view === v ? 'bg-white text-brand-800 shadow-sm' : 'text-slate-700 hover:text-slate-900')}>
+                <Icon className="h-4 w-4" aria-hidden="true" />{label}
+              </button>
+            ))}
+          </div>
+          {staff && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBooking({ date })}>{t('registrar.book')}</Button>}
+        </>} />
       <CameraArrivals />
       <Card padded={false}>
         <Toolbar>
@@ -97,15 +109,6 @@ function Schedule() {
             <option value="">{t('registrar.allStatuses', { n: appts.data?.length ?? 0 })}</option>
             {Object.keys(APPOINTMENT_STATUS_LABEL).map((k) => <option key={k} value={k}>{statusWord(k)} ({counts[k] ?? 0})</option>)}
           </Select>
-          <div role="group" aria-label={t('registrar.view')} className="inline-flex rounded-lg sm:ml-auto border-2 border-slate-300 bg-slate-50 p-0.5">
-            {([['grid', LayoutGrid, t('registrar.viewDay')], ['list', List, t('registrar.viewList')]] as const).map(([v, Icon, label]) => (
-              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
-                className={cx('inline-flex min-h-9 items-center gap-2 rounded-md px-3 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-                  view === v ? 'bg-white text-brand-800 shadow-sm ring-1 ring-brand-200' : 'text-slate-600 hover:text-slate-900')}>
-                <Icon className="hidden h-4 w-4 2xl:block" aria-hidden="true" />{label}
-              </button>
-            ))}
-          </div>
         </Toolbar>
         {appts.isLoading || doctors.isLoading ? <LoadingRows rows={8} /> : appts.isError ? <ErrorState error={appts.error} onRetry={() => appts.refetch()} /> : view === 'list' ? (
           !appts.data!.filter(visible).length ? <EmptyState title={t('registrar.noApptsDay')} action={staff && <Button variant="primary" onClick={() => setBooking({ date })}>{t('registrar.book')}</Button>} /> : (
@@ -114,7 +117,7 @@ function Schedule() {
               <tbody>{appts.data!.filter(visible).map((a) => (
                 <tr key={a.id} className="cursor-pointer hover:bg-slate-50" onClick={(e) => { if (!(e.target as HTMLElement).closest('button,a')) setSelected(a); }}>
                   <Td className="whitespace-nowrap font-semibold tabular-nums">{fmtTime(a.starts_at)}–{fmtTime(a.ends_at)}</Td>
-                  <Td className="whitespace-nowrap"><span className="font-medium text-slate-900">{fullName(a)}</span> <span className="tabular-nums text-slate-600">{pid(a.patient_number)}</span></Td>
+                  <Td className="min-w-[10rem] [overflow-wrap:anywhere]"><span className="font-medium text-slate-900">{fullName(a)}</span> <span className="whitespace-nowrap tabular-nums text-slate-600">{pid(a.patient_number)}</span></Td>
                   <Td className="whitespace-nowrap">{a.doctor_name}</Td>
                   <Td className="hidden text-slate-700 lg:table-cell">{a.service_name}</Td>
                   {showBranch && <Td className="hidden whitespace-nowrap text-slate-700 2xl:table-cell">{a.branch_name}</Td>}
