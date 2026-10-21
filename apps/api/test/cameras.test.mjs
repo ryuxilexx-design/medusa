@@ -383,6 +383,19 @@ test('ogohlantirish surati: faqat «surat saqlash» yoqilgan kamerada, faqat ogo
   }
 });
 
+test('eski demo bazasi: suratlar bir marta qo‘shiladi, mavjud ogohlantirishlar takrorlanmaydi', async () => {
+  const { backfillSeedSnapshots } = require('@meduza/db');
+  const count = async () => (await pool.query(`SELECT (SELECT count(*)::int FROM camera_events WHERE alert) AS alerts, (SELECT count(*)::int FROM camera_snapshots WHERE tenant_id = $1) AS snaps,
+    (SELECT count(*)::int FROM camera_snapshots s JOIN camera_events e ON e.id = s.event_id WHERE e.dedupe_key LIKE 'seed:%') AS seed_snaps, (SELECT count(*)::int FROM cameras WHERE tenant_id = $1) AS cams`, [SEED_IDS.tenant])).rows[0];
+  const before = await count();
+  assert.ok(before.seed_snaps >= 8);
+  await pool.query(`DELETE FROM camera_snapshots WHERE tenant_id = $1`, [SEED_IDS.tenant]); // a database seeded before migration 016 (the test's own snapshots go too)
+  assert.equal(await backfillSeedSnapshots(pool, '2026-10-18'), before.seed_snaps, 'seed suratlari qayta qo‘shildi');
+  before.snaps = before.seed_snaps;
+  assert.deepEqual(await count(), before, 'hodisalar va kameralar takrorlanmadi');
+  assert.equal(await backfillSeedSnapshots(pool, '2026-10-18'), 0, 'ikkinchi marta hech narsa qilmaydi');
+});
+
 test('tekshiruv tuzatishlari: filial doirasi, eski ochiq ogohlantirish, o‘chirilgan kamera, koddan oldingi kunlar, noto‘g‘ri qiymatlar', async () => {
   const BY = SEED_IDS.branchYunusobod;
   // a manager limited to Yunusobod cannot give or revoke the code of a central-branch doctor

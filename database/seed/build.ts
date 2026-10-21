@@ -874,10 +874,11 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       ['mrk-store', BC, 'region_entrance', 1, '23:12', null, 'store-night-2'],
       ['mrk-or', BC, 'loitering', 0, '09:48', null, 'or-day-loitering'],            // this morning: waiting at the operating-block door
     ];
-    NIGHT.forEach(([cam, branch, kind, back, time, ackAt, snap], i) => {
+    NIGHT.forEach(([cam, branch, kind, back, time, ackAt, snap]) => {
       if (back === 0 && hm(time) > demoNowMin) return;
       const when = at(addDays(demoDate, -back), hm(time));
-      const e = ev(cam, branch, kind, when, { target: kind === 'tamper' ? null : 'human', alert: true }, `sec:night:${i}`);
+      // keyed by content, so adding an alert to this list never shifts the ids of the others
+      const e = ev(cam, branch, kind, when, { target: kind === 'tamper' ? null : 'human', alert: true }, `sec:alert:${cam}:${back}:${time}`);
       if (ackAt) data.camera_event_acks.push({ event_id: e.id, tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -back + (hm(time) > hm(ackAt) ? 1 : 0)), hm(ackAt)) });
       const bytes = snap ? readSeedSnapshot(snap) : null;
       if (bytes) data.camera_snapshots.push({ event_id: e.id, tenant_id: T, content_type: 'image/jpeg', bytes, created_at: when });
