@@ -3,10 +3,17 @@
 import { Q } from '../core/db';
 import { localDate, localTime, now, toMinutes, weekday } from '../core/clock';
 
-export type EventKind = 'face_match' | 'people_count' | 'intrusion' | 'line_crossing' | 'region_entrance' | 'region_exit' | 'tamper';
-export const SECURITY_KINDS: EventKind[] = ['intrusion', 'line_crossing', 'region_entrance', 'region_exit', 'tamper'];
+export type EventKind = 'face_match' | 'people_count' | 'intrusion' | 'line_crossing' | 'region_entrance' | 'region_exit' | 'loitering' | 'tamper';
+export const SECURITY_KINDS: EventKind[] = ['intrusion', 'line_crossing', 'region_entrance', 'region_exit', 'loitering', 'tamper'];
 
-/** What a parser makes of one camera notification. Never carries a picture or a person's name. */
+/** The camera's picture of a security event. Kept only for an alert, only when the camera's «alert snapshots» are on. */
+export interface Snapshot { contentType: 'image/jpeg' | 'image/png' | 'image/webp'; bytes: Buffer }
+/** Largest snapshot stored (the camera sends one frame, usually 50–300 KB). */
+export const SNAPSHOT_MAX = 1024 * 1024;
+/** Days an alert snapshot is kept before the hourly purge deletes it. */
+export const SNAPSHOT_DAYS = 30;
+
+/** What a parser makes of one camera notification. Never carries a person's name; a picture only for a security event. */
 export interface NormalizedEvent {
   kind: EventKind;
   occurredAt: Date;
@@ -20,9 +27,11 @@ export interface NormalizedEvent {
   cumulative?: boolean;
   /** stable id of the notification on the camera side, so a re-sent event is stored once */
   sourceKey: string;
+  /** the camera's picture of a security event (never of a face match or a count) */
+  snapshot?: Snapshot | null;
 }
 
-export interface Camera { id: string; tenant_id: string; branch_id: string; purposes: string[]; security_mode: 'always' | 'after_hours' }
+export interface Camera { id: string; tenant_id: string; branch_id: string; purposes: string[]; security_mode: 'always' | 'after_hours'; alert_snapshots?: boolean }
 
 /** Recognised faces below this similarity are ignored (a doubtful match must not mark anyone as present). */
 export const MIN_SIMILARITY = 80;
@@ -41,7 +50,7 @@ async function afterHours(q: Q, tenantId: string, branchId: string, at: Date) {
   return !r.rowCount;
 }
 
-export type IngestResult = { stored: boolean; ignored?: string; event_id?: string; suggestion?: boolean };
+export type IngestResult = { stored: boolean; ignored?: string; event_id?: string; suggestion?: boolean; snapshot?: boolean };
 
 /**
  * Stores one event for a camera (idempotent by sourceKey) and runs the follow-ups. Runs inside the caller's transaction.
@@ -98,6 +107,14 @@ export async function ingestEvent(q: Q, cam: Camera, e: NormalizedEvent): Promis
   await q.query(`UPDATE cameras SET last_event_at = GREATEST(coalesce(last_event_at, $2), $2) WHERE id = $1`, [cam.id, e.occurredAt]);
   if (!row) return { stored: false, ignored: 'duplicate' };
 
+  // evidence of an alert: the camera's picture, only when the manager switched it on for this camera
+  let snapshot = false;
+  if (alert && cam.alert_snapshots && e.snapshot && SECURITY_KINDS.includes(e.kind) && e.snapshot.bytes.length >= 64 && e.snapshot.bytes.length <= SNAPSHOT_MAX) {
+    await q.query(`INSERT INTO camera_snapshots (event_id, tenant_id, content_type, bytes, created_at) VALUES ($1,$2,$3,$4,$5)`,
+      [row.id, cam.tenant_id, e.snapshot.contentType, e.snapshot.bytes, now()]);
+    snapshot = true;
+  }
+
   let suggestion = false;
   if (subject === 'patient' && patientId) {
     // today's booked, not yet arrived appointment of this patient in this branch, near the booked time
@@ -114,5 +131,11 @@ export async function ingestEvent(q: Q, cam: Camera, e: NormalizedEvent): Promis
       suggestion = !!s.rowCount;
     }
   }
-  return { stored: true, event_id: row.id, suggestion };
+  return { stored: true, event_id: row.id, suggestion, snapshot };
+}
+
+/** Deletes alert snapshots older than the retention (called hourly by the API). */
+export async function purgeSnapshots(q: Q) {
+  const r = await q.query(`DELETE FROM camera_snapshots WHERE created_at < (SELECT demo_now()) - make_interval(days => $1)`, [SNAPSHOT_DAYS]);
+  return r.rowCount ?? 0;
 }

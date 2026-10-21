@@ -3,7 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
-import { backfillSeedCameras, backfillSeedConsents, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { purgeSnapshots } from './cameras/ingest';
 import { config } from './core/config';
 import { syncClock } from './core/clock';
 import { rawBody } from './cameras/hik.controller';
@@ -37,15 +38,20 @@ export async function createApp(): Promise<INestApplication> {
     if (added) console.log(`Demo: ${added} ta seed bemoriga rozilik yozuvi qo‘shildi (migratsiya 011 dan oldingi baza)`);
     const cams = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedCameras(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
     if (cams) console.log(`Demo: ${cams} ta demo kamera va ularning hodisalari qo‘shildi (migratsiya 012 dan oldingi baza)`);
+    const snaps = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedSnapshots(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    if (snaps) console.log(`Demo: ${snaps} ta kamera ogohlantirish surati qo‘shildi (migratsiya 016 dan oldingi baza)`);
   } else if (await readDemoClock(pool)) {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than
     // stamp real visits and payments with demo dates.
     throw new Error('APP_MODE=production, lekin bu bazada demo soati bor (demo bazasi). Haqiqiy klinika uchun alohida, toza baza ishlating.');
   }
   syncClock((await pool.query('SELECT demo_now() AS n')).rows[0].n);
-  // expired sessions are removed hourly (they no longer sign anyone in; the table would only grow)
+  // expired sessions and old alert snapshots are removed hourly (they would only make the tables grow)
   if (config.workers) {
-    const purge = () => pool.query(`DELETE FROM sessions WHERE expires_at < now() - interval '1 day'`).catch((e) => console.warn(`[sessions] purge: ${e.message}`));
+    const purge = () => Promise.all([
+      pool.query(`DELETE FROM sessions WHERE expires_at < now() - interval '1 day'`).catch((e) => console.warn(`[sessions] purge: ${e.message}`)),
+      purgeSnapshots(pool).catch((e) => console.warn(`[cameras] snapshot purge: ${e.message}`)),
+    ]);
     void purge(); setInterval(purge, 3600_000).unref();
   }
   return app;

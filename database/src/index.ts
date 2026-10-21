@@ -12,7 +12,7 @@ types.setTypeParser(1082, (v) => v);
 
 export { buildSeed };
 export type { SeedData };
-export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS } from '../seed/build';
+export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS, readSeedSnapshot, SNAPSHOT_DIR } from '../seed/build';
 
 /**
  * The app's connection pool. A dropped connection (database restart, admin kill) must never crash the process:
@@ -68,7 +68,7 @@ const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
   'doctor_services', 'patients', 'patient_consents', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
   'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'expenses',
-  'inventory_items', 'inventory_movements', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions',
+  'inventory_items', 'inventory_movements', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions', 'camera_snapshots',
 ];
 
 export class ResetInProgressError extends Error {
@@ -169,6 +169,41 @@ export async function backfillSeedCameras(q: Pick<PoolClient, 'query'>, demoDate
   await insertRows(q as PoolClient, 'camera_event_acks', seed.camera_event_acks.filter((a) => eventIds.has(a.event_id)));
   await q.query(`SELECT setval('face_code_staff_seq', GREATEST((SELECT max(substring(code from 3)::int) FROM face_codes WHERE subject_type = 'staff'), 1))`);
   return seed.cameras.length;
+}
+
+/**
+ * Demo databases seeded before migration 016 have no alert snapshots and no «Operatsiya bloki» camera: adds the seed's
+ * new camera, its alerts and the drawn snapshots of the existing seed alerts once (only while the seed clinic has no
+ * snapshot). Cameras people added themselves are untouched.
+ */
+export async function backfillSeedSnapshots(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const seeded = (await q.query('SELECT 1 FROM cameras WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
+  const has = (await q.query('SELECT 1 FROM camera_snapshots WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
+  if (!seeded || has) return 0;
+  const clock = (await q.query(`SELECT to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS d, to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'HH24:MI') AS t`)).rows[0];
+  const seed = buildSeed(demoDate, clock.d === demoDate ? clock.t : clock.d < demoDate ? '00:00' : '23:59');
+  const camIds = new Set((await q.query('SELECT id FROM cameras WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const secCams = seed.cameras.filter((c) => (c.purposes as string[]).includes('security'));
+  await insertRows(q as PoolClient, 'cameras', secCams.filter((c) => !camIds.has(c.id)));
+  // the seed's security cameras now keep alert pictures; the entrance camera also guards the lobby at night
+  for (const c of secCams) await q.query('UPDATE cameras SET alert_snapshots = true, purposes = $2 WHERE id = $1 AND tenant_id = $3', [c.id, c.purposes, SEED_IDS.tenant]);
+  const alerts = seed.camera_events.filter((e) => e.alert);
+  for (const e of alerts) {
+    await q.query(
+      `INSERT INTO camera_events (id, tenant_id, camera_id, branch_id, kind, occurred_at, received_at, face_code_id, similarity, enter_count, exit_count, target, alert, dedupe_key)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (id) DO NOTHING`,
+      [e.id, e.tenant_id, e.camera_id, e.branch_id, e.kind, e.occurred_at, e.received_at, e.face_code_id, e.similarity, e.enter_count, e.exit_count, e.target, e.alert, e.dedupe_key]);
+  }
+  for (const a of seed.camera_event_acks.filter((a) => alerts.some((e) => e.id === a.event_id))) {
+    await q.query(`INSERT INTO camera_event_acks (event_id, tenant_id, acked_by, acked_at) VALUES ($1,$2,$3,$4) ON CONFLICT (event_id) DO NOTHING`, [a.event_id, a.tenant_id, a.acked_by, a.acked_at]);
+  }
+  let n = 0;
+  for (const s of seed.camera_snapshots) {
+    const r = await q.query(`INSERT INTO camera_snapshots (event_id, tenant_id, content_type, bytes, created_at) SELECT $1,$2,$3,$4,$5 WHERE EXISTS (SELECT 1 FROM camera_events WHERE id = $1) ON CONFLICT (event_id) DO NOTHING`,
+      [s.event_id, s.tenant_id, s.content_type, s.bytes, s.created_at]);
+    n += r.rowCount ?? 0;
+  }
+  return n;
 }
 
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */

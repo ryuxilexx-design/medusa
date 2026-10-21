@@ -9,15 +9,22 @@
 //   --codes S-1,S-2     staff codes for «staff» (default S-1,S-2,S-3)
 //   --code P-1001       patient code for «patient»
 //   --time 2026-10-18T08:47:00+05:00   event time (default: now, Tashkent offset)
+//   --picture file.jpg  attach this JPEG to the «night» security notifications (multipart, as the camera sends its
+//                       alarm picture); the server keeps it only for an alert on a camera with «alert snapshots» on.
+//                       Default: a drawn demo frame from database/seed/snapshots (no real people).
 //   --dry               print the requests instead of sending them
 //
 // Payload shapes follow docs/HIKVISION_ISAPI_RESEARCH.md (public ISAPI guide samples and real-device captures).
 // The face message carries a tiny placeholder instead of a photo: the server drops picture parts unread anyway.
 // Never point this at the Railway demo with real people's codes; it is for test servers and synthetic codes.
 
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 const [url, scenario = 'all', ...rest] = process.argv.slice(2);
 if (!url || !/^https?:\/\/.+\/hik\/[A-Za-z0-9_-]{20,64}$/.test(url)) {
-  console.error('Foydalanish: node tools/hik-replay.mjs <push-url .../api/v1/hik/<token>> <heartbeat|staff|patient|counting|counting-rt|night|all> [--codes S-1,S-2] [--code P-1001] [--time ISO] [--dry]');
+  console.error('Foydalanish: node tools/hik-replay.mjs <push-url .../api/v1/hik/<token>> <heartbeat|staff|patient|counting|counting-rt|night|all> [--codes S-1,S-2] [--code P-1001] [--time ISO] [--picture file.jpg] [--dry]');
   process.exit(1);
 }
 const opt = (name, def) => { const i = rest.indexOf('--' + name); return i >= 0 ? rest[i + 1] : def; };
@@ -81,13 +88,25 @@ const countingRt = (time, enter, exit) => ({
   body: envelope(time, 'PeopleCounting', `<peopleCounting><statisticalMethods>realTime</statisticalMethods><RealTime><time>${time}</time></RealTime>
 <enter>${enter}</enter><exit>${exit}</exit><regionsID>1</regionsID></peopleCounting>`),
 });
-/** Intrusion (fielddetection) with a human target, as a DeepinView camera reports it. */
-const intrusion = (time, type = 'fielddetection') => ({
-  name: `${type} (human) at ${time}`, type: 'application/xml',
-  body: envelope(time, type, `<DetectionRegionList><DetectionRegionEntry><regionID>1</regionID><sensitivityLevel>50</sensitivityLevel>
+/** The alarm picture for the security notifications: the given file, else a drawn demo frame. */
+const picture = (() => {
+  const file = opt('picture') ?? path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'database', 'seed', 'snapshots', 'store-night-1.jpg');
+  try { return readFileSync(file); } catch { console.error(`Rasm o‘qilmadi: ${file}`); process.exit(1); }
+})();
+
+/** Intrusion (fielddetection) with a human target and the camera's alarm picture, multipart as «HTTP listening» sends it. */
+const intrusion = (time, type = 'fielddetection') => {
+  const xml = envelope(time, type, `<DetectionRegionList><DetectionRegionEntry><regionID>1</regionID><sensitivityLevel>50</sensitivityLevel>
 <detectionTarget>human</detectionTarget><TargetRect><X>0.6</X><Y>0.21</Y><width>0.13</width><height>0.5</height></TargetRect></DetectionRegionEntry></DetectionRegionList>`,
-    '<detectionPictureTransType>binary</detectionPictureTransType><detectionPicturesNumber>0</detectionPicturesNumber><isDataRetransmission>false</isDataRetransmission>'),
-});
+    '<detectionPictureTransType>binary</detectionPictureTransType><detectionPicturesNumber>1</detectionPicturesNumber><isDataRetransmission>false</isDataRetransmission>');
+  const b = 'MIME_boundary';
+  const body = Buffer.concat([
+    Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="${type}"\r\nContent-Type: application/xml; charset="UTF-8"\r\nContent-Length: ${Buffer.byteLength(xml)}\r\n\r\n${xml}\r\n`),
+    Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="${type}Picture"; filename="${type}.jpg"\r\nContent-Type: image/jpeg\r\nContent-Length: ${picture.length}\r\n\r\n`), picture,
+    Buffer.from(`\r\n--${b}--\r\n`),
+  ]);
+  return { name: `${type} (human, with picture) at ${time}`, type: `multipart/form-data; boundary=${b}`, body };
+};
 
 const SCENARIOS = {
   heartbeat: () => [heartbeat()],
@@ -95,14 +114,14 @@ const SCENARIOS = {
   patient: () => [faceMatch(opt('code', 'P-1010'), at(), 0.96)],
   counting: () => [0, 1, 2].map((h) => countingRange(at(-60 * (3 - h)), at(-60 * (2 - h)), 12 + h * 5, 9 + h * 4)),
   'counting-rt': () => [countingRt(at(-10), 40, 22), countingRt(at(-5), 47, 25), countingRt(at(), 52, 31)],
-  night: () => [intrusion(at()), intrusion(at(2), 'linedetection'), intrusion(at(4), 'regionEntrance')],
+  night: () => [intrusion(at()), intrusion(at(2), 'linedetection'), intrusion(at(4), 'regionEntrance'), intrusion(at(6), 'loitering')],
 };
 SCENARIOS.all = () => [...SCENARIOS.heartbeat(), ...SCENARIOS.staff(), ...SCENARIOS.patient(), ...SCENARIOS.counting(), ...SCENARIOS.night()];
 if (!SCENARIOS[scenario]) { console.error(`Noma’lum ssenariy: ${scenario}`); process.exit(1); }
 
 let failed = 0;
 for (const r of SCENARIOS[scenario]()) {
-  if (dry) { console.log(`--- ${r.name}\nContent-Type: ${r.type}\n${Buffer.isBuffer(r.body) ? r.body.toString('latin1') : r.body}\n`); continue; }
+  if (dry) { console.log(`--- ${r.name}\nContent-Type: ${r.type}\n${Buffer.isBuffer(r.body) ? r.body.toString('latin1').replace(/(\r\n\r\n)[\s\S]{64,}?(\r\n--)/g, '$1<… rasm …>$2') : r.body}\n`); continue; }
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'content-type': r.type }, body: r.body });
     const text = await res.text();

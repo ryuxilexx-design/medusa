@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, CircleSlash, Copy, FlaskConical, KeyRound, Pencil, RefreshCw, ScanFace, Send } from 'lucide-react';
-import { CAMERA_PURPOSES, type CameraPurpose, type MessageKey } from '@meduza/contracts';
+import { CAMERA_PURPOSES, CAMERA_SECURITY_KINDS, type CameraPurpose, type CameraSecurityKind, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
@@ -11,7 +11,7 @@ import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, Loadi
 
 export type Camera = {
   id: string; branch_id: string; branch_name: string; name: string; location: string | null; model: string | null;
-  purposes: CameraPurpose[]; security_mode: 'always' | 'after_hours'; token_hint: string; status: 'active' | 'disabled';
+  purposes: CameraPurpose[]; security_mode: 'always' | 'after_hours'; alert_snapshots: boolean; token_hint: string; status: 'active' | 'disabled';
   last_event_at: string | null; last_seen_at: string | null; created_at: string; events_24h: number;
 };
 export type CamerasList = { data: Camera[]; meta: { simulator_available: boolean } };
@@ -155,7 +155,7 @@ export function Devices({ q, onEdit, onAdd }: { q: { data?: CamerasList; isError
           <tbody>{rows.map((c) => (
             <tr key={c.id} className={c.status === 'disabled' ? 'text-slate-600' : ''}>
               <Td className="min-w-[10rem]"><div className="font-semibold text-slate-900">{c.name}</div><div className="text-[0.8125rem] text-slate-600">{[showBranch ? c.branch_name : null, c.location, c.model].filter(Boolean).join(' · ') || '—'}</div><div className="mt-1 sm:hidden"><CameraStatus c={c} /></div></Td>
-              <Td className="hidden md:table-cell"><PurposeBadges purposes={c.purposes} /></Td>
+              <Td className="hidden md:table-cell"><PurposeBadges purposes={c.purposes} />{c.alert_snapshots && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('cam.dev.snapshots')}</div>}</Td>
               <Td className="hidden whitespace-nowrap sm:table-cell"><CameraStatus c={c} /></Td>
               <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell"><div className="text-slate-900">{c.last_event_at ? fmtDateTime(c.last_event_at) : t('cam.dev.never')}</div><div className="text-[0.8125rem] text-slate-600">{t('cam.dev.events24', { n: c.events_24h })}</div></Td>
               <Td right className="whitespace-nowrap !py-1.5">
@@ -173,7 +173,7 @@ export function Devices({ q, onEdit, onAdd }: { q: { data?: CamerasList; isError
   );
 }
 
-type Form = { branch_id: string; name: string; location: string; model: string; purposes: CameraPurpose[]; security_mode: 'always' | 'after_hours'; status: 'active' | 'disabled' };
+type Form = { branch_id: string; name: string; location: string; model: string; purposes: CameraPurpose[]; security_mode: 'always' | 'after_hours'; alert_snapshots: boolean; status: 'active' | 'disabled' };
 
 /** Add a camera (the push address is then shown once) or change one; «Manzilni yangilash» issues a new address. */
 export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: boolean; camera: Camera | null; onClose: () => void; onPushPath: (path: string) => void }) {
@@ -182,8 +182,8 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
   const toast = useToast();
   const { me, branchId } = useSession();
   const initial = useMemo<Form>(() => camera
-    ? { branch_id: camera.branch_id, name: camera.name, location: camera.location ?? '', model: camera.model ?? '', purposes: camera.purposes, security_mode: camera.security_mode, status: camera.status }
-    : { branch_id: branchId || me.branches[0]?.id || '', name: '', location: '', model: '', purposes: ['attendance', 'patient_arrival'], security_mode: 'after_hours', status: 'active' }, [camera, branchId, me.branches]);
+    ? { branch_id: camera.branch_id, name: camera.name, location: camera.location ?? '', model: camera.model ?? '', purposes: camera.purposes, security_mode: camera.security_mode, alert_snapshots: camera.alert_snapshots, status: camera.status }
+    : { branch_id: branchId || me.branches[0]?.id || '', name: '', location: '', model: '', purposes: ['attendance', 'patient_arrival'], security_mode: 'after_hours', alert_snapshots: false, status: 'active' }, [camera, branchId, me.branches]);
   const [f, setF] = useState<Form>(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -193,7 +193,7 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
   const fail = (e: unknown) => { if (e instanceof ApiError && e.fields) setErrors(e.fields); setFormError(e instanceof Error ? e.message : String(e)); };
   const save = useMutation({
     mutationFn: () => {
-      const body = { branch_id: f.branch_id, name: f.name, location: f.location, model: f.model, purposes: f.purposes, security_mode: f.security_mode };
+      const body = { branch_id: f.branch_id, name: f.name, location: f.location, model: f.model, purposes: f.purposes, security_mode: f.security_mode, alert_snapshots: f.purposes.includes('security') && f.alert_snapshots };
       return camera
         ? api<{ data: { id: string } }>(`/cameras/${camera.id}`, { method: 'PATCH', body: { ...body, status: f.status } })
         : api<{ data: { id: string; push_path: string } }>('/cameras', { method: 'POST', body });
@@ -259,11 +259,17 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
           {errors.purposes && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{errors.purposes}</p>}
         </fieldset>
         {f.purposes.includes('security') && (
-          <Field label={t('cam.form.securityMode')} error={errors.security_mode}>{(id) => (
-            <Select id={id} value={f.security_mode} onChange={(e) => set('security_mode', e.target.value as Form['security_mode'])}>
-              <option value="after_hours">{t('cam.form.afterHours')}</option><option value="always">{t('cam.form.always')}</option>
-            </Select>
-          )}</Field>
+          <>
+            <Field label={t('cam.form.securityMode')} error={errors.security_mode}>{(id) => (
+              <Select id={id} value={f.security_mode} onChange={(e) => set('security_mode', e.target.value as Form['security_mode'])}>
+                <option value="after_hours">{t('cam.form.afterHours')}</option><option value="always">{t('cam.form.always')}</option>
+              </Select>
+            )}</Field>
+            <label className="flex min-h-11 cursor-pointer items-start gap-2.5 text-[0.9375rem] text-slate-900">
+              <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-brand-600" checked={f.alert_snapshots} onChange={(e) => set('alert_snapshots', e.target.checked)} />
+              <span>{t('cam.form.snapshots')}<span className="block text-[0.8125rem] text-slate-600">{t('cam.form.snapshotsHint')}</span></span>
+            </label>
+          </>
         )}
         {camera && (
           <Field label={t('cam.form.status')}>{(id) => (
@@ -324,8 +330,8 @@ export function PushAddressModal({ path, onClose }: { path: string | null; onClo
   );
 }
 
-type SimKind = 'face_match' | 'people_count' | 'intrusion' | 'line_crossing' | 'region_entrance' | 'region_exit' | 'tamper';
-const SECURITY_KINDS: SimKind[] = ['intrusion', 'line_crossing', 'region_entrance', 'region_exit', 'tamper'];
+type SimKind = 'face_match' | 'people_count' | CameraSecurityKind;
+const SECURITY_KINDS: SimKind[] = [...CAMERA_SECURITY_KINDS];
 const IGNORED = ['purpose', 'no_code', 'low_similarity', 'unknown_code', 'no_consent', 'duplicate'];
 
 /** Demo only: a synthetic event for this camera, through the same server rules as a real one. */

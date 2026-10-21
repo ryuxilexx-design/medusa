@@ -163,7 +163,7 @@ Ayting: «Bemor 24/7 o‘zi yoziladi, registrator qo‘ng‘iroqqa vaqt sarflama
 
 ## Kameralar (2 daqiqa, Rahbar va Registrator oynalarida)
 
-1. Rahbar: bosh sahifada «Kamera: xavfsizlik ogohlantirishi» → **Kameralar → Xavfsizlik**: kecha 23:12 dori omboriga kirish → **Ko‘rib chiqildi**.
+1. Rahbar: bosh sahifada «Kamera: xavfsizlik ogohlantirishi» → **Kameralar → Xavfsizlik**: bugun 09:48 operatsiya bloki eshigida «Shubhali turish» — qatordagi kichik kadrni bosing: kameraning surati katta ochiladi (begona odam eshik oldida) → **Ko‘rib chiqildi**. Kecha 23:12 dori omboriga kirish ham surat bilan.
 2. **Davomat**: 7 kun bo‘yicha har xodim — kelgan kunlar, kechikishlar, o‘rtacha kelish vaqti → **Kunlar bo‘yicha**.
 3. **Odam oqimi**: eng band soat 11:00–12:00.
 4. Registrator: **Navbat** tepasida «Kamera tanidi» → **Keldi deb belgilash** → navbat raqami (oddiy «Keldi» bilan bir xil).

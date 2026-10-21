@@ -1,6 +1,7 @@
 // The address a Hikvision camera pushes its events to (ISAPI «HTTP listening»): POST /api/v1/hik/<secret token>.
 // The camera cannot send a session cookie, so the secret path token identifies it; only its SHA-256 is stored.
-// Answers 200 quickly (the camera does not retry well); pictures in the body are never read or stored.
+// Answers 200 quickly (the camera does not retry well). Pictures in the body are not read, except the picture of a
+// security alert when the camera's «alert snapshots» are on (docs/HIKVISION.md).
 import { Controller, HttpCode, Param, Post, Req } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
 import { Db } from '../core/db';
@@ -43,14 +44,14 @@ export class HikController {
   async receive(@Param('token') token: string, @Req() req: any) {
     if (!/^[A-Za-z0-9_-]{20,64}$/.test(token)) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi');
     const cam = await this.db.one<Camera & { status: string }>(
-      `SELECT c.id, c.tenant_id, c.branch_id, c.purposes, c.security_mode, c.status FROM cameras c JOIN tenants t ON t.id = c.tenant_id
+      `SELECT c.id, c.tenant_id, c.branch_id, c.purposes, c.security_mode, c.alert_snapshots, c.status FROM cameras c JOIN tenants t ON t.id = c.tenant_id
         WHERE c.token_hash = $1 AND t.status = 'active'`, [hashToken(token)]);
     if (!cam) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi');
     // one write per camera per half minute is enough to know it is alive
     await this.db.rows(`UPDATE cameras SET last_seen_at = $2 WHERE id = $1 AND (last_seen_at IS NULL OR last_seen_at < $2::timestamptz - interval '30 seconds')`, [cam.id, now()]);
     if (cam.status !== 'active') return { ok: true, stored: 0 };
     const body: Buffer = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.from(typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? ''));
-    const parsed = parseIsapi(body, String(req.headers['content-type'] ?? ''));
+    const parsed = parseIsapi(body, String(req.headers['content-type'] ?? ''), { keepPicture: cam.alert_snapshots === true });
     if (parsed.unknown.length) log.warn(`kamera ${cam.id}: tanilmagan hodisa turi: ${[...new Set(parsed.unknown)].join(', ')}`);
     let stored = 0;
     for (const e of parsed.events) {

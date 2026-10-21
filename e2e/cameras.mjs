@@ -22,15 +22,22 @@ try {
   await shot(m, 'cam-02-traffic');
   await m.goto(BASE + '/cameras?tab=security', { waitUntil: 'networkidle0' }); await settle(m);
   const open = () => m.evaluate(() => [...document.querySelectorAll('button')].filter((x) => x.offsetParent !== null && x.textContent.includes('Ko‘rib chiqildi')).length);
-  check(await open() === 2, 'Xavfsizlik: ikkita ko‘rib chiqilmagan tungi ogohlantirish');
+  check(await open() === 3, 'Xavfsizlik: uchta ko‘rib chiqilmagan ogohlantirish');
+  // the camera's picture of the alert: a small frame in the row, large in a window
+  const thumbs = await m.evaluate(() => [...document.querySelectorAll('img[src*="/snapshot"]')].filter((i) => i.naturalWidth > 0).length);
+  check(thumbs >= 3, `Xavfsizlik: ogohlantirish suratlari yuklandi (${thumbs})`);
+  await m.click('button[aria-label^="Kamera surati"]'); await settle(m);
+  check(await m.evaluate(() => !!document.querySelector('[role="dialog"] img[src*="/snapshot"]')), 'Surat katta oynada ochildi');
+  await shot(m, 'cam-03a-snapshot');
+  await m.keyboard.press('Escape'); await settle(m);
   await clickText(m, 'Ko‘rib chiqildi', 'button');
-  for (let i = 0; i < 40 && (await open()) !== 1; i++) await sleep(250);
-  check(await open() === 1, 'Bittasi ko‘rib chiqildi, bittasi qoldi');
+  for (let i = 0; i < 40 && (await open()) !== 2; i++) await sleep(250);
+  check(await open() === 2, 'Bittasi ko‘rib chiqildi, ikkitasi qoldi');
   check((await m.evaluate(() => document.body.innerText)).includes('Ko‘rib chiqdi: Dilnoza Karimova'), 'Xavfsizlik: ko‘rib chiqildi, kim belgilagani ko‘rinadi');
   await shot(m, 'cam-03-security');
   await m.goto(BASE + '/cameras?tab=devices', { waitUntil: 'networkidle0' }); await settle(m);
   const dev = await m.evaluate(() => document.body.innerText);
-  check(dev.includes('Asosiy kirish') && dev.includes('Dori ombori'), 'Qurilmalar: demo kameralar');
+  check(dev.includes('Asosiy kirish') && dev.includes('Dori ombori') && dev.includes('Operatsiya bloki') && dev.includes('Surat saqlanadi'), 'Qurilmalar: demo kameralar, surat saqlanadigan kameralar belgilangan');
   await shot(m, 'cam-04-devices');
   await m.goto(BASE + '/cameras?tab=codes', { waitUntil: 'networkidle0' }); await settle(m);
   check(/S-\d+/.test(await m.evaluate(() => document.body.innerText)), 'Kodlar: xodim kodlari');

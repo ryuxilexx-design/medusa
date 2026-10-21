@@ -19,7 +19,7 @@ function session() {
     const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t; }
     return { status: r.status, body: j };
   };
-  return { get: (p) => req('GET', p), post: (p, b = {}) => req('POST', p, b), patch: (p, b) => req('PATCH', p, b), del: (p) => req('DELETE', p), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }) };
+  return { get: (p) => req('GET', p), post: (p, b = {}) => req('POST', p, b), patch: (p, b) => req('PATCH', p, b), del: (p) => req('DELETE', p), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }), cookie: () => cookie };
 }
 const as = async (mid) => { const s = session(); assert.equal((await s.demo(mid)).status, 200); return s; };
 
@@ -36,9 +36,9 @@ after(async () => { await app?.close(); });
 
 const seedCam = async (name) => (await manager.get('/cameras')).body.data.find((c) => c.name === name);
 
-test('seed: 5 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasviri hech qayerda yo‘q', async () => {
+test('seed: 6 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasviri hech qayerda yo‘q', async () => {
   const cams = (await manager.get('/cameras')).body.data;
-  assert.equal(cams.length, 5);
+  assert.equal(cams.length, 6);
   assert.ok(cams.every((c) => !('token_hash' in c)), 'token hash qaytarilmaydi');
   const codes = (await manager.get('/cameras/face-codes')).body;
   assert.equal(codes.data.filter((r) => r.code).length, 14, 'har bir xodimda S-kod');
@@ -49,7 +49,13 @@ test('seed: 5 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasvir
   const tr = (await manager.get('/cameras/traffic?from=2026-10-12&to=2026-10-17')).body;
   assert.ok(tr.meta.total_enter > 100 && tr.meta.busiest_hour >= 9 && tr.meta.busiest_hour <= 12);
   const sec = (await manager.get('/cameras/security?from=2026-10-01&to=2026-10-18')).body;
-  assert.equal(sec.meta.open_alerts, 2, 'ikkita ko‘rib chiqilmagan tungi ogohlantirish');
+  // two open night alerts, plus this morning's loitering at the operating block once the demo clock has passed 09:48
+  assert.equal(sec.meta.open_alerts, process.env.DEMO_TIME >= '09:48' ? 3 : 2, 'ko‘rib chiqilmagan ogohlantirishlar');
+  // the seed's alert pictures: drawn frames, only on alerts, never on a face event
+  assert.ok(sec.data.filter((r) => r.has_snapshot).length >= 8, 'ogohlantirish suratlari bor');
+  assert.ok(sec.data.every((r) => !r.has_snapshot || r.alert), 'surat faqat ogohlantirishda');
+  const snaps = (await pool.query(`SELECT count(*)::int AS n FROM camera_snapshots s JOIN camera_events e ON e.id = s.event_id WHERE NOT e.alert OR e.kind IN ('face_match', 'people_count')`)).rows[0].n;
+  assert.equal(snaps, 0);
   // personas: Bekzod Ergashev is the one most often late; Lola Abdullayeva has three days of leave (no «absent» for them)
   const month = (await manager.get('/cameras/attendance?from=2026-09-19&to=2026-10-18')).body.data;
   const lateBy = (id) => month.filter((r) => r.membership_id === id && r.status === 'late').length;
@@ -57,9 +63,10 @@ test('seed: 5 kamera, xodim kodlari, davomat, odam oqimi, xavfsizlik; yuz tasvir
   assert.ok(lateBy(M.doctor(2)) > Math.max(...others), 'surunkali kechikuvchi');
   const hist = (await pool.query(`SELECT status, count(*)::int AS n FROM arrival_suggestions GROUP BY 1`)).rows;
   assert.ok(hist.find((h) => h.status === 'accepted')?.n > 5, 'bemor kelishi tarixi');
-  // the schema has no column for a picture or a face template
-  const cols = (await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name IN ('cameras','face_codes','camera_events','arrival_suggestions')`)).rows.map((r) => r.column_name);
-  assert.ok(!cols.some((c) => /image|photo|picture|template|face_data|snapshot/i.test(c)), cols.join(','));
+  // the schema has no column for a face picture or a face template: the only picture table holds alert evidence
+  const cols = (await pool.query(`SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_name IN ('cameras','face_codes','camera_events','arrival_suggestions','camera_snapshots')`)).rows;
+  assert.ok(!cols.some((c) => c.table_name !== 'camera_snapshots' && (c.data_type === 'bytea' || /image|photo|picture|template|face_data/i.test(c.column_name))), cols.map((c) => c.column_name).join(','));
+  assert.ok(!cols.some((c) => c.table_name === 'face_codes' && /snapshot/i.test(c.column_name)));
 });
 
 test('kamera qo‘shish: manzil bir marta beriladi, faqat hash saqlanadi; yangilash eskisini o‘chiradi', async () => {
@@ -117,7 +124,8 @@ test('qoidalar: vazifa, noma’lum kod, past o‘xshashlik, takror hodisa', asyn
   const entry = await seedCam('Asosiy kirish');
   assert.deepEqual((await manager.post(`/cameras/${entry.id}/simulate`, { kind: 'face_match', code: 'S-999' })).body.data, { stored: false, ignored: 'unknown_code' });
   assert.deepEqual((await manager.post(`/cameras/${entry.id}/simulate`, { kind: 'face_match' })).body.data, { stored: false, ignored: 'no_code' });
-  assert.deepEqual((await manager.post(`/cameras/${entry.id}/simulate`, { kind: 'intrusion' })).body.data, { stored: false, ignored: 'purpose' });
+  const yun = await seedCam('Kirish');                   // attendance + counting, no security
+  assert.deepEqual((await manager.post(`/cameras/${yun.id}/simulate`, { kind: 'intrusion' })).body.data, { stored: false, ignored: 'purpose' });
   // the ingest itself: low similarity and a re-sent notification
   const { ingestEvent } = require('../dist/cameras/ingest.js');
   const cam = (await pool.query(`SELECT * FROM cameras WHERE id = $1`, [entry.id])).rows[0];
@@ -291,6 +299,88 @@ test('yuzni tanish: multipart (JSON + rasm) — kod certificateNumber yoki ismda
   // too large a body is refused before parsing
   res = await push(path, Buffer.alloc(7 * 1024 * 1024, 0x41), 'application/octet-stream');
   assert.equal(res.status, 413);
+});
+
+/** A real multipart security notification with the camera's picture (fielddetection + a JPEG part). */
+const securityMultipart = (type, time, picture, extraXml = '') => {
+  const b = 'MIME_boundary';
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><EventNotificationAlert version="2.0" xmlns="http://www.hikvision.com/ver20/XMLSchema">
+<ipAddress>192.168.1.64</ipAddress><channelID>1</channelID><dateTime>${time}</dateTime><activePostCount>1</activePostCount>
+<eventType>${type}</eventType><eventState>active</eventState><eventDescription>${type} alarm</eventDescription>
+<DetectionRegionList><DetectionRegionEntry><regionID>1</regionID><detectionTarget>human</detectionTarget></DetectionRegionEntry></DetectionRegionList>${extraXml}</EventNotificationAlert>`;
+  return { type: `multipart/form-data; boundary=${b}`, body: Buffer.concat([
+    Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="${type}"\r\nContent-Type: application/xml; charset="UTF-8"\r\nContent-Length: ${Buffer.byteLength(xml)}\r\n\r\n${xml}\r\n`),
+    Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="${type}Picture"; filename="picture.jpg"\r\nContent-Type: image/jpeg\r\nContent-Length: ${picture.length}\r\n\r\n`), picture,
+    Buffer.from(`\r\n--${b}--\r\n`),
+  ]) };
+};
+
+test('ogohlantirish surati: faqat «surat saqlash» yoqilgan kamerada, faqat ogohlantirishda, ≤1 MB; yuz hodisasida hech qachon; faqat rahbarga; 30 kundan keyin o‘chadi', async () => {
+  const { readSeedSnapshot } = require('@meduza/db');
+  const { purgeSnapshots } = require('../dist/cameras/ingest.js');
+  const jpeg = readSeedSnapshot('store-night-1');
+  assert.ok(jpeg && jpeg[0] === 0xff && jpeg[1] === 0xd8, 'seed surati JPEG');
+  // «always» security camera with snapshots on
+  const r = await manager.post('/cameras', { branch_id: BC, name: 'Surat kamera', purposes: ['security', 'attendance'], security_mode: 'always', alert_snapshots: true });
+  assert.equal(r.status, 201);
+  const path = r.body.data.push_path, id = r.body.data.id;
+  assert.equal((await manager.get('/cameras')).body.data.find((c) => c.id === id).alert_snapshots, true);
+  // 1) an alert with a picture → stored with the picture
+  let m = securityMultipart('fielddetection', '2026-10-17T23:10:00+05:00', jpeg);
+  let res = await push(path, m.body, m.type); assert.equal((await res.json()).stored, 1);
+  const ev = (await pool.query(`SELECT id FROM camera_events WHERE camera_id = $1 ORDER BY occurred_at`, [id])).rows;
+  const snap = (await pool.query(`SELECT content_type, length(bytes)::int AS n FROM camera_snapshots WHERE event_id = $1`, [ev[0].id])).rows[0];
+  assert.deepEqual(snap, { content_type: 'image/jpeg', n: jpeg.length });
+  // the picture comes back only to the manager, as an image, never cached publicly
+  const img = await fetch(base + `/cameras/security/${ev[0].id}/snapshot`, { headers: { cookie: manager.cookie() } });
+  assert.equal(img.status, 200); assert.equal(img.headers.get('content-type'), 'image/jpeg'); assert.match(img.headers.get('cache-control'), /private/);
+  assert.equal((await img.arrayBuffer()).byteLength, jpeg.length);
+  assert.equal((await registrar.get(`/cameras/security/${ev[0].id}/snapshot`)).status, 403);
+  assert.equal((await t2.get(`/cameras/security/${ev[0].id}/snapshot`)).status, 404);
+  const list = (await manager.get('/cameras/security?from=2026-10-17&to=2026-10-17')).body.data.find((x) => x.id === ev[0].id);
+  assert.equal(list.has_snapshot, true);
+  // 2) a face match with a picture → the picture is never kept (the event is, if the code is known)
+  const code = (await manager.get('/cameras/face-codes')).body.data.find((x) => x.membership_id === M.cashier).code;
+  const face = multipart('alarmResult', ALARM('2026-10-17T08:40:00+05:00', code, 0.95));
+  res = await push(path, face, 'multipart/form-data; boundary=boundary'); assert.equal((await res.json()).stored, 1);
+  // 3) loitering (a new kind) at night → alert with the picture; a PNG is accepted, junk and oversized pictures are not
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(200, 1)]);
+  m = securityMultipart('loitering', '2026-10-17T23:20:00+05:00', png);
+  res = await push(path, m.body, m.type); assert.equal((await res.json()).stored, 1);
+  m = securityMultipart('linedetection', '2026-10-17T23:30:00+05:00', Buffer.from('not a picture at all, just text bytes that are long enough to pass the size floor'));
+  res = await push(path, m.body, m.type); assert.equal((await res.json()).stored, 1);
+  m = securityMultipart('regionEntrance', '2026-10-17T23:40:00+05:00', Buffer.concat([jpeg, Buffer.alloc(1024 * 1024, 0)]));
+  res = await push(path, m.body, m.type); assert.equal((await res.json()).stored, 1);
+  const byKind = (await pool.query(`SELECT e.kind, e.alert, (s.event_id IS NOT NULL) AS has_snapshot, s.content_type FROM camera_events e LEFT JOIN camera_snapshots s ON s.event_id = e.id WHERE e.camera_id = $1 ORDER BY e.occurred_at`, [id])).rows;
+  assert.deepEqual(byKind.map((x) => [x.kind, x.alert, x.has_snapshot, x.content_type]), [
+    ['face_match', false, false, null], ['intrusion', true, true, 'image/jpeg'], ['loitering', true, true, 'image/png'], ['line_crossing', true, false, null], ['region_entrance', true, false, null],
+  ]);
+  // 4) the same camera with snapshots switched off: the alert is stored, the picture is not
+  assert.equal((await manager.patch(`/cameras/${id}`, { alert_snapshots: false })).status, 200);
+  m = securityMultipart('fielddetection', '2026-10-17T23:50:00+05:00', jpeg);
+  res = await push(path, m.body, m.type); assert.equal((await res.json()).stored, 1);
+  const last = (await pool.query(`SELECT e.alert, (s.event_id IS NOT NULL) AS has_snapshot FROM camera_events e LEFT JOIN camera_snapshots s ON s.event_id = e.id WHERE e.camera_id = $1 ORDER BY e.occurred_at DESC LIMIT 1`, [id])).rows[0];
+  assert.deepEqual(last, { alert: true, has_snapshot: false });
+  // 5) an after-hours camera by day: no alert → no picture even with snapshots on
+  const r2 = await manager.post('/cameras', { branch_id: BC, name: 'Kunduzgi kamera', purposes: ['security'], security_mode: 'after_hours', alert_snapshots: true });
+  m = securityMultipart('fielddetection', '2026-10-14T10:00:00+05:00', jpeg);
+  res = await push(r2.body.data.push_path, m.body, m.type); assert.equal((await res.json()).stored, 1);
+  const day = (await pool.query(`SELECT e.alert, (s.event_id IS NOT NULL) AS has_snapshot FROM camera_events e LEFT JOIN camera_snapshots s ON s.event_id = e.id WHERE e.camera_id = $1`, [r2.body.data.id])).rows[0];
+  assert.deepEqual(day, { alert: false, has_snapshot: false });
+  // 6) snapshots are immutable and purged after the retention (an old one is planted on the picture-less line crossing)
+  await assert.rejects(pool.query(`UPDATE camera_snapshots SET content_type = 'image/png' WHERE event_id = $1`, [ev[0].id]), /append-only/);
+  const before = (await pool.query(`SELECT count(*)::int AS n FROM camera_snapshots`)).rows[0].n;
+  const lineId = (await pool.query(`SELECT id FROM camera_events WHERE camera_id = $1 AND kind = 'line_crossing'`, [id])).rows[0].id;
+  await pool.query(`INSERT INTO camera_snapshots (event_id, tenant_id, content_type, bytes, created_at) SELECT id, tenant_id, 'image/jpeg', $2, demo_now() - interval '31 days' FROM camera_events WHERE id = $1`, [lineId, jpeg]);
+  assert.equal(await purgeSnapshots(pool), 1, 'faqat 31 kunlik surat o‘chdi');
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM camera_snapshots`)).rows[0].n, before);
+  // 7) the demo simulator attaches a drawn frame to a security alert
+  const sim = await manager.post(`/cameras/${r2.body.data.id}/simulate`, { kind: 'tamper' });
+  assert.equal(sim.status, 200);
+  if (sim.body.data.stored) {
+    const s = (await pool.query(`SELECT e.alert, (sn.event_id IS NOT NULL) AS has_snapshot FROM camera_events e LEFT JOIN camera_snapshots sn ON sn.event_id = e.id WHERE e.id = $1`, [sim.body.data.event_id])).rows[0];
+    assert.equal(s.has_snapshot, s.alert, 'simulyator: surat faqat ogohlantirishda');
+  }
 });
 
 test('tekshiruv tuzatishlari: filial doirasi, eski ochiq ogohlantirish, o‘chirilgan kamera, koddan oldingi kunlar, noto‘g‘ri qiymatlar', async () => {

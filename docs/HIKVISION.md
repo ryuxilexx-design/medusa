@@ -48,11 +48,30 @@ Kameralar to‘rt vazifada ishlaydi: **xodimlar davomati**, **bemor kelganini ta
 | Davomat | yuz kutubxonasi bilan moslik (`alarmResult` / `faceContrast`), kod `S-…` | kun bo‘yicha birinchi va oxirgi ko‘rinish; shifokor jadvaliga nisbatan kechikish (5 daqiqadan ortiq) |
 | Bemor kelishi | xuddi shu, kod `P-…` | bugungi qabuldan 2 soat oldin – 1 soat keyin ko‘rilsa, registratorga «Kamera tanidi» taklifi; «Keldi deb belgilash» oddiy «Keldi» bilan bir xil (navbat raqami, hisob). Hech narsa odamsiz o‘zgarmaydi |
 | Odam oqimi | `PeopleCounting` (davr yoki real vaqt) | soatlar va kunlar bo‘yicha kirgan/chiqqanlar, eng band soat |
-| Xavfsizlik | `fielddetection`, `linedetection`, `regionEntrance`, `regionExiting`, `shelteralarm` | hodisalar ro‘yxati; ish vaqtidan tashqari (yoki «har doim» rejimida) — ogohlantirish, rahbar «Ko‘rib chiqildi» deydi |
+| Xavfsizlik | `fielddetection`, `linedetection`, `regionEntrance`, `regionExiting`, `loitering`, `shelteralarm` | hodisalar ro‘yxati; ish vaqtidan tashqari (yoki «har doim» rejimida) — ogohlantirish, rahbar «Ko‘rib chiqildi» deydi |
 
 - O‘xshashlik **80 %** dan past moslik hisobga olinmaydi.
 - Takror yuborilgan hodisa bir marta saqlanadi; bir daqiqa ichidagi bir xil xavfsizlik hodisasi — bitta yozuv.
 - Hodisalar faqat qo‘shiladi (o‘zgartirib yoki o‘chirib bo‘lmaydi — baza triggeri).
+
+### Ogohlantirish surati
+
+Kamera xavfsizlik hodisasi bilan birga o‘z suratini (alarm picture) yuboradi. Odatda server rasmni o‘qimaydi.
+Rahbar kamera sozlamasida **«Ogohlantirish suratini saqlash»** ni yoqsa, bu kameraning *ogohlantirish* hodisalari
+(begona odam operatsiya xonasi eshigida, tunda omborga kirish, uzoq turib qolish, kamera to‘silishi) bilan kelgan
+rasm dalil sifatida saqlanadi:
+
+- faqat ogohlantirish bo‘lgan hodisaga — kunduzgi oddiy hodisaga emas; **yuz tanish va odam sanash hodisalariga hech
+  qachon** (tanilgan odam — biometrik ma’lumot);
+- bitta hodisaga bitta rasm, 1 MB gacha (JPEG/PNG/WebP; haqiqiy rasm ekani bayt belgilaridan tekshiriladi);
+- **30 kun** saqlanadi, keyin server o‘zi o‘chiradi; o‘zgartirib bo‘lmaydi;
+- faqat rahbar, o‘z filiallari doirasida ko‘radi (`GET /api/v1/cameras/security/<id>/snapshot`, brauzer keshi
+  «private»); Xavfsizlik jadvalida kichik kadr, bosilganda katta oyna va shu yerda «Ko‘rib chiqildi».
+
+Kamerada buning uchun *Event → Linkage → Upload to Surveillance Center* (yoki *Notify Surveillance Center*) bilan
+birga **«Capture picture»/«Upload picture»** yoqilgan bo‘lishi kerak — shunda HTTP listening xabari multipart
+bo‘lib, rasm qismi bilan keladi. Haqiqiy kameradan suratlar faqat O‘zbekistondagi serverda saqlanadi; demo’da
+(Railway) faqat chizilgan sun’iy kadrlar bor.
 
 Texnik tafsilotlar, namunaviy ISAPI xabarlari va manbalar: `docs/HIKVISION_ISAPI_RESEARCH.md`.
 Kod: `apps/api/src/cameras/` (`isapi.ts` — xabarni o‘qish, `ingest.ts` — qoidalar, `cameras.controller.ts` — API,
@@ -85,14 +104,23 @@ node tools/hik-replay.mjs <manzil> heartbeat --dry   # yubormasdan, xabarni ko�
 ```
 
 Ssenariylar: `heartbeat`, `staff`, `patient`, `counting`, `counting-rt` (jamlangan), `night`, `all`. Yuz xabarida
-rasm o‘rniga kichik belgi yuboriladi. Faqat sinov serveri va sun’iy kodlar bilan ishlating.
+rasm o‘rniga kichik belgi yuboriladi; `night` ssenariysi esa xavfsizlik xabarlarini kameradagidek multipart qilib,
+rasm bilan yuboradi (`--picture fayl.jpg`, sukut bo‘yicha demo kadri). Faqat sinov serveri va sun’iy kodlar bilan
+ishlating.
 
 ## Demo ma’lumotlari
 
-Demo’da 5 ta kamera va 30 kunlik tarix bor: xodimlar davomati (Bekzod Ergashev tez-tez kechikadi, Lola Abdullayeva
+Demo’da 6 ta kamera va 30 kunlik tarix bor: xodimlar davomati (Bekzod Ergashev tez-tez kechikadi, Lola Abdullayeva
 3 kun ta’tilda, Sardor Nazarov ko‘pincha kech qoladi, Yunusobod kassiri ba’zan erta ketadi), hafta kuniga qarab
-o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va tungi xavfsizlik hodisalari (2 tasi
-ko‘rib chiqilmagan), bemor kelishi tarixi (tasdiqlangan va «bu emas») hamda bugungi takliflar. Hammasi sun’iy.
+o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va 11 ta ogohlantirish (3 tasi ko‘rib
+chiqilmagan: kecha 23:12 dori ombori, 3 kun oldin Yunusobod kassasi, bugun 09:48 operatsiya bloki eshigida uzoq
+turib qolgan odam), bemor kelishi tarixi (tasdiqlangan va «bu emas») hamda bugungi takliflar. Hammasi sun’iy.
+
+Ogohlantirishlarning 10 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kadrlar
+emas: `tools/gen-snapshots.mjs` chizadigan sun’iy sahnalar (koridor, operatsiya bloki eshigi, kassa, qabulxona,
+odam siluleti, kameraning o‘z yozuvlari — zona, «Human» ramkasi, vaqt). Sahna o‘zgarsa skriptni qayta ishga
+tushiring; fayllar repoda saqlanadi, seed ularni faqat o‘qiydi. «Sinov hodisasi» tugmasi ham xavfsizlik hodisasiga
+shu kadrlardan birini qo‘shadi (faqat ogohlantirish bo‘lsa saqlanadi).
 
 ## Haqiqiy kamerada hali tekshirilmagan
 

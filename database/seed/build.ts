@@ -8,8 +8,17 @@
  * All people, phones and addresses are synthetic.
  */
 import { createHash } from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export const DEMO_TIMEZONE_OFFSET_HOURS = 5; // Asia/Tashkent, no DST
+
+/** The drawn CCTV-style frames the demo attaches to its security alerts (tools/gen-snapshots.mjs; no real people). */
+export const SNAPSHOT_DIR = path.resolve(__dirname, '../../seed/snapshots');
+export function readSeedSnapshot(name: string): Buffer | null {
+  if (!/^[a-z0-9-]+$/.test(name)) return null;
+  try { return fs.readFileSync(path.join(SNAPSHOT_DIR, name + '.jpg')); } catch { return null; }
+}
 
 type Row = Record<string, any>;
 export interface SeedData {
@@ -19,7 +28,7 @@ export interface SeedData {
   service_orders: Row[]; lab_results: Row[]; diagnostic_reports: Row[]; invoices: Row[]; invoice_items: Row[];
   payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[]; cash_shifts: Row[];
   patient_consents: Row[];
-  cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[];
+  cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[]; camera_snapshots: Row[];
 }
 
 export function sid(key: string): string {
@@ -90,7 +99,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     encounters: [], clinical_notes: [], service_orders: [], lab_results: [], diagnostic_reports: [], invoices: [],
     invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [], cash_shifts: [],
     patient_consents: [],
-    cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [],
+    cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [], camera_snapshots: [],
   };
 
   // ---------- tenant, branches ----------
@@ -766,10 +775,12 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     const cint = (a: number, b: number) => a + Math.floor(crnd() * (b - a + 1));
     const demoNowMin = demoTime && /^\d{2}:\d{2}$/.test(demoTime) ? hm(demoTime)
       : (() => { const l = new Date(Date.now() + DEMO_TIMEZONE_OFFSET_HOURS * 3600_000); return l.getUTCHours() * 60 + l.getUTCMinutes(); })();
+    // security cameras keep the camera's picture of an alert (alert_snapshots); the entrance camera also guards the lobby at night
     const CAMS = [
-      { key: 'mrk-entry', branch: BC, name: 'Asosiy kirish', location: 'Qabulxona, eshik tepasida', purposes: ['attendance', 'patient_arrival', 'counting'], mode: 'after_hours' },
+      { key: 'mrk-entry', branch: BC, name: 'Asosiy kirish', location: 'Qabulxona, eshik tepasida', purposes: ['attendance', 'patient_arrival', 'counting', 'security'], mode: 'after_hours' },
       { key: 'mrk-cash', branch: BC, name: 'Kassa', location: 'Kassa xonasi', purposes: ['security'], mode: 'after_hours' },
       { key: 'mrk-store', branch: BC, name: 'Dori ombori', location: 'Ombor eshigi', purposes: ['security'], mode: 'always' },
+      { key: 'mrk-or', branch: BC, name: 'Operatsiya bloki', location: 'Operatsiya xonasi eshigi, 2-qavat', purposes: ['security'], mode: 'always' },
       { key: 'yun-entry', branch: BY, name: 'Kirish', location: 'Qabulxona', purposes: ['attendance', 'counting'], mode: 'after_hours' },
       { key: 'yun-cash', branch: BY, name: 'Kassa (Yunusobod)', location: 'Kassa oynasi', purposes: ['security'], mode: 'after_hours' },
     ];
@@ -777,7 +788,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     for (const c of CAMS) data.cameras.push({
       id: camId(c.key), tenant_id: T, branch_id: c.branch, name: c.name, location: c.location, model: 'iDS-2CD7146G0-IZS', purposes: c.purposes,
       // not a SHA-256 of anything: no push token opens these demo cameras (the simulator is the way to send events)
-      security_mode: c.mode, token_hash: 'seed-camera-no-token:' + c.key, token_hint: '····',
+      security_mode: c.mode, alert_snapshots: c.purposes.includes('security'), token_hash: 'seed-camera-no-token:' + c.key, token_hint: '····',
       status: 'active', last_event_at: null, created_by: M.manager, created_at: createdBase });
     const ev = (cam: string, branch: string, kind: string, when: Date, extra: Row, key: string) => {
       const row = { id: sid('camev:' + key), tenant_id: T, camera_id: camId(cam), branch_id: branch, kind, occurred_at: when, received_at: when,
@@ -847,20 +858,29 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
         if (cint(1, 100) <= 45) ev(cam, branch, 'line_crossing', at(day, hm('09:00') + cint(0, 480)), { target: 'human' }, `sec:day:${cam}:${day}`);
       }
     }
-    // ---- security, outside working hours: alerts; two are still open (yesterday night, three nights ago) ----
-    const NIGHT: [string, string, string, number, string, string | null][] = [
-      // camera, branch, kind, days back, time, acknowledged at (next morning) or null = still open
-      ['mrk-store', BC, 'intrusion', 26, '22:47', '08:20'],
-      ['mrk-cash', BC, 'tamper', 21, '06:58', '08:10'],
-      ['yun-cash', BY, 'line_crossing', 17, '21:35', '08:05'],
-      ['mrk-store', BC, 'region_entrance', 13, '23:40', '08:30'],
-      ['mrk-cash', BC, 'intrusion', 6, '02:15', '07:55'],
-      ['yun-cash', BY, 'region_entrance', 3, '22:18', null],
-      ['mrk-store', BC, 'region_entrance', 1, '23:12', null],
+    // ---- security alerts: at night (after hours) and, for the «always» cameras, by day; the camera's picture is kept
+    //      as evidence (drawn frames from database/seed/snapshots — no real people). Three alerts are still open. ----
+    const NIGHT: [string, string, string, number, string, string | null, string | null][] = [
+      // camera, branch, kind, days back, time, acknowledged at (the same or next morning) or null = still open, snapshot file
+      ['mrk-store', BC, 'intrusion', 26, '22:47', '08:20', null],
+      ['mrk-cash', BC, 'tamper', 21, '06:58', '08:10', 'cash-tamper'],
+      ['yun-cash', BY, 'line_crossing', 17, '21:35', '08:05', 'yun-cash-night-line'],
+      ['mrk-store', BC, 'region_entrance', 13, '23:40', '08:30', 'store-night-1'],
+      ['mrk-entry', BC, 'intrusion', 9, '01:05', '08:05', 'reception-night'],
+      ['mrk-cash', BC, 'intrusion', 6, '02:15', '07:55', 'cash-night-intrusion'],
+      ['mrk-store', BC, 'loitering', 4, '13:20', '13:35', 'store-day-loitering'],   // somebody hanging around the store door with a bag
+      ['yun-cash', BY, 'region_entrance', 3, '22:18', null, 'yun-cash-night-region'],
+      ['mrk-or', BC, 'region_entrance', 2, '14:36', '14:50', 'or-day-stranger'],   // a stranger at the operating-block door
+      ['mrk-store', BC, 'region_entrance', 1, '23:12', null, 'store-night-2'],
+      ['mrk-or', BC, 'loitering', 0, '09:48', null, 'or-day-loitering'],            // this morning: waiting at the operating-block door
     ];
-    NIGHT.forEach(([cam, branch, kind, back, time, ackAt], i) => {
-      const e = ev(cam, branch, kind, at(addDays(demoDate, -back), hm(time)), { target: kind === 'tamper' ? null : 'human', alert: true }, `sec:night:${i}`);
-      if (ackAt) data.camera_event_acks.push({ event_id: e.id, tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -back + (hm(time) > hm('12:00') ? 1 : 0)), hm(ackAt)) });
+    NIGHT.forEach(([cam, branch, kind, back, time, ackAt, snap], i) => {
+      if (back === 0 && hm(time) > demoNowMin) return;
+      const when = at(addDays(demoDate, -back), hm(time));
+      const e = ev(cam, branch, kind, when, { target: kind === 'tamper' ? null : 'human', alert: true }, `sec:night:${i}`);
+      if (ackAt) data.camera_event_acks.push({ event_id: e.id, tenant_id: T, acked_by: M.manager, acked_at: at(addDays(demoDate, -back + (hm(time) > hm(ackAt) ? 1 : 0)), hm(ackAt)) });
+      const bytes = snap ? readSeedSnapshot(snap) : null;
+      if (bytes) data.camera_snapshots.push({ event_id: e.id, tenant_id: T, content_type: 'image/jpeg', bytes, created_at: when });
     });
     // ---- patients with a signed biometric consent: every tenth card, plus the next bookings within the arrival window ----
     const todayLater = data.appointments.filter((a) => a.branch_id === BC && a.status === 'scheduled' && a.starts_at >= at(demoDate, demoNowMin) && a.starts_at <= at(demoDate, demoNowMin + 120)) // the camera's arrival window: up to 2 h early

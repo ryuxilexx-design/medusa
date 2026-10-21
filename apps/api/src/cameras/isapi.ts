@@ -1,19 +1,22 @@
 // Hikvision ISAPI event notifications (DeepinView cameras, HTTP listening / alertStream) → NormalizedEvent.
 // The body can be plain XML or JSON, or multipart (form-data from HTTP listening, mixed from alertStream) with
-// picture parts. Pictures are dropped unread: a face crop is biometric data and never leaves this function.
+// picture parts. Pictures are dropped unread, with one exception: when the caller asks (the camera's «alert
+// snapshots» are on), the first picture of a *security* notification is handed over as evidence of the alert.
+// A face message's picture is never kept: a face crop is biometric data and never leaves this function.
 // XML namespaces differ by firmware (hikvision.com/ver20, isapi.org/ver20, urn:psialliance-org), so elements are
 // matched by local name only. Formats and sources: docs/HIKVISION_ISAPI_RESEARCH.md; setup: docs/HIKVISION.md.
 import { createHash } from 'crypto';
-import type { EventKind, NormalizedEvent } from './ingest';
+import { type EventKind, type NormalizedEvent, SECURITY_KINDS, SNAPSHOT_MAX, type Snapshot } from './ingest';
 import { now } from '../core/clock';
 
 export type Parsed = { events: NormalizedEvent[]; heartbeat: boolean; unknown: string[] };
+export type ParseOptions = { keepPicture?: boolean };
 
 const KIND_BY_TYPE: Record<string, EventKind> = {
   alarmresult: 'face_match', facecontrast: 'face_match', facesnapmatch: 'face_match', facecontrastsuccess: 'face_match',
   peoplecounting: 'people_count',
   fielddetection: 'intrusion', linedetection: 'line_crossing', regionentrance: 'region_entrance', regionexiting: 'region_exit',
-  shelteralarm: 'tamper', tamperdetection: 'tamper',
+  loitering: 'loitering', shelteralarm: 'tamper', tamperdetection: 'tamper',
 };
 /** Recognised but not useful to us (a face seen without a library match, motion, heartbeats). */
 const IGNORED = new Set(['facecapture', 'facesnap', 'vmd', 'motiondetection', 'videoloss', 'duration', 'whitefacecontrast', 'humanrecognition', 'targetcapture']);
@@ -33,22 +36,39 @@ export function parseCameraTime(s: unknown): Date | null {
 }
 
 // ---------- multipart ----------
-/** The non-picture parts of a multipart body (form-data or mixed), as text. */
-export function multipartTextParts(body: Buffer, contentType: string): string[] {
+/** A real picture of a supported type: the magic bytes decide, not the camera's header. */
+function pictureOf(bytes: Buffer): Snapshot | null {
+  if (bytes.length < 64 || bytes.length > SNAPSHOT_MAX) return null;
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { contentType: 'image/jpeg', bytes };
+  if (bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) return { contentType: 'image/png', bytes };
+  if (bytes.subarray(0, 4).toString('latin1') === 'RIFF' && bytes.subarray(8, 12).toString('latin1') === 'WEBP') return { contentType: 'image/webp', bytes };
+  return null;
+}
+
+/** The parts of a multipart body (form-data or mixed): text parts, and the first picture only when asked for. */
+export function multipartParts(body: Buffer, contentType: string, keepPicture = false): { texts: string[]; picture: Snapshot | null } {
   const b = /boundary="?([^";]+)"?/i.exec(contentType)?.[1];
-  if (!b) return [];
+  if (!b) return { texts: [], picture: null };
   const text = body.toString('latin1'); // byte-preserving; text parts are re-decoded as UTF-8 below
-  const out: string[] = [];
+  const texts: string[] = [];
+  let picture: Snapshot | null = null;
   for (const chunk of text.split('--' + b)) {
     const sep = chunk.search(/\r?\n\r?\n/);
     if (sep < 0) continue;
     const head = chunk.slice(0, sep).toLowerCase();
-    if (/content-type:\s*image\//.test(head) || /filename=/.test(head)) continue; // pictures are never read
-    const payload = Buffer.from(chunk.slice(sep).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, ''), 'latin1').toString('utf8').trim();
-    if (payload.startsWith('<') || payload.startsWith('{')) out.push(payload);
+    const raw = chunk.slice(sep).replace(/^\r?\n\r?\n/, '').replace(/\r?\n$/, '');
+    if (/content-type:\s*image\//.test(head) || /filename=/.test(head)) {
+      // pictures are not read — unless the caller keeps alert snapshots, and then only the first one
+      if (keepPicture && !picture) picture = pictureOf(Buffer.from(raw, 'latin1'));
+      continue;
+    }
+    const payload = Buffer.from(raw, 'latin1').toString('utf8').trim();
+    if (payload.startsWith('<') || payload.startsWith('{')) texts.push(payload);
   }
-  return out;
+  return { texts, picture };
 }
+/** The non-picture parts of a multipart body, as text (pictures skipped unread). */
+export const multipartTextParts = (body: Buffer, contentType: string): string[] => multipartParts(body, contentType).texts;
 
 // ---------- tiny XML access by local name ----------
 /** Text of the first element with this local name (anywhere below `xml`). */
@@ -169,11 +189,13 @@ function fromJson(o: any, out: Parsed) {
   out.events.push(securityEvent(kind, env, t));
 }
 
-/** Parses one HTTP body from a camera. Unknown event types are reported (not stored); pictures are skipped. */
-export function parseIsapi(body: Buffer, contentType = ''): Parsed {
+/** Parses one HTTP body from a camera. Unknown event types are reported (not stored); pictures are skipped, except
+ *  that with `keepPicture` the body's first picture is attached to its security events (never to a face match). */
+export function parseIsapi(body: Buffer, contentType = '', opts: ParseOptions = {}): Parsed {
   const out: Parsed = { events: [], heartbeat: false, unknown: [] };
   const ct = contentType.toLowerCase();
-  const parts = ct.startsWith('multipart/') ? multipartTextParts(body, contentType) : [body.toString('utf8').trim()];
+  const mp = ct.startsWith('multipart/') ? multipartParts(body, contentType, !!opts.keepPicture) : null;
+  const parts = mp ? mp.texts : [body.toString('utf8').trim()];
   for (const p of parts) {
     if (p.startsWith('{')) {
       let o: unknown;
@@ -186,6 +208,9 @@ export function parseIsapi(body: Buffer, contentType = ''): Parsed {
     }
   }
   // an event re-sent after a broken connection must be stored once: keys depend only on the content
-  for (const e of out.events) e.sourceKey = e.sourceKey.length > 120 ? hash(e.sourceKey) : e.sourceKey;
+  for (const e of out.events) {
+    e.sourceKey = e.sourceKey.length > 120 ? hash(e.sourceKey) : e.sourceKey;
+    if (mp?.picture && SECURITY_KINDS.includes(e.kind)) e.snapshot = mp.picture;
+  }
   return out;
 }

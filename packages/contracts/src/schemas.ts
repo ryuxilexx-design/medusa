@@ -334,6 +334,9 @@ export const expenseVoidSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
 
 // ---------- Hikvision cameras ----------
 export const CAMERA_PURPOSES = ['attendance', 'patient_arrival', 'counting', 'security'] as const;
+/** Security event kinds a camera reports (the ones that can raise an alert and carry a snapshot). */
+export const CAMERA_SECURITY_KINDS = ['intrusion', 'line_crossing', 'region_entrance', 'region_exit', 'loitering', 'tamper'] as const;
+export type CameraSecurityKind = (typeof CAMERA_SECURITY_KINDS)[number];
 export type CameraPurpose = (typeof CAMERA_PURPOSES)[number];
 export const cameraSchema = z.object({
   branch_id: z.string().uuid({ message: 'Filialni tanlang' }),
@@ -342,6 +345,8 @@ export const cameraSchema = z.object({
   model: optionalText(60),
   purposes: z.array(z.enum(CAMERA_PURPOSES)).min(1, 'Kamera vazifasini tanlang'),
   security_mode: z.enum(['always', 'after_hours']).default('after_hours'),
+  /** keep the camera's picture of a security alert (30 days, manager only); never for face events */
+  alert_snapshots: z.boolean().default(false),
 });
 export type CameraInput = z.infer<typeof cameraSchema>;
 export const cameraUpdateSchema = cameraSchema.partial().extend({ status: z.enum(['active', 'disabled']).optional() });

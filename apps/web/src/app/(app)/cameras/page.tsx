@@ -3,14 +3,14 @@ import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, DoorOpen, Hourglass, KeyRound, Plus, ShieldAlert, Table2, TrendingUp, UserX,
+  BarChart3, CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, DoorOpen, Hourglass, ImageOff, KeyRound, Plus, ShieldAlert, Table2, TrendingUp, UserX,
 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { addDays, duration, fmtDate, fmtDateTime, fmtTime, localMinutes } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, StatCard, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
+import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, Modal, ModalCancel, PageHeader, StatCard, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
 import { PeriodPicker } from '@/components/finance-extra';
 import { type Camera, CameraFormModal, type CamerasList, Devices, FaceCodes, PushAddressModal } from '@/components/camera-devices';
 
@@ -41,7 +41,7 @@ function Cameras() {
   const [pushPath, setPushPath] = useState<string | null>(null);
   const p: Period = { from, to, branchId };
   // loaded on every tab: the open-alerts count sits in the tab label
-  const sec = useQuery({ queryKey: ['cameras', 'security', from, to, alertsOnly, branchId], queryFn: () => api<{ data: SecurityRow[]; meta: { open_alerts: number } }>(`/cameras/security${qs({ from, to, branch_id: branchId, alerts_only: alertsOnly ? 1 : 0 })}`), refetchInterval: 60_000, placeholderData: (prev) => prev });
+  const sec = useQuery({ queryKey: ['cameras', 'security', from, to, alertsOnly, branchId], queryFn: () => api<{ data: SecurityRow[]; meta: { open_alerts: number; snapshot_days: number } }>(`/cameras/security${qs({ from, to, branch_id: branchId, alerts_only: alertsOnly ? 1 : 0 })}`), refetchInterval: 60_000, placeholderData: (prev) => prev });
   const openAlerts = sec.data?.meta.open_alerts ?? 0;
   const items: { value: Tab; label: React.ReactNode; count?: number }[] = [
     { value: 'attendance', label: t('cam.tab.attendance') }, { value: 'traffic', label: t('cam.tab.traffic') },
@@ -56,7 +56,7 @@ function Cameras() {
       <div className="mb-5"><Tabs value={tab} onChange={setTab} items={items} /></div>
       {tab === 'attendance' && <Attendance p={p} period={period} onCodes={() => setTab('codes')} />}
       {tab === 'traffic' && <Traffic p={p} period={period} />}
-      {tab === 'security' && <Security q={sec} period={period} alertsOnly={alertsOnly} setAlertsOnly={setAlertsOnly} cameras={cams.data?.data ?? []} />}
+      {tab === 'security' && <Security q={sec} period={period} alertsOnly={alertsOnly} setAlertsOnly={setAlertsOnly} cameras={cams.data?.data ?? []} snapshotDays={sec.data?.meta.snapshot_days ?? 30} />}
       {tab === 'codes' && <FaceCodes />}
       {tab === 'devices' && <Devices q={cams} onEdit={(c) => setForm({ camera: c })} onAdd={() => setForm({ camera: null })} />}
       <CameraFormModal open={!!form} camera={form?.camera ?? null} onClose={() => setForm(null)} onPushPath={setPushPath} />
@@ -255,17 +255,37 @@ function HourlyChart({ rows, busiest }: { rows: TrafficData['data']['hourly']; b
 
 // ---------- security ----------
 
-type SecurityRow = { id: string; kind: string; occurred_at: string; target: string | null; alert: boolean; camera_id: string; security_mode: 'always' | 'after_hours'; camera_name: string; location: string | null; branch_name: string; acked_at: string | null; acked_by_name: string | null };
+type SecurityRow = { id: string; kind: string; occurred_at: string; target: string | null; alert: boolean; camera_id: string; security_mode: 'always' | 'after_hours'; camera_name: string; location: string | null; branch_name: string; acked_at: string | null; acked_by_name: string | null; has_snapshot: boolean };
 
-function Security({ q, period, alertsOnly, setAlertsOnly, cameras }: {
+const snapshotUrl = (id: string) => `/api/v1/cameras/security/${id}/snapshot`;
+
+/** The camera's picture of an alert: a small frame in the row; opens large. Never cached across people (private). */
+function SnapshotThumb({ row, onOpen }: { row: SecurityRow; onOpen: () => void }) {
+  const t = useT();
+  const [failed, setFailed] = useState(false);
+  const alt = t('cam.sec.snapshotAlt', { kind: t(`cam.kind.${row.kind}` as MessageKey), camera: row.camera_name, at: fmtDateTime(row.occurred_at) });
+  if (!row.has_snapshot || failed) {
+    return <span className="inline-flex h-[3.25rem] w-[5.75rem] items-center justify-center rounded-md bg-slate-100 text-slate-400" title={t('cam.sec.noSnapshot')}><ImageOff className="h-5 w-5" aria-hidden="true" /><span className="sr-only">{t('cam.sec.noSnapshot')}</span></span>;
+  }
+  return (
+    <button type="button" onClick={onOpen} className="block overflow-hidden rounded-md border border-slate-200 bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" aria-label={alt}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={snapshotUrl(row.id)} alt="" width={92} height={52} loading="lazy" className="h-[3.25rem] w-[5.75rem] object-cover" onError={() => setFailed(true)} />
+    </button>
+  );
+}
+
+function Security({ q, period, alertsOnly, setAlertsOnly, cameras, snapshotDays }: {
   q: { data?: { data: SecurityRow[] }; isError: boolean; error: unknown; refetch: () => void };
-  period: React.ReactNode; alertsOnly: boolean; setAlertsOnly: (v: boolean) => void; cameras: Camera[];
+  period: React.ReactNode; alertsOnly: boolean; setAlertsOnly: (v: boolean) => void; cameras: Camera[]; snapshotDays: number;
 }) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const { me, branchId } = useSession();
   const showBranch = !branchId && me.branches.length > 1;
+  const [viewing, setViewing] = useState<SecurityRow | null>(null);
+  const [viewFailed, setViewFailed] = useState(false);
   const ack = useMutation({
     mutationFn: (id: string) => api(`/cameras/security/${id}/ack`, { method: 'POST' }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['cameras', 'security'] }); toast.success(t('cam.sec.acked')); },
@@ -285,11 +305,12 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras }: {
         <EmptyState compact icon={<CheckCircle2 />} title={t(alertsOnly ? 'cam.sec.emptyAlerts' : 'cam.sec.empty')} />
       ) : (
         <Table>
-          <thead><tr><Th className="hidden sm:table-cell">{t('cam.col.time')}</Th><Th>{t('cam.col.event')}</Th><Th className="hidden md:table-cell">{t('cam.col.camera')}</Th><Th right><span className="sr-only">{t('cam.col.actions')}</span></Th></tr></thead>
+          <thead><tr><Th><span className="sr-only">{t('cam.sec.snapshot')}</span></Th><Th className="hidden sm:table-cell">{t('cam.col.time')}</Th><Th>{t('cam.col.event')}</Th><Th className="hidden md:table-cell">{t('cam.col.camera')}</Th><Th right><span className="sr-only">{t('cam.col.actions')}</span></Th></tr></thead>
           <tbody>{q.data.data.map((r) => {
             const open = r.alert && !r.acked_at;
             return (
               <tr key={r.id} className={open ? 'bg-red-50/40' : ''}>
+                <Td className="w-[6.5rem] !py-1.5 !pr-0"><SnapshotThumb row={r} onOpen={() => { setViewFailed(false); setViewing(r); }} /></Td>
                 <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(r.occurred_at)}</Td>
                 <Td className="min-w-[10rem]">
                   <div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden">{fmtDateTime(r.occurred_at)}</div>
@@ -312,6 +333,34 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras }: {
           })}</tbody>
         </Table>
       )}
+      <Modal open={!!viewing} onClose={() => setViewing(null)} width="max-w-3xl"
+        title={viewing ? t('cam.sec.snapshotTitle', { kind: t(`cam.kind.${viewing.kind}` as MessageKey), camera: viewing.camera_name }) : ''}
+        footer={viewing && (
+          <>
+            <ModalCancel>{t('common.close')}</ModalCancel>
+            {viewing.alert && !viewing.acked_at && (
+              <Button icon={<Check className={ic} />} loading={ack.isPending && ack.variables === viewing.id} onClick={() => ack.mutate(viewing.id, { onSuccess: () => setViewing(null) })}>{t('cam.sec.ack')}</Button>
+            )}
+          </>
+        )}>
+        {viewing && (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.9375rem] text-slate-700">
+              <span className="font-semibold tabular-nums text-slate-900">{fmtDateTime(viewing.occurred_at)}</span>
+              <span>{[viewing.location, showBranch ? viewing.branch_name : null].filter(Boolean).join(' · ')}</span>
+              {viewing.alert && <Badge tone="red" icon={<ShieldAlert className={ic} />}>{t(always(viewing) ? 'cam.sec.alert' : 'cam.sec.afterHours')}</Badge>}
+            </div>
+            {viewFailed ? (
+              <EmptyState compact icon={<ImageOff />} title={t('cam.sec.snapshotFailed')} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={snapshotUrl(viewing.id)} alt={t('cam.sec.snapshotAlt', { kind: t(`cam.kind.${viewing.kind}` as MessageKey), camera: viewing.camera_name, at: fmtDateTime(viewing.occurred_at) })}
+                className="w-full rounded-lg bg-slate-900 object-contain" onError={() => setViewFailed(true)} />
+            )}
+            <p className="text-[0.8125rem] text-slate-600">{t('cam.sec.snapshotKept', { n: snapshotDays })}</p>
+          </div>
+        )}
+      </Modal>
     </Card>
   );
 }
