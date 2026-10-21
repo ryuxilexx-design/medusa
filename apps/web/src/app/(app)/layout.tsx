@@ -13,7 +13,7 @@ import { fmtTime, localDate, longDate } from '@/lib/format';
 import { useI18n, useT } from '@/lib/i18n';
 import { Button, cx, Modal, Select } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
-import { LanguagePicker } from '@/components/prefs';
+import { LanguagePicker, LanguageSwitch } from '@/components/prefs';
 import { confirmLeave, hasUnsaved, NavigationGuard } from '@/lib/unsaved';
 import { canOpen, SECTION_ROLES, type Section } from '@/lib/routes';
 import { handPatientSearch } from '@/lib/patient-search';
@@ -179,21 +179,20 @@ function UserMenu({ onPassword }: { onPassword: () => void }) {
       <button ref={btn} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="true" data-testid="user-menu"
         className="flex min-h-11 items-center gap-2.5 rounded-lg py-1 pl-1 pr-2 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
         <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-800">{initials(me.name)}</span>
-        <span className="hidden max-w-[12rem] text-left leading-tight md:block">
+        <span className="hidden max-w-[12rem] text-left leading-tight xl:block">
           <span className="block truncate text-sm font-semibold text-slate-900">{me.name}</span>
           <span className="block truncate text-[0.8125rem] text-slate-600">{role}</span>
         </span>
         <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
         <span className="sr-only">{t('shell.userMenu')}</span>
       </button>
-      {/* kept in the DOM while closed (hidden), so the language select keeps its state */}
+      {/* kept in the DOM while closed (hidden) */}
       <div hidden={!open} className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
         <div className="border-b border-slate-100 px-3 pb-3 pt-1.5 leading-tight">
           <div className="text-[0.9375rem] font-bold text-slate-900">{me.name}</div>
           <div className="mt-0.5 text-[0.8125rem] text-slate-600">{role}</div>
         </div>
-        <div className="px-3 py-2.5"><LanguagePicker signedIn className="w-full [&>select]:flex-1" /></div>
-        <div className="border-t border-slate-100 pt-1.5">
+        <div className="pt-1.5">
           {me.auth_kind === 'password' && <button className={item} onClick={() => { setOpen(false); onPassword(); }}><KeyRound className="h-5 w-5 text-slate-600" />{t('password.change')}</button>}
           <button className={item} onClick={() => confirmLeave(logout)}><LogOut className="h-5 w-5 text-slate-600" />{me.auth_kind === 'demo' ? t('shell.logoutDemo') : t('shell.logout')}</button>
         </div>
@@ -255,6 +254,8 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
         </div>
         {/* below xl the clinic and date leave the top bar and are shown here */}
         <ClinicInfo className="flex border-b border-slate-100 px-5 py-3 xl:hidden" />
+        {/* phone: the language is at the top of the menu (the top bar has no room for it) */}
+        <div className="border-b border-slate-100 px-5 py-2.5 md:hidden"><LanguagePicker signedIn className="w-full [&>select]:flex-1" /></div>
         {canSearch && search('relative mx-3 mt-3 sm:hidden')}
         <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label={t('nav.menu')}>
           {groups.map((g, gi) => (
@@ -280,15 +281,16 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
 
       <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur print:hidden lg:px-8">
         <Button ref={burger} variant="ghost" className="-ml-1 px-2.5 text-slate-700 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
-        <ClinicInfo className="hidden max-w-[17rem] xl:flex" />
+        <ClinicInfo className="hidden max-w-[17rem] shrink-0 xl:flex" />
         {me.branches.length > 1 ? (
-          <Select aria-label={t('shell.branch')} className="min-w-0 flex-1 pr-7 text-sm sm:w-auto sm:max-w-[14rem] sm:flex-none sm:text-[0.9375rem]" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <Select aria-label={t('shell.branch')} className="min-w-0 flex-1 pr-7 text-sm sm:w-auto sm:max-w-[12.5rem] sm:flex-none sm:text-[0.9375rem]" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             <option value="">{t('shell.allBranches')}</option>
             {me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
         ) : <span className="min-w-0 truncate rounded-lg bg-slate-100 px-3 py-2 text-[0.9375rem] text-slate-800">{me.branches[0]?.name}</span>}
-        {canSearch && search('relative hidden min-w-[10rem] max-w-[24rem] flex-1 sm:block')}
-        <div className="ml-auto"><UserMenu onPassword={() => setPwOpen(true)} /></div>
+        {canSearch && search('relative hidden min-w-[8rem] max-w-[22rem] flex-1 sm:block')}
+        {/* the language is one click away, in plain sight (not inside the person's menu) */}
+        <div className="ml-auto flex items-center gap-2"><LanguageSwitch signedIn /><UserMenu onPassword={() => setPwOpen(true)} /></div>
       </header>
       {sessionEnded ? (
         <div role="alert" className="sticky top-16 z-10 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-900 print:hidden">
