@@ -36,9 +36,9 @@ export default function DashboardPage() {
     <>
       <PageHeader title={t('clinical.dash.title')} subtitle={periodLabel}
         actions={
-          <div className="grid w-full grid-cols-2 gap-0.5 rounded-lg border-2 border-slate-300 bg-white p-0.5 sm:flex sm:w-auto" role="group" aria-label={t('clinical.period.group')}>
+          <div className="glass-field grid w-full grid-cols-2 gap-0.5 rounded-full p-1 sm:flex sm:w-auto" role="group" aria-label={t('clinical.period.group')}>
             {([['today', 'clinical.period.today'], ['7d', 'clinical.period.last7'], ['30d', 'clinical.period.last30'], ['custom', 'clinical.period.custom']] as [Period, MessageKey][]).map(([v, l]) => (
-              <button key={v} type="button" onClick={() => setPeriod(v)} aria-pressed={period === v} className={cx('min-h-9 whitespace-nowrap rounded-md px-3 text-sm font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', period === v ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-slate-100')}>{t(l)}</button>
+              <button key={v} type="button" onClick={() => setPeriod(v)} aria-pressed={period === v} className={cx('min-h-9 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', period === v ? 'bg-white text-brand-800 shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]' : 'text-slate-800 hover:bg-white/50')}>{t(l)}</button>
             ))}
           </div>
         } />
@@ -109,12 +109,12 @@ function Attention({ a }: { a: any }) {
     { icon: <AlertTriangle className="text-amber-600" />, label: t('clinical.dash.cancelledOpen'), value: t('clinical.dash.cancelledCount', { n: a.cancelled_with_invoice }), href: '/cashier?debt=1', show: a.cancelled_with_invoice > 0 },
   ].filter((x) => x.show);
   if (!items.length) return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-5 py-3.5 text-[0.9375rem] font-semibold text-slate-900">
+    <div className="flex items-center gap-2.5 surface px-5 py-3.5 text-[0.9375rem] font-semibold text-slate-900">
       <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-700" />{t('clinical.dash.allClear')}
     </div>
   );
   return (
-    <section className="rounded-xl border border-slate-200 bg-white" aria-labelledby="dash-attention">
+    <section className="surface" aria-labelledby="dash-attention">
       <h2 id="dash-attention" className="px-5 pt-4 text-base font-bold text-slate-900">{t('clinical.dash.attention')}</h2>
       <ul className="grid grid-cols-1 gap-3 p-5 pt-3 md:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
         {items.map((it) => (

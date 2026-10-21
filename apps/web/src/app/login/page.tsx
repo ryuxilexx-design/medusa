@@ -51,27 +51,25 @@ export default function LoginPage() {
 
   const tabBtn = (v: 'demo' | 'password', label: string) => (
     <button type="button" role="tab" aria-selected={tab === v} aria-controls={`login-${v}`} id={`login-tab-${v}`} onClick={() => setTab(v)}
-      className={cx('min-h-11 flex-1 rounded-lg px-3 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-        tab === v ? 'bg-white text-brand-800 shadow-sm ring-1 ring-slate-200' : 'text-slate-600 hover:text-slate-900')}>{label}</button>
+      className={cx('min-h-11 flex-1 rounded-full px-3 text-[0.9375rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+        tab === v ? 'bg-white text-brand-800 shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]' : 'text-slate-800 hover:bg-white/50')}>{label}</button>
   );
 
   return (
-    <main className="min-h-screen bg-slate-100">
+    <main className="min-h-screen">
       <title>{`${t('login.pageTitle')} — Med.uz.ai`}</title>
-      <div className="mx-auto flex h-16 max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
-        <BrandLockup size="lg" />
-        <LanguagePicker />
-      </div>
-      {/* one centred card: one way in at a time (demo roles or login + password), nothing competing beside it */}
-      <div className="mx-auto w-full max-w-[30rem] px-4 pb-10 pt-4 sm:pt-[6vh]">
-        <h1 className="text-2xl font-bold text-slate-900">{t('login.heading')}</h1>
-        <p className="mt-1 text-[0.9375rem] text-slate-600">{t('login.tagline')}{demoMode && <> · <span className="font-semibold text-amber-800">{t('common.demoEnv')}</span></>}</p>
-        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+      {/* one centred glass card: one way in at a time (demo roles or login + password), nothing competing beside it */}
+      <div className="mx-auto w-full max-w-[34rem] px-3 pb-10 pt-4 sm:px-4 sm:pt-[6vh]">
+        <div className="glass p-4 sm:p-7 sm:!rounded-[2.5rem]">
+          <div className="flex flex-wrap items-center justify-between gap-3"><BrandLockup size="lg" /><LanguagePicker /></div>
+          <h1 className="mt-4 text-2xl font-bold text-slate-900">{t('login.heading')}</h1>
+          <p className="mt-1 text-[0.9375rem] text-slate-800">{t('login.tagline')}{demoMode && <> · <span className="font-semibold text-amber-900">{t('common.demoEnv')}</span></>}</p>
           {demoMode && (
-            <div role="tablist" aria-label={t('login.heading')} className="mb-5 flex gap-1 rounded-xl bg-slate-100 p-1">
+            <div role="tablist" aria-label={t('login.heading')} className="glass-field my-4 flex gap-1 rounded-full p-1">
               {tabBtn('demo', t('login.tabDemo'))}{tabBtn('password', t('login.tabPassword'))}
             </div>
           )}
+          <div className={cx('surface p-3 sm:p-4', !demoMode && 'mt-4')}>
           {demoMode && tab === 'demo' ? (
             <section id="login-demo" role="tabpanel" aria-labelledby="login-tab-demo">
               {codeRequired && (
@@ -82,14 +80,14 @@ export default function LoginPage() {
                 </div>
               )}
               <p className="mb-3 text-[0.9375rem] text-slate-700">{t('login.demoPick')}</p>
-              <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+              <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
                 {accounts.isLoading && Array.from({ length: 5 }).map((_, i) => <li key={i} className="p-3"><Skeleton className="h-11" /></li>)}
                 {accounts.isError && <li><ErrorState error={accounts.error} onRetry={() => accountsQ.refetch()} /></li>}
                 {accounts.data && CARDS.map((c) => {
                   const acc = c.role === 'doctor' ? null : accounts.data!.find((a) => a.role === c.role);
                   return (
                     <li key={c.role} data-demo-role={c.role} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-3 sm:px-4">
-                      <span aria-hidden="true" className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 min-[400px]:flex">{c.icon}</span>
+                      <span aria-hidden="true" className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 min-[400px]:flex">{c.icon}</span>
                       <div className="min-w-0 flex-1">
                         <h2 className="truncate text-base font-bold leading-tight text-slate-900">{t(`role.${c.role}` as MessageKey)}</h2>
                         <p className="mt-0.5 truncate text-sm text-slate-600">{c.role === 'doctor' ? t('login.pickDoctor') : acc?.full_name}</p>
@@ -109,8 +107,9 @@ export default function LoginPage() {
           ) : (
             <section id="login-password" role={demoMode ? 'tabpanel' : undefined} aria-labelledby={demoMode ? 'login-tab-password' : undefined}><StaffLogin /></section>
           )}
+          </div>
+          {demoMode && <p className="mt-4 text-[0.8125rem] text-slate-800">{t('login.demoFooter')}</p>}
         </div>
-        {demoMode && <p className="mt-4 text-[0.8125rem] text-slate-600">{t('login.demoFooter')}</p>}
       </div>
     </main>
   );

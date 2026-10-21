@@ -195,7 +195,7 @@ export default function PhoneCameraPage() {
         </div>
         <Alert tone="blue">{t('cam.phone.privacy')}</Alert>
 
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+        <section className="space-y-3 surface p-5">
           <Field label={t('cam.phone.address')} hint={t('cam.phone.addressHint')} error={address && !path ? t('cam.phone.badAddress') : undefined}>
             {(id) => <Input id={id} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="https://…/api/v1/hik/…" className="font-mono text-sm" autoComplete="off" />}
           </Field>
@@ -217,7 +217,7 @@ export default function PhoneCameraPage() {
         {modelState === 'failed' && <Alert tone="red">{t('cam.phone.modelsFailed')}</Alert>}
 
         {camOn && modelState === 'ready' && (
-          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+          <section className="space-y-3 surface p-5">
             <h2 className="flex items-center gap-2 text-base font-bold text-slate-900"><ScanFace className="h-5 w-5 text-brand-600" />{t('cam.phone.enrollTitle')}</h2>
             <div className="flex flex-wrap items-end gap-2">
               <Field label={t('cam.phone.code')} className="w-36">{(id) => <Input id={id} value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" />}</Field>
@@ -238,7 +238,7 @@ export default function PhoneCameraPage() {
           </section>
         )}
 
-        <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5">
+        <section className="space-y-3 surface p-5">
           <h2 className="text-base font-bold text-slate-900">{t('cam.phone.otherEvents')}</h2>
           <div className="flex flex-wrap gap-2">
             <Button icon={<DoorOpen className="h-4 w-4" />} onClick={() => void send(t('cam.phone.enter'), xml('PeopleCounting', '<peopleCounting><statisticalMethods>timeRange</statisticalMethods><enter>1</enter><exit>0</exit></peopleCounting>'), 'application/xml')}>{t('cam.phone.enter')}</Button>
@@ -248,7 +248,7 @@ export default function PhoneCameraPage() {
         </section>
 
         {log.length > 0 && (
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
+          <section className="surface p-5">
             <h2 className="mb-2 text-base font-bold text-slate-900">{t('cam.phone.log')}</h2>
             <ul className="space-y-1.5 text-sm">
               {log.map((l, i) => (

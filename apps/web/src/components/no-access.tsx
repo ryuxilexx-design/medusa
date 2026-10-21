@@ -9,7 +9,7 @@ import { LinkButton } from './ui';
 export function NoAccess({ role, className }: { role: Role; className?: string }) {
   const t = useT();
   return (
-    <div className={className ?? 'mx-auto mt-10 max-w-lg rounded-xl border border-slate-200 bg-white'} data-testid="no-access">
+    <div className={className ?? 'mx-auto mt-10 max-w-lg surface'} data-testid="no-access">
       <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
         <ShieldAlert className="h-8 w-8 text-slate-400" aria-hidden="true" />
         <h1 className="text-lg font-bold text-slate-900">{t('state.notForRole')}</h1>

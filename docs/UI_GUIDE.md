@@ -3,6 +3,21 @@
 Maqsad: har yoshdagi shifokor va xodim ekranni **birinchi qarashda** tushunsin. Chiroyli bo‘lishdan oldin sodda va
 tartibli bo‘lsin. Bu qoidalar barcha sahifalarga tegishli; yangi ekran shu qoidalarga mos bo‘lmasa — tuzatiladi.
 
+## 0. Material: Liquid Glass «Clear» (2026-10-21 dan)
+
+Interfeys Apple’ning Liquid Glass (iOS 26) materialida, «Clear» variantida. Qoidalar (`apps/web/src/app/globals.css`):
+
+- **Shisha faqat boshqaruv qatlamida:** chap menyu (`.glass`, suzuvchi panel), yuqori toolbar (`.glass .glass-pill`),
+  telefon/planshetdagi pastki capsule tab bar, tugmalar (`Button` = `.glass-btn`, asosiy = `.glass-btn-tint`),
+  segmentli tanlagichlar (`.glass-field`). Kontent — kartalar, jadvallar, formalar — **hech qachon shisha emas**:
+  `.surface` (oq, 22 px radius). Shisha ustiga shisha qo‘yilmaydi.
+- **Material:** fon rangli «wallpaper» (`body`), shisha uni sindiradi (`<GlassDefs/>` SVG linza, Chrome/Edge’da;
+  Safari’da blur), yuqori chetida yorug‘lik chizig‘i, pastida ozgina qoraytiruvchi parda (matn o‘qilishi uchun).
+  `prefers-reduced-transparency` yoki eski brauzerda — oq panellar, bir xil joylashuv.
+- **Shakl:** konsentrik yumaloqlik — panel 28 px, karta 22 px, tugma va maydonlar kapsula (`rounded-full`, h ≥ 48).
+- Rang, matn o‘lchami va kontrast qoidalari (1–2-bo‘limlar) o‘z kuchida: shisha ustidagi matn `slate-900`,
+  ikkinchi darajali `slate-700` (shishada `slate-600` ishlatilmaydi).
+
 ## 1. Asosiy tamoyillar
 
 1. **Bitta ekran — bitta asosiy vazifa.** Har sahifada bitta asosiy (ko‘k, `variant="primary"`) tugma, sarlavhaning
@@ -29,9 +44,9 @@ Asosiy shrift 18 px (`html`), o‘lchamlar `rem` da. 1 rem = 18 px.
 | Eng kichik (faqat belgi/teg) | `text-2xs` | ≈ 13 |
 
 - Bo‘shliqlar faqat shu qatordan: `gap-2` (8), `gap-3` (12), `gap-4` (16), `gap-5` (20), `gap-6` (24). Kartalar orasida `gap-5`.
-- Tugma balandligi: oddiy `min-h-11` (≈ 44 px), kichik `min-h-9`. Maydon (input/select) `h-11`. Bitta qatordagi
-  barcha boshqaruvlar bir xil balandlikda.
-- Karta: `rounded-xl border border-slate-200 bg-white`, ichki chekka `p-5` (jadval kartasida 0).
+- Tugma balandligi: oddiy `min-h-12` (≈ 48 px, kapsula), kichik `min-h-10`. Maydon (input/select) `h-11`,
+  `rounded-xl`. Bitta qatordagi barcha boshqaruvlar bir xil balandlikda.
+- Karta: `surface` (`Card`/`StatCard` shuni beradi), ichki chekka `p-5` (jadval kartasida 0).
 - Sahifa: kenglik `max-w-[1440px]`, chekka `px-4 lg:px-8`, yuqoridan `py-6`.
 
 ## 3. Sahifa tuzilishi (yuqoridan pastga)

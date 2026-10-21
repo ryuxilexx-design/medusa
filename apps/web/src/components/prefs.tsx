@@ -34,12 +34,12 @@ export function LanguageSwitch({ signedIn = false }: { signedIn?: boolean }) {
   const change = useChangeLocale(signedIn);
   return (
     <>
-      <div role="group" aria-label={t('pref.language')} className="hidden h-11 shrink-0 items-center gap-0.5 rounded-lg border-2 border-slate-300 bg-white p-0.5 md:inline-flex">
+      <div role="group" aria-label={t('pref.language')} className="glass-field hidden h-11 shrink-0 items-center gap-0.5 rounded-full p-1 md:inline-flex">
         {LOCALES.map((l) => (
           <button key={l.id} type="button" lang={LANG_TAG[l.id]} aria-pressed={locale === l.id} aria-label={l.label} title={l.label}
             onClick={() => locale !== l.id && void change(l.id)}
-            className={cx('h-full min-w-[2.75rem] rounded-md px-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-              locale === l.id ? 'bg-brand-600 text-white' : 'text-slate-700 hover:bg-slate-100')}>
+            className={cx('h-full min-w-[2.75rem] rounded-full px-2.5 text-sm font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+              locale === l.id ? 'bg-white text-brand-800 shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]' : 'text-slate-800 hover:bg-white/50')}>
             {SHORT[l.id]}
           </button>
         ))}

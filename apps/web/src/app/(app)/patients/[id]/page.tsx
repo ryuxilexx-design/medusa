@@ -46,7 +46,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <div className="mb-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="mb-5 overflow-hidden surface">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-4">
           <div className="flex min-w-0 flex-1 basis-[22rem] items-center gap-4">
             <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-bold text-brand-700 sm:flex" aria-hidden="true">{pt.last_name?.[0]}{pt.first_name?.[0]}</div>

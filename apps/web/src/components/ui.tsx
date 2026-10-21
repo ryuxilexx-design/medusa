@@ -14,16 +14,17 @@ type BtnProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'success'; size?: 'sm' | 'md'; loading?: boolean; icon?: React.ReactNode;
 };
 export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button({ variant = 'secondary', size = 'md', loading, icon, className, children, disabled, ...rest }, ref) {
+  // Liquid Glass: the primary action is tinted glass, the others clear glass capsules (docs/UI_GUIDE.md)
   const styles = {
-    primary: 'bg-brand-600 text-white hover:bg-brand-700 border-brand-600',
-    secondary: 'bg-white text-slate-800 hover:border-slate-500 border-slate-300',
-    ghost: 'bg-transparent text-brand-700 hover:bg-brand-50 border-transparent',
-    danger: 'bg-white text-red-700 hover:bg-red-50 border-red-300',
-    success: 'bg-emerald-700 text-white hover:bg-emerald-800 border-emerald-700',
+    primary: 'glass-btn glass-btn-tint border-transparent',
+    secondary: 'glass-btn border-transparent',
+    ghost: 'bg-transparent text-brand-700 hover:bg-white/60 border-transparent rounded-full',
+    danger: 'glass-btn border-transparent !text-red-700',
+    success: 'glass-btn border-transparent !bg-emerald-700/90 !text-white hover:!bg-emerald-800',
   }[variant];
   return (
-    <button ref={ref} disabled={disabled || loading} aria-busy={loading || undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-lg border-2 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-60 aria-busy:opacity-100 whitespace-nowrap',
-      size === 'sm' ? 'min-h-9 px-3 text-sm' : 'min-h-11 px-4 text-[0.9375rem]', styles, className)} {...rest}>
+    <button ref={ref} disabled={disabled || loading} aria-busy={loading || undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-full border-2 font-bold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-60 aria-busy:opacity-100 whitespace-nowrap',
+      size === 'sm' ? 'min-h-10 px-4 text-sm' : 'min-h-12 px-5 text-[0.9375rem]', styles, className)} {...rest}>
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {children}
     </button>
@@ -31,8 +32,8 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button({ 
 });
 
 export function LinkButton({ href, children, variant = 'secondary', icon, className, size = 'md', target }: { href: string; children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost'; icon?: React.ReactNode; className?: string; size?: 'sm' | 'md'; target?: '_blank' }) {
-  const styles = { primary: 'bg-brand-600 text-white hover:bg-brand-700 border-brand-600', secondary: 'bg-white text-slate-800 hover:border-slate-500 border-slate-300', ghost: 'border-transparent text-brand-700 hover:bg-brand-50' }[variant];
-  return <Link href={href} target={target} rel={target ? 'noopener' : undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-lg border-2 font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 whitespace-nowrap', size === 'sm' ? 'min-h-9 px-3 text-sm' : 'min-h-11 px-4 text-[0.9375rem]', styles, className)}>{icon}{children}</Link>;
+  const styles = { primary: 'glass-btn glass-btn-tint border-transparent', secondary: 'glass-btn border-transparent', ghost: 'border-transparent text-brand-700 hover:bg-white/60' }[variant];
+  return <Link href={href} target={target} rel={target ? 'noopener' : undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-full border-2 font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 whitespace-nowrap', size === 'sm' ? 'min-h-10 px-4 text-sm' : 'min-h-12 px-5 text-[0.9375rem]', styles, className)}>{icon}{children}</Link>;
 }
 
 // ---------- Form fields ----------
@@ -50,7 +51,7 @@ export function Field({ label, error, hint, required, children, className }: { l
   );
 }
 const W = (c?: string) => (c && /(^|\s)w-/.test(c) ? '' : 'w-full');
-const inputBase = 'rounded-lg border-2 bg-white px-3 text-[0.9375rem] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-amber-300 focus:border-brand-600 disabled:bg-slate-50 disabled:text-slate-600';
+const inputBase = 'rounded-xl border-2 bg-white px-3 text-[0.9375rem] text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-4 focus:ring-amber-300 focus:border-brand-600 disabled:bg-slate-50 disabled:text-slate-600';
 export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean }>(function Input({ className, invalid, ...p }, ref) {
   const f = useContext(FieldCtx);
   return <input ref={ref} className={cx(inputBase, W(className), 'h-11', invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} aria-describedby={f.describedBy} {...p} />;
@@ -78,7 +79,7 @@ export function Badge({ tone = 'gray', children, icon, className }: { tone?: Ton
 // ---------- Card / page ----------
 export function Card({ children, className, title, actions, padded = true }: { children: React.ReactNode; className?: string; title?: React.ReactNode; actions?: React.ReactNode; padded?: boolean }) {
   return (
-    <section className={cx('rounded-xl border border-slate-200 bg-white', className)}>
+    <section className={cx('surface', className)}>
       {(title || actions) && <header className="flex min-h-14 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-2.5"><h2 className="text-base font-bold text-slate-900">{title}</h2><div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div></header>}
       <div className={padded ? 'p-5' : ''}>{children}</div>
     </section>
@@ -88,7 +89,7 @@ export function Card({ children, className, title, actions, padded = true }: { c
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: React.ReactNode; actions?: React.ReactNode }) {
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-      <div className="min-w-0"><h1 className="text-2xl font-bold leading-tight text-slate-900">{title}</h1>{subtitle && <p className="mt-1 text-[0.9375rem] text-slate-600">{subtitle}</p>}</div>
+      <div className="min-w-0"><h1 className="text-[1.75rem] font-bold leading-tight tracking-tight text-slate-900">{title}</h1>{subtitle && <p className="mt-1 text-[0.9375rem] text-slate-600">{subtitle}</p>}</div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
@@ -106,7 +107,7 @@ export function StatCard({ icon, label, value, sub, href, loading, tone = 'defau
   icon?: React.ReactNode; label: string; value?: React.ReactNode; sub?: React.ReactNode; href?: string; loading?: boolean; tone?: 'default' | 'danger' | 'success'; className?: string;
 }) {
   const body = (
-    <div className={cx('flex h-full min-w-0 flex-col rounded-xl border border-slate-200 bg-white px-4 py-4 transition-colors 2xl:px-5', href && 'hover:border-brand-300')}>
+    <div className={cx('surface flex h-full min-w-0 flex-col px-4 py-4 transition-colors 2xl:px-5', href && 'hover:!border-brand-300')}>
       <div className="flex items-center gap-2 text-[0.875rem] font-semibold text-slate-600">
         {icon && <span className={cx('shrink-0 [&>svg]:h-[1.125rem] [&>svg]:w-[1.125rem]', tone === 'danger' ? 'text-red-600' : tone === 'success' ? 'text-emerald-700' : 'text-brand-600')}>{icon}</span>}
         <span className="truncate" title={label}>{label}</span>
@@ -115,13 +116,13 @@ export function StatCard({ icon, label, value, sub, href, loading, tone = 'defau
       {loading ? <Skeleton className="mt-2.5 h-3 w-32" /> : sub != null && <div className="mt-2 truncate text-[0.8125rem] text-slate-600">{sub}</div>}
     </div>
   );
-  return href ? <Link href={href} className={cx('block rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', className)}>{body}</Link> : <div className={className}>{body}</div>;
+  return href ? <Link href={href} className={cx('block rounded-[1.375rem] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', className)}>{body}</Link> : <div className={className}>{body}</div>;
 }
 
 /** Filter bar at the top of a card: filters on the left, secondary actions (export…) on the right, one row when it fits. */
 export function Toolbar({ children, actions, className }: { children?: React.ReactNode; actions?: React.ReactNode; className?: string }) {
   return (
-    <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-slate-100 px-5 py-3', className)}>
+    <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-2.5 border-b border-slate-100 px-5 py-3 first:rounded-t-[inherit]', className)}>
       <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-2.5 sm:basis-0">{children}</div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -195,11 +196,11 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
   // a selected tab outside the visible strip (narrow card, link to ?status=…) is scrolled into view
   useEffect(() => { list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [value]);
   return (
-    <div ref={list} className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
+    <div ref={list} className="flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-slate-100 p-1" role="tablist">
       {items.map((it) => (
         <button key={it.value} role="tab" aria-selected={value === it.value} onClick={() => onChange(it.value)}
-          className={cx('-mb-px whitespace-nowrap border-b-[3px] px-3 py-2.5 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', value === it.value ? 'border-brand-600 text-brand-800' : 'border-transparent text-slate-600 hover:text-slate-900')}>
-          {it.label}{it.count != null && <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 text-xs text-slate-600">{it.count}</span>}
+          className={cx('min-h-10 whitespace-nowrap rounded-full px-4 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', value === it.value ? 'bg-white text-brand-800 shadow-[0_2px_8px_rgba(15,23,42,0.12)]' : 'text-slate-600 hover:text-slate-900')}>
+          {it.label}{it.count != null && <span className="ml-1.5 rounded-full bg-slate-200/80 px-1.5 text-xs text-slate-700">{it.count}</span>}
         </button>
       ))}
     </div>
@@ -251,11 +252,11 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-l
   if (!open || typeof document === 'undefined') return null;
   // rendered at the end of <body>: never inherits table/space-y styles of the place that opened it
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4 pt-[4vh] print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) tryClose(); }}>
-      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx('flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-xl bg-white text-left shadow-xl', width)}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 pt-[4vh] backdrop-blur-sm print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) tryClose(); }}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx('flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-[1.75rem] border border-white bg-white text-left shadow-[0_30px_60px_-20px_rgba(10,30,70,0.45)]', width)}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
           <h2 id={titleId} className="min-w-0 text-lg font-bold text-slate-900">{title}</h2>
-          <button data-close onClick={tryClose} className="shrink-0 rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
+          <button data-close onClick={tryClose} className="shrink-0 rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
         </div>
         {confirming && (
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-sm text-amber-900">
@@ -265,7 +266,7 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-l
         )}
         <ModalCloseCtx.Provider value={tryClose}>
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-          {footer && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-xl border-t border-slate-100 bg-slate-50/60 px-5 py-3">{footer}</div>}
+          {footer && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-[1.75rem] border-t border-slate-100 bg-slate-50/70 px-5 py-3">{footer}</div>}
         </ModalCloseCtx.Provider>
       </div>
     </div>,
@@ -289,7 +290,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {/* errors are announced at once (role=alert, assertive); success and info politely */}
       <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} aria-live={t.tone === 'error' ? 'assertive' : undefined} className={cx('pointer-events-auto flex items-start gap-2.5 rounded-lg border px-4 py-3 text-[0.9375rem] font-medium shadow-lg', t.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : t.tone === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900')}>
+          <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} aria-live={t.tone === 'error' ? 'assertive' : undefined} className={cx('pointer-events-auto flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-[0.9375rem] font-medium shadow-lg backdrop-blur', t.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : t.tone === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900')}>
             {t.tone === 'success' ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" /> : t.tone === 'error' ? <XCircle className="mt-0.5 h-5 w-5 shrink-0" /> : <Info className="mt-0.5 h-5 w-5 shrink-0" />}
             <span>{t.text}</span>
           </div>

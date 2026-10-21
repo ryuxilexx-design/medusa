@@ -55,6 +55,7 @@ export const shell = {
 
   // app frame
   'nav.menu': ['Asosiy menyu', 'Главное меню'],
+  'nav.more': ['Menyu', 'Меню'],
   'nav.open': ['Menyuni ochish', 'Открыть меню'],
   'nav.close': ['Menyuni yopish', 'Закрыть меню'],
   'nav.home': ['Med.uz.ai — bosh sahifa', 'Med.uz.ai — главная'],

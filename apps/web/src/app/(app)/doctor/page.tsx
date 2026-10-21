@@ -106,7 +106,7 @@ function Workspace({ appt }: { appt: any }) {
   const allergy = patient.data?.allergy_state as string | undefined;
 
   const header = (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <section className="overflow-hidden surface">
       <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><h1 className="text-2xl font-bold leading-tight text-slate-900">{fullName(appt, true)}</h1><AppointmentStatus status={appt.status} /></div>
@@ -328,7 +328,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
 
       {/* the two decisions of the visit, always in reach while the doctor writes, orders and issues documents */}
       {!signed && (
-        <div className="sticky bottom-0 z-10 space-y-2 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_-16px_rgba(26,34,51,0.4)] backdrop-blur">
+        <div className="sticky bottom-0 z-10 space-y-2 surface/95 px-4 py-3 shadow-[0_-8px_24px_-16px_rgba(26,34,51,0.4)] backdrop-blur">
           {saveError && <Alert tone="red">{saveError}</Alert>}
           {conflict && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900" role="alert" data-testid="note-conflict">
