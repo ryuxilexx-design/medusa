@@ -183,7 +183,10 @@ test('to‘lov: idempotency, qoldiqdan ortiq to‘lash va parallel to‘lovlar',
   assert.equal(inv.status, 'paid');
   assert.equal(inv.paid_amount, inv.total);
   assert.equal(inv.payments.length, 2);
-  assert.equal((await manager.post(`/invoices/${state.invoiceId}/payments`, { amount: 1, method: 'cash' }, { 'Idempotency-Key': randomUUID() })).status, 403, 'rahbar to‘lov qayd qilmaydi');
+  // the manager may take money too, but only with their own open shift; a registrar never
+  const m = await manager.post(`/invoices/${state.invoiceId}/payments`, { amount: 1, method: 'cash' }, { 'Idempotency-Key': randomUUID() });
+  assert.equal(m.status, 409, 'rahbar smenasiz to‘lov qayd qilmaydi'); assert.equal(m.body.error.code, 'SHIFT_REQUIRED');
+  assert.equal((await registrar.post(`/invoices/${state.invoiceId}/payments`, { amount: 1, method: 'cash' }, { 'Idempotency-Key': randomUUID() })).status, 403, 'registrator to‘lov qayd qilmaydi');
 });
 
 test('dashboard tushumi filtrlangan to‘lovlar yig‘indisiga teng (filial kesimida ham)', async () => {

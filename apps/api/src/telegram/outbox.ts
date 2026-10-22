@@ -7,13 +7,16 @@ export type NoticeKind = 'reminder_day' | 'reminder_soon' | 'result_ready' | 'ca
  * card with the parent's number in contact_phone) belongs to the parent's chat too; a chat never sees a card whose
  * phones are not its own verified number.
  */
+/** The contact person may act for a card only when it is a child's card (under 18) or the patient has no phone of their own
+ *  (an adult's emergency contact must not see that adult's visits). */
+export const GUARDIAN_CARD_SQL = `(p.phone IS NULL OR p.birth_date > ((demo_now() AT TIME ZONE 'Asia/Tashkent')::date - interval '18 years'))`;
 export const LINKED_CHATS_SQL = `
   SELECT tc.id, tc.bot_id, tc.chat_id, tc.lang, b.kind AS bot_kind
     FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
-   WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND tc.phone IN (p.phone, p.contact_phone) AND NOT tc.blocked AND b.status = 'active'`;
+   WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active'`;
 
 /** SQL condition: chat phone `$n` owns patient `p` (own card or a family card with that contact number). */
-export const OWN_CARD_SQL = (param: string) => `(p.phone = ${param} OR p.contact_phone = ${param})`;
+export const OWN_CARD_SQL = (param: string) => `(p.phone = ${param} OR (p.contact_phone = ${param} AND ${GUARDIAN_CARD_SQL}))`;
 
 /**
  * SQL condition: patient `p` has not refused / withdrawn the Telegram notifications consent. Linking the bot with

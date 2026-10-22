@@ -1,3 +1,4 @@
+import { GUARDIAN_CARD_SQL } from '../telegram/outbox';
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema, searchTranslit } from '@meduza/contracts';
@@ -12,7 +13,7 @@ import { consentHistory, latestConsents, recordConsent } from './consent';
 
 const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.created_at, p.updated_at, p.source,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
-           WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND tc.phone IN (p.phone, p.contact_phone) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked`;
+           WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked`;
 const MIN_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex`;
 
 /** Doctors only see patients that have (had) an appointment with them. */

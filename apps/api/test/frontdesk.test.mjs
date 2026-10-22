@@ -131,6 +131,24 @@ test('oilaviy karta: bolaning kartasi (contact_phone = ota-ona raqami) ota-onani
   assert.equal((await registrar.get(`/patients/${child.id}`)).body.data.telegram_linked, true);
 });
 
+test('oilaviy karta chegarasi: o‘z telefoni bor katta bemorning kartasi aloqa shaxsining chatiga ko‘rinmaydi', async () => {
+  const adultPhone = '+99890' + String(7_000_000 + Math.floor(Math.random() * 999_999)).padStart(7, '0'); // not a seed number
+  const contact = await uniquePhone();
+  const card = (await registrar.post('/patients', { last_name: 'Kattalar', first_name: 'Bemor', birth_date: '1980-02-02', sex: 'male', phone: adultPhone, contact_name: 'Hamkasb', contact_phone: contact.phone })).body.data;
+  assert.ok(card?.id, JSON.stringify(card));
+  const chat = await linked(contact.phone);
+  assert.ok(!(await texts(chat)).includes('Kattalar Bemor'), 'aloqa shaxsi katta bemorning kartasini ko‘rmaydi');
+  const tomorrow = addDays(dateOf(await demoNow()), 1);
+  const mark = await lastId(chat);
+  await bookOn(card.id, tomorrow);
+  await notifier.deliverDue();
+  assert.ok(!(await texts(chat, mark)).includes('Kattalar Bemor'), 'uning qabuli haqida xabar ham bormaydi');
+  await say(chat, '🗓 Mening qabullarim');
+  assert.ok(!(await out(chat)).at(-1).text.includes('Kattalar Bemor'));
+  // the registrar sees the card as not linked to Telegram
+  assert.equal((await registrar.get(`/patients/${card.id}`)).body.data.telegram_linked, false);
+});
+
 test('navbatsiz qabul: eng yaqin bo‘sh vaqt + «Keldi» bitta so‘rovda; bo‘sh vaqt bo‘lmasa 409 NO_SLOT; kassir 403', async () => {
   const now = await demoNow();
   const today = dateOf(now), nowMin = localOf(now).getUTCHours() * 60 + localOf(now).getUTCMinutes();

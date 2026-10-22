@@ -15,6 +15,12 @@ const MS_DAY = 86400_000;
  * Days off, vacations, clinic holidays and one-day custom hours. The booking rules that read them live in
  * booking.ts (shared with the Telegram bot); here only the manager's maintenance and the read for the grid.
  */
+/** True when the manager's branches cover every branch of the clinic (clinic-wide holidays need that). */
+async function coversAllBranches(c: { query: (q: string, p?: unknown[]) => Promise<{ rows: any[] }> }, ctx: Ctx): Promise<boolean> {
+  const r = await c.query(`SELECT NOT EXISTS (SELECT 1 FROM branches b WHERE b.tenant_id = $1 AND b.id <> ALL($2::uuid[])) AS ok`, [ctx.tenantId, ctx.branchIds]);
+  return Boolean(r.rows[0]?.ok);
+}
+
 @Controller('schedule-exceptions')
 export class ScheduleExceptionsController {
   constructor(private db: Db) {}
@@ -53,9 +59,13 @@ export class ScheduleExceptionsController {
     return this.db.tx(async (c) => {
       let doctor: { id: string; display_name: string } | null = null;
       if (input.doctor_id) {
-        doctor = (await c.query(`SELECT id, display_name FROM doctors WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [input.doctor_id, ctx.tenantId])).rows[0] ?? null;
+        // a manager limited to some branches may only touch doctors who work in those branches
+        doctor = (await c.query(
+          `SELECT d.id, d.display_name FROM doctors d WHERE d.id = $1 AND d.tenant_id = $2
+              AND EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = d.id AND s.branch_id = ANY($3::uuid[])) FOR UPDATE OF d`,
+          [input.doctor_id, ctx.tenantId, ctx.branchIds])).rows[0] ?? null;
         if (!doctor) throw notFound('Shifokor');
-      }
+      } else if (!input.branch_id && !(await coversAllBranches(c, ctx))) throw forbidden(); // clinic-wide holiday: whole-clinic managers only
       const dates: string[] = [];
       for (let d = from; d <= to; d = addDays(d, 1)) dates.push(d);
       if (input.kind === 'custom_hours') {
@@ -80,9 +90,9 @@ export class ScheduleExceptionsController {
         `SELECT a.id, a.starts_at, a.ends_at, a.branch_id, a.doctor_id, d.display_name AS doctor_name, p.patient_number, p.last_name, p.first_name, s.name AS service_name
            FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN services s ON s.id = a.service_id JOIN doctors d ON d.id = a.doctor_id
           WHERE a.tenant_id = $1 AND a.status = 'scheduled' AND a.starts_at >= $2 AND a.starts_at < $3 AND a.starts_at >= $4
-            AND ($5::uuid IS NULL OR a.doctor_id = $5) AND ($6::uuid IS NULL OR a.branch_id = $6)
+            AND ($5::uuid IS NULL OR a.doctor_id = $5) AND ($6::uuid IS NULL OR a.branch_id = $6) AND a.branch_id = ANY($7::uuid[])
           ORDER BY a.starts_at LIMIT 500`,
-        [ctx.tenantId, dayStart(from), dayStart(addDays(to, 1)), now(), doctor?.id ?? null, input.branch_id ?? null])).rows;
+        [ctx.tenantId, dayStart(from), dayStart(addDays(to, 1)), now(), doctor?.id ?? null, input.branch_id ?? null, ctx.branchIds])).rows;
       const affected = future.flatMap((a) => {
         const st = toMinutes(localTime(a.starts_at)), en = toMinutes(localTime(a.ends_at));
         const inside = BLOCKING_KINDS.includes(input.kind) || st < toMinutes(input.start_time!) || en > toMinutes(input.end_time!);
@@ -102,10 +112,14 @@ export class ScheduleExceptionsController {
     if (!isUuid(id)) throw notFound('Dam olish kuni');
     return this.db.tx(async (c) => {
       const e = (await c.query(
-        `SELECT e.id, e.date::text AS date, e.kind, e.branch_id, d.display_name FROM schedule_exceptions e LEFT JOIN doctors d ON d.id = e.doctor_id
-          WHERE e.id = $1 AND e.tenant_id = $2 FOR UPDATE OF e`, [id, ctx.tenantId])).rows[0];
+        `SELECT e.id, e.date::text AS date, e.kind, e.branch_id, e.doctor_id, d.display_name,
+                EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = e.doctor_id AND s.branch_id = ANY($3::uuid[])) AS doctor_in_scope
+           FROM schedule_exceptions e LEFT JOIN doctors d ON d.id = e.doctor_id
+          WHERE e.id = $1 AND e.tenant_id = $2 FOR UPDATE OF e`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!e) throw notFound('Dam olish kuni');
       if (e.branch_id && !ctx.branchIds.includes(e.branch_id)) throw forbidden();
+      if (e.doctor_id && !e.doctor_in_scope) throw forbidden();
+      if (!e.doctor_id && !e.branch_id && !(await coversAllBranches(c, ctx))) throw forbidden();
       await c.query(`DELETE FROM schedule_exceptions WHERE id = $1`, [id]);
       await audit(c, ctx, 'schedule.exception.delete', 'schedule_exception', id, `${e.display_name ?? 'butun klinika'}: ${e.date} (${EXCEPTION_REASON[e.kind] ?? 'maxsus ish vaqti'}) o‘chirildi`, e.branch_id);
       return { data: { ok: true } };
