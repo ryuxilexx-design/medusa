@@ -94,6 +94,32 @@ birga **«Capture picture»/«Upload picture»** yoqilgan bo‘lishi kerak — s
 bo‘lib, rasm qismi bilan keladi. Haqiqiy kameradan suratlar faqat O‘zbekistondagi serverda saqlanadi; demo’da
 (Railway) faqat namunaviy kadrlar bor (ochiq litsenziyali stok fotolar, yuzlar xiralashtirilgan).
 
+### Bir oy davomida kamera nimalarni ko‘rsatadi
+
+Hozirgi kod bilan (yuz kutubxonasi kamerada, xavfsizlik hodisalari serverda) klinika rahbari bir oyda taxminan
+quyidagilarni ko‘radi. «Surat» ustuni — kadr saqlanadimi (faqat ogohlantirish, «surat saqlash» yoqilgan kamerada).
+
+| № | Holat | Kamera hodisasi | Med.uz.ai’da | Surat | Rahbar nima qiladi | Demo’da |
+|---|---|---|---|---|---|---|
+| 1 | Tunda kassa xonasiga kirildi | `fielddetection` (intrusion), ish vaqtidan tashqari | qizil ogohlantirish, bosh sahifada «Kamera: xavfsizlik ogohlantirishi» | ✓ | kadrni ochadi: xodimmi, begonami; «Ko‘rib chiqildi» yoki qo‘riqchiga qo‘ng‘iroq | 12.10 02:15, kapyushonli odam peshtaxta oldida |
+| 2 | Tunda dori ombori eshigi zonasiga kirish | `regionEntrance` | ogohlantirish; Ombor bo‘limida shu kecha qoldiq o‘zgarganmi — tekshiradi | ✓ | farrosh/navbatchi bo‘lsa yopadi; begona bo‘lsa inventarizatsiya | 05.10 23:40 (qutilar bilan xodim), 17.10 23:12 (siluet, **ochiq**) |
+| 3 | Omborda uzoq turib qolish (sumkali odam) | `loitering` | ogohlantirish | ✓ | qaysi xodim ekanini aniqlaydi, dori hisobini solishtiradi | 08.10 00:40, 14.10 13:20 |
+| 4 | Operatsiya bloki eshigida begona (kunduzi) | `regionEntrance` / `loitering`, «har doim» rejimi | ogohlantirish, begona kirgan vaqt | ✓ | hamshirani ogohlantiradi, kirish tartibini eslatadi | 16.10 14:36, 18.10 09:48 (**ochiq**) |
+| 5 | Favqulodda chiqish eshigidan tunda chiqish | `linedetection` (A→B) | ogohlantirish, chiziq yo‘nalishi | ✓ | kim va nega chiqqanini surishtiradi | 04.10 23:58 |
+| 6 | Kamera to‘sildi / bo‘yaldi / burildi | `shelteralarm` (tamper) | ogohlantirish, kadr qorong‘i-xira | ✓ | kamerani joyida tekshiradi; takrorlansa — texnik | 27.09 06:58 (kassa), 13.10 04:12 (ombor) |
+| 7 | Asosiy kirishdan ish vaqtidan keyin kirish | `linedetection` / `fielddetection` | ogohlantirish | ✓ | kechikkan xodim yoki bemor — yopadi | 20.09, 24.09, 09.10, 11.10 tunlari |
+| 8 | Xodim ish vaqtidan keyin kelib ketdi | yuz mosligi `S-n` + xavfsizlik hodisasi | Davomatda tungi «ko‘rindi», xavfsizlikda ogohlantirish | ✓ (faqat xavfsizlik hodisasiga) | kim ekani kod orqali ma’lum — tez yopadi | — |
+| 9 | Bemor tunda koridorda (statsionar) | `fielddetection` | ogohlantirish | ✓ | navbatchi hamshiraga xabar | — |
+| 10 | Kuryer / yetkazib beruvchi tunda eshikda | `loitering` kirishda | ogohlantirish | ✓ | qabul qilinganini tekshiradi | — |
+| 11 | Bola yolg‘iz kirish oldida kunduzi | `loitering` («har doim» rejimi) | hodisa (ogohlantirish — rejimga qarab) | rejimga qarab | registratorga aytadi | — |
+| 12 | Qabulxonada navbat to‘planib ketdi | `PeopleCounting` | Odam oqimi: eng band soat, kun jadvali | ✗ (hech qachon) | registrator qo‘shadi, jadvalni surishtiradi | 09:00–11:00 cho‘qqisi |
+| 13 | Shifokor kechikdi / bemor kelganini kamera tanidi | yuz mosligi `S-n` / `P-n` | Davomatda kechikish, registratorga «Kamera tanidi» taklifi | ✗ (hech qachon) | hech narsa avtomatik o‘zgarmaydi, registrator tasdiqlaydi | Davomat, Navbat |
+| 14 | Kamera jim qoldi (tok, tarmoq, o‘chirilgan) | hodisa yo‘q, `last_seen_at` eskiradi | bosh sahifada «Kamera javob bermayapti», Qurilmalar’da sariq | ✗ | texnikni chaqiradi | «Yunusobod kirish» kamerasi |
+| 15 | Bir odam bir daqiqada bir necha hodisa yubordi | takror hodisalar | bitta yozuv (dedupe), ro‘yxat to‘lib ketmaydi | — | — | test |
+
+Surat 30 kundan keyin o‘chadi, hodisa yozuvi qoladi. Kadrlarda yuz ko‘rinadi — shuning uchun suratni faqat rahbar
+ko‘radi va u ogohlantirishdan boshqa hech qanday hodisada saqlanmaydi.
+
 Texnik tafsilotlar, namunaviy ISAPI xabarlari va manbalar: `docs/HIKVISION_ISAPI_RESEARCH.md`.
 Kod: `apps/api/src/cameras/` (`isapi.ts` — xabarni o‘qish, `ingest.ts` — qoidalar, `cameras.controller.ts` — API,
 `hik.controller.ts` — kamera manzili). Testlar: `apps/api/test/cameras.test.mjs`.
@@ -133,15 +159,16 @@ ishlating.
 
 Demo’da 6 ta kamera va 30 kunlik tarix bor: xodimlar davomati (Bekzod Ergashev tez-tez kechikadi, Lola Abdullayeva
 3 kun ta’tilda, Sardor Nazarov ko‘pincha kech qoladi, Yunusobod kassiri ba’zan erta ketadi), hafta kuniga qarab
-o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va 21 ta ogohlantirish (3 tasi ko‘rib
+o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va 24 ta ogohlantirish (3 tasi ko‘rib
 chiqilmagan: kecha 23:12 dori ombori, 3 kun oldin Yunusobod kassasi, bugun 09:48 operatsiya bloki eshigida uzoq
 turib qolgan odam), bemor kelishi tarixi (tasdiqlangan va «bu emas») hamda bugungi takliflar. Hammasi sun’iy.
 
-Ogohlantirishlarning 20 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kameradan
+Ogohlantirishlarning 23 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kameradan
 emas: Wikimedia Commons’dagi ochiq litsenziyali shifoxona fotolari (`tools/snapshot-sources/`, mualliflar va
 litsenziyalar `ATTRIBUTION.md` da), `tools/make-snapshots.py` ularni CCTV ko‘rinishiga keltiradi — avval har bir yuz,
 ism yorlig‘i va o‘qiladigan yozuv pikselga aylantiriladi, keyin 960×540 kadr, tunda IR monoxrom, shovqin, kameraning
-o‘z yozuvlari (vaqt, kanal nomi, zona, nishon ramkasi). Sahna o‘zgarsa skriptni qayta ishga tushiring; fayllar
+o‘z yozuvlari (vaqt, kanal nomi, zona, nishon ramkasi); tungi «begona» sahnalarda rasmga kapyushonli odam yoki siluet
+(`tools/snapshot-sources/figures`) qo‘yilgan. Sahna o‘zgarsa skriptni qayta ishga tushiring; fayllar
 repoda saqlanadi, seed ularni faqat o‘qiydi, API ishga tushganda o‘zgargan faylni bazadagi eski surat o‘rniga qo‘yadi
 (`backfillSeedSnapshots`). «Sinov hodisasi» tugmasi ham xavfsizlik hodisasiga
 shu kadrlardan birini qo‘shadi (faqat ogohlantirish bo‘lsa saqlanadi).

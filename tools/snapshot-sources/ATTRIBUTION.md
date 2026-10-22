@@ -25,6 +25,11 @@ the CCTV treatment; the people are not identifiable and the places are not the d
 | hall-cologne.jpg | [COVID-19 vaccination center, fair grounds Cologne-6623.jpg](https://commons.wikimedia.org/wiki/File:COVID-19_vaccination_center,_fair_grounds_Cologne-6623.jpg) | see the file page (author linked via Wikidata) | CC BY-SA 4.0 |
 | medical-post-pirogov.jpg | [2026-02-26 Открытие корпуса ГКБ имени Пирогова 08.jpg](https://commons.wikimedia.org/wiki/File:2026-02-26_%D0%9E%D1%82%D0%BA%D1%80%D1%8B%D1%82%D0%B8%D0%B5_%D0%BA%D0%BE%D1%80%D0%BF%D1%83%D1%81%D0%B0_%D0%93%D0%9A%D0%91_%D0%B8%D0%BC%D0%B5%D0%BD%D0%B8_%D0%9F%D0%B8%D1%80%D0%BE%D0%B3%D0%BE%D0%B2%D0%B0_08.jpg) | Владимир Новиков / пресс-служба мэра и правительства Москвы | CC BY 4.0 |
 | entrance-guys-night.jpg | [Main entrance of Guy's Hospital at night - geograph.org.uk - 5682030.jpg](https://commons.wikimedia.org/wiki/File:Main_entrance_of_Guy%27s_Hospital_at_night_-_geograph.org.uk_-_5682030.jpg) | geograph.org.uk contributor (see the file page) | CC BY-SA 2.0 |
+| figures/hood.png (from figures/src-body-in-the-dark.jpg) | [Body in the dark (Unsplash).jpg](https://commons.wikimedia.org/wiki/File:Body_in_the_dark_(Unsplash).jpg) | Unsplash contributor (see the file page) | CC0 |
+| figures/silhouette.png (from figures/src-hooded-street.jpg) | [23773262025 - Flickr - Thomas Leuthard.jpg](https://commons.wikimedia.org/wiki/File:23773262025_-_Flickr_-_Thomas_Leuthard.jpg) | Thomas Leuthard | CC BY 2.0 |
+
+The two cut-out figures (a hooded person, face pixelated, and a backlit silhouette) are pasted into some night frames as
+the «intruder» — the pictures of a real camera would show a real person there.
 
 The derived frames (`database/seed/snapshots/`) are shared under the same licences as their sources (CC BY-SA 4.0
 for the set as a whole); this file is the attribution. The product itself is not affected: the pictures are demo

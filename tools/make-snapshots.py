@@ -27,14 +27,14 @@ if not os.path.exists(FONT):
 # optional tamper (the lens being covered).
 SCENES = [
     dict(name='cash-night-intrusion', src='reception-wagga.jpg', crop=(0, 120, 1280, 840), night=True,
-         blur=[(205, 435, 310, 535), (1215, 400, 1280, 620), (955, 280, 1225, 325)],
+         blur=[(205, 435, 310, 535), (1215, 400, 1280, 620), (955, 280, 1225, 325)], figures=[('hood', 300, 808, 540, False)],
          channel='CAM 02 Kassa', time='12-10-2026 02:15:07', zone=[(120, 120), (560, 110), (640, 530), (40, 530)], box=(150, 230, 300, 535)),
     dict(name='cash-tamper', src='reception-dentistry.jpg', crop=(0, 0, 1280, 720), night=False, tamper=True,
          blur=[(560, 290, 660, 380), (630, 220, 820, 320), (840, 400, 920, 500)],
          channel='CAM 02 Kassa', time='27-09-2026 06:58:41', zone=None, box=None),
-    dict(name='or-day-loitering', src='corridor-sansalvatore.jpg', crop=(0, 70, 1280, 790), night=False,
-         blur=[(985, 345, 1105, 480)],
-         channel='CAM 04 Operatsiya bloki', time='18-10-2026 09:48:12', zone=[(420, 150), (940, 150), (960, 540), (380, 540)], box=(455, 200, 870, 535)),
+    dict(name='or-day-loitering', src='ward-door-northwick.jpg', crop=(0, 120, 1280, 840), night=False,
+         blur=[(565, 315, 725, 395), (235, 490, 365, 650), (370, 560, 460, 700)], figures=[('hood', 600, 790, 540, False)],
+         channel='CAM 04 Operatsiya bloki', time='18-10-2026 09:48:12', zone=[(340, 110), (620, 110), (620, 540), (330, 540)], box=(380, 190, 520, 540)),
     dict(name='or-day-stranger', src='corridor-eskenazi.jpg', crop=(0, 60, 1280, 780), night=False,
          blur=[(335, 370, 375, 410), (1030, 30, 1240, 150), (615, 215, 690, 270)],
          channel='CAM 04 Operatsiya bloki', time='16-10-2026 14:36:55', zone=[(200, 220), (420, 220), (470, 420), (120, 420)], box=(250, 240, 285, 335)),
@@ -47,15 +47,15 @@ SCENES = [
     dict(name='store-night-1', src='store-boxes.jpg', crop=(0, 40, 1280, 760), night=True,
          blur=[(225, 70, 430, 300), (410, 395, 530, 460), (175, 380, 260, 440)],
          channel='CAM 03 Dori ombori', time='05-10-2026 23:40:19', zone=[(60, 20), (640, 20), (700, 540), (20, 540)], box=(120, 30, 640, 520)),
-    dict(name='store-night-2', src='store-30mdg.jpg', crop=(320, 100, 1280, 640), night=True,
-         blur=[(820, 90, 1125, 335), (860, 430, 1010, 505), (1105, 525, 1210, 650)],
-         channel='CAM 03 Dori ombori', time='17-10-2026 23:12:04', zone=[(300, 20), (960, 20), (960, 540), (220, 540)], box=(430, 10, 950, 540)),
+    dict(name='store-night-2', src='corridor-tuenmun.jpg', crop=(0, 120, 1280, 840), night=True,
+         blur=[(525, 440, 560, 480), (495, 445, 525, 475), (405, 445, 440, 475), (60, 260, 500, 335), (1130, 320, 1230, 515), (1170, 525, 1250, 580)], figures=[('silhouette', 200, 560, 320, True)],
+         channel='CAM 03 Dori ombori', time='17-10-2026 23:12:04', zone=[(0, 170), (330, 170), (360, 540), (0, 540)], box=(90, 180, 220, 430)),
     dict(name='yun-cash-night-line', src='reception-arrowe.jpg', crop=(0, 60, 1280, 780), night=True,
          blur=[(945, 355, 1000, 405), (905, 370, 950, 415), (535, 295, 725, 340), (670, 335, 745, 505)],
          channel='CAM 05 Kassa (Yunusobod)', time='01-10-2026 21:35:26', line=[(560, 540), (700, 250)], box=(670, 260, 760, 430)),
-    dict(name='yun-cash-night-region', src='corridor-tuenmun.jpg', crop=(0, 120, 1280, 840), night=True,
-         blur=[(525, 440, 560, 480), (495, 445, 525, 475), (405, 445, 440, 475), (60, 260, 500, 335), (1130, 320, 1230, 515), (1170, 525, 1250, 580)],
-         channel='CAM 05 Kassa (Yunusobod)', time='15-10-2026 22:18:50', zone=[(0, 170), (300, 170), (330, 540), (0, 540)], box=(380, 240, 430, 400)),
+    dict(name='yun-cash-night-region', src='reception-arrowe.jpg', crop=(0, 60, 1280, 780), night=True,
+         blur=[(945, 355, 1000, 405), (905, 370, 950, 415), (535, 295, 725, 340), (670, 335, 745, 505)], figures=[('hood', 430, 660, 350, False)],
+         channel='CAM 05 Kassa (Yunusobod)', time='15-10-2026 22:18:50', zone=[(120, 250), (560, 250), (600, 540), (60, 540)], box=(260, 240, 390, 500)),
     # ---- second set (2026-10-22): entrance, lifts, ward door, pharmacy window, halls ----
     dict(name='entry-night-door', src='entrance-ealing-night.jpg', crop=(0, 200, 1280, 920), night=True, gain=1.9,
          blur=[(540, 475, 600, 650)],
@@ -85,8 +85,18 @@ SCENES = [
          blur=[(455, 490, 535, 585), (630, 630, 810, 735)],
          channel='CAM 02 Kassa', time='10-10-2026 18:45:15', zone=[(240, 300), (620, 300), (640, 540), (220, 540)], box=(300, 320, 440, 540)),
     dict(name='entry-night-street', src='entrance-guys-night.jpg', crop=(0, 0, 1280, 720), night=True,
-         blur=[(630, 330, 770, 405), (145, 315, 215, 395), (940, 580, 1015, 610), (110, 515, 200, 565), (560, 425, 780, 455)],
+         blur=[(630, 330, 770, 405), (145, 315, 215, 395), (940, 580, 1015, 610), (110, 515, 200, 565), (560, 425, 780, 455)], figures=[('silhouette', 790, 650, 270, False)],
          channel='CAM 01 Asosiy kirish', time='11-10-2026 02:50:30', zone=[(380, 300), (700, 300), (720, 540), (300, 540)], box=(400, 345, 560, 540)),
+    # ---- staged intruders (cut-out figures, tools/snapshot-sources/figures) ----
+    dict(name='or-night-exit', src='lift-corridor-uddevalla.jpg', crop=(0, 50, 1280, 770), night=True,
+         blur=[(300, 285, 385, 405), (640, 255, 690, 300)], figures=[('silhouette', 1120, 690, 400, False)],
+         channel='CAM 04 Operatsiya bloki', time='04-10-2026 23:58:12', line=[(760, 540), (790, 170)], box=(770, 180, 930, 540)),
+    dict(name='store-night-bag', src='corridor-eskenazi.jpg', crop=(0, 60, 1280, 780), night=True,
+         blur=[(335, 370, 375, 410), (1030, 30, 1240, 150), (615, 215, 690, 270)], figures=[('hood', 640, 600, 370, False)],
+         channel='CAM 03 Dori ombori', time='08-10-2026 00:40:33', zone=[(420, 150), (760, 150), (800, 540), (380, 540)], box=(400, 170, 560, 470)),
+    dict(name='store-night-tamper', src='store-30mdg.jpg', crop=(0, 70, 1280, 790), night=True, tamper=True, gain=1.7,
+         blur=[(820, 90, 1125, 335), (860, 430, 1010, 505), (1105, 525, 1210, 650)],
+         channel='CAM 03 Dori ombori', time='13-10-2026 04:12:57', zone=None, box=None),
 ]
 
 
@@ -178,11 +188,31 @@ def overlay(im, sc):
     return im
 
 
+FIG = os.path.join(SRC, 'figures')
+
+
+def place_figures(im, figures):
+    """Pastes cut-out people (figures/*.png, alpha) into the cropped frame: (file, x of the feet, y of the feet, height, flip)."""
+    for name, x, y, h, flip in figures:
+        f = Image.open(os.path.join(FIG, name + '.png')).convert('RGBA')
+        f = f.resize((max(1, int(f.width * h / f.height)), h), Image.LANCZOS)
+        if flip:
+            f = f.transpose(Image.FLIP_LEFT_RIGHT)
+        sh = Image.new('RGBA', im.size, (0, 0, 0, 0))
+        ImageDraw.Draw(sh).ellipse((x - h * 0.22, y - h * 0.04, x + h * 0.22, y + h * 0.04), fill=(0, 0, 0, 120))
+        sh = sh.filter(ImageFilter.GaussianBlur(h * 0.03))
+        base = im.convert('RGBA'); base.alpha_composite(sh); base.alpha_composite(f, (int(x - f.width / 2), int(y - f.height)))
+        im = base.convert('RGB')
+    return im
+
+
 def build(sc, idx):
     im = Image.open(os.path.join(SRC, sc['src'])).convert('RGB')
     for b in sc.get('blur', []):
         pixelate(im, b)
     im = im.crop(sc['crop'])
+    if sc.get('figures'):
+        im = place_figures(im, sc['figures'])
     im = cctv(im, sc['night'], 1000 + idx, sc.get('gain', 1.0))
     if sc.get('tamper'):
         im = tamper(im, 2000 + idx)

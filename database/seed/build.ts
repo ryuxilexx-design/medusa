@@ -871,13 +871,16 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       ['yun-cash', BY, 'line_crossing', 17, '21:35', '08:05', 'yun-cash-night-line'],
       ['mrk-or', BC, 'line_crossing', 16, '12:30', '12:45', 'or-day-lifts'],
       ['mrk-store', BC, 'region_entrance', 15, '19:30', '08:10', 'store-day-window'],
+      ['mrk-or', BC, 'line_crossing', 14, '23:58', '08:00', 'or-night-exit'],       // somebody leaves through the emergency exit at night
       ['mrk-store', BC, 'region_entrance', 13, '23:40', '08:30', 'store-night-1'],
       ['mrk-or', BC, 'region_entrance', 12, '03:40', '08:00', 'or-night-ward-door'],
       ['yun-cash', BY, 'intrusion', 11, '00:25', '08:05', 'yun-cash-night-hall'],
+      ['mrk-store', BC, 'loitering', 10, '00:40', '08:10', 'store-night-bag'],       // a hooded person lingering at the store door at night
       ['mrk-entry', BC, 'intrusion', 9, '01:05', '08:05', 'reception-night'],
       ['mrk-cash', BC, 'loitering', 8, '18:45', '19:00', 'cash-day-post'],
       ['mrk-entry', BC, 'intrusion', 7, '02:50', '08:10', 'entry-night-street'],
       ['mrk-cash', BC, 'intrusion', 6, '02:15', '07:55', 'cash-night-intrusion'],
+      ['mrk-store', BC, 'tamper', 5, '04:12', '08:05', 'store-night-tamper'],         // the store camera was covered at night
       ['mrk-store', BC, 'loitering', 4, '13:20', '13:35', 'store-day-loitering'],   // somebody hanging around the store door with a bag
       ['yun-cash', BY, 'region_entrance', 3, '22:18', null, 'yun-cash-night-region'],
       ['mrk-or', BC, 'region_entrance', 2, '14:36', '14:50', 'or-day-stranger'],   // a stranger at the operating-block door

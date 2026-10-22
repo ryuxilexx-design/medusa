@@ -370,9 +370,9 @@ function demoSnapshot(kind: EventKind, at: Date, camId: string) {
   const hour = Math.floor(toMinutes(localTime(at)) / 60);
   const night = hour < 8 || hour >= 20;
   const pick = (names: string[]) => names[parseInt(camId.slice(0, 2), 16) % names.length];
-  const name = kind === 'tamper' ? 'cash-tamper'
-    : kind === 'loitering' ? pick(['or-day-loitering', 'store-day-loitering', 'cash-day-post'])
-    : night ? pick(['store-night-1', 'cash-night-intrusion', 'reception-night', 'yun-cash-night-region', 'store-night-2', 'entry-night-door', 'entry-night-glass', 'cash-night-lift', 'or-night-ward-door', 'yun-cash-night-hall', 'entry-night-street'])
+  const name = kind === 'tamper' ? pick(['cash-tamper', 'store-night-tamper'])
+    : kind === 'loitering' ? pick(['or-day-loitering', 'store-day-loitering', 'cash-day-post', 'store-night-bag'])
+    : night ? pick(['store-night-1', 'cash-night-intrusion', 'reception-night', 'yun-cash-night-region', 'store-night-2', 'entry-night-door', 'entry-night-glass', 'cash-night-lift', 'or-night-ward-door', 'yun-cash-night-hall', 'entry-night-street', 'or-night-exit'])
     : pick(['or-day-stranger', 'entry-day-stroller', 'or-day-lifts', 'store-day-window']);
   const bytes = readSeedSnapshot(name);
   return bytes ? { contentType: 'image/jpeg' as const, bytes } : null;
