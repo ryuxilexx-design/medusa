@@ -3,11 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey, qs } from '@/lib/api';
-import { fmtDate, formatSom, fullName, localDate, fmtTime, pid, longDate } from '@/lib/format';
-import { useDebounced } from '@/lib/hooks';
+import { fmtDate, formatSom, localDate, fmtTime, longDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Select, Skeleton, Textarea, useToast } from './ui';
 import { PatientFormModal } from './patient-form';
+import { PatientPicker } from './patient-picker';
 import { useT } from '@/lib/i18n';
 
 export type BookingInit = { patient?: { id: string; last_name: string; first_name: string; patient_number: number }; doctorId?: string; date?: string; time?: string };
@@ -19,7 +19,6 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   const toast = useToast();
   const t = useT();
   const [patient, setPatient] = useState<BookingInit['patient'] | null>(null);
-  const [search, setSearch] = useState('');
   const [doctorId, setDoctorId] = useState('');
   const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState(me.today);
@@ -43,7 +42,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     } else {
       setPatient(init?.patient ?? null); setDoctorId(init?.doctorId ?? ''); setServiceId(''); setDate(init?.date ?? me.today); setTime(init?.time ?? ''); setDuration(''); setNote('');
     }
-    setSearch(''); setErrors({}); setFormError(null);
+    setErrors({}); setFormError(null);
   }, [open, init, reschedule, me.today]);
 
   const doctors = useQuery({ queryKey: ['doctors'], queryFn: () => api('/doctors').then((r) => r.data as any[]), enabled: open });
@@ -67,8 +66,8 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   const pickPatient = (p: BookingInit['patient'] | null) => { setPatient(p); if (p) clearError('patient_id'); };
   // the service is also filled automatically when a doctor is picked: a filled field never keeps its «choose» error
   useEffect(() => { if (serviceId) setErrors((x) => (x.service_id ? { ...x, service_id: '' } : x)); }, [serviceId]);
-  const dq = useDebounced(search, 300);
-  const found = useQuery({ queryKey: ['patients', 'pick', dq], queryFn: () => api(`/patients${qs({ search: dq, page_size: 6 })}`).then((r) => r.data as any[]), enabled: open && !patient && dq.trim().length >= 2 });
+  // the branch comes from the doctor's schedule for that day (availability): no save before it is known
+  const branchKnown = !!reschedule || !!avail.data?.branch_id;
 
   const save = useMutation({
     mutationFn: () => reschedule
@@ -91,7 +90,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     if (!patient) e.patient_id = t('registrar.bk.pickPatient');
     if (!doctorId) e.doctor_id = t('registrar.bk.pickDoctor');
     if (!serviceId) e.service_id = t('registrar.bk.pickService');
-    if (!time) e.start_time = t('registrar.bk.pickSlot');
+    if (!time || !branchKnown) e.start_time = t('registrar.bk.pickSlot');
     setErrors(e); setFormError(null);
     if (!Object.keys(e).length) { if (!save.isPending) save.mutate(); return; }
     // the first field with an error gets the focus: the patient search, a select, or the slot grid
@@ -103,30 +102,11 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   return (
     <>
       <Modal open={open && !newPatient} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-3xl" title={reschedule ? t('registrar.bk.rescheduleTitle') : t('registrar.book')}
-        footer={<><ModalCancel /><Button variant="primary" loading={save.isPending} onClick={submit}>{reschedule ? t('registrar.bk.saveReschedule') : t('registrar.book')}</Button></>}>
+        footer={<><ModalCancel /><Button variant="primary" loading={save.isPending} disabled={!!doctorId && (avail.isLoading || avail.isError)} onClick={submit}>{reschedule ? t('registrar.bk.saveReschedule') : t('registrar.book')}</Button></>}>
         <div ref={panel} className="grid grid-cols-1 gap-4 md:grid-cols-5">
           <div className="space-y-3 md:col-span-2">
             {formError && <Alert tone="red">{formError}</Alert>}
-            <Field label={t('registrar.patient')} required error={errors.patient_id}>{(id) => patient ? (
-              <div className="flex min-h-11 items-center justify-between gap-2 rounded-lg border-2 border-slate-200 bg-slate-50 py-1 pl-3 pr-1 text-[0.9375rem]">
-                <span className="min-w-0 [overflow-wrap:anywhere]"><b>{fullName(patient)}</b> <span className="text-slate-600">{pid(patient.patient_number)}</span></span>
-                {!reschedule && !init?.patient && <Button size="sm" variant="ghost" onClick={() => pickPatient(null)}>{t('registrar.change')}</Button>}
-              </div>
-            ) : (
-              <div>
-                <Input id={id} value={search} invalid={!!errors.patient_id} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.bk.patientSearch')} autoComplete="off" />
-                <div className="mt-1 overflow-hidden rounded-lg border border-slate-200">
-                  {dq.trim().length < 2 ? <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.bk.min2')}</p>
-                    : found.isLoading ? <Skeleton className="m-2 h-6" />
-                    : found.data?.length ? found.data.map((p) => (
-                      <button key={p.id} type="button" onClick={() => pickPatient(p)} className="block min-h-9 w-full px-3 py-1.5 text-left text-sm [overflow-wrap:anywhere] hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">
-                        <b>{fullName(p)}</b> <span className="text-slate-600">{pid(p.patient_number)}, {fmtDate(p.birth_date)}</span>
-                      </button>
-                    )) : <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.patientNotFound')}</p>}
-                  <button type="button" onClick={() => setNewPatient(true)} className="block min-h-9 w-full border-t border-slate-200 px-3 py-1.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{t('registrar.bk.newPatient')}</button>
-                </div>
-              </div>
-            )}</Field>
+            <PatientPicker value={patient ?? null} onChange={pickPatient} error={errors.patient_id} locked={!!reschedule || !!init?.patient} onNew={() => setNewPatient(true)} />
             <Field label={t('registrar.doctor')} required error={errors.doctor_id}>{(id) => (
               <Select id={id} value={doctorId} invalid={!!errors.doctor_id} onChange={(e) => { setDoctorId(e.target.value); setTime(''); clearError('doctor_id'); }}>
                 <option value="">{t('registrar.bk.choose')}</option>

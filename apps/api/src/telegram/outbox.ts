@@ -1,12 +1,19 @@
 import { Q } from '../core/db';
 
-export type NoticeKind = 'reminder_day' | 'reminder_soon' | 'result_ready' | 'cancelled_by_clinic' | 'rescheduled_by_clinic';
+export type NoticeKind = 'reminder_day' | 'reminder_soon' | 'result_ready' | 'cancelled_by_clinic' | 'rescheduled_by_clinic' | 'booked';
 
-/** SQL fragment: active, unblocked chats linked to patient `p` (by the phone Telegram verified). */
+/**
+ * SQL fragment: active, unblocked chats linked to patient `p` by the phone Telegram verified. A family card (a child's
+ * card with the parent's number in contact_phone) belongs to the parent's chat too; a chat never sees a card whose
+ * phones are not its own verified number.
+ */
 export const LINKED_CHATS_SQL = `
   SELECT tc.id, tc.bot_id, tc.chat_id, tc.lang, b.kind AS bot_kind
     FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
-   WHERE tc.tenant_id = p.tenant_id AND tc.phone = p.phone AND tc.phone IS NOT NULL AND NOT tc.blocked AND b.status = 'active'`;
+   WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND tc.phone IN (p.phone, p.contact_phone) AND NOT tc.blocked AND b.status = 'active'`;
+
+/** SQL condition: chat phone `$n` owns patient `p` (own card or a family card with that contact number). */
+export const OWN_CARD_SQL = (param: string) => `(p.phone = ${param} OR p.contact_phone = ${param})`;
 
 /**
  * SQL condition: patient `p` has not refused / withdrawn the Telegram notifications consent. Linking the bot with

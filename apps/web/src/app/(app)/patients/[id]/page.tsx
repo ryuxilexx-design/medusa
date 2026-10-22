@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet } from 'lucide-react';
+import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
 import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -11,6 +11,7 @@ import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, 
 import { AppointmentStatus, InvoiceStatus, LabStatus, NoteStatus } from '@/components/status';
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal } from '@/components/booking';
+import { WalkInModal } from '@/components/walk-in';
 import { LabValues } from '@/components/lab-values';
 import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
 import { useT } from '@/lib/i18n';
@@ -30,6 +31,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   const [tab, setTab] = useState<Tab>('overview');
   const [edit, setEdit] = useState(false);
   const [book, setBook] = useState(false);
+  const [walkIn, setWalkIn] = useState(false);
   const [allergy, setAllergy] = useState(false);
   const [consentKind, setConsentKind] = useState<ConsentKind | null>(null);
   const canEdit = role === 'manager' || role === 'registrar';
@@ -73,6 +75,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
           {canEdit && (
             <div className="flex flex-wrap gap-2">
               <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>
+              <Button icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>
               <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook(true)}>{t('registrar.newAppt')}</Button>
             </div>
           )}
@@ -104,6 +107,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
       </Card>
       <PatientFormModal open={edit} patient={pt} onClose={() => setEdit(false)} />
       <BookingModal open={book} init={{ patient: pt }} onClose={() => setBook(false)} />
+      {canEdit && <WalkInModal open={walkIn} patient={pt} onClose={() => setWalkIn(false)} />}
       {role === 'doctor' && <AllergyModal open={allergy} onClose={() => setAllergy(false)} patient={pt} />}
       {pt.consents && <ConsentModal open={!!consentKind} kind={consentKind ?? 'data_processing'} patientId={pt.id} onClose={() => setConsentKind(null)} />}
     </>

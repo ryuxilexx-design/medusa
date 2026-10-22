@@ -241,4 +241,12 @@ export const registrar = {
   'registrar.q.doneToday': ['Bugun yakunlangan/bekor: {n} ta · {list}', 'Сегодня завершено/отменено: {n} · {list}'],
   'registrar.q.expected': ['Bugun kutilmoqda', 'Ожидаются сегодня'],
   'registrar.q.noExpected': ['Bugun boshqa rejalashtirilgan qabul yo‘q', 'Других запланированных приёмов на сегодня нет'],
+  // walk-in («Hozir qabul qilish»)
+  'registrar.wi.button': ['Hozir qabul qilish', 'Принять сейчас'],
+  'registrar.wi.title': ['Hozir qabul qilish', 'Принять сейчас'],
+  'registrar.wi.hint': ['Eng yaqin bo‘sh vaqt tanlanadi va bemor navbatga qo‘shiladi.', 'Выберется ближайшее свободное время, пациент встанет в очередь.'],
+  'registrar.wi.done': ['Navbat №{n} · {time}, {doctor}', 'Очередь №{n} · {time}, {doctor}'],
+  'registrar.wi.doneTitle': ['Bemor navbatda', 'Пациент в очереди'],
+  'registrar.wi.print': ['Chop etish', 'Распечатать'],
+  'registrar.ap.print': ['Chop etish', 'Распечатать'],
 } as const satisfies Catalog;

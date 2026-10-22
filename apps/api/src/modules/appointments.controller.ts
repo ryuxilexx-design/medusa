@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { appointmentActionSchema, appointmentCreateSchema, appointmentUpdateSchema } from '@meduza/contracts';
+import { appointmentActionSchema, appointmentCreateSchema, appointmentUpdateSchema, walkInSchema } from '@meduza/contracts';
 import { PoolClient } from 'pg';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
@@ -9,10 +9,10 @@ import { audit } from '../core/audit';
 import { addDays, dayStart, localDate, localTime, localToUtc, now, toMinutes, today, weekday } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
 import { createBilledOrder } from './billing';
-import { cancelAppointment, createAppointment, lockAppointment, rescheduleAppointment } from './booking';
+import { cancelAppointment, createAppointment, lockAppointment, rescheduleAppointment, walkInSlot } from './booking';
 
 export const APPT_SELECT = `
-  SELECT a.id, a.branch_id, b.name AS branch_name, a.patient_id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
+  SELECT a.id, a.branch_id, b.name AS branch_name, b.address AS branch_address, b.phone AS branch_phone, a.patient_id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
          a.doctor_id, d.display_name AS doctor_name, d.specialty, a.service_id, s.name AS service_name, s.category AS service_category,
          a.room_id, r.name AS room_name, a.starts_at, a.ends_at, a.status, a.note, a.cancel_reason, a.version, a.source, a.patient_confirmed_at,
          qt.number AS queue_number, qt.arrived_at, qt.started_at, qt.finished_at, qt.wait_seconds, e.id AS encounter_id,
@@ -62,6 +62,31 @@ export class AppointmentsController {
     return this.db.tx(async (c) => {
       const r = await createAppointment(c, ctx, input, requestKey);
       return { data: r.replayed ? { id: r.id, replayed: true } : { id: r.id } };
+    });
+  }
+
+  /**
+   * «Hozir qabul qilish»: the patient is at the desk — book the nearest slot (booking.ts rules) and check them in
+   * (queue number, invoice) in one transaction. 409 NO_SLOT when the doctor has nothing free within the hour.
+   */
+  @Roles('manager', 'registrar') @Post('walk-in')
+  async walkIn(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+    const input = parse(walkInSchema, body);
+    return this.db.tx(async (c) => {
+      // one walk-in per doctor at a time: two desks must not be handed the same slot
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`walk-in:${input.doctor_id}`]);
+      const service = input.service_id
+        ? (await c.query(`SELECT s.id, s.duration_min FROM services s WHERE s.id = $1 AND s.tenant_id = $2 AND s.active`, [input.service_id, ctx.tenantId])).rows[0]
+        : (await c.query(
+          `SELECT s.id, s.duration_min FROM services s JOIN doctor_services ds ON ds.service_id = s.id
+            WHERE ds.doctor_id = $1 AND s.tenant_id = $2 AND s.active ORDER BY (s.category = 'consultation') DESC, s.name LIMIT 1`, [input.doctor_id, ctx.tenantId])).rows[0];
+      if (!service) throw invalid({ service_id: 'Xizmat topilmadi yoki nofaol' });
+      const slot = await walkInSlot(c, ctx.tenantId, input.doctor_id, service.duration_min);
+      if (!slot) throw conflict('NO_SLOT', 'Shifokorda yaqin bir soatda bo‘sh vaqt yo‘q. Boshqa shifokorni tanlang yoki qabulga yozing.');
+      assertBranch(ctx, slot.branch_id);
+      const r = await createAppointment(c, ctx, { patient_id: input.patient_id, service_id: service.id, doctor_id: input.doctor_id, note: input.note ?? null, ...slot }, null, { walkIn: true });
+      const q = await checkInAppointment(c, ctx, r.id);
+      return { data: { id: r.id, queue_number: q.queue_number, invoice_id: q.invoice_id, start_time: slot.start_time } };
     });
   }
 

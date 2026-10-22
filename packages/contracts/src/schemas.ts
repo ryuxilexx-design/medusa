@@ -91,6 +91,8 @@ export const appointmentUpdateSchema = z.object({
   note: optionalText(300),
 });
 export const appointmentActionSchema = z.object({ version: z.number().int().optional(), reason: optionalText(300) });
+/** Walk-in: the registrar picks the doctor (and optionally the service); the server picks the time and checks the patient in. */
+export const walkInSchema = z.object({ patient_id: uuid, doctor_id: uuid, service_id: uuid.optional(), note: optionalText(300) });
 
 const vitalNum = (min: number, max: number, label: string) =>
   z.union([z.number(), z.null()]).optional().refine((v) => v == null || (v >= min && v <= max), `${label}: ${min}–${max} oralig‘ida bo‘lsin`);

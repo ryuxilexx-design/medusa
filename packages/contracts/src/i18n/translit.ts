@@ -97,6 +97,36 @@ export function latinToCyrillic(text: string): string {
   return result + convertRun(text.slice(last));
 }
 
+/**
+ * Uzbek/Russian Cyrillic → Uzbek Latin, for search only (a person types «Каримов» and finds the card stored as
+ * «Karimov»). Letters only; «е» after a vowel or at the start of a word is «ye», «ц» is «ts», ў/ғ/ҳ/қ are o‘/g‘/h/q.
+ */
+const CYR: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p',
+  р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'x', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh', ъ: '’', ы: 'i', ь: '', э: 'e', ю: 'yu', я: 'ya',
+  ў: 'o‘', қ: 'q', ғ: 'g‘', ҳ: 'h',
+};
+const CYR_VOWEL = /[аеёиоуўэюяы]/;
+export function cyrillicToLatin(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i], low = ch.toLowerCase();
+    if (!(low in CYR)) { out += ch; continue; }
+    const prev = text[i - 1]?.toLowerCase();
+    let lat = low === 'е' && (!prev || !/\p{L}/u.test(prev) || CYR_VOWEL.test(prev)) ? 'ye' : CYR[low];
+    if (ch !== low && lat) lat = lat[0].toUpperCase() + lat.slice(1);
+    out += lat;
+  }
+  return out;
+}
+
+/** The search text in the other script (Cyrillic ↔ Latin), or null when it has no letters to convert. */
+export function searchTranslit(q: string): string | null {
+  if (/[Ѐ-ӿ]/.test(q)) return cyrillicToLatin(q);
+  if (/[A-Za-z]/.test(q)) return latinToCyrillic(q);
+  return null;
+}
+
 function convertRun(s: string): string {
   // words include their inner apostrophes (o‘zbek, ma’lumot) so the letter rules see them
   return s.replace(new RegExp(`[A-Za-z](?:[A-Za-z${APOS}]*[A-Za-z])?[${APOS}]?`, 'g'), (w) => {

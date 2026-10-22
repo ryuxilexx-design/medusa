@@ -3,29 +3,65 @@ import { Loader2, Printer, X } from 'lucide-react';
 import { useMeQuery } from '@/lib/session';
 import { fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
 import { BrandMark, BrandWordmark } from './logo';
-import { Button, ErrorState } from './ui';
+import { Button, cx, ErrorState } from './ui';
 import { useT } from '@/lib/i18n';
 
 /** A4 document shell: Med.uz.ai + clinic/branch, patient ID, document number, date, responsible person, status and the DEMO mark. */
-export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, children }: {
+/** Paper: A4 (default), A5 (slips) or a 58 mm thermal ticket (queue number, narrow single column, no footer). */
+export type PaperSize = 'A4' | 'A5' | 'ticket';
+const PAGE_CSS: Record<PaperSize, string> = {
+  A4: '', // globals.css
+  A5: '@media print { @page { size: A5; margin: 10mm; } }',
+  ticket: '@media print { @page { size: 58mm auto; margin: 3mm; } }',
+};
+
+export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, paper = 'A4', toolbar, children }: {
   title: string; number: string; date: string | Date; branch?: string; patient: any; responsible: string; status: string; draft?: boolean; children: React.ReactNode;
   /** Label of the fourth patient-box cell (default «Holat:»). */
   statusLabel?: string;
   /** Replaces the default footer (responsible person, signature, legal note), e.g. a form signed by the patient. */
   footer?: React.ReactNode;
+  paper?: PaperSize;
+  /** Extra controls in the on-screen toolbar (never printed), e.g. the paper switch. */
+  toolbar?: React.ReactNode;
 }) {
   const me = useMeQuery();
   const t = useT();
   const demo = me.data?.demo !== false; // until /me answers, assume demo (never print a real-looking demo document)
+  const ticket = paper === 'ticket';
+  const sheet = ticket ? 'max-w-[58mm] min-h-0 p-[3mm] text-[0.6875rem] leading-snug' : paper === 'A5' ? 'max-w-[148mm] min-h-[210mm] p-[10mm] text-[0.8125rem] leading-relaxed' : 'max-w-[210mm] min-h-[297mm] p-[14mm] text-[0.8125rem] leading-relaxed';
+  if (ticket) return (
+    <div className="min-h-screen bg-slate-200 py-6 print:bg-white print:py-0">
+      <title>{`${title} ${number} — Med.uz.ai`}</title>
+      <style>{PAGE_CSS.ticket}</style>
+      <div className="no-print mx-auto mb-3 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 px-4 print:hidden">
+        <Button variant="ghost" icon={<X className="h-5 w-5" />} onClick={() => window.close()}>{t('print.close')}</Button>
+        {toolbar}
+        <Button variant="primary" className="ml-auto max-w-full !whitespace-normal text-center" icon={<Printer className="h-5 w-5 shrink-0" />} onClick={() => window.print()}>{t('print.print')}</Button>
+      </div>
+      <article className={cx('relative mx-auto overflow-hidden bg-white text-slate-900 shadow-lg print:max-w-none print:p-0 print:shadow-none', sheet)}>
+        <header className="flex items-center gap-2 border-b border-dashed border-slate-500 pb-2">
+          <BrandMark compact className="h-7 w-7" />
+          <div className="min-w-0"><div className="text-xs font-bold leading-tight">{me.data?.clinic_name ?? '…'}</div>{branch && <div className="truncate text-[0.625rem] text-slate-600">{branch}</div>}</div>
+        </header>
+        {demo && <div className="mt-1 text-center text-[0.625rem] font-bold text-red-700">{t('print.demoMark')}</div>}
+        <div className="mt-2 font-bold">{fullName(patient, true)} <span className="font-normal text-slate-600">{pid(patient?.patient_number)}</span></div>
+        <div className="mt-2">{children}</div>
+        <div className="mt-3 border-t border-dashed border-slate-500 pt-1 text-[0.625rem] text-slate-600">{fmtDateTime(date)} · {number}</div>
+      </article>
+    </div>
+  );
   return (
     <div className="min-h-screen bg-slate-200 py-6 print:bg-white print:py-0">
       {/* the tab title is also the file name offered by «Save as PDF» */}
       <title>{`${title} ${number} — Med.uz.ai`}</title>
+      {PAGE_CSS[paper] && <style>{PAGE_CSS[paper]}</style>}
       <div className="no-print mx-auto mb-3 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 px-4 print:hidden">
         <Button variant="ghost" icon={<X className="h-5 w-5" />} onClick={() => window.close()}>{t('print.close')}</Button>
+        {toolbar}
         <Button variant="primary" className="ml-auto max-w-full !whitespace-normal text-center" icon={<Printer className="h-5 w-5 shrink-0" />} onClick={() => window.print()}>{t('print.print')}</Button>
       </div>
-      <article className="relative mx-auto min-h-[297mm] max-w-[210mm] overflow-hidden bg-white p-[14mm] text-[0.8125rem] leading-relaxed text-slate-900 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none">
+      <article className={cx('relative mx-auto overflow-hidden bg-white text-slate-900 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none', sheet)}>
         {demo && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <span className="-rotate-[30deg] select-none whitespace-nowrap text-[2.625rem] font-black tracking-widest text-slate-200/60 print:text-slate-200">{t('print.demoMark')}</span>
         </div>}
