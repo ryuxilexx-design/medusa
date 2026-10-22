@@ -72,7 +72,7 @@ export class SessionController {
 
   @AllowDuringPasswordChange() @Get('me')
   async me(@CurrentCtx() ctx: Ctx) {
-    const branches = await this.db.rows(`SELECT id, name, code FROM branches WHERE tenant_id = $1 AND id = ANY($2) ORDER BY code`, [ctx.tenantId, ctx.branchIds]);
+    const branches = await this.db.rows(`SELECT id, name, code FROM branches WHERE tenant_id = $1 AND id = ANY($2) AND active ORDER BY code`, [ctx.tenantId, ctx.branchIds]);
     return {
       data: {
         membership_id: ctx.membershipId, name: ctx.name, title: ctx.title, role: ctx.role, tenant_id: ctx.tenantId, clinic_name: ctx.tenantName,

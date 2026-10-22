@@ -12,6 +12,7 @@ Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server teks
 | Indekslar va baza ulanishi (migratsiya 015): jadval 23 s → ~50 ms, qidiruv trigram, uzilishda API yiqilmaydi | Ishlaydi | Yuk auditi indeks tajribasi; API testi ulanish uzilishi |
 | Shaxsiy yangiliklar: 25 mutaxassislik, 5 tagacha qo‘shimcha mavzu, saqlash, «o‘qildi», shifokor menyusida «Yangiliklar» | Ishlaydi | API testi, E2E `news` |
 | Tadqiqot: O‘zbekiston shakllari va integratsiyalar, shifokor vaqti — `docs/research/` | Hujjat | — |
+| Katalogni rahbar o‘zi boshqaradi, SQL kerak emas (migratsiya `020_catalog.sql`): Sozlamalar → Xizmatlar — «Xizmat qo‘shish» (nomi, turi, narx, davomiylik, ulush, faol; kod avtomatik C/L/U/P), tahrirlashda tur, ulush, natija shakli (API) va **filial narxi** (filial narxi umumiydan ustun, eski buyurtmalar narxi o‘zgarmaydi); Sozlamalar → Klinika — filial qo‘shish/tahrirlash (nomi, kod, manzil, telefon, faol; yangi filial rahbarga avtomatik biriktiriladi, nofaol filial sarlavha ro‘yxatidan yo‘qoladi, oxirgi faol filial o‘chmaydi) va xona qo‘shish/tahrirlash; Ombor — «Tovar qo‘shish» va tahrirlash (nomi, birlik, filial, minimum, faol). Hech narsa o‘chirilmaydi — nofaol qilinadi | Ishlaydi | API testi `reference.test.mjs` (9 ta): yaratish/o‘zgartirish, 403 (registrator, kassir), boshqa klinika 404, nom takrori 409, `billing.currentPrice` filial narxi, audit yozuvlari; brauzerda uz/ru 1366×768 va 390 px — yon siljish yo‘q |
 
 ## 000000000000. 0.10: Hikvision kameralari
 
@@ -304,8 +305,8 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 | M-10 Kassa | Ishlaydi | 0.6: smena va qaytarish; chegirma oqimi soddalashtirilgan (1.3) |
 | M-11 Moliya | Ishlaydi | 0.6: xarajat kiritish/bekor qilish, smenalar, qaytarishlar, sof natija |
 | M-12 Xodimlar, ulush | Ishlaydi (P1) | 0.2: xodim qo‘shish/tahrirlash/parol tiklash/faolsizlantirish. 0.2: haftalik jadvalni tahrirlash. Bir martalik istisnolar (ta’til), payroll — Rejada |
-| M-13 Ombor | Ishlaydi (P1) | Avtomatik yechish, partiya — Rejada |
-| M-14 Sozlamalar | Ishlaydi | Logotip, shablon maydonlari, modul ko‘rinishi — Rejada |
+| M-13 Ombor | Ishlaydi (P1): tovar qo‘shish/tahrirlash, kirim/chiqim | Avtomatik yechish, partiya — Rejada |
+| M-14 Sozlamalar | Ishlaydi: klinika nomi, filiallar, xonalar, xizmatlar (narx, filial narxi, ulush) — rahbar o‘zi kiritadi | Logotip, shablon maydonlari, modul ko‘rinishi, laboratoriya natija shaklini formada tahrirlash — Rejada |
 | AI-01 qaydni tartiblash | Namunaviy AI | `AI_MODE=sample` (standart): faqat demo matni. `live` rejim kodda bor, **haqiqiy kalit bilan sinalmagan** |
 | AI-02 rahbar savollari | Ishlaydi (AI emas) | SQL natijasidan shablon; ekranda «bu AI emas» deb yozilgan |
 | Telegram bot (bemorlar) | Ishlaydi (0.3) | 00-bo‘lim. Haqiqiy Telegram tokeni bilan hali sinalmagan |

@@ -143,12 +143,74 @@ export const paymentSchema = z.object({
 });
 export const voidSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
 
+// ---------- Catalogue (manager-only: services, rooms, branches, stock items) ----------
+export const SERVICE_CATEGORIES = ['consultation', 'lab', 'ultrasound', 'procedure'] as const;
+export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number];
+const serviceCategory = z.enum(SERVICE_CATEGORIES, { errorMap: () => ({ message: 'Xizmat turini tanlang' }) });
+const priceTiyin = z.number({ invalid_type_error: 'Narxni kiriting' }).int('Narx tiyinda butun son bo‘lsin').min(0, 'Narx manfiy bo‘lmasin').max(1_000_000_000_00, 'Narx juda katta');
+const sharePercent = z.number({ invalid_type_error: 'Ulushni kiriting' }).min(0, 'Ulush 0–100 oralig‘ida bo‘lsin').max(100, 'Ulush 0–100 oralig‘ida bo‘lsin')
+  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'Ulush ko‘pi bilan 2 ta kasr xona');
+const durationMin = z.number({ invalid_type_error: 'Davomiylikni kiriting' }).int('Davomiylik butun son bo‘lsin').min(5, 'Davomiylik 5–240 daqiqa bo‘lsin').max(240, 'Davomiylik 5–240 daqiqa bo‘lsin');
+/** One row of a lab service's result form: what the laborant fills in and the reference range shown to the doctor. */
+export const labTemplateRowSchema = z.object({
+  code: z.string().trim().min(1).max(20),
+  name: trimmed(1, 80, 'Ko‘rsatkich nomi'),
+  unit: z.string().trim().max(20).default(''),
+  ref_low: z.number().nullable().default(null),
+  ref_high: z.number().nullable().default(null),
+  ref_text: z.string().trim().max(80).nullable().default(null),
+});
+export const labTemplateSchema = z.array(labTemplateRowSchema).max(30, 'Ko‘pi bilan 30 ta ko‘rsatkich');
+
+export const serviceCreateSchema = z.object({
+  name: trimmed(2, 120, 'Nomi'),
+  category: serviceCategory,
+  price: priceTiyin, // tiyin, general price (all branches)
+  duration_min: durationMin,
+  share_percent: sharePercent.default(0),
+  lab_template: labTemplateSchema.nullable().optional(),
+  active: z.boolean().default(true),
+});
 export const servicePatchSchema = z.object({
   name: trimmed(2, 120, 'Nomi').optional(),
-  price: z.number().int().min(0, 'Narx manfiy bo‘lmasin').optional(), // tiyin
-  duration_min: z.number().int().min(5).max(240).optional(),
+  category: serviceCategory.optional(),
+  price: priceTiyin.optional(), // tiyin
+  /** with `price`: the price applies to this branch only (NULL/absent = the general price) */
+  branch_id: uuid.nullable().optional(),
+  duration_min: durationMin.optional(),
+  share_percent: sharePercent.optional(),
+  lab_template: labTemplateSchema.nullable().optional(),
   active: z.boolean().optional(),
 });
+
+export const roomCreateSchema = z.object({
+  name: trimmed(1, 60, 'Xona nomi'),
+  branch_id: uuid,
+  purpose: optionalText(80),
+  active: z.boolean().default(true),
+});
+export const roomPatchSchema = roomCreateSchema.partial();
+
+export const branchCreateSchema = z.object({
+  name: trimmed(2, 80, 'Filial nomi'),
+  code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,8}$/, 'Kod 2–8 ta lotin harfi yoki raqam').optional(),
+  address: optionalText(200),
+  phone,
+  active: z.boolean().default(true),
+});
+export const branchPatchSchema = branchCreateSchema.omit({ code: true }).partial();
+
+const qty = z.number().min(0, 'Miqdor manfiy bo‘lmasin').max(1_000_000, 'Miqdor juda katta')
+  .refine((q) => Math.abs(q * 100 - Math.round(q * 100)) < 1e-6, 'Ko‘pi bilan 2 ta kasr xona');
+export const inventoryItemCreateSchema = z.object({
+  name: trimmed(2, 100, 'Material nomi'),
+  unit: trimmed(1, 20, 'O‘lchov birligi'),
+  branch_id: uuid,
+  minimum_qty: qty.default(0),
+  opening_qty: qty.default(0),
+  active: z.boolean().default(true),
+});
+export const inventoryItemPatchSchema = inventoryItemCreateSchema.omit({ opening_qty: true }).partial();
 export const clinicPatchSchema = z.object({ name: trimmed(2, 120, 'Klinika nomi') });
 
 export const inventoryMovementSchema = z.object({
