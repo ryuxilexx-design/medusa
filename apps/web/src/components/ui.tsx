@@ -1,5 +1,5 @@
 'use client';
-import { createContext, forwardRef, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { createContext, forwardRef, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Loader2, RefreshCw, X, XCircle } from 'lucide-react';
@@ -23,7 +23,7 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button({ 
     success: 'glass-btn border-transparent !bg-emerald-700/90 !text-white hover:!bg-emerald-800',
   }[variant];
   return (
-    <button ref={ref} disabled={disabled || loading} aria-busy={loading || undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-full border-2 font-bold transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-60 aria-busy:opacity-100 whitespace-nowrap',
+    <button ref={ref} disabled={disabled || loading} aria-busy={loading || undefined} className={cx('press inline-flex items-center justify-center gap-2 rounded-full border-2 font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-60 aria-busy:opacity-100 whitespace-nowrap',
       size === 'sm' ? 'min-h-10 px-4 text-sm' : 'min-h-12 px-5 text-[0.9375rem]', styles, className)} {...rest}>
       {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : icon}
       {children}
@@ -33,7 +33,7 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button({ 
 
 export function LinkButton({ href, children, variant = 'secondary', icon, className, size = 'md', target }: { href: string; children: React.ReactNode; variant?: 'primary' | 'secondary' | 'ghost'; icon?: React.ReactNode; className?: string; size?: 'sm' | 'md'; target?: '_blank' }) {
   const styles = { primary: 'glass-btn glass-btn-tint border-transparent', secondary: 'glass-btn border-transparent', ghost: 'border-transparent text-brand-700 hover:bg-white/60' }[variant];
-  return <Link href={href} target={target} rel={target ? 'noopener' : undefined} className={cx('inline-flex items-center justify-center gap-2 rounded-full border-2 font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 whitespace-nowrap', size === 'sm' ? 'min-h-10 px-4 text-sm' : 'min-h-12 px-5 text-[0.9375rem]', styles, className)}>{icon}{children}</Link>;
+  return <Link href={href} target={target} rel={target ? 'noopener' : undefined} className={cx('press inline-flex items-center justify-center gap-2 rounded-full border-2 font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 whitespace-nowrap', size === 'sm' ? 'min-h-10 px-4 text-sm' : 'min-h-12 px-5 text-[0.9375rem]', styles, className)}>{icon}{children}</Link>;
 }
 
 // ---------- Form fields ----------
@@ -192,6 +192,35 @@ export function Pagination({ page, pageSize, total, onPage }: { page: number; pa
 }
 
 // ---------- Tabs ----------
+// ---------- Sliding pill ----------
+/**
+ * The raised capsule of a segmented control / tab bar. It is one element that slides (on the spring) to whatever
+ * child of `container` carries `data-active="true"`; the items themselves only change their text colour.
+ * The container is `relative`; the pill sits under the items (z-0), so give the items `relative z-[1]`.
+ */
+export function SlidingPill({ container, active, className }: { container: React.RefObject<HTMLElement | null>; active: string | number | boolean; className?: string }) {
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const ready = useRef(false);
+  // useEffect, not useLayoutEffect: the container's ref is attached after this child's layout effects would run
+  useEffect(() => {
+    const c = container.current; if (!c) return;
+    const measure = () => {
+      const el = c.querySelector<HTMLElement>('[data-active="true"]');
+      if (!el) { setBox(null); return; }
+      setBox((b) => (b && b.x === el.offsetLeft && b.y === el.offsetTop && b.w === el.offsetWidth && b.h === el.offsetHeight) ? b : { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    };
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(c);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
+  useLayoutEffect(() => { if (box) { const t = setTimeout(() => { ready.current = true; }, 50); return () => clearTimeout(t); } }, [box]);
+  if (!box) return null;
+  // the first position is taken without a transition (no slide in from the corner); .glass > * would make it relative
+  return <div aria-hidden="true" className={cx('pill pointer-events-none !absolute left-0 top-0 !z-0', !ready.current && '!transition-none', className)}
+    style={{ width: box.w, height: box.h, transform: `translate(${box.x}px, ${box.y}px)` }} />;
+}
+
 export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: React.ReactNode; count?: number }[] }) {
   const list = useRef<HTMLDivElement>(null);
   // a selected tab outside the visible strip (narrow card, link to ?status=…) is scrolled into view
@@ -204,10 +233,11 @@ export function Tabs<T extends string>({ value, onChange, items }: { value: T; o
     else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth + 8;
   }, [value]);
   return (
-    <div ref={list} className="flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-slate-100 p-1" role="tablist">
+    <div ref={list} className="relative flex max-w-full gap-0.5 overflow-x-auto rounded-full bg-slate-100 p-1" role="tablist">
+      <SlidingPill container={list} active={value} className="rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.12)]" />
       {items.map((it) => (
-        <button key={it.value} role="tab" aria-selected={value === it.value} onClick={() => onChange(it.value)}
-          className={cx('min-h-10 whitespace-nowrap rounded-full px-4 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', value === it.value ? 'bg-white text-brand-800 shadow-[0_2px_8px_rgba(15,23,42,0.12)]' : 'text-slate-600 hover:text-slate-900')}>
+        <button key={it.value} role="tab" aria-selected={value === it.value} data-active={value === it.value} onClick={() => onChange(it.value)}
+          className={cx('press relative z-[1] min-h-10 whitespace-nowrap rounded-full px-4 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', value === it.value ? 'text-brand-800' : 'text-slate-600 hover:text-slate-900')}>
           {it.label}{it.count != null && <span className="ml-1.5 rounded-full bg-slate-200/80 px-1.5 text-xs text-slate-700">{it.count}</span>}
         </button>
       ))}
@@ -260,11 +290,11 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-l
   if (!open || typeof document === 'undefined') return null;
   // rendered at the end of <body>: never inherits table/space-y styles of the place that opened it
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 pt-[4vh] backdrop-blur-sm print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) tryClose(); }}>
-      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx('flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-[1.75rem] border border-white bg-white text-left shadow-[0_30px_60px_-20px_rgba(10,30,70,0.45)]', width)}>
+    <div className="modal-backdrop fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/30 p-4 pt-[4vh] backdrop-blur-sm print:hidden" onMouseDown={(e) => { if (e.target === e.currentTarget) tryClose(); }}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby={titleId} className={cx('modal-panel flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-[1.75rem] border border-white bg-white text-left shadow-[0_30px_60px_-20px_rgba(10,30,70,0.45)]', width)}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-3.5">
           <h2 id={titleId} className="min-w-0 text-lg font-bold text-slate-900">{title}</h2>
-          <button data-close onClick={tryClose} className="shrink-0 rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
+          <button data-close onClick={tryClose} className="press shrink-0 rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')}><X className="h-5 w-5" /></button>
         </div>
         {confirming && (
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-5 py-2 text-sm text-amber-900">
@@ -300,7 +330,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {/* below lg the phone tab bar sits at the bottom: toasts stay above it */}
       <div className="pointer-events-none fixed bottom-24 right-4 z-[60] flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-2 print:hidden lg:bottom-4" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} aria-live={t.tone === 'error' ? 'assertive' : undefined} className={cx('pointer-events-auto flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-[0.9375rem] font-medium shadow-lg backdrop-blur', t.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : t.tone === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900')}>
+          <div key={t.id} role={t.tone === 'error' ? 'alert' : 'status'} aria-live={t.tone === 'error' ? 'assertive' : undefined} className={cx('toast-in pointer-events-auto flex items-start gap-2.5 rounded-2xl border px-4 py-3 text-[0.9375rem] font-medium shadow-lg backdrop-blur', t.tone === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : t.tone === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-sky-200 bg-sky-50 text-sky-900')}>
             {t.tone === 'success' ? <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" /> : t.tone === 'error' ? <XCircle className="mt-0.5 h-5 w-5 shrink-0" /> : <Info className="mt-0.5 h-5 w-5 shrink-0" />}
             <span>{t.text}</span>
           </div>

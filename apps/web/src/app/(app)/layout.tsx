@@ -11,7 +11,7 @@ import type { MessageKey, Role } from '@meduza/contracts';
 import { meReconnecting, SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
 import { fmtTime, localDate, longDate } from '@/lib/format';
 import { useI18n, useT } from '@/lib/i18n';
-import { Button, cx, Modal, Select } from '@/components/ui';
+import { Button, cx, Modal, Select, SlidingPill } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
 import { LanguagePicker, LanguageSwitch } from '@/components/prefs';
 import { confirmLeave, hasUnsaved, NavigationGuard } from '@/lib/unsaved';
@@ -239,6 +239,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
   function closeNav() { setNavOpen(false); burger.current?.focus(); }
   // a short screen (1366×768) cannot show all 15 sections: a fade at the bottom says the list goes on
   const navEl = useRef<HTMLElement>(null);
+  const tabbar = useRef<HTMLElement>(null);
   const [navMore, setNavMore] = useState(false);
   useEffect(() => {
     const el = navEl.current; if (!el) return;
@@ -265,7 +266,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
       <title>{pageTitle}</title>
       <a href="#main" className="sr-only z-[70] rounded-lg bg-white px-4 py-3 font-semibold text-brand-800 shadow-lg focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:outline-none focus:ring-4 focus:ring-amber-300">{t('shell.skipToContent')}</a>
       {/* Liquid Glass: the menu is a floating glass panel, detached from the edges; a drawer below lg */}
-      <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('glass fixed bottom-4 left-4 top-4 z-40 flex w-[16.5rem] flex-col transition-transform print:hidden lg:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1.5rem)]')}>
+      <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('glass drawer fixed bottom-4 left-4 top-4 z-40 flex w-[16.5rem] flex-col print:hidden lg:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1.5rem)]')}>
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 pl-5 pr-2">
           <Link href="/" className="rounded-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('nav.home')}><BrandLockup /></Link>
           <Button variant="ghost" className="!px-2.5 text-slate-700 lg:hidden" onClick={closeNav} aria-label={t('nav.close')}><X className="h-6 w-6" /></Button>
@@ -284,7 +285,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
                 const Icon = it.icon;
                 return (
                   <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined}
-                    className={cx('mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [@media(max-height:820px)]:mb-0.5 [@media(max-height:820px)]:min-h-11',
+                    className={cx('press mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [@media(max-height:820px)]:mb-0.5 [@media(max-height:820px)]:min-h-11',
                       active ? 'glass-on text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
                     <Icon className={cx('h-[1.375rem] w-[1.375rem] shrink-0', active ? 'text-brand-700' : 'text-slate-700')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
                   </Link>
@@ -327,19 +328,20 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
       )}
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1440px] px-4 py-6 focus:outline-none lg:px-8">{allowed ? children : <NoAccess role={me.role} />}</main>
       {/* phone and tablet: a floating capsule tab bar with the first sections; «Menyu» opens the full list */}
-      <nav aria-label={t('nav.menu')} className="glass glass-pill fixed bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-0.5 p-1.5 print:hidden lg:hidden">
+      <nav ref={tabbar} aria-label={t('nav.menu')} className="glass glass-pill fixed bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-0.5 p-1.5 print:hidden lg:hidden">
+        <SlidingPill container={tabbar} active={pathname} className="glass-on rounded-full" />
         {items.slice(0, 4).map((it, i) => {
           const active = pathname === it.href || pathname.startsWith(it.href + '/');
           const Icon = it.icon;
           return (
-            <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined}
-              className={cx('min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold', i === 3 ? 'hidden sm:flex' : 'flex', active ? 'glass-on text-brand-800' : 'text-slate-900')}>
+            <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
+              className={cx('press relative z-[1] min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold', i === 3 ? 'hidden sm:flex' : 'flex', active ? 'text-brand-800' : 'text-slate-900')}>
               <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5.5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
             </Link>
           );
         })}
         <button type="button" onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-controls="app-menu"
-          className="flex min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold">
+          className="press relative z-[1] flex min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold">
           <Menu className="h-5 w-5" /><span>{t('nav.more')}</span>
         </button>
       </nav>

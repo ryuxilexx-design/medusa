@@ -13,6 +13,11 @@
   --accent: #0a58ca;
   /* height of the phone tab bar + its gap: sticky action bars sit above it (bottom: var(--tabbar)) */
   --tabbar: 5rem;
+  /* Motion «Prujina» (chosen 2026-10-22): one spring for everything that moves — a press shrinks fast, the release,
+     a page, a dialog, a toast and a moving pill all spring back with a small overshoot. transform/opacity only. */
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --spring-soft: cubic-bezier(0.34, 1.3, 0.64, 1);
+  --spring-ms: 450ms;
 }
 /* 18px base for every reader; sizes are in rem, so they all follow the root. */
 html { font-size: 112.5%; }
@@ -88,6 +93,37 @@ body {
   .glass::after { display: none; }
   .glass-btn-tint { background: var(--accent); }
   body { background: #dfe7f1; }
+}
+
+/* ---------- Motion ----------
+   .press      any button/link: shrinks on the press (fast), springs back on release.
+   .page-enter the route's content: slides in from the right on a spring; rows and list items follow one by one.
+   .pill       the raised capsule that slides between the items of a segmented control / tab bar (SlidingPill). */
+.press { transition: transform var(--spring-ms) var(--spring), background-color 150ms, color 150ms, opacity 150ms; }
+.press:active:not(:disabled) { transform: scale(0.94); transition-duration: 80ms; transition-timing-function: ease-out; }
+.pill { transition: transform var(--spring-ms) var(--spring-soft), width var(--spring-ms) var(--spring-soft), height var(--spring-ms) var(--spring-soft); }
+.page-enter { animation: page-in 500ms var(--spring-soft) both; }
+@keyframes page-in { from { transform: translateX(34px) scale(0.97); opacity: 0; } }
+.page-enter tbody > tr, .page-enter .divide-y > *, .page-enter .stagger > * { animation: row-in 550ms var(--spring-soft) both; animation-delay: 80ms; }
+.page-enter tbody > tr:nth-child(2), .page-enter .divide-y > :nth-child(2), .page-enter .stagger > :nth-child(2) { animation-delay: 135ms; }
+.page-enter tbody > tr:nth-child(3), .page-enter .divide-y > :nth-child(3), .page-enter .stagger > :nth-child(3) { animation-delay: 190ms; }
+.page-enter tbody > tr:nth-child(4), .page-enter .divide-y > :nth-child(4), .page-enter .stagger > :nth-child(4) { animation-delay: 245ms; }
+.page-enter tbody > tr:nth-child(5), .page-enter .divide-y > :nth-child(5), .page-enter .stagger > :nth-child(5) { animation-delay: 300ms; }
+.page-enter tbody > tr:nth-child(6), .page-enter .divide-y > :nth-child(6), .page-enter .stagger > :nth-child(6) { animation-delay: 355ms; }
+.page-enter tbody > tr:nth-child(7), .page-enter .divide-y > :nth-child(7), .page-enter .stagger > :nth-child(7) { animation-delay: 410ms; }
+.page-enter tbody > tr:nth-child(8), .page-enter .divide-y > :nth-child(8), .page-enter .stagger > :nth-child(8) { animation-delay: 465ms; }
+.page-enter tbody > tr:nth-child(n+9), .page-enter .divide-y > :nth-child(n+9), .page-enter .stagger > :nth-child(n+9) { animation-delay: 520ms; }
+@keyframes row-in { from { transform: translateY(14px); opacity: 0; } }
+.modal-backdrop { animation: fade-in 250ms ease-out both; }
+.modal-panel { animation: modal-in 500ms var(--spring) both; }
+@keyframes modal-in { from { transform: translateY(40px) scale(0.92); opacity: 0; } }
+.toast-in { animation: toast-in 550ms var(--spring) both; }
+@keyframes toast-in { from { transform: translateY(30px) scale(0.9); opacity: 0; } }
+@keyframes fade-in { from { opacity: 0; } }
+.drawer { transition: transform var(--spring-ms) var(--spring-soft); }
+@media (prefers-reduced-motion: reduce) {
+  .press, .pill, .drawer { transition-duration: 1ms; }
+  .page-enter, .page-enter tbody > tr, .page-enter .divide-y > *, .page-enter .stagger > *, .modal-backdrop, .modal-panel, .toast-in { animation: none; }
 }
 
 @media print {

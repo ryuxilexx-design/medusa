@@ -4,7 +4,8 @@ import { Languages } from 'lucide-react';
 import { LOCALES, type Locale } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { useI18n } from '@/lib/i18n';
-import { cx, useToast } from '@/components/ui';
+import { useRef } from 'react';
+import { cx, SlidingPill, useToast } from '@/components/ui';
 
 /** Saves the interface language for the signed-in person and keeps the cached /me in step. */
 function usePersist() {
@@ -32,14 +33,16 @@ function useChangeLocale(signedIn: boolean) {
 export function LanguageSwitch({ signedIn = false }: { signedIn?: boolean }) {
   const { locale, t } = useI18n();
   const change = useChangeLocale(signedIn);
+  const group = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div role="group" aria-label={t('pref.language')} className="glass-field hidden h-11 shrink-0 items-center gap-0.5 rounded-full p-1 md:inline-flex">
+      <div ref={group} role="group" aria-label={t('pref.language')} className="glass-field relative hidden h-11 shrink-0 items-center gap-0.5 rounded-full p-1 md:inline-flex">
+        <SlidingPill container={group} active={locale} className="rounded-full bg-white shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]" />
         {LOCALES.map((l) => (
-          <button key={l.id} type="button" lang={LANG_TAG[l.id]} aria-pressed={locale === l.id} aria-label={l.label} title={l.label}
+          <button key={l.id} type="button" lang={LANG_TAG[l.id]} aria-pressed={locale === l.id} data-active={locale === l.id} aria-label={l.label} title={l.label}
             onClick={() => locale !== l.id && void change(l.id)}
-            className={cx('h-full min-w-[2.75rem] rounded-full px-2.5 text-sm font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-              locale === l.id ? 'bg-white text-brand-800 shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]' : 'text-slate-800 hover:bg-white/50')}>
+            className={cx('press relative z-[1] h-full min-w-[2.75rem] rounded-full px-2.5 text-sm font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+              locale === l.id ? 'text-brand-800' : 'text-slate-800 hover:bg-white/50')}>
             {SHORT[l.id]}
           </button>
         ))}

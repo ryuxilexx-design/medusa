@@ -15,6 +15,12 @@ Interfeys Apple’ning Liquid Glass (iOS 26) materialida, «Clear» variantida. 
   Safari’da blur), yuqori chetida yorug‘lik chizig‘i, pastida ozgina qoraytiruvchi parda (matn o‘qilishi uchun).
   `prefers-reduced-transparency` yoki eski brauzerda — oq panellar, bir xil joylashuv.
 - **Shakl:** konsentrik yumaloqlik — panel 28 px, karta 22 px, tugma va maydonlar kapsula (`rounded-full`, h ≥ 48).
+- **Harakat «Prujina» (2026-10-22 dan):** butun ilovada bitta prujina (`--spring`, `--spring-soft`, `globals.css`
+  «Motion»). Tugma bosilganda tez kichrayadi (`.press`, 0,94, 80 ms), qo‘yib yuborilganda ozgina «sakrab» qaytadi
+  (450 ms). Yangi sahifa o‘ngdan prujinada kiradi (`(app)/template.tsx` → `.page-enter`), jadval qatorlari va
+  `.divide-y`/`.stagger` ro‘yxat elementlari birin-ketin ko‘tariladi. Oyna (`.modal-panel`), xabar (`.toast-in`),
+  segmentli tanlagich va tab bar kapsulasi (`SlidingPill`) ham shu prujinada. Faqat `transform`/`opacity`;
+  `prefers-reduced-motion` da hammasi o‘chadi (E2E shu rejimda yuradi). Boshqa uslub (to‘lqin, shu’la) qo‘shilmaydi.
 - Rang, matn o‘lchami va kontrast qoidalari (1–2-bo‘limlar) o‘z kuchida: shisha ustidagi matn `slate-900`,
   ikkinchi darajali `slate-700` (shishada `slate-600` ishlatilmaydi).
 

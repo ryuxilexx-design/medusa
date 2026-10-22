@@ -12,6 +12,8 @@ export async function newPage(browser, errors) {
   const ctx = await browser.createBrowserContext();
   const page = await ctx.newPage();
   await page.setViewport({ width: 1366, height: 768 });
+  // the spring animations (globals.css «Motion») are switched off in tests: clicks land on elements that stand still
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
   page.on('console', (m) => { if (m.type() === 'error') errors.push(`[console] ${m.text()}`); });
   page.on('pageerror', (e) => errors.push(`[pageerror] ${e.message}`));
   page.on('response', (r) => { if (r.status() >= 500) errors.push(`[${r.status()}] ${r.url()}`); });
