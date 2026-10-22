@@ -357,10 +357,12 @@ test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilga
     r = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya' });
     assert.deepEqual(r.body.data.suggestions.map((x) => x.code), ['I10']);
 
+    // only the note-draft calls are counted: the doctor's news feed summarises articles through the same fake Gemini in the background
+    const noteCalls = () => gem.calls.filter((c) => JSON.stringify(c.body?.systemInstruction ?? '').includes('tartiblovchisan')).length;
     gem.next = 'overloaded'; // 503 once: retried after a second
-    const before503 = gem.calls.length;
+    const before503 = noteCalls();
     r = await doctor.post('/ai/note-draft', { text: 'Bemor yo‘taldan shikoyat qiladi.' });
-    assert.equal(r.status, 200, r.text); assert.equal(gem.calls.length, before503 + 2, 'bir marta qayta so‘raldi');
+    assert.equal(r.status, 200, r.text); assert.equal(noteCalls(), before503 + 2, 'bir marta qayta so‘raldi');
 
     config.ai.timeoutMs = 800; gem.next = 'stall'; // headers arrive, the body stalls: a timeout, not "bad output"
     r = await doctor.post('/ai/note-draft', { text: 'Bemor yo‘taldan shikoyat qiladi.' });
@@ -389,7 +391,7 @@ test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilga
 
     // a real clinic on the free tier: no clinical text leaves the server; ICD-10 falls back to word search
     config.mode = 'production';
-    const calls = gem.calls.length;
+    const calls = noteCalls();
     assert.equal((await doctor.get('/ai/status')).body.data.mode, 'off');
     const me = (await doctor.get('/me')).body.data;
     assert.equal(me.ai_mode, 'off', 'shifokor tugmasi ham o‘chadi'); assert.match(me.ai_off_reason, /Bepul Gemini/);
@@ -397,7 +399,7 @@ test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilga
     assert.equal(r.status, 503); assert.equal(r.body.error.code, 'AI_NOT_ALLOWED'); assert.match(r.body.error.message, /Bepul Gemini/);
     r = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya' });
     assert.equal(r.body.data.mode, 'search');
-    assert.equal(gem.calls.length, calls, 'Gemini’ga hech narsa yuborilmadi');
+    assert.equal(noteCalls(), calls, 'Gemini’ga hech narsa yuborilmadi');
     const usage = (await manager.get('/ai/usage')).body.data;
     assert.equal(usage.provider, 'gemini'); assert.equal(usage.gemini_free, true); assert.equal(usage.clinical_allowed, false);
     config.ai.geminiPaid = true;
