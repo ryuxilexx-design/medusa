@@ -7,9 +7,12 @@ import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, conflict, invalid, notFound } from '../core/errors';
 import { isDate, isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
-import { addDays, dayStart, now, TZ_OFFSET_MS } from '../core/clock';
+import { addDays, dayStart, localDate, now, today, TZ_OFFSET_MS } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { invoiceStatus, recalcInvoice } from './billing';
+
+/** A shift opened before today's local day start (left open overnight) must be closed before it takes money. */
+export const shiftIsStale = (openedAt: Date | string) => new Date(openedAt) < dayStart(today());
 
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
 
@@ -93,8 +96,9 @@ export class InvoicesController {
   /**
    * Records a payment. Idempotency-Key is mandatory: a retry with the same key returns the original payment.
    * The invoice row is locked, so concurrent payments can never exceed the remaining balance.
+   * A cashier or the manager: whoever takes the money needs their own open shift in the invoice's branch.
    */
-  @Roles('cashier') @Post(':id/payments')
+  @Roles('cashier', 'manager') @Post(':id/payments')
   async pay(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Res({ passthrough: true }) res: Response) {
     if (!key || key.length < 8 || key.length > 100) throw new AppError(422, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key sarlavhasi majburiy');
     const input = parse(paymentSchema, body);
@@ -112,9 +116,11 @@ export class InvoicesController {
       if (due <= 0) throw conflict('INVOICE_PAID', 'Hisob to‘liq to‘langan');
       if (input.amount > due) throw invalid({ amount: `Summa qoldiqdan (${som(due)} so‘m) oshmasligi kerak` });
       // money is taken only in an open shift of this branch (FOR SHARE: a concurrent close waits for this payment)
-      const shift = (await c.query(`SELECT id, branch_id FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' FOR SHARE`, [ctx.tenantId, ctx.membershipId])).rows[0];
+      const shift = (await c.query(`SELECT id, branch_id, opened_at FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' FOR SHARE`, [ctx.tenantId, ctx.membershipId])).rows[0];
       if (!shift) throw conflict('SHIFT_REQUIRED', 'To‘lov qabul qilish uchun avval kassa smenasini oching');
       if (shift.branch_id !== inv.branch_id) throw conflict('SHIFT_OTHER_BRANCH', 'Smenangiz boshqa filialda ochilgan. Shu filial hisobiga to‘lov olish uchun smenani yopib, shu filialda oching.');
+      // a shift left open overnight: money of a new day never lands in yesterday's Z-report — close it first
+      if (shiftIsStale(shift.opened_at)) throw conflict('SHIFT_STALE', `Smena ${localDate(shift.opened_at)} kuni ochilgan. Avval uni yoping, keyin bugungi smenani oching.`, { opened_at: shift.opened_at });
       const receipt = (await c.query(`UPDATE tenants SET receipt_seq = receipt_seq + 1 WHERE id = $1 RETURNING receipt_seq`, [ctx.tenantId])).rows[0].receipt_seq;
       const payment = (await c.query(
         `INSERT INTO payments (id, tenant_id, branch_id, invoice_id, receipt_number, amount, method, cashier_membership_id, cashier_name, paid_at, note, idempotency_key, request_hash, shift_id)

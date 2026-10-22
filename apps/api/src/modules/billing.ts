@@ -10,6 +10,18 @@ export async function currentPrice(q: Q, serviceId: string, branchId: string): P
   return r ? Number(r.amount) : 0;
 }
 
+/**
+ * Share % snapshotted on an order: the performing doctor's own percent (`doctors.default_share_percent`, set by the
+ * manager in Staff) when it is above 0, otherwise the service's `share_percent`. 0 on the doctor means «not set».
+ * Snapshotted at order time, so later changes to either never rewrite past reports.
+ */
+export async function sharePercentFor(q: Q, tenantId: string, doctorId: string | null, servicePercent: number): Promise<number> {
+  if (!doctorId) return servicePercent;
+  const d = (await q.query(`SELECT default_share_percent FROM doctors WHERE id = $1 AND tenant_id = $2`, [doctorId, tenantId])).rows[0];
+  const own = d ? Number(d.default_share_percent) : 0;
+  return own > 0 ? own : servicePercent;
+}
+
 export async function nextInvoiceNumber(q: Q, tenantId: string): Promise<number> {
   return (await q.query(`UPDATE tenants SET invoice_seq = invoice_seq + 1 WHERE id = $1 RETURNING invoice_seq`, [tenantId])).rows[0].invoice_seq;
 }
@@ -24,12 +36,13 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
 }): Promise<{ orderId: string; invoiceId: string }> {
   const s = (await q.query(`SELECT id, name, category, share_percent FROM services WHERE id = $1 AND tenant_id = $2`, [o.serviceId, ctx.tenantId])).rows[0];
   const price = await currentPrice(q, o.serviceId, o.branchId);
+  const share = await sharePercentFor(q, ctx.tenantId, o.performerDoctorId ?? o.doctorId, Number(s.share_percent));
   const at = now();
   const orderId = (await q.query(
     `INSERT INTO service_orders (id, tenant_id, branch_id, patient_id, appointment_id, encounter_id, service_id, category, service_name, is_primary, price_snapshot,
                                  share_percent_snapshot, doctor_id, performer_doctor_id, status, ordered_at, created_by)
      VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ordered',$14,$15) RETURNING id`,
-    [ctx.tenantId, o.branchId, o.patientId, o.appointmentId, o.encounterId, s.id, s.category, s.name, o.isPrimary, price, s.share_percent,
+    [ctx.tenantId, o.branchId, o.patientId, o.appointmentId, o.encounterId, s.id, s.category, s.name, o.isPrimary, price, share,
       o.doctorId, o.performerDoctorId, at, ctx.membershipId])).rows[0].id;
 
   let invoice = o.appointmentId ? (await q.query(

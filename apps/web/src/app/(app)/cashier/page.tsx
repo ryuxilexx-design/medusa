@@ -11,7 +11,7 @@ import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Button, Card, EmptyState, ErrorState, Input, LinkButton, LoadingRows, PageHeader, Pagination, Select, Table, Td, Th, Toolbar } from '@/components/ui';
 import { InvoiceStatus } from '@/components/status';
-import { useShiftUi } from '@/components/cash-shift';
+import { canTakeMoney, useShiftUi } from '@/components/cash-shift';
 import { FootRow } from '@/components/finance-extra';
 
 export default function CashierPage() { return <Suspense><Cashier /></Suspense>; }
@@ -20,7 +20,8 @@ function Cashier() {
   const t = useT();
   const { me, branchId } = useSession();
   const sp = useSearchParams();
-  const cashier = me.role === 'cashier';
+  // a cashier or the manager runs a drawer here; the registrar only looks
+  const cashier = canTakeMoney(me.role);
   const shift = useShiftUi(cashier);
   const [status, setStatus] = useState(sp.get('debt') === '1' ? 'debt' : sp.get('status') ?? '');
   const [period, setPeriod] = useState(sp.get('debt') === '1' ? 'all' : sp.get('period') ?? 'today');

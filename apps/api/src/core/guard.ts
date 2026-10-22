@@ -4,7 +4,8 @@ import { createHash } from 'crypto';
 import { Db } from './db';
 import { AppError, forbidden } from './errors';
 import { syncClock } from './clock';
-import { Ctx, PASSWORD_CHANGE_OK_KEY, PUBLIC_KEY, ROLES_KEY, SESSION_COOKIE } from './context';
+import { Ctx, PASSWORD_CHANGE_OK_KEY, PUBLIC_KEY, ROLES_KEY, SESSION_COOKIE, SESSION_FREE_KEY } from './context';
+import { config } from './config';
 import type { Role } from '@meduza/contracts';
 
 export const hashToken = (t: string) => createHash('sha256').update(t).digest('hex');
@@ -15,6 +16,7 @@ export class AuthGuard implements CanActivate {
   constructor(private reflector: Reflector, private db: Db) {}
   async canActivate(ec: ExecutionContext): Promise<boolean> {
     const req = ec.switchToHttp().getRequest();
+    if (this.reflector.getAllAndOverride<boolean>(SESSION_FREE_KEY, [ec.getHandler(), ec.getClass()])) return true;
     const isPublic = this.reflector.getAllAndOverride<boolean>(PUBLIC_KEY, [ec.getHandler(), ec.getClass()]);
     const token: string | undefined = req.cookies?.[SESSION_COOKIE];
     if (token) {
@@ -35,7 +37,11 @@ export class AuthGuard implements CanActivate {
           requestId: req.requestId, sessionHash: h, authKind: row.kind, mustChangePassword: row.kind === 'password' && row.must_change_password,
           locale: row.locale, textSize: row.text_size,
         } satisfies Ctx;
-        if (row.seen_stale) await this.db.rows(`UPDATE sessions SET last_seen_at = now() WHERE token_hash = $1`, [h]);
+        // sliding expiry: activity extends the session by SESSION_TTL_HOURS, but never beyond SESSION_MAX_HOURS after sign-in
+        // (a cashier is not logged out in the middle of a shift; a forgotten browser still expires)
+        if (row.seen_stale) await this.db.rows(
+          `UPDATE sessions SET last_seen_at = now(), expires_at = GREATEST(expires_at, LEAST(now() + make_interval(hours => $2), created_at + make_interval(hours => $3))) WHERE token_hash = $1`,
+          [h, config.sessionTtlHours, config.sessionMaxHours]);
       }
     }
     if (!req.ctx) syncClock((await this.db.one('SELECT demo_now() AS n'))!.n);

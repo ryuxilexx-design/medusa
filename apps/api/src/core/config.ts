@@ -1,6 +1,11 @@
 import * as path from 'path';
+import { readFileSync } from 'fs';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+
+function packageVersion(): string {
+  try { return String(JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')).version || '0'); } catch { return '0'; }
+}
 
 const mode = (process.env.APP_MODE || 'demo') as 'development' | 'demo' | 'production';
 const aiProvider = (process.env.AI_PROVIDER || 'anthropic') as 'anthropic' | 'gemini';
@@ -12,7 +17,14 @@ export const config = {
   demoEnabled: mode !== 'production',
   demoDate: process.env.DEMO_DATE || '2026-10-18',
   demoTime: process.env.DEMO_TIME || '',
+  /** Idle lifetime of a session: every request (at most once a minute) extends it by this much … */
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS || 12),
+  /** … but never beyond this many hours after sign-in (at least the idle lifetime). */
+  sessionMaxHours: Math.max(Number(process.env.SESSION_MAX_HOURS || 14), Number(process.env.SESSION_TTL_HOURS || 12)),
+  /** One structured line per request (method, path, status, ms, request id, tenant — never a body). off in tests. */
+  requestLog: process.env.REQUEST_LOG !== 'off' && process.env.MEDUZA_TEST !== '1',
+  /** Shown by GET /health: APP_VERSION (set by the deploy) or the package version. */
+  version: process.env.APP_VERSION || packageVersion(),
   /** If set, demo role login requires this code (use it whenever the demo is reachable from the internet). */
   demoAccessCode: process.env.DEMO_ACCESS_CODE || '',
   /** Mark the session cookie Secure (behind HTTPS, e.g. Railway). */

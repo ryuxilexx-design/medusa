@@ -13,6 +13,7 @@ import { localToUtc, now, today } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { invoiceStatus } from './billing';
 import { range } from './dashboard.controller';
+import { shiftIsStale } from './invoices.controller';
 
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
 type MethodSum = { n: number; sum: number };
@@ -74,14 +75,16 @@ export class CashController {
 
   // ---------------------------------------------------------------- shifts
 
-  @Roles('cashier') @Get('cash-shifts/current')
+  /** The signed-in person's own open shift (a cashier or the manager taking money). `stale` = opened before today: close it before paying. */
+  @Roles('cashier', 'manager') @Get('cash-shifts/current')
   async current(@CurrentCtx() ctx: Ctx) {
     const s = await this.db.one(`SELECT ${SHIFT_COLS} FROM cash_shifts s JOIN branches b ON b.id = s.branch_id
       WHERE s.tenant_id = $1 AND s.cashier_membership_id = $2 AND s.status = 'open' AND s.branch_id = ANY($3)`, [ctx.tenantId, ctx.membershipId, ctx.branchIds]);
-    return { data: await this.withTotals(this.db.pool, s) };
+    const data = await this.withTotals(this.db.pool, s);
+    return { data: data ? { ...data, stale: shiftIsStale(data.opened_at) } : null };
   }
 
-  @Roles('cashier') @Post('cash-shifts') @HttpCode(201)
+  @Roles('cashier', 'manager') @Post('cash-shifts') @HttpCode(201)
   async open(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(shiftOpenSchema, body);
     if (!ctx.branchIds.includes(input.branch_id)) throw invalid({ branch_id: 'Bu filialda ishlamaysiz' });

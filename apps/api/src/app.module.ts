@@ -1,9 +1,11 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Logger, MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { randomUUID } from 'crypto';
 import { Db } from './core/db';
 import { AuthGuard } from './core/guard';
 import { ErrorFilter } from './core/errors';
+import { config } from './core/config';
+import { HealthController } from './modules/health.controller';
 import { SessionController } from './modules/session.controller';
 import { ReferenceController } from './modules/reference.controller';
 import { PatientsController } from './modules/patients.controller';
@@ -34,8 +36,21 @@ import { Icd10Service } from './ai/icd10';
 import { NewsService } from './ai/news';
 import { NewsWorker } from './ai/news-worker';
 
+const http = new Logger('HTTP');
+/** One line per finished request: method, path, status, ms, request id, tenant and role — never a body, a query value or clinical text. */
+function requestLog(req: any, res: any) {
+  const started = process.hrtime.bigint();
+  res.on('finish', () => {
+    // a camera's push address carries its secret token: masked like in the error log
+    const path = String(req.originalUrl || req.url).split('?')[0].replace(/\/hik\/[^/?#]+/, '/hik/***');
+    if (path.endsWith('/health')) return; // the container probe every 30 s would only fill the log
+    const ms = Number(process.hrtime.bigint() - started) / 1e6;
+    http.log(JSON.stringify({ method: req.method, path, status: res.statusCode, ms: Math.round(ms * 10) / 10, request_id: req.requestId, tenant: req.ctx?.tenantId ?? null, role: req.ctx?.role ?? null }));
+  });
+}
+
 @Module({
-  controllers: [SessionController, ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
+  controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
     AuthController, StaffController, TelegramController, DocumentsController, CashController, CamerasController, HikController, CameraIsapiController],
   providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
@@ -45,6 +60,7 @@ export class AppModule implements NestModule {
     consumer.apply((req: any, res: any, next: () => void) => {
       if (!req.requestId) { req.requestId = randomUUID(); res.setHeader('X-Request-Id', req.requestId); }
       res.setHeader('Cache-Control', 'no-store');
+      if (config.requestLog) requestLog(req, res);
       next();
     }).forRoutes('*');
   }

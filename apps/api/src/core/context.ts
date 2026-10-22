@@ -26,7 +26,10 @@ export interface Ctx {
 export const PUBLIC_KEY = 'meduza:public';
 export const PASSWORD_CHANGE_OK_KEY = 'meduza:password-change-ok';
 export const ROLES_KEY = 'meduza:roles';
+export const SESSION_FREE_KEY = 'meduza:session-free';
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
+/** Public route that never touches the session or the database in the guard (health check: must answer even when the database is down). */
+export const SessionFree = () => SetMetadata(SESSION_FREE_KEY, true);
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
 /** Route stays reachable while the user must still replace a temporary password. */
 export const AllowDuringPasswordChange = () => SetMetadata(PASSWORD_CHANGE_OK_KEY, true);

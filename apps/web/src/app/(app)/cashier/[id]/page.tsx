@@ -5,13 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Ban, CheckCircle2, Percent, Printer, Undo2, Wallet } from 'lucide-react';
 import { PAYMENT_METHOD_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey } from '@/lib/api';
-import { fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
+import { fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { useUnsavedGuard } from '@/lib/unsaved';
 import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, PageHeader, Select, Table, Td, Textarea, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus } from '@/components/status';
-import { ShiftLoadError, useCurrentShift } from '@/components/cash-shift';
+import { canTakeMoney, ShiftLoadError, useCurrentShift } from '@/components/cash-shift';
 import { RefundModal } from '@/components/refund-modal';
 import { MoneyInput } from '@/components/money-input';
 
@@ -52,9 +52,10 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3"><span className="text-[0.9375rem] font-semibold text-slate-700">{t('cash.colDue')}</span><span className={cx('text-2xl font-bold tabular-nums', inv.status !== 'void' && inv.due > 0 ? 'text-red-700' : 'text-slate-900')}>{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
             </div>
           </Card>
-          {me.role === 'cashier' && open && <CashierPay inv={inv} />}
+          {/* a cashier or the manager takes money (each in their own open shift); the registrar only looks */}
+          {canTakeMoney(me.role) && open && <CashierPay inv={inv} />}
           {inv.status === 'paid' && <Alert tone="green" title={t('cash.fullyPaidTitle')}>{t('cash.fullyPaidText')}</Alert>}
-          {me.role !== 'cashier' && open && <Alert tone="blue">{t('cash.cashierTakes')}</Alert>}
+          {!canTakeMoney(me.role) && open && <Alert tone="blue">{t('cash.cashierTakes')}</Alert>}
         </div>
         <div className="min-w-0 space-y-5 xl:order-1">
           {(inv.appointment_status === 'cancelled' || inv.status === 'void') && <div className="space-y-3">
@@ -126,6 +127,11 @@ function CashierPay({ inv }: { inv: any }) {
     return <Alert tone="yellow" title={t('cash.shiftClosed')}>{before}<Link href="/cashier" className="font-medium underline">{t('cash.title')}</Link>{after}</Alert>;
   }
   if (shift.data.branch_id !== inv.branch_id) return <Alert tone="yellow" title={t('cash.shiftOtherBranch')}>{t('cash.shiftOtherBranchText', { shiftBranch: shift.data.branch_name, invoiceBranch: inv.branch_name })}</Alert>;
+  // left open overnight: the server refuses the payment (SHIFT_STALE) until yesterday's shift is closed
+  if (shift.data.stale) {
+    const [before, after] = t('cash.openShiftHint').split('{link}');
+    return <Alert tone="red" title={t('cash.shiftStale', { date: fmtDate(shift.data.opened_at) })}>{t('cash.shiftStaleHint')} {before}<Link href="/cashier" className="font-medium underline">{t('cash.title')}</Link>{after}</Alert>;
+  }
   return <PaymentForm inv={inv} />;
 }
 
