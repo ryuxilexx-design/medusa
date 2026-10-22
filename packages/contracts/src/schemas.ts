@@ -350,6 +350,21 @@ export const cameraSchema = z.object({
 });
 export type CameraInput = z.infer<typeof cameraSchema>;
 export const cameraUpdateSchema = cameraSchema.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
+/** Direct ISAPI connection of a camera (the camera's own admin login; the password is stored encrypted). */
+export const cameraIsapiSchema = z.object({
+  host: z.string().trim().min(1, 'Kamera IP manzilini kiriting').max(120).regex(/^[A-Za-z0-9.-]+$/, 'Faqat IP yoki host nomi'),
+  port: z.number().int().min(1).max(65535).default(80),
+  https: z.boolean().default(false),
+  username: z.string().trim().min(1, 'Kamera loginini kiriting').max(64),
+  password: z.string().min(1, 'Kamera parolini kiriting').max(128),
+  delivery: z.enum(['push', 'pull']).default('push'),
+});
+export type CameraIsapiInput = z.infer<typeof cameraIsapiSchema>;
+/** A face picture for the camera's library (base64 JPEG, 20–300 KB): forwarded to the camera, never stored. */
+export const facePhotoSchema = z.object({
+  photo_base64: z.string().min(100, 'Rasm yuklang').max(420_000, 'Rasm 300 KB dan katta'),
+  camera_ids: z.array(z.string().uuid()).min(1, 'Kamerani tanlang').max(20),
+});
 /** A staff face code: the manager confirms the employee gave written consent to face recognition. */
 export const staffFaceCodeSchema = z.object({
   membership_id: z.string().uuid(),

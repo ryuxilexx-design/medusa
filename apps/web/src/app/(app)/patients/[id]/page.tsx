@@ -137,7 +137,7 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
             </dl>
           ) : <p className="text-sm text-slate-600">{t('registrar.minimalInfo')}</p>}
         </section>
-        {pt.consents && <ConsentBlock patientId={pt.id} patientNumber={pt.patient_number} consents={pt.consents} role={role} onRecord={onConsent} />}
+        {pt.consents && <ConsentBlock patientId={pt.id} patientNumber={pt.patient_number} patientName={fullName(pt)} consents={pt.consents} role={role} onRecord={onConsent} />}
       </div>
       <div className="min-w-0">
         <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.timeline')}</h3>

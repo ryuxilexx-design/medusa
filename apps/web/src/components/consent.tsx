@@ -1,15 +1,16 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Cctv, CheckCircle2, CircleAlert, CircleX, FileSignature, Printer, ShieldAlert } from 'lucide-react';
+import { Cctv, CheckCircle2, CircleAlert, CircleX, FileSignature, ImagePlus, Printer, ShieldAlert } from 'lucide-react';
 import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, Field, LinkButton, Modal, ModalCancel, Select, Textarea, useToast } from './ui';
+import { FacePhotoModal, type FaceSubject } from './face-photo';
 
 type Kind = ConsentKind;
-type ConsentRow = { id: string; kind: Kind; granted: boolean; text_version: string; method: 'signed_paper' | 'telegram' | 'verbal'; recorded_by_name: string | null; recorded_at: string; note: string | null };
+type ConsentRow = { id: string; kind: Kind; granted: boolean; text_version: string; method: 'signed_paper' | 'telegram' | 'verbal'; recorded_by_name: string | null; recorded_at: string; note: string | null; face_code_id?: string | null };
 /** `biometric` is missing from an API that predates the camera module: treated as «not recorded». */
 export type Consents = { data_processing: ConsentRow | null; notifications: ConsentRow | null; biometric?: ConsentRow | null };
 const KINDS: Kind[] = ['data_processing', 'notifications', 'biometric'];
@@ -55,8 +56,9 @@ export function ConsentNotice({ patientId, consents, role, onRecord }: { patient
 }
 
 /** Consent block of the patient card: status of both kinds (word + icon + colour), who recorded it, history, quiet actions. */
-export function ConsentBlock({ patientId, patientNumber, consents, role, onRecord }: { patientId: string; patientNumber: number; consents: Consents; role: string; onRecord: (kind: Kind) => void }) {
+export function ConsentBlock({ patientId, patientNumber, patientName, consents, role, onRecord }: { patientId: string; patientNumber: number; patientName?: string; consents: Consents; role: string; onRecord: (kind: Kind) => void }) {
   const t = useT();
+  const [photo, setPhoto] = useState<FaceSubject | null>(null);
   const h = useQuery({ queryKey: ['patient', patientId, 'consents'], queryFn: () => api<{ data: ConsentRow[] }>(`/patients/${patientId}/consents`).then((r) => r.data), enabled: canRecordConsent(role) });
   const everGranted = (k: Kind) => !!h.data?.some((r) => r.kind === k && r.granted);
   const quiet = 'text-slate-700 hover:bg-slate-100 hover:text-brand-800 !px-2';
@@ -84,6 +86,7 @@ export function ConsentBlock({ patientId, patientNumber, consents, role, onRecor
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem]" data-testid="camera-code">
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-900"><Cctv className="h-4 w-4 text-slate-600" aria-hidden="true" />{t('consent.bio.code', { code: `P-${patientNumber}` })}</span>
                   <span className="text-slate-600">{t('consent.bio.hint')}</span>
+                  {role === 'manager' && r.face_code_id && <Button size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800 !px-2" icon={<ImagePlus className="h-4 w-4" />} onClick={() => setPhoto({ face_code_id: r.face_code_id!, code: `P-${patientNumber}`, name: patientName ?? `P-${patientNumber}` })}>{t('cam.photo.upload')}</Button>}
                 </div>
               )}
             </div>
@@ -107,6 +110,7 @@ export function ConsentBlock({ patientId, patientNumber, consents, role, onRecor
           </div>
         </details>
       )}
+      <FacePhotoModal subject={photo} onClose={() => setPhoto(null)} />
     </section>
   );
 }

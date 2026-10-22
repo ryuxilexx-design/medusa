@@ -1,18 +1,22 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, CircleSlash, Copy, FlaskConical, KeyRound, Pencil, RefreshCw, ScanFace, Send } from 'lucide-react';
+import { AlertTriangle, Cable, CheckCircle2, CircleSlash, CircleX, Copy, FlaskConical, ImagePlus, KeyRound, Pencil, RefreshCw, ScanFace, Send, Unplug, Wand2 } from 'lucide-react';
 import { CAMERA_PURPOSES, CAMERA_SECURITY_KINDS, type CameraPurpose, type CameraSecurityKind, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, useToast } from './ui';
+import { FacePhotoModal, type FaceSubject } from './face-photo';
 
 export type Camera = {
   id: string; branch_id: string; branch_name: string; name: string; location: string | null; model: string | null;
   purposes: CameraPurpose[]; security_mode: 'always' | 'after_hours'; alert_snapshots: boolean; token_hint: string; status: 'active' | 'disabled';
   last_event_at: string | null; last_seen_at: string | null; created_at: string; events_24h: number;
+  // direct (ISAPI) connection, if the manager entered the camera's address
+  isapi_connected: boolean; isapi_host: string | null; delivery: 'push' | 'pull'; isapi_model: string | null; isapi_error: string | null;
+  listening_configured_at: string | null; fdlib_id: string | null;
 };
 export type CamerasList = { data: Camera[]; meta: { simulator_available: boolean } };
 
@@ -27,17 +31,20 @@ const ic = 'h-4 w-4';
 
 // ---------- face codes ----------
 
-type StaffCode = { membership_id: string; full_name: string; role: string; specialty: string | null; face_code_id: string | null; code: string | null; created_at: string | null; last_seen_at: string | null };
+type StaffCode = { membership_id: string; full_name: string; role: string; specialty: string | null; face_code_id: string | null; code: string | null; created_at: string | null; last_seen_at: string | null; cameras_enrolled: number };
+type EnrolCamera = { id: string; name: string; branch_id: string };
 
 /** Staff and their camera codes; the face itself is enrolled on the camera under this code. */
 export function FaceCodes() {
   const t = useT();
-  const q = useQuery({ queryKey: ['cameras', 'face-codes'], queryFn: () => api<{ data: StaffCode[]; meta: { patient_codes: number } }>('/cameras/face-codes') });
+  const q = useQuery({ queryKey: ['cameras', 'face-codes'], queryFn: () => api<{ data: StaffCode[]; meta: { patient_codes: number; enrol_cameras: EnrolCamera[] } }>('/cameras/face-codes') });
   const [giving, setGiving] = useState<StaffCode | null>(null);
+  const [photo, setPhoto] = useState<FaceSubject | null>(null);
+  const canEnrol = !!q.data?.meta.enrol_cameras.length;
   const [revoking, setRevoking] = useState<StaffCode | null>(null);
   return (
-    <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-      <Card className="xl:col-span-2" padded={false} title={t('cam.codes.staffTitle')}
+    <div className="grid grid-cols-1 gap-5 2xl:grid-cols-3">
+      <Card className="2xl:col-span-2" padded={false} title={t('cam.codes.staffTitle')}
         actions={q.data && <span title={t('cam.codes.patientsHint')}><Badge tone="gray">{t('cam.codes.patients', { n: q.data.meta.patient_codes })}</Badge></span>}>
         {q.isPending ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data.data.length ? <EmptyState compact title={t('cam.codes.empty')} /> : (
           <Table>
@@ -45,11 +52,14 @@ export function FaceCodes() {
             <tbody>{q.data.data.map((s) => (
               <tr key={s.membership_id}>
                 <Td className="min-w-[11rem]"><div className="font-semibold text-slate-900">{s.full_name}</div><div className="text-[0.8125rem] text-slate-600">{t(`role.${s.role}` as MessageKey)}{s.specialty ? `, ${s.specialty}` : ''}</div></Td>
-                <Td className="whitespace-nowrap">{s.code ? <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[0.9375rem] font-bold text-slate-900">{s.code}</span> : <span className="text-slate-600">{t('cam.codes.none')}</span>}</Td>
+                <Td className="whitespace-nowrap">{s.code ? <><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[0.9375rem] font-bold text-slate-900">{s.code}</span>{s.cameras_enrolled > 0 && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('cam.photo.onCameras', { n: s.cameras_enrolled })}</div>}</> : <span className="text-slate-600">{t('cam.codes.none')}</span>}</Td>
                 <Td className="hidden whitespace-nowrap tabular-nums text-slate-700 md:table-cell">{s.code ? (s.last_seen_at ? fmtDateTime(s.last_seen_at) : t('cam.codes.never')) : '—'}</Td>
                 <Td right className="whitespace-nowrap !py-1.5">
                   {s.code
-                    ? <Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" icon={<CircleSlash className={ic} />} aria-label={t('cam.codes.revoke')} title={t('cam.codes.revoke')} onClick={() => setRevoking(s)}><span className="hidden sm:inline">{t('cam.codes.revoke')}</span></Button>
+                    ? <div className="flex flex-wrap justify-end gap-1">
+                        {canEnrol && <Button size="sm" icon={<ImagePlus className={ic} />} aria-label={t('cam.photo.upload')} title={t('cam.photo.upload')} onClick={() => setPhoto({ face_code_id: s.face_code_id!, code: s.code!, name: s.full_name })}><span className="hidden sm:inline">{t('cam.photo.upload')}</span></Button>}
+                        <Button size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" icon={<CircleSlash className={ic} />} aria-label={t('cam.codes.revoke')} title={t('cam.codes.revoke')} onClick={() => setRevoking(s)}><span className="hidden sm:inline">{t('cam.codes.revoke')}</span></Button>
+                      </div>
                     : <Button size="sm" icon={<KeyRound className={ic} />} aria-label={t('cam.codes.give')} title={t('cam.codes.give')} onClick={() => setGiving(s)}><span className="hidden sm:inline">{t('cam.codes.give')}</span></Button>}
                 </Td>
               </tr>
@@ -66,6 +76,7 @@ export function FaceCodes() {
       </Card>
       <GiveCodeModal row={giving} onClose={() => setGiving(null)} />
       <RevokeCodeModal row={revoking} onClose={() => setRevoking(null)} />
+      <FacePhotoModal subject={photo} onClose={() => setPhoto(null)} />
     </div>
   );
 }
@@ -131,6 +142,14 @@ function CameraStatus({ c }: { c: Camera }) {
   return <Badge tone="green" icon={<CheckCircle2 className={ic} />}>{t('cam.dev.ok')}</Badge>;
 }
 
+/** Direct connection: the model when connected, the last error in red, else «not connected». */
+function ConnectionBadge({ c }: { c: Camera }) {
+  const t = useT();
+  if (c.isapi_error) return <span title={c.isapi_error}><Badge tone="red" icon={<CircleX className={ic} />}>{t('cam.dev.connError')}</Badge></span>;
+  if (c.isapi_connected) return <Badge tone="green" icon={<Cable className={ic} />}>{t('cam.dev.connected', { model: c.isapi_model || c.isapi_host })}</Badge>;
+  return <Badge tone="gray" icon={<Unplug className={ic} />}>{t('cam.dev.notConnected')}</Badge>;
+}
+
 export function PurposeBadges({ purposes }: { purposes: CameraPurpose[] }) {
   const t = useT();
   return <div className="flex flex-wrap gap-1">{CAMERA_PURPOSES.filter((p) => purposes.includes(p)).map((p) => <Badge key={p} tone="gray" className="!text-2xs !px-2">{t(`cam.purpose.${p}`)}</Badge>)}</div>;
@@ -140,6 +159,7 @@ export function Devices({ q, onEdit, onAdd }: { q: { data?: CamerasList; isError
   const t = useT();
   const { me, branchId } = useSession();
   const [testing, setTesting] = useState<Camera | null>(null);
+  const [connecting, setConnecting] = useState<Camera | null>(null);
   const showBranch = !branchId && me.branches.length > 1;
   const rows = q.data?.data.filter((c) => !branchId || c.branch_id === branchId) ?? [];
   return (
@@ -154,13 +174,14 @@ export function Devices({ q, onEdit, onAdd }: { q: { data?: CamerasList; isError
           </tr></thead>
           <tbody>{rows.map((c) => (
             <tr key={c.id} className={c.status === 'disabled' ? 'text-slate-600' : ''}>
-              <Td className="min-w-[10rem]"><div className="font-semibold text-slate-900">{c.name}</div><div className="text-[0.8125rem] text-slate-600">{[showBranch ? c.branch_name : null, c.location, c.model].filter(Boolean).join(' · ') || '—'}</div><div className="mt-1 sm:hidden"><CameraStatus c={c} /></div></Td>
+              <Td className="min-w-[10rem]"><div className="font-semibold text-slate-900">{c.name}</div><div className="text-[0.8125rem] text-slate-600">{[showBranch ? c.branch_name : null, c.location, c.model].filter(Boolean).join(' · ') || '—'}</div><div className="mt-1 flex flex-wrap gap-1"><span className="sm:hidden"><CameraStatus c={c} /></span><ConnectionBadge c={c} /></div></Td>
               <Td className="hidden md:table-cell"><PurposeBadges purposes={c.purposes} />{c.alert_snapshots && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('cam.dev.snapshots')}</div>}</Td>
               <Td className="hidden whitespace-nowrap sm:table-cell"><CameraStatus c={c} /></Td>
               <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell"><div className="text-slate-900">{c.last_event_at ? fmtDateTime(c.last_event_at) : t('cam.dev.never')}</div><div className="text-[0.8125rem] text-slate-600">{t('cam.dev.events24', { n: c.events_24h })}</div></Td>
               <Td right className="whitespace-nowrap !py-1.5">
                 <div className="flex flex-wrap justify-end gap-1">
                   {q.data!.meta.simulator_available && c.status === 'active' && <Button size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800" icon={<FlaskConical className={ic} />} aria-label={t('cam.dev.test')} title={t('cam.dev.test')} onClick={() => setTesting(c)}><span className="hidden sm:inline">{t('cam.dev.test')}</span></Button>}
+                  <Button size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800" icon={<Cable className={ic} />} aria-label={t('cam.dev.connect')} title={t('cam.dev.connect')} onClick={() => setConnecting(c)}><span className="hidden sm:inline">{t('cam.dev.connect')}</span></Button>
                   <Button size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800" icon={<Pencil className={ic} />} aria-label={t('cam.dev.edit')} title={t('cam.dev.edit')} onClick={() => onEdit(c)}><span className="hidden sm:inline">{t('cam.dev.edit')}</span></Button>
                 </div>
               </Td>
@@ -169,6 +190,7 @@ export function Devices({ q, onEdit, onAdd }: { q: { data?: CamerasList; isError
         </Table>
       )}
       <SimulateModal camera={testing} onClose={() => setTesting(null)} />
+      <ConnectModal camera={connecting} onClose={() => setConnecting(null)} />
     </Card>
   );
 }
@@ -326,6 +348,136 @@ export function PushAddressModal({ path, onClose }: { path: string | null; onClo
           </ol>
         </section>
       </div>
+    </Modal>
+  );
+}
+
+// ---------- direct connection (ISAPI) ----------
+
+type IsapiStatus = {
+  connected: boolean; host: string | null; port: number; https: boolean; username: string | null; delivery: 'push' | 'pull';
+  model: string | null; firmware: string | null; serial: string | null; checked_at: string | null; error: string | null; fdlib_id: string | null; listening_configured_at: string | null;
+};
+type IsapiSetup = { fdlib_id?: string; comparison?: boolean; listening?: { ok: boolean; detail: string } };
+type ConnForm = { host: string; port: string; https: boolean; username: string; password: string; delivery: 'push' | 'pull' };
+const emptyConn: ConnForm = { host: '', port: '80', https: false, username: 'admin', password: '', delivery: 'push' };
+
+/**
+ * «Ulanish»: address + admin login of the camera, proved against the device on save; then one-click setup (push
+ * address written into the camera, face library, comparison on, test notification). The password is never shown back.
+ */
+function ConnectModal({ camera, onClose }: { camera: Camera | null; onClose: () => void }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const st = useQuery({ queryKey: ['cameras', 'isapi', camera?.id], queryFn: () => api<{ data: IsapiStatus; meta: { secrets_configured: boolean; public_url: string | null } }>(`/cameras/${camera!.id}/isapi`), enabled: !!camera });
+  const [f, setF] = useState<ConnForm>(emptyConn);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [setup, setSetup] = useState<IsapiSetup | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  useEffect(() => { if (camera) { setF(emptyConn); setErrors({}); setFormError(null); setSetup(null); setRemoving(false); setLoadedFor(null); } }, [camera]);
+  // the stored address/login fill the form once per opening (never the password)
+  useEffect(() => {
+    if (!camera || !st.data || loadedFor === camera.id) return;
+    const d = st.data.data;
+    if (d.connected) setF({ host: d.host ?? '', port: String(d.port || 80), https: !!d.https, username: d.username ?? 'admin', password: '', delivery: d.delivery || 'push' });
+    setLoadedFor(camera.id);
+  }, [camera, st.data, loadedFor]);
+  const set = <K extends keyof ConnForm>(k: K, v: ConnForm[K]) => { setF((x) => ({ ...x, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); setFormError(null); };
+  // a field error (wrong password) is shown once, under its field
+  const fail = (e: unknown) => {
+    const fields = e instanceof ApiError ? e.fields : undefined;
+    if (fields) setErrors(fields);
+    const msg = e instanceof Error ? e.message : String(e);
+    setFormError(fields && Object.values(fields).includes(msg) ? null : msg);
+  };
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['cameras'] }); };
+  const save = useMutation({
+    mutationFn: () => api<{ data: IsapiStatus; meta: { device: unknown } }>(`/cameras/${camera!.id}/isapi`, { method: 'PUT', body: { host: f.host.trim(), port: Number(f.port) || 80, https: f.https, username: f.username.trim(), password: f.password, delivery: f.delivery } }),
+    onSuccess: (r) => { refresh(); setF((x) => ({ ...x, password: '' })); setErrors({}); setSetup(null); toast.success(t('cam.isapi.connected', { model: r.data.model || f.host.trim() })); },
+    onError: (e) => { refresh(); fail(e); },
+  });
+  const run = useMutation({
+    mutationFn: () => api<{ data: IsapiStatus & { setup: IsapiSetup } }>(`/cameras/${camera!.id}/isapi/setup`, { method: 'POST' }),
+    onSuccess: (r) => { refresh(); setSetup(r.data.setup); setFormError(null); },
+    onError: (e) => { refresh(); fail(e); },
+  });
+  const remove = useMutation({
+    mutationFn: () => api(`/cameras/${camera!.id}/isapi`, { method: 'DELETE' }),
+    onSuccess: () => { refresh(); toast.success(t('cam.isapi.disconnected')); onClose(); },
+    onError: (e) => { setRemoving(false); fail(e); },
+  });
+  const submit = () => {
+    setFormError(null);
+    const errs: Record<string, string> = {};
+    if (!f.host.trim()) errs.host = t('api.v.cameraHost');
+    else if (!/^[A-Za-z0-9.-]+$/.test(f.host.trim())) errs.host = t('api.v.cameraHostFormat');
+    if (!f.username.trim()) errs.username = t('api.v.cameraUser');
+    if (!f.password) errs.password = t('api.v.cameraPassword');
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    save.mutate();
+  };
+  const d = st.data?.data;
+  const secrets = st.data?.meta.secrets_configured ?? true;
+  const connected = !!d?.connected;
+  const dirty = f.password !== '' || (loadedFor === camera?.id && !!d && (f.host !== (d.host ?? '') || f.username !== (d.username ?? 'admin')));
+  return (
+    <Modal open={!!camera} onClose={onClose} width="max-w-2xl" title={camera ? t('cam.isapi.title', { name: camera.name }) : ''} dirty={dirty && !save.isSuccess}
+      footer={<><ModalCancel /><Button variant="primary" icon={<Cable className={ic} />} loading={save.isPending} disabled={!secrets || run.isPending || remove.isPending} onClick={submit}>{t('cam.isapi.check')}</Button></>}>
+      {st.isError ? <ErrorState error={st.error} onRetry={() => st.refetch()} /> : !st.data ? <LoadingRows /> : (
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>
+          {!secrets && <Alert tone="red">{t('cam.isapi.noSecrets')}</Alert>}
+          {formError && <Alert tone="red">{formError}</Alert>}
+          {setup && (
+            <Alert tone={setup.listening && !setup.listening.ok ? 'yellow' : 'green'} title={t('cam.isapi.setupDone')}>
+              <ul className="mt-0.5 space-y-0.5">
+                <li>{t('cam.isapi.library', { id: setup.fdlib_id ?? '—' })}</li>
+                <li>{t(setup.comparison ? 'cam.isapi.comparisonOn' : 'cam.isapi.comparisonOff')}</li>
+                <li>{setup.listening ? (setup.listening.ok ? t('cam.isapi.listeningOk', { ok: 'OK' }) : t('cam.isapi.listeningFail', { detail: setup.listening.detail })) : t('cam.isapi.pullOnly')}</li>
+              </ul>
+            </Alert>
+          )}
+          {d && connected && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[0.8125rem] text-slate-700">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><ConnectionBadge c={{ ...camera!, isapi_connected: true, isapi_model: d.model, isapi_host: d.host, isapi_error: d.error }} />{d.checked_at && <span>{t('cam.isapi.checkedAt', { at: fmtDateTime(d.checked_at) })}</span>}</div>
+              {d.model && <div className="mt-1">{t('cam.isapi.device', { model: d.model, firmware: d.firmware ?? '—', serial: d.serial ?? '—' })}</div>}
+              {d.fdlib_id && <div>{t('cam.isapi.library', { id: d.fdlib_id })}</div>}
+              {d.listening_configured_at && <div>{t('cam.isapi.listeningAt', { at: fmtDateTime(d.listening_configured_at) })}</div>}
+              {d.error && <div className="text-red-700">{t('cam.isapi.lastError', { error: d.error })}</div>}
+              {/* actions on the saved connection: one-click setup on the device, or forget the login (confirm in place) */}
+              {removing ? (
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="min-w-0 flex-1 basis-[12rem] text-sm text-amber-900">{t('cam.isapi.disconnectText')}</p>
+                  <div className="flex gap-2"><Button type="button" size="sm" onClick={() => setRemoving(false)}>{t('common.cancel')}</Button><Button type="button" size="sm" variant="danger" icon={<Unplug className={ic} />} loading={remove.isPending} onClick={() => remove.mutate()}>{t('cam.isapi.disconnect')}</Button></div>
+                </div>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Button type="button" size="sm" icon={<Wand2 className={ic} />} loading={run.isPending} disabled={save.isPending} onClick={() => run.mutate()}>{t('cam.isapi.setup')}</Button>
+                  <Button type="button" size="sm" variant="ghost" className="text-red-700 hover:bg-red-50" icon={<Unplug className={ic} />} onClick={() => setRemoving(true)}>{t('cam.isapi.disconnect')}</Button>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8rem]">
+            <Field label={t('cam.isapi.host', { ip: 'IP' })} required error={errors.host}>{(id) => <Input id={id} data-autofocus maxLength={120} autoComplete="off" inputMode="url" placeholder="192.168.1.64" value={f.host} invalid={!!errors.host} onChange={(e) => set('host', e.target.value)} />}</Field>
+            <Field label={t('cam.isapi.port')} error={errors.port}>{(id) => <Input id={id} type="number" min={1} max={65535} inputMode="numeric" value={f.port} invalid={!!errors.port} onChange={(e) => set('port', e.target.value)} />}</Field>
+          </div>
+          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] text-slate-900">
+            <input type="checkbox" className="h-5 w-5 accent-brand-600" checked={f.https} onChange={(e) => set('https', e.target.checked)} />{t('cam.isapi.https', { proto: 'HTTPS' })}
+          </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label={t('cam.isapi.username')} required error={errors.username}>{(id) => <Input id={id} maxLength={64} autoComplete="off" value={f.username} invalid={!!errors.username} onChange={(e) => set('username', e.target.value)} />}</Field>
+            <Field label={t('cam.isapi.password')} required error={errors.password} hint={connected ? t('cam.isapi.passwordHint') : undefined}>{(id) => <Input id={id} type="password" maxLength={128} autoComplete="new-password" value={f.password} invalid={!!errors.password} onChange={(e) => set('password', e.target.value)} />}</Field>
+          </div>
+          <Field label={t('cam.isapi.delivery')} error={errors.delivery} hint={t('cam.isapi.pullHint', { mode: 'Pull' })}>{(id) => (
+            <Select id={id} value={f.delivery} onChange={(e) => set('delivery', e.target.value as ConnForm['delivery'])}>
+              <option value="push">{t('cam.isapi.push', { mode: 'Push' })}</option><option value="pull">{t('cam.isapi.pull', { mode: 'Pull' })}</option>
+            </Select>
+          )}</Field>
+        </form>
+      )}
     </Modal>
   );
 }

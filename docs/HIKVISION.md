@@ -18,28 +18,49 @@ Kameralar to‘rt vazifada ishlaydi: **xodimlar davomati**, **bemor kelganini ta
 
 ## O‘rnatish (har bir kamera uchun)
 
-1. **Med.uz.ai:** Kameralar → Qurilmalar → «Kamera qo‘shish». Filial, nom, joy va vazifalarni belgilang:
-   - Davomat — kirish eshigi kamerasi (xodimlarni taniydi);
-   - Bemor kelishi — qabulxona kamerasi (rozilik bergan bemorlarni taniydi);
-   - Odam sanash — kirish eshigi (People Counting);
-   - Xavfsizlik — kassa, dori ombori (hududga kirish, chiziqni kesish, kamera to‘silishi).
-   Saqlagach **ulanish manzili bir marta** ko‘rsatiladi (`https://DOMEN/api/v1/hik/<maxfiy-token>`). Uni nusxalang.
-   Yo‘qotilsa — «Manzilni yangilash» (eski manzil darhol ishlamay qoladi).
-2. **Kamera veb-sahifasi** (brauzerda kamera IP manzili, administrator):
-   - *Configuration → Network → Advanced Settings → HTTP Listening* (ba’zi proshivkalarda *Alarm Server*):
-     manzil = Med.uz.ai domeni, port 443, URL = `/api/v1/hik/<token>`, protokol HTTPS.
-     Agar proshivka HTTPS qabul qilmasa — klinika tarmog‘idagi serverga HTTP (port 80) bilan ulang.
-     Rasm yuborishni o‘chiring (yuborilsa ham server uni tashlab yuboradi).
-   - *Event → Smart Event / Face Picture Comparison / People Counting*: kerakli hodisalarni yoqing va har birida
-     **«Notify Surveillance Center»** belgisini qo‘ying — usiz kamera hech narsa yubormaydi.
-   - Kamera vaqti: *System → Time Settings* → vaqt mintaqasi **UTC+05:00 (Toshkent)**, NTP yoqilgan.
-   - Odam sanash: hisobot rejimi **davr bo‘yicha (time range)** tavsiya etiladi; real vaqt rejimi ham ishlaydi.
-3. **Yuz kutubxonasi** (*Picture → Face Picture Library*): kutubxona yarating, odamni qo‘shing, **ID No.** maydoniga
-   Med.uz.ai kodini yozing (`S-12` yoki `P-1001`). Agar ID No. harf qabul qilmasa — kodni **Name** maydoniga yozing
-   (masalan `S-12 Ali`). Rasmni shu yerda kamera bilan oling. Kod Med.uz.ai’da: Kameralar → Kodlar (xodim),
-   bemor kartasi → Rozilik (bemor).
-4. **Tekshirish:** kameraning *HTTP Listening → Test* tugmasi; Med.uz.ai «Qurilmalar»da «oxirgi aloqa» vaqti
-   yangilanadi. Kamera 24 soat jim qolsa, rahbarning bosh sahifasida ogohlantirish chiqadi.
+### A. Avtomatik — kamera menyusiga kirmasdan (tavsiya etiladi)
+
+Med.uz.ai kameraga ISAPI orqali o‘zi ulanadi (`apps/api/src/cameras/isapi-client.ts`), serverda `APP_SECRET_KEY`
+sozlangan bo‘lishi kerak (kamera paroli shifrlab saqlanadi).
+
+1. **Kameralar → Qurilmalar → «Kamera qo‘shish»**: filial, nom, joy, vazifalar (Davomat / Bemor kelishi /
+   Odam sanash / Xavfsizlik).
+2. Kamera qatorida **«Ulanish»**: kameraning IP manzili (klinika tarmog‘ida), port (80), administrator login va parol,
+   rejim:
+   - **Push** (odatiy): kamera hodisalarni serverga o‘zi yuboradi — server internetda (yoki kamera serverni ko‘radigan
+     tarmoqda) bo‘lsa;
+   - **Pull**: server kameradan o‘qiydi (`alertStream`) — server klinika ichida, kamera uni ko‘rmasa ham ishlaydi;
+     bu rejimda serverdan kameraga yo‘l bo‘lishi kerak.
+   «Ulanishni tekshirish va saqlash» kameradan model, proshivka va seriya raqamini oladi; parol noto‘g‘ri bo‘lsa
+   maydon ostida aytadi; 5 marta xato parol — kamera 30 daqiqaga bloklanadi (Hikvision qoidasi).
+3. **«Avtomatik sozlash»** bir bosishda:
+   - kameraga yangi maxfiy push manziliga ega **HTTP listening** host’ini yozadi (`/ISAPI/Event/notification/httpHosts/1`,
+     JSON, token hech kimga ko‘rsatilmaydi — faqat kamerada va bazada hash), so‘ng kameraning o‘z **test** xabarini
+     yuboradi (`httpHosts/1/test`) — «OK» bo‘lsa yo‘l ochiq;
+   - **yuz kutubxonasi**ni yaratadi yoki topadi (`/ISAPI/Intelligent/FDLib`, nomi «Med.uz.ai»);
+   - 1-kanalda **yuz taqqoslash**ni shu kutubxona bilan yoqadi (`/ISAPI/Intelligent/channels/1/faceContrast`, chegara 80 %;
+     ba’zi proshivkalar buni faqat veb-sahifada beradi — unda natijada «yo‘q» chiqadi, qo‘lda yoqiladi).
+4. **Yuz yuklash**: Kameralar → Kodlar → xodim qatorida **«Rasm yuklash»** (telefon kamerasi bilan ham); bemor uchun —
+   bemor kartasi → Rozilik → «Rasm yuklash» (faqat imzolangan biometrik rozilik bo‘lsa). Rasm (JPEG, 20–300 KB, bitta
+   yuz) serverdan to‘g‘ri kameraga ketadi (`FaceDataRecord` JSON; qabul qilmasa `pictureUpload` XML) va **serverda
+   saqlanmaydi**; kod `FPID`, `certificateNumber`, `customHumanID` va `name` maydonlariga yoziladi, shunda proshivka
+   qaysi maydonni qaytarsa ham tanish ishlaydi. Kod bekor qilinganda (xodim ketdi, bemor rozilikni qaytardi) server
+   yuzni kameradan ham o‘chiradi (fon ishi, har 30 soniyada).
+5. Kamerada baribir qo‘lda tekshirish kerak bo‘lgan 3 narsa: *System → Time* — UTC+05:00 va NTP; *Event*
+   bo‘limlarida kerakli hodisalarda **«Notify Surveillance Center»** belgisi (ko‘p proshivkalarda avtomatik sozlash
+   bilan yoqiladi, lekin hammasida emas); HTTPS ishlatilsa — ishonchli sertifikat (zavod self-signed sertifikati
+   tasdiqlanmaydi, klinika tarmog‘ida HTTP ishlating).
+
+### B. Qo‘lda — kamera veb-sahifasi orqali (zaxira yo‘l)
+
+1. Med.uz.ai’da kamera qo‘shilganda **ulanish manzili bir marta** ko‘rsatiladi (`https://DOMEN/api/v1/hik/<token>`).
+   Yo‘qotilsa — «Manzilni yangilash».
+2. Kamera veb-sahifasi: *Configuration → Network → Advanced Settings → HTTP Listening* (yoki *Alarm Server*):
+   manzil = Med.uz.ai domeni, port 443, URL = `/api/v1/hik/<token>`, HTTPS; proshivka HTTPS qabul qilmasa —
+   klinika tarmog‘idagi serverga HTTP. *Event*’larda «Notify Surveillance Center». Vaqt — UTC+05:00, NTP.
+3. *Face Picture Library*: kutubxona, odam, **ID No.** = Med.uz.ai kodi (`S-12`, `P-1001`); ID No. harf olmasa —
+   **Name** maydoniga (`S-12 Ali`). Rasmni kamera bilan oling.
+4. Tekshirish: kameraning *HTTP Listening → Test*; «Qurilmalar»da «oxirgi aloqa» yangilanadi.
 
 ## Qanday ishlaydi
 
@@ -124,6 +145,11 @@ shu kadrlardan birini qo‘shadi (faqat ogohlantirish bo‘lsa saqlanadi).
 
 ## Haqiqiy kamerada hali tekshirilmagan
 
-Hikvision’ning to‘liq hujjatlari hamkor parolini talab qiladi, shuning uchun quyidagilar birinchi kamerada
-sinab ko‘rilishi kerak: DeepinView proshivkasida `alarmResult` JSON aniq ko‘rinishi; ID No. maydoni `S-12`
-kabi kodni qabul qilishi; HTTPS orqali yuborish; chiziq/zona/to‘silish hodisalarining to‘liq XML namunasi.
+Hikvision’ning to‘liq hujjatlari hamkor akkaunti (tpp.hikvision.com) bilan beriladi; integratsiya rasmiy «Face
+Recognition Integration Solution», «How to get real-time event in listening mode» qo‘llanmalari va haqiqiy
+qurilmalardan olingan namunalar bo‘yicha yozilgan (`docs/HIKVISION_ISAPI_RESEARCH.md`). Server tomoni soxta kamera
+bilan to‘liq sinalgan (`apps/api/test/_fakecam.mjs`, `isapi.test.mjs`: digest, httpHosts, test push, FDLib JSON va
+XML, FaceDataRecord/pictureUpload, o‘chirish, alertStream). Birinchi haqiqiy kamerada tasdiqlanadigan ro‘yxat
+(`docs/HIKVISION_FIELD_TEST.md`): DeepinView proshivkasida `alarmResult` maydonlari va kod qaysi maydonda qaytishi;
+`FaceDataRecord` yoki `pictureUpload` — qaysi biri qabul qilinishi; `faceContrast` ISAPI orqali yoqilishi;
+HTTPS push; `httpHosts/1/test` natijasi; chiziq/zona/to‘silish XML’ining to‘liq ko‘rinishi.

@@ -19,6 +19,8 @@ export const config = {
   cookieSecure: process.env.COOKIE_SECURE === '1' || mode === 'production',
   /** Seed the demo data automatically when the database is empty (first deploy). */
   autoSeed: process.env.AUTO_SEED === '1',
+  /** Public address of this server (https://klinika.example.uz): cameras push events to <it>/api/v1/hik/<token>. Empty = taken from the request. */
+  publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
   /** 32-byte key (base64) for encrypting stored secrets such as Telegram bot tokens. Without it a real bot cannot be connected. */
   secretKey: process.env.APP_SECRET_KEY || '',
   /** Background workers (Telegram polling, reminders, outbox, daily news). Off in tests: tests drive them directly. */

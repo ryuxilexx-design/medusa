@@ -12,7 +12,13 @@ export async function latestConsents(q: Q, tenantId: string, patientId: string) 
     `SELECT DISTINCT ON (c.kind) ${CONSENT_COLS} FROM patient_consents c
       WHERE c.patient_id = $1 AND c.tenant_id = $2 ORDER BY c.kind, c.recorded_at DESC, c.seq DESC`, [patientId, tenantId])).rows;
   const by = (k: ConsentKind) => rows.find((r) => r.kind === k) ?? null;
-  return { data_processing: by('data_processing'), notifications: by('notifications'), biometric: by('biometric') };
+  const biometric = by('biometric');
+  // the patient's active camera code (P-<number>) travels with the consent so the card can send a face to a camera
+  if (biometric?.granted) {
+    const fc = (await q.query(`SELECT id FROM face_codes WHERE tenant_id = $1 AND patient_id = $2 AND revoked_at IS NULL`, [tenantId, patientId])).rows[0];
+    biometric.face_code_id = fc?.id ?? null;
+  }
+  return { data_processing: by('data_processing'), notifications: by('notifications'), biometric };
 }
 
 export async function consentHistory(q: Q, tenantId: string, patientId: string) {

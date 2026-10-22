@@ -20,13 +20,13 @@ test('har bir xabar: o‘zbek va rus matni bor, o‘rinbosarlar bir xil', () => 
     for (const form of ruForms(ru)) assert.equal(placeholders(form), placeholders(uz), `${k}: o‘rinbosarlar mos emas`);
     if (cy) assert.equal(placeholders(cy), placeholders(uz), `${k}: kirill o‘rinbosarlari`);
     assert.ok(!/[A-Za-z]'[A-Za-z]/.test(uz), `${k}: oddiy apostrof (‘ yoki ’ kerak): ${uz}`);
-    assert.ok(!/[A-Za-z]/.test(ruForms(ru).join(' ').replace(/\{\w+\}|Med\.uz\.ai|AI|PubMed|Telegram|DMED|RCT|I10|ID|PDF|°C|Gemini|Claude|Idempotency-Key|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?:=[a-z]+)?/g, '')), `${k}: rus matnida lotin harfi: ${JSON.stringify(ru)}`);
+    assert.ok(!/[A-Za-z]/.test(ruForms(ru).join(' ').replace(/\{\w+\}|Med\.uz\.ai|AI|PubMed|Telegram|DMED|RCT|I10|ID|PDF|°C|Gemini|Claude|Idempotency-Key|JPEG|HTTPS?|HTTP|DNS|ISAPI|Hikvision|No\.|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?:=[a-z]+)?/g, '')), `${k}: rus matnida lotin harfi: ${JSON.stringify(ru)}`);
   }
 });
 
 test('o‘zbek kirill: lotin harfi qolmaydi (brend va kodlardan tashqari), tanlangan so‘zlar to‘g‘ri', () => {
   for (const k of Object.keys(MESSAGES)) {
-    const s = t('uz-Cyrl', k).replace(/\{\w+\}|Med\.uz\.ai|Med\.uz|\bAI\b|PubMed|DMED|\bID\b|PDF|I10|°C|Gemini|Claude|Idempotency-Key|YYYY-MM-DD|HH:MM|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?:=[a-z]+)?/g, '');
+    const s = t('uz-Cyrl', k).replace(/\{\w+\}|Med\.uz\.ai|Med\.uz|\bAI\b|PubMed|DMED|\bID\b|PDF|I10|°C|Gemini|Claude|Idempotency-Key|JPEG|HTTPS?|HTTP|DNS|ISAPI|Hikvision|No\.|YYYY-MM-DD|HH:MM|[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+(?:=[a-z]+)?/g, '');
     assert.ok(!/[A-Za-z]/.test(s), `${k}: ${s}`);
   }
   const cases = {

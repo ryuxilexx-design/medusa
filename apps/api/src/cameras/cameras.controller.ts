@@ -18,7 +18,8 @@ import { hashToken } from '../core/guard';
 import { checkInAppointment } from '../modules/appointments.controller';
 import { Camera, EventKind, ingestEvent, SECURITY_KINDS, SNAPSHOT_DAYS } from './ingest';
 
-const CAM_COLS = `c.id, c.branch_id, b.name AS branch_name, c.name, c.location, c.model, c.purposes, c.security_mode, c.alert_snapshots, c.token_hint, c.status, c.last_event_at, c.last_seen_at, c.created_at`;
+const CAM_COLS = `c.id, c.branch_id, b.name AS branch_name, c.name, c.location, c.model, c.purposes, c.security_mode, c.alert_snapshots, c.token_hint, c.status, c.last_event_at, c.last_seen_at, c.created_at,
+  (c.isapi_host IS NOT NULL) AS isapi_connected, c.isapi_host, c.delivery, c.isapi_model, c.isapi_error, c.listening_configured_at, c.fdlib_id`;
 /** Late if the first arrival is more than this after the doctor's scheduled start. */
 const LATE_GRACE_MIN = 5;
 
@@ -119,7 +120,8 @@ export class CamerasController {
   async faceCodes(@CurrentCtx() ctx: Ctx) {
     const rows = await this.db.rows(
       `SELECT m.id AS membership_id, u.full_name, m.role, d.specialty, fc.id AS face_code_id, fc.code, fc.created_at,
-              (SELECT max(e.occurred_at) FROM camera_events e WHERE e.face_code_id = fc.id) AS last_seen_at
+              (SELECT max(e.occurred_at) FROM camera_events e WHERE e.face_code_id = fc.id) AS last_seen_at,
+              (SELECT count(*)::int FROM face_code_cameras fcc WHERE fcc.face_code_id = fc.id) AS cameras_enrolled
          FROM memberships m JOIN users u ON u.id = m.user_id
          LEFT JOIN doctors d ON d.membership_id = m.id AND d.tenant_id = m.tenant_id
          LEFT JOIN face_codes fc ON fc.membership_id = m.id AND fc.tenant_id = m.tenant_id AND fc.revoked_at IS NULL
@@ -127,7 +129,11 @@ export class CamerasController {
         ORDER BY CASE m.role WHEN 'manager' THEN 0 WHEN 'doctor' THEN 1 ELSE 2 END, u.full_name`, [ctx.tenantId, ctx.branchIds]);
     const patients = (await this.db.one(
       `SELECT count(*)::int AS n FROM face_codes WHERE tenant_id = $1 AND subject_type = 'patient' AND revoked_at IS NULL`, [ctx.tenantId]))!.n;
-    return { data: rows, meta: { patient_codes: patients } };
+    // cameras a face can be sent to: connected over ISAPI, in the manager's branches
+    const enrolTargets = await this.db.rows(
+      `SELECT id, name, branch_id FROM cameras WHERE tenant_id = $1 AND status = 'active' AND isapi_host IS NOT NULL AND isapi_password_enc IS NOT NULL AND branch_id = ANY($2) ORDER BY name`,
+      [ctx.tenantId, ctx.branchIds]);
+    return { data: rows, meta: { patient_codes: patients, enrol_cameras: enrolTargets } };
   }
 
   @Roles('manager') @Post('face-codes') @HttpCode(201)
