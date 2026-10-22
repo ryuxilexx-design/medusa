@@ -56,7 +56,7 @@ export class ReferenceController {
     const input = parse(branchPatchSchema, body);
     if (!isUuid(id)) throw notFound('Filial');
     return this.db.tx(async (c) => {
-      const b = (await c.query(`SELECT * FROM branches WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
+      const b = (await c.query(`SELECT * FROM branches WHERE id = $1 AND tenant_id = $2 AND id = ANY($3::uuid[]) FOR UPDATE`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!b) throw notFound('Filial');
       const changes: string[] = [];
       if (input.name !== undefined && input.name !== b.name) changes.push(`nomi: «${input.name}»`);
@@ -104,7 +104,7 @@ export class ReferenceController {
     const input = parse(roomPatchSchema, body);
     if (!isUuid(id)) throw notFound('Xona');
     return this.db.tx(async (c) => {
-      const r = (await c.query(`SELECT * FROM rooms WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
+      const r = (await c.query(`SELECT * FROM rooms WHERE id = $1 AND tenant_id = $2 AND branch_id = ANY($3::uuid[]) FOR UPDATE`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!r) throw notFound('Xona');
       const changes: string[] = [];
       const branchId = input.branch_id ?? r.branch_id;
@@ -128,7 +128,8 @@ export class ReferenceController {
 
   /** A branch of this clinic that is switched on, or a field error pointing at `branch_id`. */
   private async activeBranch(c: PoolClient, ctx: Ctx, branchId: string) {
-    const b = (await c.query(`SELECT id, name, active FROM branches WHERE id = $1 AND tenant_id = $2`, [branchId, ctx.tenantId])).rows[0];
+    // the branch must be the clinic's and one the manager is assigned to (a branch-limited manager stays in their branches)
+    const b = (await c.query(`SELECT id, name, active FROM branches WHERE id = $1 AND tenant_id = $2 AND id = ANY($3::uuid[])`, [branchId, ctx.tenantId, ctx.branchIds])).rows[0];
     if (!b) throw invalid({ branch_id: 'Filial topilmadi' });
     if (!b.active) throw invalid({ branch_id: 'Filial nofaol — avval uni faollashtiring' });
     return b as { id: string; name: string };

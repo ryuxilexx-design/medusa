@@ -7,6 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatPhone, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useT } from '@/lib/i18n';
 import { MoneyInput } from '@/components/money-input';
+import { DaysOff } from '@/components/days-off';
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 /**
@@ -65,6 +66,7 @@ export function ClinicSettings() {
           )}
         </Card>
       </div>
+      <Card title={t('admin.off.holidays')}><DaysOff clinic canEdit /></Card>
       <Card title={t('admin.set.rooms')} padded={false} actions={<Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setRoom('new')} disabled={!activeBranches.length}>{t('settings.rooms.add')}</Button>}>
         {rooms.isLoading ? <LoadingRows rows={4} /> : rooms.isError ? <ErrorState error={rooms.error} onRetry={() => rooms.refetch()} /> : !rooms.data!.length ? <EmptyState compact title={t('admin.set.noRooms')} /> : (
           <Table>
