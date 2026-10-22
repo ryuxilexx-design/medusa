@@ -37,7 +37,9 @@ test('API qayta ishga tushsa demo vaqti orqaga qaytmaydi; reset vaqt va ma’lum
 
 test('xavfsizlik: test helperi demo bazaga ulanishni rad etadi', async () => {
   const { Pool } = await import('pg').then((m) => m.default ?? m);
-  const demo = new Pool({ connectionString: 'postgres://meduza:meduza_local@127.0.0.1:5433/meduza', max: 1 });
+  // the same server as the test database, but a database whose name does not end in _test (CI has no «meduza» demo DB)
+  const u = new URL(process.env.DATABASE_URL); u.pathname = '/postgres';
+  const demo = new Pool({ connectionString: u.toString(), max: 1 });
   await assert.rejects(() => db.assertDatabaseName(demo, '_test'), /Xavfsizlik to‘xtatdi/);
   await demo.end();
 });
