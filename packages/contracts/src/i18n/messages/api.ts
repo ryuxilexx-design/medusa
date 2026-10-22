@@ -139,6 +139,7 @@ export const api = {
   'api.shiftOtherBranch': ['Smenangiz boshqa filialda ochilgan. Shu filial hisobiga to‘lov olish uchun smenani yopib, shu filialda oching.', 'Ваша смена открыта в другом филиале. Чтобы принять оплату по счёту этого филиала, закройте смену и откройте её здесь.'],
   'api.shiftMissing': ['Tanlangan smena yopilgan yoki topilmadi', 'Выбранная смена закрыта или не найдена'],
   'api.openShiftForPayment': ['To‘lov qabul qilish uchun avval kassa smenasini oching', 'Чтобы принять оплату, сначала откройте кассовую смену'],
+  'api.shiftStale': ['Smena {date} kuni ochilgan. Avval uni yoping, keyin bugungi smenani oching.', 'Смена открыта {date}. Сначала закройте её, затем откройте смену на сегодня.'],
   'api.cannotVoidPaid': ['To‘lov qayd etilgan hisobni bekor qilib bo‘lmaydi', 'Счёт с проведённой оплатой нельзя аннулировать'],
   'api.noDiscount': ['To‘lov yoki qaytarish bo‘lgan, yoxud bekor qilingan hisobga chegirma qo‘llanmaydi', 'Скидка не применяется к счёту с оплатой, возвратом или к аннулированному счёту'],
   'api.expenseVoided': ['Xarajat allaqachon bekor qilingan', 'Расход уже отменён'],

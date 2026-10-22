@@ -26,7 +26,7 @@ export async function startSession(db: Db, req: Request, res: Response, membersh
   const lang = req.cookies?.[LANG_COOKIE];
   await db.rows(`INSERT INTO sessions (token_hash, membership_id, tenant_id, expires_at, kind, locale) VALUES ($1,$2,$3, now() + make_interval(hours => $4), $5, $6)`,
     [hashToken(token), membershipId, tenantId, config.sessionTtlHours, kind, isLocale(lang) ? lang : null]);
-  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, path: '/', maxAge: config.sessionTtlHours * 3600_000 });
+  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.cookieSecure, path: '/', maxAge: config.sessionMaxHours * 3600_000 });
 }
 
 const demoOnly = () => { if (!config.demoEnabled) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi'); };

@@ -49,7 +49,8 @@ chmod 600 .env
 openssl rand -base64 32   # → APP_SECRET_KEY
 openssl rand -base64 24   # → POSTGRES_PASSWORD
 openssl rand -base64 24   # → BACKUP_PASSPHRASE
-nano .env                 # DOMAIN, ACME_EMAIL va yuqoridagi uchta qiymat
+nano .env                 # DOMAIN, ACME_EMAIL va yuqoridagi uchta qiymat; PUBLIC_URL — server tashqaridan
+                          # ko‘rinadigan manzil (bo‘sh qoldirilsa https://DOMAIN; kameralar va Telegram havolalari shuni ishlatadi)
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps        # hammasi "running", app "healthy"
 docker compose -f docker-compose.prod.yml logs app | tail -20
@@ -60,6 +61,7 @@ menejerida). Parolsiz zaxira nusxalarni ochib bo‘lmaydi; `APP_SECRET_KEY` siz 
 
 Tekshirish: brauzerda `https://DOMAIN/login` ochiladi, qulf belgisi bor. `/demo/login` → 404 bo‘lishi kerak
 (production rejimida demo kirish yo‘q). Sanalar haqiqiy bugungi kun (demo soati ishlatilmaydi).
+`curl -s https://DOMAIN/api/v1/health` → `{"ok":true,"db":"ok","version":"…"}` (baza javob bermasa — 503).
 
 ## 3. Klinikani yaratish
 
@@ -72,6 +74,15 @@ docker compose -f docker-compose.prod.yml exec app node database/dist/src/cli.js
 Buyruq rahbar uchun **bir martalik vaqtinchalik parolni** chiqaradi — uni rahbarga shaxsan bering, hech qayerga
 yozib qo‘ymang. Birinchi kirishda tizim parolni almashtirishni talab qiladi. Keyin rahbar «Sozlamalar»da
 xodimlarni (shifokor, registrator, kassir), xonalarni va xizmatlar narxini kiritadi.
+
+**Rahbar vaqtinchalik parolni unutdi (yoki yagona rahbar qulflanib qoldi).** Tizim ichidan o‘z parolini
+tiklab bo‘lmaydi — server konsolidan yangi bir martalik parol beriladi, akkaunt qulfdan chiqadi va uning barcha
+sessiyalari yopiladi (xodimlar uchun ham ishlaydi; oddiy holatda xodim parolini rahbar «Xodimlar»da tiklaydi):
+
+```bash
+docker compose -f docker-compose.prod.yml exec app node database/dist/src/cli.js reset-password \
+  --login +998901234567 [--tenant "Klinika nomi"]
+```
 
 MKB-10 ro‘yxatini rasmiy fayldan yuklash:
 
@@ -133,8 +144,13 @@ Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta i
 
 ## 6. Kuzatish
 
-- `docker compose -f deploy/docker-compose.prod.yml ps` — `app` holati `healthy` bo‘lishi kerak.
-- Tashqi tekshiruv (masalan UptimeRobot) `https://DOMAIN/login` ni har 5 daqiqada tekshirsin.
+- `docker compose -f deploy/docker-compose.prod.yml ps` — `app` holati `healthy` bo‘lishi kerak (konteyner
+  har 30 soniyada `GET /api/v1/health` ni so‘raydi: baza 2 soniyada javob bermasa — 503).
+- Tashqi tekshiruv (masalan UptimeRobot) `https://DOMAIN/api/v1/health` ni har 5 daqiqada tekshirsin
+  (HTTP 200 va javobda `"ok":true`). Sessiya, kirish kodi va audit talab qilinmaydi.
+- Jurnallar: har bir konteyner 5 × 50 MB aylanma fayl (`logging` bo‘limi, disk to‘lmaydi). API har so‘rov uchun
+  bitta qator yozadi (`HTTP`: metod, yo‘l, status, ms, `request_id`, klinika) — so‘rov tanasi, klinik matn yoki
+  parol hech qachon jurnalga tushmaydi. Xato bo‘yicha qidirish: `docker compose logs app | grep <request_id>`.
 - Har hafta: `backups/restore-test.log` da oxirgi qator `OK restore-test` bo‘lsin; disk joyi `df -h`.
 - Sertifikat Caddy tomonidan avtomatik yangilanadi; `docker compose logs caddy` da xato bo‘lmasin.
 

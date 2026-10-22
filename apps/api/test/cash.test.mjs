@@ -18,11 +18,11 @@ function session() {
     const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t; }
     return { status: r.status, body: j, text: t };
   };
-  return { get: (p) => req('GET', p), post: (p, b = {}, h) => req('POST', p, b, h), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }) };
+  return { get: (p) => req('GET', p), post: (p, b = {}, h) => req('POST', p, b, h), patch: (p, b) => req('PATCH', p, b), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }) };
 }
 const key = () => ({ 'Idempotency-Key': randomUUID() });
 
-let manager, cashier, cashier2, central, yunusobod;
+let manager, cashier, cashier2, registrar, central, yunusobod;
 before(async () => {
   ({ app, base } = await bootTestApp());
   pool = app.get(require('../dist/core/db.js').Db).pool;
@@ -30,6 +30,7 @@ before(async () => {
   assert.equal((await manager.post('/demo/reset')).status, 200);
   cashier = session(); await cashier.demo(M.cashier);     // Nodira: central + Yunusobod, seed shift open in central
   cashier2 = session(); await cashier2.demo(M.cashier2);  // Jasur: Yunusobod, seed shift open there
+  registrar = session(); await registrar.demo(M.registrar);
   const branches = (await manager.get('/me')).body.data.branches;
   central = branches.find((b) => b.code === 'MRK').id; yunusobod = branches.find((b) => b.code === 'YUN').id;
 });
@@ -241,4 +242,93 @@ test('poyga: xarajatni bekor qilish va smenani yopish bir vaqtda — yopilgan sm
   const active = Number((await pool.query(`SELECT coalesce(sum(amount),0)::bigint AS s FROM expenses WHERE shift_id = $1 AND status = 'active' AND paid_from = 'cash_drawer'`, [cur.id])).rows[0].s);
   assert.equal(s.totals.cash_expenses.sum, active, 'smena hisobotidagi xarajat bazadagi faol xarajatga teng');
   if (v.status === 409) assert.equal(v.body.error.code, 'SHIFT_CLOSED');
+});
+
+test('rahbar ham kassa yuritadi: o‘z smenasini ochadi, to‘lov oladi, yopadi; registrator to‘lov ololmaydi; qaytarish faqat rahbar', async () => {
+  // no shift yet: the manager is refused like a cashier would be
+  const noShift = await manager.post(`/invoices/${(await unpaid(central)).id}/payments`, { amount: 1000_00, method: 'cash' }, key());
+  assert.equal(noShift.status, 409, noShift.text); assert.equal(noShift.body.error.code, 'SHIFT_REQUIRED');
+  assert.equal((await manager.get('/cash-shifts/current')).body.data, null);
+  const open = await manager.post('/cash-shifts', { branch_id: central, opening_cash: 50_000_00 });
+  assert.equal(open.status, 201, open.text);
+  const cur = (await manager.get('/cash-shifts/current')).body.data;
+  assert.equal(cur.status, 'open'); assert.equal(cur.branch_id, central); assert.equal(cur.stale, false);
+  const inv = await unpaid(central, 20_000_00);
+  const pay = await manager.post(`/invoices/${inv.id}/payments`, { amount: 20_000_00, method: 'cash' }, key());
+  assert.equal(pay.status, 201, pay.text);
+  assert.equal(pay.body.data.payment.shift_id, cur.id);
+  assert.equal(pay.body.data.payment.cashier_name, 'Dilnoza Karimova');
+  // a registrar sees the invoice but never takes money or runs a drawer
+  const reg = await registrar.post(`/invoices/${inv.id}/payments`, { amount: 1000_00, method: 'cash' }, key());
+  assert.equal(reg.status, 403, reg.text);
+  assert.equal((await registrar.post('/cash-shifts', { branch_id: central, opening_cash: 0 })).status, 403);
+  assert.equal((await registrar.get('/cash-shifts/current')).status, 403);
+  // refunds stay manager-only now that cashiers and managers share the payment route
+  const ref = await cashier.post(`/invoices/${inv.id}/refunds`, { payment_id: pay.body.data.payment.id, amount: 1000_00, method: 'cash', reason_code: 'other', reason: 'Sinov' }, key());
+  assert.equal(ref.status, 403, ref.text);
+  const after = (await manager.get('/cash-shifts/current')).body.data;
+  assert.equal(after.expected_cash, 50_000_00 + 20_000_00);
+  const close = await manager.post(`/cash-shifts/${cur.id}/close`, { counted_cash: after.expected_cash });
+  assert.equal(close.status, 200, close.text); assert.equal(close.body.data.difference, 0);
+  assert.equal((await manager.get('/cash-shifts/current')).body.data, null);
+});
+
+test('tungi smena: kecha ochilgan smena bilan to‘lov 409 SHIFT_STALE; current.stale = true; yopib, yangisini ochgach to‘lov o‘tadi', async () => {
+  const prev = (await cashier.get('/cash-shifts/current')).body.data;
+  if (prev) { assert.equal(prev.stale, false); await cashier.post(`/cash-shifts/${prev.id}/close`, { counted_cash: Math.max(prev.expected_cash, 0), note: 'sinov' }); }
+  // a shift opened yesterday evening and never closed (opening data is immutable, so it is written as it would have been then)
+  const number = (await pool.query(`UPDATE tenants SET shift_seq = shift_seq + 1 WHERE id = $1 RETURNING shift_seq`, [SEED_IDS.tenant])).rows[0].shift_seq;
+  const cur = (await pool.query(
+    `INSERT INTO cash_shifts (tenant_id, branch_id, cashier_membership_id, cashier_name, number, opening_cash, opened_at) VALUES ($1,$2,$3,'Nodira Aliyeva',$4,0, demo_now() - interval '20 hours') RETURNING id`,
+    [SEED_IDS.tenant, central, M.cashier, number])).rows[0];
+  const stale = (await cashier.get('/cash-shifts/current')).body.data;
+  assert.equal(stale.id, cur.id);
+  assert.equal(stale.stale, true, 'current smena «eski» deb belgilanadi');
+  const inv = await unpaid(central, 1000_00);
+  const r = await cashier.post(`/invoices/${inv.id}/payments`, { amount: 1000_00, method: 'cash' }, key());
+  assert.equal(r.status, 409, r.text); assert.equal(r.body.error.code, 'SHIFT_STALE');
+  assert.match(r.body.error.message, /2026-10-17/, 'xabarda smena ochilgan sana');
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM payments WHERE invoice_id = $1 AND shift_id = $2`, [inv.id, cur.id])).rows[0].n, 0, 'to‘lov yozilmadi');
+  // close yesterday's shift (its Z-report stays yesterday's), open today's, pay
+  assert.equal((await cashier.post(`/cash-shifts/${cur.id}/close`, { counted_cash: stale.expected_cash })).status, 200);
+  assert.equal((await cashier.post('/cash-shifts', { branch_id: central, opening_cash: 0 })).status, 201);
+  const ok = await cashier.post(`/invoices/${inv.id}/payments`, { amount: 1000_00, method: 'cash' }, key());
+  assert.equal(ok.status, 201, ok.text);
+});
+
+test('shifokor ulushi: shifokorning o‘z foizi xizmat foizidan ustun (0 = belgilanmagan); buyurtmada muhrlanadi; hisobotda ko‘rinadi', async () => {
+  const docId = SEED_IDS.doctor(0);
+  const svc = (await pool.query(`SELECT s.id, s.share_percent FROM doctor_services ds JOIN services s ON s.id = ds.service_id WHERE ds.doctor_id = $1 AND s.category = 'consultation' LIMIT 1`, [docId])).rows[0];
+  assert.ok(svc, 'shifokorning konsultatsiya xizmati bor');
+  const own = Number(svc.share_percent) === 37 ? 41 : 37;
+  const upd = await manager.patch(`/staff/${M.doctor(0)}`, { doctor: { share_percent: own } });
+  assert.equal(upd.status, 200, upd.text);
+  // a booking today → check-in creates the consultation order with the doctor's own percent
+  const me = (await manager.get('/me')).body.data;
+  const branch = (await pool.query(`SELECT branch_id FROM schedules WHERE doctor_id = $1 AND weekday = extract(dow FROM $2::date)`, [docId, me.today])).rows[0]?.branch_id;
+  assert.ok(branch, 'shifokor bugun ishlaydi');
+  const slots = (await registrar.get(`/availability?doctor_id=${docId}&date=${me.today}&service_id=${svc.id}`)).body.data.slots.filter((s) => s.free);
+  assert.ok(slots.length, 'bo‘sh vaqt bor');
+  const patient = (await pool.query(`SELECT id FROM patients WHERE tenant_id = $1 AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a.patient_id = patients.id AND a.starts_at >= $2::date::timestamp - interval '5 hours') ORDER BY patient_number LIMIT 1`, [SEED_IDS.tenant, me.today])).rows[0];
+  const book = await registrar.post('/appointments', { patient_id: patient.id, branch_id: branch, doctor_id: docId, service_id: svc.id, date: me.today, start_time: slots[slots.length - 1].time }, key());
+  assert.equal(book.status, 201, book.text);
+  const ci = await registrar.post(`/appointments/${book.body.data.id}/check-in`);
+  assert.equal(ci.status, 200, ci.text);
+  const order = (await pool.query(`SELECT id, share_percent_snapshot FROM service_orders WHERE appointment_id = $1 AND is_primary`, [book.body.data.id])).rows[0];
+  assert.equal(Number(order.share_percent_snapshot), own, 'buyurtma shifokorning foizini muhrlaydi');
+  // the doctor's percent back to 0 («not set»): new orders take the service's percent, the old snapshot stays
+  assert.equal((await manager.patch(`/staff/${M.doctor(0)}`, { doctor: { share_percent: 0 } })).status, 200);
+  assert.equal(Number((await pool.query(`SELECT share_percent_snapshot FROM service_orders WHERE id = $1`, [order.id])).rows[0].share_percent_snapshot), own);
+  const { sharePercentFor } = require('../dist/modules/billing.js');
+  assert.equal(await sharePercentFor(pool, SEED_IDS.tenant, docId, Number(svc.share_percent)), Number(svc.share_percent));
+  assert.equal(await sharePercentFor(pool, SEED_IDS.tenant, null, 15), 15);
+  // performed today: the report's share grows by value × the doctor's percent
+  const report = async () => (await manager.get(`/reports/doctors?from=${me.today}&to=${me.today}`)).body.data.find((d) => d.doctor_id === docId);
+  const before = await report();
+  await pool.query(`UPDATE service_orders SET status = 'completed', performed_at = demo_now() WHERE id = $1`, [order.id]);
+  const after = await report();
+  const line = Number((await pool.query(`SELECT line_total FROM invoice_items WHERE order_id = $1`, [order.id])).rows[0].line_total);
+  assert.ok(line > 0);
+  assert.equal(after.value - before.value, line);
+  assert.equal(after.share - before.share, Math.round(line * own / 100), 'hisobotdagi ulush = qiymat × shifokor foizi');
 });

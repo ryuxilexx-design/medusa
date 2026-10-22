@@ -5,10 +5,14 @@
 # Runbook: docs/DEPLOY_UZ.md
 name: meduzai
 
+# every service: rotated JSON logs (5 × 50 MB), so a chatty week never fills the disk
 services:
   db:
     image: postgres:16.4-bookworm
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
     # parallel queries need shared memory beyond Docker's 64 MB default; tuned for a 2–4 vCPU / 8 GB database host
     shm_size: 1g
     command: ["postgres", "-c", "shared_buffers=1GB", "-c", "effective_cache_size=3GB", "-c", "work_mem=16MB", "-c", "random_page_cost=1.1", "-c", "max_connections=100"]
@@ -33,14 +37,21 @@ services:
       dockerfile: Dockerfile
     image: meduzai:latest
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
     depends_on:
       db: { condition: service_healthy }
+    # the container probe asks the API's health route through the web proxy (see Dockerfile HEALTHCHECK)
     environment:
       APP_MODE: production
       DATABASE_URL: postgres://meduza:${POSTGRES_PASSWORD}@db:5432/meduza
       COOKIE_SECURE: "1"
       APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in deploy/.env}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      SESSION_MAX_HOURS: ${SESSION_MAX_HOURS:-14}
+      # the address cameras and Telegram links use for this server; defaults to the HTTPS domain
+      PUBLIC_URL: ${PUBLIC_URL:-https://${DOMAIN}}
       BACKGROUND_WORKERS: ${BACKGROUND_WORKERS:-on}
       AI_MODE: ${AI_MODE:-off}
       AI_CLINICAL_ALLOWED: ${AI_CLINICAL_ALLOWED:-0}
@@ -61,6 +72,9 @@ services:
     # HTTPS with an automatic Let's Encrypt certificate for DOMAIN; HTTP is redirected to HTTPS
     image: caddy:2.8.4
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
     depends_on: [app]
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
@@ -78,6 +92,9 @@ services:
     # daily pg_dump at BACKUP_HOUR (Tashkent time), 14 daily + 8 weekly copies, weekly restore test
     image: postgres:16.4-bookworm
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
     depends_on:
       db: { condition: service_healthy }
     environment:

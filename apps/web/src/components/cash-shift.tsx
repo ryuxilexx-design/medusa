@@ -4,17 +4,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowUpRight, Banknote, CreditCard, DoorClosed, DoorOpen, Printer, ReceiptText, RefreshCw, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
-import { fmtTime, formatSom, parseSomToTiyin } from '@/lib/format';
+import { fmtDate, fmtDateTime, fmtTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Field, Input, LinkButton, Modal, ModalCancel, Money, Select, StatCard, Textarea, useToast } from '@/components/ui';
+import { Alert, Button, cx, Field, Input, LinkButton, Modal, ModalCancel, Money, Select, StatCard, Textarea, useToast } from '@/components/ui';
 import { MoneyInput } from '@/components/money-input';
 
 export type Shift = {
   id: string; number: number; status: 'open' | 'closed'; branch_id: string; branch_name: string; cashier_name: string; opened_at: string; opening_cash: number;
   expected_cash: number; counted_cash: number | null; difference: number | null;
+  /** Opened before today (left open overnight): the server takes no payment until it is closed. Only on /cash-shifts/current. */
+  stale?: boolean;
   totals: { payments: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; refunds: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; cash_expenses: { n: number; sum: number }; cash_in: number; cash_out: number };
 };
+
+/** Who may run a drawer and take money: the cashier and the manager (the server allows the same two roles). */
+export const canTakeMoney = (role: string) => role === 'cashier' || role === 'manager';
 
 /** The signed-in cashier's open shift (null when the drawer is closed). */
 export function useCurrentShift(enabled = true) {
@@ -60,13 +65,15 @@ export function useShiftUi(enabled: boolean) {
   if (shift.isError && s === undefined) return { subtitle: null, actions: null, body: <div className="mb-5"><ShiftLoadError q={shift} /></div> };
   const tot = s?.totals;
   return {
-    subtitle: s ? <span className="inline-flex items-center gap-2"><DoorOpen className="h-5 w-5 shrink-0 text-emerald-700" /><span><b className="font-semibold text-slate-900">{t('cash.shiftOpenTitle', { n: s.number, branch: s.branch_name })}</b>, {t('cash.shiftSinceShort', { time: fmtTime(s.opened_at) })}</span></span> : null,
+    // a shift from an earlier day shows its date, not just the time: the cashier must see that it is yesterday's
+    subtitle: s ? <span className="inline-flex items-center gap-2"><DoorOpen className={cx('h-5 w-5 shrink-0', s.stale ? 'text-red-700' : 'text-emerald-700')} /><span><b className="font-semibold text-slate-900">{t('cash.shiftOpenTitle', { n: s.number, branch: s.branch_name })}</b>, {s.stale ? <span className="font-semibold text-red-700">{t('cash.shiftOpenedOn', { date: fmtDateTime(s.opened_at) })}</span> : t('cash.shiftSinceShort', { time: fmtTime(s.opened_at) })}</span></span> : null,
     actions: s ? <>
-      <Button icon={<ReceiptText className="h-4 w-4" />} onClick={() => setModal('expense')}>{t('cash.cashExpense')}</Button>
+      {!s.stale && <Button icon={<ReceiptText className="h-4 w-4" />} onClick={() => setModal('expense')}>{t('cash.cashExpense')}</Button>}
       <LinkButton href={`/print/shift/${s.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('cash.report')}</LinkButton>
-      <Button icon={<DoorClosed className="h-4 w-4" />} onClick={() => setModal('close')}>{t('cash.closeShift')}</Button>
+      <Button variant={s.stale ? 'primary' : 'secondary'} icon={<DoorClosed className="h-4 w-4" />} onClick={() => setModal('close')}>{t('cash.closeShift')}</Button>
     </> : <Button variant="primary" icon={<DoorOpen className="h-5 w-5" />} onClick={() => setModal('open')}>{t('cash.openShift')}</Button>,
     body: <>
+      {s?.stale && <div className="mb-5"><Alert tone="red" title={t('cash.shiftStale', { date: fmtDate(s.opened_at) })}>{t('cash.shiftStaleHint')}</Alert></div>}
       {s && tot ? (
         <div className="mb-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard icon={<Banknote />} label={t('cash.colCashIncome')} value={<StatMoney tiyin={tot.payments.cash.sum} />} sub={t('cash.nPayments', { n: tot.payments.cash.n })} />

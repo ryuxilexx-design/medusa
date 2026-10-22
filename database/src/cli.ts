@@ -70,6 +70,50 @@ async function createClinic(pool: ReturnType<typeof createPool>, a: Record<strin
   }
 }
 
+const RESET_USAGE = `Foydalanish:
+  npm run db:reset-password -- --login <+998901234567 | login> [--tenant "<klinika nomi yoki id>"]
+
+  Xodimga (masalan, vaqtinchalik parolini unutgan yagona rahbarga) yangi bir martalik vaqtinchalik parol beradi,
+  akkauntni qulfdan chiqaradi va uning barcha sessiyalarini yopadi. --tenant berilsa, login shu klinikada ishlashi tekshiriladi.`;
+
+/**
+ * Operator's password reset from the server console: the only way back in when the sole manager has lost the temporary
+ * password (the API refuses to reset one's own password). Same rules as the manager's button: a new temporary password
+ * shown once, must_change_password, lockout cleared, every session of that person closed.
+ */
+async function resetPassword(pool: ReturnType<typeof createPool>, a: Record<string, string>) {
+  const login = a.login && a.login !== 'true' ? normLogin(a.login) : null;
+  if (!login) { console.error(RESET_USAGE); process.exit(2); }
+  const temp = generateTempPassword();
+  const hash = await hashPassword(temp);
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    const u = (await c.query(`SELECT id, full_name FROM users WHERE login = $1 FOR UPDATE`, [login])).rows[0];
+    if (!u) throw new Error(`«${login}» logini topilmadi`);
+    const memberships = (await c.query(
+      `SELECT m.id, m.tenant_id, m.role, m.status, t.name AS tenant_name FROM memberships m JOIN tenants t ON t.id = m.tenant_id WHERE m.user_id = $1 ORDER BY t.name`, [u.id])).rows;
+    if (a.tenant && a.tenant !== 'true') {
+      const want = a.tenant.trim().toLowerCase();
+      if (!memberships.some((m) => m.tenant_id === want || m.tenant_name.toLowerCase() === want)) throw new Error(`«${login}» «${a.tenant}» klinikasida ishlamaydi`);
+    }
+    await c.query(`UPDATE users SET password_hash = $2, must_change_password = true, failed_logins = 0, locked_until = NULL WHERE id = $1`, [u.id, hash]);
+    const sessions = (await c.query(`DELETE FROM sessions WHERE membership_id = ANY($1::uuid[])`, [memberships.map((m) => m.id)])).rowCount ?? 0;
+    for (const m of memberships)
+      await c.query(`INSERT INTO audit_logs (tenant_id, actor_name, action, resource_type, resource_id, summary) VALUES ($1, 'CLI', 'staff.password_reset', 'membership', $2, $3)`,
+        [m.tenant_id, m.id, `${u.full_name}: server konsolidan vaqtinchalik parol berildi`]);
+    await c.query('COMMIT');
+    const where = memberships.map((m) => `${m.tenant_name} (${m.role}${m.status === 'active' ? '' : ', ' + m.status})`).join(', ');
+    console.log(`Parol tiklandi: ${u.full_name}\n  login: ${login}\n  klinika: ${where || '—'}\n  yopilgan sessiyalar: ${sessions}\n  vaqtinchalik parol: ${temp}\n` +
+      `Parolni xodimga shaxsan bering — birinchi kirishda u yangi parol o‘rnatadi. Bu parol boshqa ko‘rsatilmaydi.`);
+  } catch (e) {
+    await c.query('ROLLBACK').catch(() => undefined);
+    throw e;
+  } finally {
+    c.release();
+  }
+}
+
 /**
  * Loads the official ICD-10 (MKB-10) list: CSV/TSV with columns code;title_ru[;title_uz] (header optional).
  * Existing codes are updated, new ones added; with --replace the starter codes missing from the file are removed
@@ -111,6 +155,7 @@ async function main() {
   try {
     await migrate(pool);
     if (cmd === 'create-clinic') await createClinic(pool, args(process.argv.slice(3)));
+    if (cmd === 'reset-password') await resetPassword(pool, args(process.argv.slice(3)));
     if (cmd === 'import-icd10') await importIcd10(pool, process.argv.slice(3));
     if (cmd === 'reset' || cmd === 'seed') {
       const demoDate = process.env.DEMO_DATE || '2026-10-18';

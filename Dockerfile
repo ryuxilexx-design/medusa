@@ -24,6 +24,7 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOST=0.0.0.0 PORT=3000 TZ=UTC
 COPY --from=build --chown=node:node /app /app
 USER node
 EXPOSE 3000
+# /api/v1/health answers 503 when the database does not respond within 2 s (the web proxy forwards it to the API)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:3000/login').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:3000/api/v1/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 CMD ["npm", "run", "start"]

@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import { json } from 'express';
 import { randomUUID } from 'crypto';
 import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { purgeSnapshots } from './cameras/ingest';
@@ -11,12 +12,19 @@ import { rawBody } from './cameras/hik.controller';
 import { AppModule } from './app.module';
 import { Db } from './core/db';
 
+/** Body limit of POST /cameras/face-codes/:id/photo (a phone JPEG; base64 adds a third). */
+export const FACE_PHOTO_BODY_LIMIT = '3mb';
+
 export async function createApp(): Promise<INestApplication> {
   const app = await NestFactory.create(AppModule, { logger: ['error', 'warn', 'log'] });
   // camera pushes (XML / JSON / multipart): read as a raw body before the JSON parser sees it
   // a request id from the very first byte (also for errors thrown by the body parser)
   app.use((req: any, res: any, next: () => void) => { if (!req.requestId) { req.requestId = randomUUID(); res.setHeader('X-Request-Id', req.requestId); } next(); });
   app.use('/api/v1/hik', rawBody);
+  // a face picture for the cameras (JPEG as base64 inside JSON) may be up to 3 MB on this one route; every other route keeps the 100 kB default
+  // (wrapped: Nest looks for a middleware named «jsonParser» in the stack and would skip its own default parser if it saw this one)
+  const facePhotoJson = json({ limit: FACE_PHOTO_BODY_LIMIT });
+  app.use('/api/v1/cameras/face-codes', (req: any, res: any, next: (e?: unknown) => void) => facePhotoJson(req, res, next));
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');
   (app.getHttpAdapter().getInstance() as any).disable('x-powered-by');
