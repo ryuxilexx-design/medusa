@@ -39,12 +39,15 @@ export const print = {
   'print.doc.rest': ['{from} – {until} ({n} kun) uyda davolanish tavsiya etiladi.', { one: 'С {from} по {until} ({n} день) рекомендовано лечение дома.', few: 'С {from} по {until} ({n} дня) рекомендовано лечение дома.', many: 'С {from} по {until} ({n} дней) рекомендовано лечение дома.' }],
   'print.doc.notSickLeave': ['Bu ma’lumotnoma mehnatga layoqatsizlik varaqasi emas.', 'Справка не является листком нетрудоспособности.'],
   'print.doc.rxGeneral': ['Umumiy tavsiya', 'Общие рекомендации'],
-  'print.doc.rxDisclaimer': ['Klinika ichki retsepti (dori tavsiyasi). Davlat elektron retsepti (DMED) emas.', 'Внутренний рецепт клиники (назначение лекарств). Не является государственным электронным рецептом (DMED).'],
+  'print.doc.rxDisclaimer': ['Klinikaning ichki dori tavsiyasi. Davlat elektron retsepti (DMED) emas.', 'Внутренняя рекомендация клиники по препаратам. Не является государственным электронным рецептом (DMED).'],
 
   // visit note
   'print.note.title': ['Shifokor xulosasi', 'Заключение врача'],
   'print.note.meta': ['Xizmat: {service}, qabul: {date}, {room}', 'Услуга: {service}, приём: {date}, {room}'],
   'print.note.followUp': ['Qayta qabul:', 'Повторный приём:'],
+  'print.note.addenda': ['Qo‘shimcha yozuvlar', 'Дополнения'],
+  'print.note.addendumMeta': ['{n}-qo‘shimcha yozuv — {name}, {at}', 'Дополнение {n} — {name}, {at}'],
+  'print.note.addendumReason': ['Sabab: {reason}', 'Причина: {reason}'],
 
   // lab
   'print.lab.title': ['Laboratoriya natijasi: {service}', 'Результат лабораторного исследования: {service}'],

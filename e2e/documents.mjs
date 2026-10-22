@@ -15,8 +15,8 @@ try {
   await waitText(d, 'Hujjatlar');
   check(await d.evaluate(() => document.body.innerText.includes('Bu qabulda hujjat berilmagan')), 'Qabulda «Hujjatlar» bloki bor (hali bo‘sh)');
 
-  await clickText(d, 'Retsept', 'button');
-  await waitText(d, 'Retsept (dori tavsiyasi) berish');
+  await clickText(d, 'Dori tavsiyasi', 'button');
+  await waitText(d, 'Dori tavsiyasi berish');
   // empty prescription → server validation shown, nothing issued
   await clickText(d, 'Berish va saqlash', '[role=dialog] button');
   await waitText(d, 'Kamida bitta dori');
@@ -29,7 +29,7 @@ try {
   await waitText(d, 'berildi');
   await settle(d);
   const href = await d.evaluate(() => [...document.querySelectorAll('a[href^="/print/document/"]')].at(-1)?.getAttribute('href'));
-  check(!!href && await d.evaluate(() => /Retsept \(dori tavsiyasi\) №\d+/.test(document.body.innerText)), 'Retsept ro‘yxatda raqami bilan');
+  check(!!href && await d.evaluate(() => /Dori tavsiyasi №\d+/.test(document.body.innerText)), 'Dori tavsiyasi ro‘yxatda raqami bilan');
 
   const p = await newPage(b, errors);
   await login(p, 'Shifokor', 'Akmal Rasulov');

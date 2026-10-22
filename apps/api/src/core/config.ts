@@ -30,11 +30,16 @@ export const config = {
     apiBase: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org',
   },
   ai: {
-    mode: (process.env.AI_MODE || 'sample') as 'off' | 'sample' | 'live',
+    /** off | sample | live. A production server starts with AI off; the demo shows the sample result. */
+    mode: (process.env.AI_MODE || (mode === 'production' ? 'off' : 'sample')) as 'off' | 'sample' | 'live',
+    /** APP_MODE=production refuses clinical routes (note draft, ICD-10) unless the clinic explicitly allowed them. News still works. */
+    clinicalInProduction: process.env.AI_CLINICAL_ALLOWED === '1',
+    /** Per-clinic daily spend cap in USD, summed from ai_usage before each call; 0 = no cap. */
+    dailyLimitUsd: process.env.AI_DAILY_LIMIT_USD === undefined || process.env.AI_DAILY_LIMIT_USD === '' ? 5 : Number(process.env.AI_DAILY_LIMIT_USD),
     /** anthropic (Claude) | gemini. Each provider has its own key and model variable, so switching is one line. */
     provider: aiProvider,
     apiKey: (aiProvider === 'gemini' ? process.env.GEMINI_API_KEY : process.env.ANTHROPIC_API_KEY) || '',
-    model: (aiProvider === 'gemini' ? process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite' : process.env.AI_MODEL || 'claude-opus-5-5'),
+    model: (aiProvider === 'gemini' ? process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite' : process.env.AI_MODEL || 'claude-sonnet-5-5'),
     /** Gemini free tier lets Google use prompts to improve its products: no patient text there in production. */
     geminiPaid: process.env.GEMINI_PAID === '1',
     timeoutMs: Number(process.env.AI_TIMEOUT_MS || 20000),

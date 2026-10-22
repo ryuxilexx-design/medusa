@@ -388,7 +388,8 @@ test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilga
     assert.equal(ai.clinicalAllowed(null), false);
 
     // a real clinic on the free tier: no clinical text leaves the server; ICD-10 falls back to word search
-    config.mode = 'production';
+    // (AI_CLINICAL_ALLOWED=1 here, so it is the free-tier rule that refuses, not the production switch)
+    config.mode = 'production'; config.ai.clinicalInProduction = true;
     const calls = gem.calls.length;
     assert.equal((await doctor.get('/ai/status')).body.data.mode, 'off');
     const me = (await doctor.get('/me')).body.data;
@@ -408,4 +409,82 @@ test('Gemini: so‘rov shakli, ism yuborilmaydi, sarf hisobi; rad etish, kesilga
     Object.assign(config.ai, saved); config.mode = savedMode;
     server.close();
   }
+});
+
+// ---------- production guard and the daily budget ----------
+test('production: klinik marshrutlar AI_CLINICAL_ALLOWED=1 bo‘lmaguncha 503 AI_DISABLED_PRODUCTION (uz/ru); yangiliklar ishlaydi; ruxsat bilan — 200', async () => {
+  const savedMode = config.mode, savedAllowed = config.ai.clinicalInProduction;
+  config.mode = 'production'; config.ai.clinicalInProduction = false;
+  try {
+    const calls = claude.calls.length;
+    const text = 'Bemor 2 kundan beri yo‘taldan shikoyat qiladi, harorat 37.5.';
+    let r = await doctor.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id });
+    assert.equal(r.status, 503, r.text); assert.equal(r.body.error.code, 'AI_DISABLED_PRODUCTION');
+    assert.match(r.body.error.message, /klinik matn uchun AI yoqilmagan/);
+    r = await doctor.post('/ai/icd10-suggest', { text: 'Arterial gipertenziya' });
+    assert.equal(r.status, 200); assert.equal(r.body.data.mode, 'search', 'MKB-10 so‘z bo‘yicha qidiradi, AI’siz');
+    assert.equal(claude.calls.length, calls, 'klinik matn modelga ketmadi');
+    const me = (await doctor.get('/me')).body.data;
+    assert.equal(me.ai_mode, 'off'); assert.match(me.ai_off_reason, /klinik matn uchun AI yoqilmagan/);
+    assert.equal((await doctor.get('/ai/status')).body.data.mode, 'off');
+    // the person's language: the same refusal in Russian
+    assert.equal((await doctor.put('/me/preferences', { locale: 'ru' })).status, 200);
+    try {
+      r = await doctor.post('/ai/note-draft', { text });
+      assert.equal(r.status, 503); assert.equal(r.body.error.code, 'AI_DISABLED_PRODUCTION'); assert.match(r.body.error.message, /не включён/);
+      assert.match((await doctor.get('/me')).body.data.ai_off_reason, /не включён/);
+    } finally { await doctor.put('/me/preferences', { locale: 'uz' }); }
+    // public route: specialty news summaries still run on a production server
+    await pool.query(`DELETE FROM news_items WHERE specialty_key = 'dermatology'`);
+    assert.equal(await news.refreshSpecialty('dermatology'), 2);
+    assert.equal(claude.calls.length, calls + 1, 'yangiliklar uchun model chaqirildi');
+    // the clinic switched clinical AI on
+    config.ai.clinicalInProduction = true;
+    r = await doctor.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id });
+    assert.equal(r.status, 200, r.text); assert.equal(r.body.data.mode, 'live');
+    assert.equal((await doctor.get('/me')).body.data.ai_mode, 'live');
+  } finally { config.mode = savedMode; config.ai.clinicalInProduction = savedAllowed; }
+});
+
+test('kunlik limit: klinikaning bugungi sarfi AI_DAILY_LIMIT_USD ga yetganda 429 AI_BUDGET (uz/ru), model chaqirilmaydi; yangiliklar chegaralanmaydi', async () => {
+  const savedLimit = config.ai.dailyLimitUsd;
+  const spent = Number((await pool.query(`SELECT coalesce(sum(cost_usd),0) AS s FROM ai_usage WHERE tenant_id = $1 AND created_at >= date_trunc('day', demo_now() AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent'`, [SEED_IDS.tenant])).rows[0].s);
+  assert.ok(spent > 0, `bugungi sarf bor: ${spent}`);
+  config.ai.dailyLimitUsd = spent; // the cap is reached exactly
+  try {
+    const calls = claude.calls.length;
+    const text = 'Bemor 2 kundan beri yo‘taldan shikoyat qiladi, harorat 37.5.';
+    let r = await doctor.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id });
+    assert.equal(r.status, 429, r.text); assert.equal(r.body.error.code, 'AI_BUDGET'); assert.match(r.body.error.message, /limiti tugadi/);
+    assert.equal(claude.calls.length, calls, 'model chaqirilmadi');
+    assert.equal((await doctor.put('/me/preferences', { locale: 'ru' })).status, 200);
+    try {
+      r = await doctor.post('/ai/note-draft', { text });
+      assert.equal(r.status, 429); assert.match(r.body.error.message, /лимит/);
+    } finally { await doctor.put('/me/preferences', { locale: 'uz' }); }
+    // the other clinic has its own budget
+    const t2 = session(); await t2.demo(M.tenant2Doctor ?? M.tenant2Manager);
+    const usage2 = (await pool.query(`SELECT count(*)::int AS n FROM ai_usage WHERE tenant_id = $1`, [SEED_IDS.tenant2])).rows[0].n;
+    assert.equal(usage2, 0);
+    // news has no tenant: not capped per clinic
+    await pool.query(`DELETE FROM news_items WHERE specialty_key = 'ophthalmology'`);
+    assert.equal(await news.refreshSpecialty('ophthalmology'), 2);
+    assert.equal(claude.calls.length, calls + 1);
+    // a higher cap lets the next call through
+    config.ai.dailyLimitUsd = spent + 1;
+    r = await doctor.post('/ai/note-draft', { text, encounter_id: encounter.encounter.id });
+    assert.equal(r.status, 200, r.text);
+    // 0 = no cap
+    config.ai.dailyLimitUsd = 0;
+    assert.equal((await doctor.post('/ai/note-draft', { text })).status, 200);
+  } finally { config.ai.dailyLimitUsd = savedLimit; }
+});
+
+test('sozlamalar: APP_MODE=production da AI_MODE sukut bo‘yicha off, model sukut bo‘yicha claude-sonnet-5-5, limit 5 $', () => {
+  const { execFileSync } = require('node:child_process');
+  const read = (env) => JSON.parse(execFileSync(process.execPath, ['-e', 'const { config } = require("./dist/core/config.js"); console.log(JSON.stringify({ mode: config.ai.mode, model: config.ai.model, limit: config.ai.dailyLimitUsd, allowed: config.ai.clinicalInProduction }))'],
+    { cwd: new URL('..', import.meta.url).pathname, env: { ...process.env, AI_MODE: '', AI_MODEL: '', AI_PROVIDER: 'anthropic', AI_DAILY_LIMIT_USD: '', AI_CLINICAL_ALLOWED: '', ...env }, encoding: 'utf8' }).trim());
+  assert.deepEqual(read({ APP_MODE: 'production' }), { mode: 'off', model: 'claude-sonnet-5-5', limit: 5, allowed: false });
+  assert.deepEqual(read({ APP_MODE: 'demo' }), { mode: 'sample', model: 'claude-sonnet-5-5', limit: 5, allowed: false });
+  assert.deepEqual(read({ APP_MODE: 'production', AI_MODE: 'live', AI_CLINICAL_ALLOWED: '1', AI_DAILY_LIMIT_USD: '12.5', AI_MODEL: 'claude-opus-5-5' }), { mode: 'live', model: 'claude-opus-5-5', limit: 12.5, allowed: true });
 });

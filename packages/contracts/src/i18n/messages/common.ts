@@ -107,8 +107,8 @@ export const common = {
   'payment.transfer': ['O‘tkazma', 'Перевод'],
   'document.referral': ['Yo‘llanma', 'Направление'],
   'document.certificate': ['Tibbiy ma’lumotnoma', 'Медицинская справка'],
-  'document.prescription': ['Retsept (dori tavsiyasi)', 'Рецепт (назначение лекарств)'],
-  'document.prescriptionShort': ['Retsept', 'Рецепт'],
+  'document.prescription': ['Dori tavsiyasi', 'Рекомендация по препаратам'],
+  'document.prescriptionShort': ['Dori tavsiyasi', 'Рекомендация по препаратам'],
   'document.certificateShort': ['Ma’lumotnoma', 'Справка'],
 
   // lab values

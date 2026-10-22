@@ -112,6 +112,12 @@ export const noteFieldsSchema = z.object({
 });
 export const noteDraftSchema = noteFieldsSchema.extend({ version: z.number().int() });
 export const noteSignSchema = noteDraftSchema;
+/** Addendum to a signed note: the text and why it is added (both required, both kept as written). */
+export const noteAddendumSchema = z.object({
+  text: z.string({ required_error: 'Qo‘shimcha matn kiritilishi shart' }).transform((s) => cleanText(s).trim())
+    .pipe(z.string().min(3, 'Qo‘shimcha matn kamida 3 belgidan iborat bo‘lsin').max(4000, 'Qo‘shimcha matn 4000 belgidan oshmasin')),
+  reason: trimmed(3, 300, 'Sabab'),
+});
 /** Personal display settings: interface language and text size (at least one). */
 export const preferencesSchema = z.object({
   locale: z.enum(['uz', 'uz-Cyrl', 'ru']).optional(),
@@ -303,7 +309,7 @@ export const documentCreateSchema = z.discriminatedUnion('kind', [
 export const documentVoidSchema = z.object({ reason: trimmed(3, 300, 'Bekor qilish sababi') });
 
 export const DOCUMENT_KIND_LABEL: Record<'referral' | 'certificate' | 'prescription', string> = {
-  referral: 'Yo‘llanma', certificate: 'Tibbiy ma’lumotnoma', prescription: 'Retsept (dori tavsiyasi)',
+  referral: 'Yo‘llanma', certificate: 'Tibbiy ma’lumotnoma', prescription: 'Dori tavsiyasi',
 };
 
 // ---------- Cash desk: shifts, refunds, expenses ----------

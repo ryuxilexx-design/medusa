@@ -3,7 +3,7 @@ import { Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock, Eye, FlaskConical, PlayCircle, Printer, ShieldAlert, Sparkles, Stethoscope } from 'lucide-react';
+import { CheckCircle2, Clock, Eye, FilePlus2, FlaskConical, PlayCircle, Printer, ShieldAlert, Sparkles, Stethoscope } from 'lucide-react';
 import { REQUIRED_FOR_SIGN, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, fmtTime, formatSom, fullName, longDate, pid } from '@/lib/format';
@@ -157,6 +157,9 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   const [orderOpen, setOrderOpen] = useState(false);
   const [preview, setPreview] = useState(false);
   const [confirmSign, setConfirmSign] = useState(false);
+  const [addendumOpen, setAddendumOpen] = useState(false);
+  // the patient's own intake answers (same query as the intake panel): the allergy line is repeated inside the prescription form
+  const intake = useQuery({ queryKey: ['intake', appointmentId], queryFn: () => api<{ data: { allergies: string | null } | null }>(`/appointments/${appointmentId}/intake`).then((r) => r.data), retry: false });
 
   useEffect(() => {
     if (enc.data && (!form || enc.data.note.version !== version && !dirtyOf(form, base))) {
@@ -260,7 +263,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     <div className="space-y-5">
       {mine && <MyText mine={mine} server={form} canPutBack={!signed} onPutBack={() => { setForm(mine); setMine(null); }} onDismiss={() => setMine(null)} />}
       <Card padded={false} title={<span className="flex items-center gap-2 whitespace-nowrap">{t('note.title')} <NoteStatus status={enc.data.note.status} /></span>}
-        actions={signed ? printLink : undefined}>
+        actions={signed ? <><Button size="sm" icon={<FilePlus2 className="h-4 w-4" />} onClick={() => setAddendumOpen(true)}>{t('note.addendum')}</Button>{printLink}</> : undefined}>
         {!signed && (
           <Toolbar actions={<><Button size="sm" variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(true)}>{t('note.preview')}</Button>{printLink}</>}>
             <Button size="sm" icon={<Sparkles className="h-4 w-4 text-brand-600" />} disabled={!!aiDisabledReason} title={aiDisabledReason ?? t('note.aiButtonTitle')} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</Button>
@@ -274,7 +277,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
             setErrors((x) => ({ ...x, complaints: '' }));
             toast.info(t('note.intakeAdded'));
           }} />
-          {signed ? <div className="divide-y divide-slate-100"><NoteRows form={form} /></div> : <>
+          {signed ? <><div className="divide-y divide-slate-100"><NoteRows form={form} /></div><Addenda items={enc.data.addenda ?? []} /></> : <>
             {/* vitals: one short row; the two pressure numbers sit together like the doctor writes them (120 / 80) */}
             <div className="flex flex-wrap items-start gap-x-5 gap-y-3">
               <div role="group" aria-labelledby={`${bpId}-bp`} className="flex flex-col gap-1">
@@ -326,7 +329,8 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
         )}
       </Card>
 
-      <DocumentsCard encounterId={encounterId} note={{ diagnosis: form.diagnosis, icd10: form.icd10, signed }} />
+      <DocumentsCard encounterId={encounterId} note={{ diagnosis: form.diagnosis, icd10: form.icd10, signed }}
+        allergy={{ state: enc.data.patient?.allergy_state ?? null, note: enc.data.patient?.allergy_note ?? null, intake: intake.data?.allergies ?? null }} />
 
       {/* the two decisions of the visit, always in reach while the doctor writes, orders and issues documents */}
       {!signed && (
@@ -349,7 +353,9 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
         </div>
       )}
 
-      <AiModal open={aiOpen} encounterId={encounterId} onClose={() => setAiOpen(false)} onApply={(d) => { setForm((f) => ({ ...f!, ...d })); toast.info(t('note.aiApplied')); }} />
+      <AiModal open={aiOpen} encounterId={encounterId} current={form} onClose={() => setAiOpen(false)}
+        onApply={(d) => { if (!Object.keys(d).length) { toast.info(t('ai.nothingApplied')); return; } setForm((f) => ({ ...f!, ...d })); setErrors((x) => ({ ...x, ...Object.fromEntries(Object.keys(d).map((k) => [k, ''])) })); toast.info(t('note.aiApplied')); }} />
+      <AddendumModal open={addendumOpen} encounterId={encounterId} onClose={() => setAddendumOpen(false)} />
       <OrderModal open={orderOpen} onClose={() => setOrderOpen(false)} encounterId={encounterId} existing={enc.data.orders} />
       <Modal open={preview} onClose={() => setPreview(false)} width="max-w-2xl" title={t('note.previewTitle')} footer={<Button onClick={() => setPreview(false)}>{t('common.close')}</Button>}>
         <NotePreview form={form} patient={enc.data.patient} appt={enc.data.appointment} status={enc.data.note.status} />
@@ -422,6 +428,57 @@ function NoteRows({ form }: { form: NoteForm }) {
   );
 }
 
+type Addendum = { id: string; text: string; reason: string; author_name: string; signed_at: string };
+/** Addenda under a signed note: each one signed, dated and never editable — the only way a signed note grows. */
+function Addenda({ items }: { items: Addendum[] }) {
+  const t = useT();
+  if (!items.length) return null;
+  return (
+    <section className="rounded-xl border border-slate-200 bg-slate-50/60 p-4" data-testid="note-addenda">
+      <h3 className="text-[0.8125rem] font-bold uppercase tracking-wide text-slate-600">{t('note.addendaTitle')}</h3>
+      <ol className="mt-2 divide-y divide-slate-200">
+        {items.map((a, i) => (
+          <li key={a.id} className="py-2.5 first:pt-0 last:pb-0">
+            <div className="text-[0.8125rem] font-semibold text-slate-600">{t('note.addendumMeta', { n: i + 1, name: a.author_name, at: fmtDateTime(a.signed_at) })}</div>
+            <div className="whitespace-pre-wrap text-[0.9375rem] text-slate-900">{a.text}</div>
+            <div className="text-[0.8125rem] text-slate-600">{t('note.addendumReasonLine', { reason: a.reason })}</div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function AddendumModal({ open, encounterId, onClose }: { open: boolean; encounterId: string; onClose: () => void }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [reason, setReason] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  useEffect(() => { if (open) { setText(''); setReason(''); setErrors({}); setFormError(null); } }, [open]);
+  const add = useMutation({
+    mutationFn: () => api(`/encounters/${encounterId}/addendum`, { method: 'POST', body: { text, reason } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['encounter', encounterId] }); toast.success(t('note.addendumAdded')); onClose(); },
+    onError: (e) => {
+      // the typed text stays in the form; field errors beside the fields, anything else above them
+      if (e instanceof ApiError && e.fields) { setErrors(e.fields); setFormError(null); } else setFormError((e as Error).message);
+    },
+  });
+  return (
+    <Modal open={open} onClose={onClose} width="max-w-2xl" dirty={(!!text.trim() || !!reason.trim()) && !add.isPending} title={t('note.addendumTitle')}
+      footer={<><ModalCancel /><Button variant="primary" loading={add.isPending} disabled={text.trim().length < 3 || reason.trim().length < 3} onClick={() => { setFormError(null); add.mutate(); }}>{t('note.addendumSave')}</Button></>}>
+      <div className="space-y-3">
+        {formError && <Alert tone="red">{formError}</Alert>}
+        <Field label={t('note.addendumText')} required error={errors.text}>{(id) => <Textarea id={id} data-autofocus rows={5} value={text} invalid={!!errors.text} onChange={(e) => { setText(e.target.value); setErrors((x) => ({ ...x, text: '' })); }} />}</Field>
+        <Field label={t('note.addendumReason')} required error={errors.reason}>{(id) => <Input id={id} value={reason} invalid={!!errors.reason} placeholder={t('note.addendumReasonPh')} onChange={(e) => { setReason(e.target.value); setErrors((x) => ({ ...x, reason: '' })); }} />}</Field>
+        <p className="text-[0.8125rem] text-slate-600">{t('note.addendumHint')}</p>
+      </div>
+    </Modal>
+  );
+}
+
 function NotePreview({ form, patient, appt, status }: { form: NoteForm; patient: any; appt: any; status: string }) {
   const t = useT();
   return (
@@ -433,19 +490,44 @@ function NotePreview({ form, patient, appt, status }: { form: NoteForm; patient:
   );
 }
 
-function AiModal({ open, onClose, onApply, encounterId }: { open: boolean; onClose: () => void; onApply: (d: Partial<NoteForm>) => void; encounterId: string }) {
+type Choice = 'keep' | 'replace' | 'append';
+type AiField = (typeof FIELDS)[number]['key'];
+const AI_FIELDS = FIELDS.map((f) => f.key);
+
+function AiModal({ open, onClose, onApply, encounterId, current }: { open: boolean; onClose: () => void; onApply: (d: Partial<NoteForm>) => void; encounterId: string; current: NoteForm }) {
   const status = useQuery({ queryKey: ['ai-status'], queryFn: () => api('/ai/status').then((r) => r.data), enabled: open });
   const t = useT();
   const [text, setText] = useState('');
+  const [choice, setChoice] = useState<Partial<Record<AiField, Choice>>>({});
   const run = useMutation({ mutationFn: () => api('/ai/note-draft', { method: 'POST', body: { text, encounter_id: encounterId } }).then((r) => r.data) });
-  useEffect(() => { if (!open) { run.reset(); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  // opening with an empty scratch text: start from what is already in the note, so the doctor never types it twice
+  useEffect(() => {
+    if (!open) { run.reset(); setChoice({}); return; }
+    setText((s) => s.trim() ? s : AI_FIELDS.map((k) => current[k].trim()).filter(Boolean).join('\n\n'));
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   const d = run.data?.draft;
   const label = run.data?.mode === 'sample' ? t('ai.sampleLabel') : t('ai.liveLabel');
   // the model answers «Kiritilmagan» for an empty section (its prompt is Uzbek); show it in the doctor's language
   const NOT_ENTERED = 'Kiritilmagan';
+  const draftOf = (k: AiField) => (d && d[k] !== NOT_ENTERED ? String(d[k]).trim() : '');
+  /** What applying would do to each field: fill an empty one, leave an identical one, ask about a typed one. */
+  const planOf = (k: AiField): 'fill' | 'same' | 'none' | 'ask' => {
+    const v = draftOf(k), cur = current[k].trim();
+    return !v ? 'none' : !cur ? 'fill' : cur === v ? 'same' : 'ask';
+  };
+  const apply = () => {
+    const out: Partial<NoteForm> = {};
+    for (const k of AI_FIELDS) {
+      const plan = planOf(k), c = choice[k] ?? 'keep';
+      if (plan === 'fill') out[k] = draftOf(k);
+      else if (plan === 'ask' && c === 'replace') out[k] = draftOf(k);
+      else if (plan === 'ask' && c === 'append') out[k] = `${current[k].trim()}\n${draftOf(k)}`;
+    }
+    onApply(out); onClose();
+  };
   return (
     <Modal open={open} onClose={onClose} width="max-w-5xl" dirty={!!text && !d} title={<span className="flex flex-wrap items-center gap-2"><Sparkles className="h-5 w-5 shrink-0 text-brand-600" />{t('ai.title')} {status.data?.mode === 'sample' && <Badge tone="yellow">{t('ai.sampleMode')}</Badge>}{status.data?.mode === 'live' && <Badge tone="teal">{t('ai.live')}</Badge>}</span>}
-      footer={d ? <><ModalCancel /><Button variant="primary" onClick={() => { onApply(Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v === NOT_ENTERED ? '' : v])) as Partial<NoteForm>); onClose(); }}>{t('ai.apply')}</Button></>
+      footer={d ? <><ModalCancel /><Button variant="primary" onClick={apply}>{t('ai.apply')}</Button></>
         : <><ModalCancel /><Button variant="primary" loading={run.isPending} disabled={text.trim().length < 10} onClick={() => run.mutate()}>{t('ai.run')}</Button></>}>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
@@ -461,7 +543,25 @@ function AiModal({ open, onClose, onApply, encounterId }: { open: boolean; onClo
             : d ? (
               <div className="space-y-2">
                 <Alert tone={run.data.mode === 'sample' ? 'yellow' : 'blue'}>{t('ai.rules', { label })}</Alert>
-                {FIELDS.map((f) => <div key={f.key} className="rounded-lg border border-slate-200 px-3 py-2"><div className="text-[0.8125rem] font-semibold text-slate-600">{t(f.label)}</div><div className={cx('whitespace-pre-wrap text-[0.9375rem]', d[f.key] === NOT_ENTERED && 'text-slate-500')}>{d[f.key] === NOT_ENTERED ? t('common.notEntered') : d[f.key]}</div></div>)}
+                {FIELDS.map((f) => {
+                  const plan = planOf(f.key);
+                  return (
+                    <div key={f.key} className="rounded-lg border border-slate-200 px-3 py-2">
+                      <div className="text-[0.8125rem] font-semibold text-slate-600">{t(f.label)}</div>
+                      <div className={cx('whitespace-pre-wrap text-[0.9375rem]', d[f.key] === NOT_ENTERED && 'text-slate-500')}>{d[f.key] === NOT_ENTERED ? t('common.notEntered') : d[f.key]}</div>
+                      {plan === 'fill' && <div className="mt-1 text-[0.8125rem] text-emerald-800">{t('ai.toEmpty')}</div>}
+                      {plan === 'same' && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('ai.same')}</div>}
+                      {plan === 'ask' && (
+                        <fieldset className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" data-testid={`ai-choice-${f.key}`}>
+                          <legend className="mb-1 font-medium text-amber-900">{t('ai.hasText')}</legend>
+                          {(['keep', 'replace', 'append'] as Choice[]).map((c) => (
+                            <label key={c} className="flex min-h-8 items-center gap-1.5"><input type="radio" name={`ai-${f.key}`} className="h-4 w-4 accent-brand-600" checked={(choice[f.key] ?? 'keep') === c} onChange={() => setChoice((x) => ({ ...x, [f.key]: c }))} />{t(`ai.${c}` as MessageKey)}</label>
+                          ))}
+                        </fieldset>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : <p className="rounded-lg border-2 border-dashed border-slate-300 p-8 text-center text-[0.9375rem] text-slate-600">{t('ai.empty')}</p>}
         </div>

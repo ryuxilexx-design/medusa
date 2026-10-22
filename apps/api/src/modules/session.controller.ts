@@ -3,6 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response } from 'express';
 import { isLocale, loginSchema, preferencesSchema } from '@meduza/contracts';
 import { AiClient } from '../ai/ai-client';
+import { reasonText } from './ai.controller';
 import { assertDatabaseName, RealTenantsPresentError, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
 import { Db } from '../core/db';
 import { config } from '../core/config';
@@ -77,7 +78,7 @@ export class SessionController {
       data: {
         membership_id: ctx.membershipId, name: ctx.name, title: ctx.title, role: ctx.role, tenant_id: ctx.tenantId, clinic_name: ctx.tenantName,
         doctor_id: ctx.doctorId, doctor_specialty: ctx.doctorSpecialty, branches, auth_kind: ctx.authKind, must_change_password: ctx.mustChangePassword,
-        today: today(), now: now().toISOString(), demo: config.demoEnabled, clock_reason: (await this.db.one(`SELECT set_reason FROM demo_clock WHERE id = 1`))?.set_reason ?? null, ai_mode: this.ai.clinicalMode(ctx.tenantId), ai_off_reason: this.ai.clinicalOffReason(ctx.tenantId),
+        today: today(), now: now().toISOString(), demo: config.demoEnabled, clock_reason: (await this.db.one(`SELECT set_reason FROM demo_clock WHERE id = 1`))?.set_reason ?? null, ai_mode: this.ai.clinicalMode(ctx.tenantId), ai_off_reason: reasonText(ctx, this.ai.clinicalOffReason(ctx.tenantId)),
         locale: ctx.locale, text_size: ctx.textSize,
       },
     };
