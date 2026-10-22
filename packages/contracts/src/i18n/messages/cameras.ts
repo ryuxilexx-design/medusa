@@ -147,7 +147,7 @@ export const cameras = {
   'cam.dev.connError': ['Ulanish xatosi', 'Ошибка подключения'],
   'cam.dev.connect': ['Ulanish', 'Подключение'],
   'cam.isapi.title': ['Kamera bilan to‘g‘ridan-to‘g‘ri ulanish: {name}', 'Прямое подключение к камере: {name}'],
-  'cam.isapi.host': ['{ip} manzil yoki host', '{ip}-адрес или хост'],
+  'cam.isapi.host': ['{ip} manzil (klinika tarmog‘ida)', '{ip}-адрес (в сети клиники)'],
   'cam.isapi.port': ['Port', 'Порт'],
   'cam.isapi.https': ['{proto} orqali', 'Через {proto}'],
   'cam.isapi.username': ['Kamera logini', 'Логин камеры'],

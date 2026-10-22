@@ -47,10 +47,10 @@ test('ulanish: noto‘g‘ri parol → maydon xatosi; to‘g‘ri → model/pros
   const r = await manager.post('/cameras', { branch_id: BC, name: NAME.j, purposes: ['attendance', 'security'], security_mode: 'always', alert_snapshots: true });
   const id = r.body.data.id;
   // the server never connects to itself, link-local/metadata or multicast addresses on a manager's say-so
-  for (const host of ['169.254.169.254', '0.0.0.0', '224.0.0.1', 'localhost.', '64:ff9b::a9fe:a9fe', '2002:a9fe:a9fe::1', '::ffff:7f00:1']) {
+  for (const host of ['169.254.169.254', '0.0.0.0', '224.0.0.1', '100.64.0.1', 'localhost', 'camera.local', '64:ff9b::a9fe:a9fe', '::ffff:7f00:1']) {
     const r = await manager.put(`/cameras/${id}/isapi`, { host, port: 80, username: 'admin', password: 'x' });
     assert.ok(r.status === 422 || r.status === 502, host + ' ' + r.status);
-    assert.match(r.body.error.message, /klinika tarmog‘ida|topilmadi|aloqa yo‘q|Faqat IP|tekshiring/, host + ': ' + r.body.error.message);
+    assert.match(r.body.error.message, /klinika tarmog‘ida|IPv4|tekshiring/, host + ': ' + r.body.error.message);
   }
   const bad = await manager.put(`/cameras/${id}/isapi`, { host: cam.host, port: cam.port, username: 'admin', password: 'wrong' });
   assert.equal(bad.status, 422); assert.match(bad.body.error.fields.password, /parol/i);

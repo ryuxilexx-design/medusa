@@ -98,6 +98,15 @@ export class CameraIsapiController {
   @Roles('manager') @Delete(':id/isapi') @HttpCode(200)
   async disconnect(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     const c = await this.camera(ctx, id);
+    // a revoked code still on the camera is deleted now, while we still have the login; if that fails, nothing is forgotten
+    const pending = await this.db.rows(`SELECT fcc.face_code_id, fcc.remote_id, fc.code FROM face_code_cameras fcc JOIN face_codes fc ON fc.id = fcc.face_code_id WHERE fcc.camera_id = $1 AND fc.revoked_at IS NOT NULL`, [c.id]);
+    const target = targetOf(c);
+    if (pending.length && target && c.fdlib_id) {
+      try {
+        const client = await IsapiClient.create(target);
+        for (const p of pending) { await client.deleteFace(c.fdlib_id, p.code, p.remote_id); await this.db.rows(`DELETE FROM face_code_cameras WHERE face_code_id = $1 AND camera_id = $2`, [p.face_code_id, c.id]); }
+      } catch (e) { throw conflict('FACES_PENDING_REMOVAL', `Bekor qilingan ${pending.length} ta kod hali kamerada: ${(e as Error).message}`); }
+    }
     await this.db.tx(async (q) => {
       await q.query(`UPDATE cameras SET isapi_host = NULL, isapi_user = NULL, isapi_password_enc = NULL, isapi_error = NULL, listening_configured_at = NULL, delivery = 'push' WHERE id = $1`, [c.id]);
       await audit(q, ctx, 'camera.isapi_disconnect', 'camera', c.id, 'Kamera ulanishi o‘chirildi', c.branch_id);

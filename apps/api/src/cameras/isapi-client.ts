@@ -4,7 +4,6 @@
 //
 // Face pictures pass through here in memory on their way to the camera and are never written anywhere.
 import { createHash, randomBytes } from 'crypto';
-import { lookup } from 'dns/promises';
 import { isIP } from 'net';
 import { AppError } from '../core/errors';
 
@@ -12,6 +11,23 @@ export interface IsapiTarget { host: string; port: number; https: boolean; usern
 export type IsapiResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 const TIMEOUT_MS = 8_000;
+/** Largest answer read from a camera (device info, status, library lists): more is not a camera talking to us. */
+const MAX_RESPONSE = 2 * 1024 * 1024;
+
+/** Reads a response body up to `max` bytes; a longer one is cut off and the connection dropped. */
+async function readBounded(res: Response, max: number): Promise<Buffer> {
+  if (!res.body) return Buffer.alloc(0);
+  const reader = res.body.getReader();
+  const chunks: Buffer[] = []; let size = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) { await reader.cancel().catch(() => undefined); throw new IsapiError('Kamera javobi juda katta'); }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
+}
 const md5 = (s: string) => createHash('md5').update(s).digest('hex');
 
 /** Error thrown for a camera that answered but refused (bad password, locked, unsupported): the message is for the manager. */
@@ -27,24 +43,20 @@ function parseDigest(h: string): Record<string, string> {
 }
 
 /**
- * A camera lives in the clinic's own network, so private ranges are allowed; everything that could turn the server
- * into a proxy against itself or its host is not: loopback, link-local / cloud metadata (169.254.0.0/16, fe80::/10),
- * unspecified, multicast and reserved addresses. The name is resolved once and the connection goes to that address,
- * so a DNS answer cannot change between the check and the request (rebinding). Tests may use 127.0.0.1.
+ * A camera is addressed by its IPv4 address in the clinic's own network (no host names: nothing to resolve, nothing
+ * to rebind). Private ranges are allowed; everything that could turn the server into a proxy against itself or its
+ * host is not: loopback, link-local / cloud metadata (169.254.0.0/16), unspecified, multicast, reserved, CGNAT.
+ * Tests may use 127.0.0.1.
  */
-export async function assertCameraAddress(host: string): Promise<string> {
-  const addrs = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
-  if (!addrs.length) throw new IsapiError('Kamera manzili topilmadi (DNS)');
-  for (const a of addrs) if (!allowedCameraIp(a)) throw new IsapiError('Bu manzilga ulanish mumkin emas: kamera klinika tarmog‘ida bo‘lishi kerak', 0, 'ADDRESS');
-  return addrs[0];
+export function assertCameraAddress(host: string): string {
+  if (isIP(host) !== 4) throw new IsapiError('Kamera manzili IPv4 ko‘rinishida bo‘lsin (masalan 192.168.1.64)', 0, 'ADDRESS');
+  if (!allowedCameraIp(host)) throw new IsapiError('Bu manzilga ulanish mumkin emas: kamera klinika tarmog‘ida bo‘lishi kerak', 0, 'ADDRESS');
+  return host;
 }
 function allowedCameraIp(ip: string): boolean {
-  if (process.env.MEDUZA_TEST === '1' && (ip === '127.0.0.1' || ip === '::1')) return true;
-  // only plain IPv4 (a dotted IPv4-mapped IPv6 is unwrapped; every other IPv6 form — NAT64, 6to4, Teredo, link-local —
-  // can hide an address and is refused: cameras on a clinic LAN are IPv4)
-  const v4 = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip)?.[1] ?? ip;
-  if (isIP(v4) !== 4) return false;
-  const [a, b] = v4.split('.').map(Number);
+  if (process.env.MEDUZA_TEST === '1' && ip === '127.0.0.1') return true;
+  if (isIP(ip) !== 4) return false;
+  const [a, b] = ip.split('.').map(Number);
   if (a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127)) return false;
   return true;
 }
@@ -55,14 +67,13 @@ export class IsapiClient {
   private readonly base: string;
   // HTTPS is verified like any other TLS connection: a camera with its factory self-signed certificate must either get a
   // proper certificate or be reached over plain HTTP inside the clinic's own network (docs/HIKVISION.md)
-  private constructor(private t: IsapiTarget, address: string) {
-    const h = t.https || isIP(address) === 0 ? t.host : isIP(address) === 6 ? `[${address}]` : address;
-    this.base = `${t.https ? 'https' : 'http'}://${h}:${t.port}`;
+  private constructor(private t: IsapiTarget) {
+    this.base = `${t.https ? 'https' : 'http'}://${t.host}:${t.port}`;
   }
   /** Checks the address first (see assertCameraAddress), then returns a client bound to it. */
   static async create(t: IsapiTarget): Promise<IsapiClient> {
-    if (!/^[A-Za-z0-9.:-]+$/.test(t.host)) throw new IsapiError('Kamera manzili noto‘g‘ri');
-    return new IsapiClient(t, await assertCameraAddress(t.host));
+    assertCameraAddress(t.host);
+    return new IsapiClient(t);
   }
 
   private authHeader(method: string, uri: string): string | null {
@@ -106,7 +117,7 @@ export class IsapiClient {
         if (/^Digest/i.test(www) && attempt === 0 && parseDigest(www).stale === 'true') { this.challenge = parseDigest(www); continue; }
         throw new IsapiError('Kamera login yoki parolni qabul qilmadi', 401, 'AUTH');
       }
-      return { status: res.status, headers: res.headers, body: Buffer.from(await res.arrayBuffer()) };
+      return { status: res.status, headers: res.headers, body: await readBounded(res, MAX_RESPONSE) };
     }
     throw new IsapiError('Kamera login yoki parolni qabul qilmadi', 401, 'AUTH');
   }

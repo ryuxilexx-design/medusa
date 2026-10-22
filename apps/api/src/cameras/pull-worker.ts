@@ -18,13 +18,16 @@ export class MultipartStream {
   private buf = Buffer.alloc(0);
   constructor(private boundary: string) {}
   /** Returns the parts completed by this chunk: { headers (lower-case), body }. */
+  /** A part larger than this cannot be a notification or an alarm picture: the buffer is dropped and the stream re-opened. */
+  static readonly MAX_BUFFER = 8 * 1024 * 1024;
   push(chunk: Buffer): { headers: Record<string, string>; body: Buffer }[] {
     this.buf = Buffer.concat([this.buf, chunk]);
+    if (this.buf.length > MultipartStream.MAX_BUFFER) { this.buf = Buffer.alloc(0); throw new Error('oqim qismi juda katta (8 MB dan ko‘p)'); }
     const out: { headers: Record<string, string>; body: Buffer }[] = [];
     const delim = Buffer.from('--' + this.boundary);
     for (;;) {
       const start = this.buf.indexOf(delim);
-      if (start < 0) { if (this.buf.length > 8 * 1024 * 1024) this.buf = Buffer.alloc(0); return out; }
+      if (start < 0) return out;
       const next = this.buf.indexOf(delim, start + delim.length);
       if (next < 0) { if (start > 0) this.buf = this.buf.subarray(start); return out; }
       const part = this.buf.subarray(start + delim.length, next);
@@ -155,8 +158,10 @@ export class CameraWorkers implements OnApplicationBootstrap, OnModuleDestroy {
         WHERE fc.revoked_at IS NOT NULL LIMIT 50`);
     for (const r of rows) {
       const target = targetOf(r);
+      // the row is the reminder that a face is still on the camera: it goes only after the camera confirmed the delete
+      if (!target || !r.fdlib_id) { this.log.warn(`kamera ${r.camera_id} ulanmagan: ${r.code} hali kutubxonada (qo‘lda o‘chiring yoki kamerani ulang)`); continue; }
       try {
-        if (target && r.fdlib_id) await (await IsapiClient.create(target)).deleteFace(r.fdlib_id, r.code, r.remote_id);
+        await (await IsapiClient.create(target)).deleteFace(r.fdlib_id, r.code, r.remote_id);
         await this.db.rows(`DELETE FROM face_code_cameras WHERE face_code_id = $1 AND camera_id = $2`, [r.face_code_id, r.camera_id]);
       } catch (e) { this.log.warn(`kamera ${r.camera_id}: ${r.code} o‘chirilmadi: ${(e as Error).message}`); }
     }

@@ -352,7 +352,7 @@ export type CameraInput = z.infer<typeof cameraSchema>;
 export const cameraUpdateSchema = cameraSchema.partial().extend({ status: z.enum(['active', 'disabled']).optional() });
 /** Direct ISAPI connection of a camera (the camera's own admin login; the password is stored encrypted). */
 export const cameraIsapiSchema = z.object({
-  host: z.string().trim().min(1, 'Kamera IP manzilini kiriting').max(120).regex(/^[A-Za-z0-9.-]+$/, 'Faqat IP yoki host nomi'),
+  host: z.string().trim().min(1, 'Kamera IP manzilini kiriting').max(15).regex(/^\d{1,3}(\.\d{1,3}){3}$/, 'IPv4 manzil kiriting (masalan 192.168.1.64)'),
   port: z.number().int().min(1).max(65535).default(80),
   https: z.boolean().default(false),
   username: z.string().trim().min(1, 'Kamera loginini kiriting').max(64),
