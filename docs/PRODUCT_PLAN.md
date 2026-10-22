@@ -15,7 +15,7 @@ fiskal kassa va DMED retsept yonma-yon).
 | 5 | `db:reset-password`, `GET /health`, log chegarasi, `PUBLIC_URL`, sliding sessiya | bajarildi (2026-10-23) |
 | 6 | Rahbar to‘lov qabul qiladi/smena ochadi; shifokor ulushi % ishlaydi; tungi ochiq smena ogohlantirishi | bajarildi (2026-10-23) |
 | 7 | Registrator yozganda bemorga Telegram tasdiq; farzand kartasi; navbatsiz qabul; lotin↔kirill qidiruv; qabul taloni chopi | bajarildi (2026-10-23) |
-| 8 | CI (GitHub Actions: typecheck + testlar + build) | qo‘shildi; GitHub’da hali qizil — sabab aniqlanmoqda (lokal Linux konteynerida takrorlanmoqda) |
+| 8 | CI (GitHub Actions: typecheck + testlar + build) | yashil (6b9fbee): typecheck, 157 test, build |
 
 Natija: API testlari 157/157, E2E 152 ✓ (13 suite), typecheck toza; lokal demo yangi build bilan ishlayapti.
 
