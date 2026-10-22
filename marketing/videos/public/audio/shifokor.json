@@ -1,0 +1,36 @@
+{
+ "text": "Shifokor kuniga ikki soatini yozuvga sarflaydi. Med.uz.ai’da shikoyatni yozasiz — sun’iy intellekt qaydning qoralamasini va MKB o‘n tashxis takliflarini beradi. Siz tekshirasiz, bir bosishda imzolaysiz. Qaror hamisha shifokorniki. Shifokorga vaqt, bemorga e’tibor. Bepul demo — med.uz.ai.",
+ "cues": [
+  {
+   "start": 0.1,
+   "end": 3.577,
+   "text": "Shifokor kuniga ikki soatini yozuvga sarflaydi."
+  },
+  {
+   "start": 3.527,
+   "end": 10.555,
+   "text": "Med.uz.ai’da shikoyatni yozasiz — sun’iy intellekt qaydning qoralamasini va MKB o‘n tashxis takliflarini beradi."
+  },
+  {
+   "start": 10.555,
+   "end": 13.727,
+   "text": "Siz tekshirasiz, bir bosishda imzolaysiz."
+  },
+  {
+   "start": 13.727,
+   "end": 16.097,
+   "text": "Qaror hamisha shifokorniki."
+  },
+  {
+   "start": 16.097,
+   "end": 18.822,
+   "text": "Shifokorga vaqt, bemorga e’tibor."
+  },
+  {
+   "start": 18.822,
+   "end": 21.298,
+   "text": "Bepul demo — med.uz.ai."
+  }
+ ],
+ "end": 21.298
+}

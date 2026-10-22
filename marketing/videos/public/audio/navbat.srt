@@ -1,0 +1,20 @@
+1
+00:00:00,100 --> 00:00:03,446
+Qabulxonangizda bemorlar navbatda kutyaptimi?
+
+2
+00:00:03,396 --> 00:00:09,093
+Med.uz.ai bilan bemor Telegram orqali o‘zi qabulga yoziladi, eslatmani o‘zi oladi.
+
+3
+00:00:09,093 --> 00:00:13,680
+Registrator jadvalni telefonida ko‘radi: kim keldi, kim kechikdi.
+
+4
+00:00:13,680 --> 00:00:16,711
+Navbat yo‘q, telefon qo‘ng‘iroqlari yo‘q.
+
+5
+00:00:16,711 --> 00:00:19,187
+Bepul demo — med.uz.ai.
+

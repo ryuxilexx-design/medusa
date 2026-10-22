@@ -1,0 +1,20 @@
+1
+00:00:00,100 --> 00:00:03,411
+Tunda klinikangizda kim yurganini bilasizmi?
+
+2
+00:00:03,361 --> 00:00:13,987
+Med.uz.ai Hikvision kameralari bilan ishlaydi: xodimlar davomati avtomatik, bemor kelganini kamera taniydi, tungi ogohlantirish surati rahbarning telefoniga keladi.
+
+3
+00:00:13,987 --> 00:00:17,642
+Yuz rasmlari kamerada qoladi, bizda faqat vaqt.
+
+4
+00:00:17,642 --> 00:00:19,635
+Xavfsiz va qonuniy.
+
+5
+00:00:19,635 --> 00:00:22,112
+Bepul demo — med.uz.ai.
+

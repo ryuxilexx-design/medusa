@@ -1,0 +1,9 @@
+# Ovoz matnlari (uz-UZ-MadinaNeural)
+
+| Video | Hook (ekranda) | Ovoz |
+|---|---|---|
+| navbat | Navbatda kutish — 20 daqiqa? | Qabulxonangizda bemorlar navbatda kutyaptimi? Med.uz.ai bilan bemor Telegram orqali o‘zi qabulga yoziladi, eslatmani o‘zi oladi. Registrator jadvalni telefonida ko‘radi: kim keldi, kim kechikdi. Navbat yo‘q, telefon qo‘ng‘iroqlari yo‘q. Bepul demo — med.uz.ai. |
+| shifokor | Shifokor kuniga 2 soat yozuv yozadi | Shifokor kuniga ikki soatini yozuvga sarflaydi. Med.uz.ai’da shikoyatni yozasiz — sun’iy intellekt qaydning qoralamasini va MKB-10 tashxis takliflarini beradi. Siz tekshirasiz, bir bosishda imzolaysiz. Qaror hamisha shifokorniki. Shifokorga vaqt, bemorga e’tibor. Bepul demo — med.uz.ai. |
+| kassa | Kassadagi pul bilan hisobot mos keladimi? | Kassadagi pul bilan hisobotdagi raqam mos keladimi? Med.uz.ai’da har bir to‘lov smena bilan bog‘lanadi: naqd, karta, qaytarish, xarajat — hammasi bir joyda. Rahbar daromadni real vaqtda, telefonida ko‘radi. Oy oxirida hisobot bir daqiqada. Bepul demo — med.uz.ai. |
+| kamera | Tunda klinikangizda kim yuradi? | Tunda klinikangizda kim yurganini bilasizmi? Med.uz.ai Hikvision kameralari bilan ishlaydi: xodimlar davomati avtomatik, bemor kelganini kamera taniydi, tungi ogohlantirish surati rahbarning telefoniga keladi. Yuz rasmlari kamerada qoladi, bizda faqat vaqt. Xavfsiz va qonuniy. Bepul demo — med.uz.ai. |
+| nega | Nega Med.uz.ai? | Nega Med.uz.ai? DMED — davlatning elektron tibbiy kartasi. Med Plus — klinika hisob-kitob dasturi. Med.uz.ai esa klinikaning kundalik ishi uchun yaratilgan: bemor Telegram’dan yoziladi, sun’iy intellekt shifokorga yozuvda yordam beradi, kameralar davomatni oladi, kassa va hisobot bir joyda. Hammasi telefonda, uch tilda, ma’lumotlar O‘zbekistonda. Bepul demo — med.uz.ai. |

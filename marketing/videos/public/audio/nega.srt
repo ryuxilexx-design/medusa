@@ -1,0 +1,24 @@
+1
+00:00:00,100 --> 00:00:02,079
+Nega Med.uz.ai?
+
+2
+00:00:02,029 --> 00:00:05,331
+DMED — davlatning elektron tibbiy kartasi.
+
+3
+00:00:05,331 --> 00:00:08,362
+Med Plus — klinika hisob-kitob dasturi.
+
+4
+00:00:08,362 --> 00:00:20,225
+Med.uz.ai esa klinikaning kundalik ishi uchun yaratilgan: bemor Telegram’dan yoziladi, sun’iy intellekt shifokorga yozuvda yordam beradi, kameralar davomatni oladi, kassa va hisobot bir joyda.
+
+5
+00:00:20,225 --> 00:00:24,270
+Hammasi telefonda, uch tilda, ma’lumotlar O‘zbekistonda.
+
+6
+00:00:24,270 --> 00:00:26,746
+Bepul demo — med.uz.ai.
+

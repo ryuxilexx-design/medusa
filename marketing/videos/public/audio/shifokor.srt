@@ -1,0 +1,24 @@
+1
+00:00:00,100 --> 00:00:03,577
+Shifokor kuniga ikki soatini yozuvga sarflaydi.
+
+2
+00:00:03,527 --> 00:00:10,555
+Med.uz.ai’da shikoyatni yozasiz — sun’iy intellekt qaydning qoralamasini va MKB o‘n tashxis takliflarini beradi.
+
+3
+00:00:10,555 --> 00:00:13,727
+Siz tekshirasiz, bir bosishda imzolaysiz.
+
+4
+00:00:13,727 --> 00:00:16,097
+Qaror hamisha shifokorniki.
+
+5
+00:00:16,097 --> 00:00:18,822
+Shifokorga vaqt, bemorga e’tibor.
+
+6
+00:00:18,822 --> 00:00:21,298
+Bepul demo — med.uz.ai.
+

@@ -1,0 +1,31 @@
+{
+ "text": "Qabulxonangizda bemorlar navbatda kutyaptimi? Med.uz.ai bilan bemor Telegram orqali o‘zi qabulga yoziladi, eslatmani o‘zi oladi. Registrator jadvalni telefonida ko‘radi: kim keldi, kim kechikdi. Navbat yo‘q, telefon qo‘ng‘iroqlari yo‘q. Bepul demo — med.uz.ai.",
+ "cues": [
+  {
+   "start": 0.1,
+   "end": 3.446,
+   "text": "Qabulxonangizda bemorlar navbatda kutyaptimi?"
+  },
+  {
+   "start": 3.396,
+   "end": 9.093,
+   "text": "Med.uz.ai bilan bemor Telegram orqali o‘zi qabulga yoziladi, eslatmani o‘zi oladi."
+  },
+  {
+   "start": 9.093,
+   "end": 13.68,
+   "text": "Registrator jadvalni telefonida ko‘radi: kim keldi, kim kechikdi."
+  },
+  {
+   "start": 13.68,
+   "end": 16.711,
+   "text": "Navbat yo‘q, telefon qo‘ng‘iroqlari yo‘q."
+  },
+  {
+   "start": 16.711,
+   "end": 19.187,
+   "text": "Bepul demo — med.uz.ai."
+  }
+ ],
+ "end": 19.187
+}

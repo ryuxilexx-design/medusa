@@ -1,0 +1,31 @@
+{
+ "text": "Tunda klinikangizda kim yurganini bilasizmi? Med.uz.ai Hikvision kameralari bilan ishlaydi: xodimlar davomati avtomatik, bemor kelganini kamera taniydi, tungi ogohlantirish surati rahbarning telefoniga keladi. Yuz rasmlari kamerada qoladi, bizda faqat vaqt. Xavfsiz va qonuniy. Bepul demo — med.uz.ai.",
+ "cues": [
+  {
+   "start": 0.1,
+   "end": 3.411,
+   "text": "Tunda klinikangizda kim yurganini bilasizmi?"
+  },
+  {
+   "start": 3.3609999999999998,
+   "end": 13.987,
+   "text": "Med.uz.ai Hikvision kameralari bilan ishlaydi: xodimlar davomati avtomatik, bemor kelganini kamera taniydi, tungi ogohlantirish surati rahbarning telefoniga keladi."
+  },
+  {
+   "start": 13.987,
+   "end": 17.642,
+   "text": "Yuz rasmlari kamerada qoladi, bizda faqat vaqt."
+  },
+  {
+   "start": 17.642,
+   "end": 19.635,
+   "text": "Xavfsiz va qonuniy."
+  },
+  {
+   "start": 19.635,
+   "end": 22.112,
+   "text": "Bepul demo — med.uz.ai."
+  }
+ ],
+ "end": 22.112
+}

@@ -1,0 +1,20 @@
+1
+00:00:00,100 --> 00:00:03,729
+Kassadagi pul bilan hisobotdagi raqam mos keladimi?
+
+2
+00:00:03,679 --> 00:00:10,567
+Med.uz.ai’da har bir to‘lov smena bilan bog‘lanadi: naqd, karta, qaytarish, xarajat — hammasi bir joyda.
+
+3
+00:00:10,567 --> 00:00:14,175
+Rahbar daromadni real vaqtda, telefonida ko‘radi.
+
+4
+00:00:14,175 --> 00:00:16,887
+Oy oxirida hisobot bir daqiqada.
+
+5
+00:00:16,887 --> 00:00:19,376
+Bepul demo — med.uz.ai.
+

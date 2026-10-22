@@ -1,0 +1,21 @@
+{
+  "name": "meduza-marketing-videos",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.538",
+    "@remotion/google-fonts": "4.0.538",
+    "@remotion/media-utils": "4.0.538",
+    "@remotion/transitions": "4.0.538",
+    "@types/react": "^19.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remotion": "^4.0.538",
+    "typescript": "^5.9.3",
+    "zod": "4.5.4"
+  }
+}

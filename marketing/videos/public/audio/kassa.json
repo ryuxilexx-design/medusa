@@ -1,0 +1,31 @@
+{
+ "text": "Kassadagi pul bilan hisobotdagi raqam mos keladimi? Med.uz.ai’da har bir to‘lov smena bilan bog‘lanadi: naqd, karta, qaytarish, xarajat — hammasi bir joyda. Rahbar daromadni real vaqtda, telefonida ko‘radi. Oy oxirida hisobot bir daqiqada. Bepul demo — med.uz.ai.",
+ "cues": [
+  {
+   "start": 0.1,
+   "end": 3.729,
+   "text": "Kassadagi pul bilan hisobotdagi raqam mos keladimi?"
+  },
+  {
+   "start": 3.6790000000000003,
+   "end": 10.567,
+   "text": "Med.uz.ai’da har bir to‘lov smena bilan bog‘lanadi: naqd, karta, qaytarish, xarajat — hammasi bir joyda."
+  },
+  {
+   "start": 10.567,
+   "end": 14.175,
+   "text": "Rahbar daromadni real vaqtda, telefonida ko‘radi."
+  },
+  {
+   "start": 14.175,
+   "end": 16.887,
+   "text": "Oy oxirida hisobot bir daqiqada."
+  },
+  {
+   "start": 16.887,
+   "end": 19.376,
+   "text": "Bepul demo — med.uz.ai."
+  }
+ ],
+ "end": 19.376
+}
