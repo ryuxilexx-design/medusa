@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, FileText, Pill, Plus, Printer, Send, Trash2 } from 'lucide-react';
+import { Ban, FileText, Pill, Plus, Printer, Send, ShieldAlert, Trash2 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
@@ -12,6 +12,8 @@ import { useT } from '@/lib/i18n';
 type Kind = 'referral' | 'certificate' | 'prescription';
 type Doc = { id: string; kind: Kind; number: number; status: 'issued' | 'void'; issued_at: string; issued_by_name: string; void_reason: string | null };
 type Note = { diagnosis: string; icd10: Icd[]; signed: boolean };
+/** What is known about the patient's allergies: the card (doctor-confirmed) and the intake answer (the patient's own words). */
+type Allergy = { state: string | null; note: string | null; intake: string | null };
 // suggestions in the doctor's language; the document keeps whatever text the doctor finally wrote
 const SPECIALTIES: MessageKey[] = ['docs.sp.cardiologist', 'docs.sp.neurologist', 'docs.sp.endocrinologist', 'docs.sp.gastroenterologist', 'docs.sp.gynecologist', 'docs.sp.urologist', 'docs.sp.ent',
   'docs.sp.ophthalmologist', 'docs.sp.dermatologist', 'docs.sp.traumatologist', 'docs.sp.surgeon', 'docs.sp.pediatrician', 'docs.sp.psychiatrist', 'docs.sp.oncologist', 'docs.sp.ultrasound', 'docs.sp.xray', 'docs.sp.ctmri', 'docs.sp.inpatient'];
@@ -20,7 +22,7 @@ const kindKey = (k: Kind) => `document.${k}` as MessageKey;
 const ICON: Record<Kind, React.ReactNode> = { referral: <Send className="h-4 w-4" />, certificate: <FileText className="h-4 w-4" />, prescription: <Pill className="h-4 w-4" /> };
 
 /** Documents issued from this visit: list, print, void; buttons to issue a referral, certificate or prescription. */
-export function DocumentsCard({ encounterId, note }: { encounterId: string; note: Note }) {
+export function DocumentsCard({ encounterId, note, allergy }: { encounterId: string; note: Note; allergy?: Allergy }) {
   const qc = useQueryClient();
   const toast = useToast();
   const t = useT();
@@ -57,7 +59,7 @@ export function DocumentsCard({ encounterId, note }: { encounterId: string; note
           ))}
         </ul>
       )}
-      {kind && <DocumentModal key={kind} kind={kind} encounterId={encounterId} note={note} onClose={() => setKind(null)} />}
+      {kind && <DocumentModal key={kind} kind={kind} encounterId={encounterId} note={note} allergy={allergy} onClose={() => setKind(null)} />}
       <Modal open={!!voiding} onClose={() => { setVoiding(null); setReason(''); }} dirty={!!reason.trim() && !voidDoc.isPending} title={voiding ? t('docs.voidTitle', { kind: t(kindKey(voiding.kind)), n: voiding.number }) : ''}
         footer={<><ModalCancel>{t('common.back')}</ModalCancel><Button variant="danger" loading={voidDoc.isPending} disabled={reason.trim().length < 3} onClick={() => voidDoc.mutate()}>{t('docs.voidAction')}</Button></>}>
         <p className="mb-2 text-sm text-slate-700">{t('docs.voidText')}</p>
@@ -71,7 +73,7 @@ type Item = { name: string; form: string; dose: string; frequency: string; durat
 const emptyItem = (): Item => ({ name: '', form: '', dose: '', frequency: '', duration: '', instructions: '' });
 const COL: Record<keyof Item, MessageKey> = { name: 'docs.drug', form: 'docs.form', dose: 'docs.dose', frequency: 'docs.frequency', duration: 'docs.duration', instructions: 'docs.instructions' };
 
-function DocumentModal({ kind, encounterId, note, onClose }: { kind: Kind; encounterId: string; note: Note; onClose: () => void }) {
+function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Kind; encounterId: string; note: Note; allergy?: Allergy; onClose: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const t = useT();
@@ -153,6 +155,9 @@ function DocumentModal({ kind, encounterId, note, onClose }: { kind: Kind; encou
         </>}
 
         {kind === 'prescription' && <>
+          {/* the allergy is repeated right where the drugs are chosen; a known allergy is red, the patient's own answer amber */}
+          {allergy?.state === 'known' && <div role="alert" className="flex items-start gap-2 rounded-lg bg-red-700 px-3.5 py-2.5 text-[0.9375rem] font-bold text-white" data-testid="rx-allergy"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" /><span>{allergy.note ? t('docs.rxAllergyKnown', { note: allergy.note }) : t('docs.rxAllergyKnownNoNote')}</span></div>}
+          {allergy?.state !== 'known' && allergy?.intake && <Alert tone="yellow">{t('docs.rxAllergyIntake', { text: allergy.intake })}</Alert>}
           {errors.items && <Alert tone="red">{errors.items}</Alert>}
           <div className="overflow-x-auto">
             <table className="w-full min-w-[51rem] table-fixed text-sm">

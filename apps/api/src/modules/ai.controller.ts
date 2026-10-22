@@ -1,15 +1,15 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, newsFeedbackSchema, NEWS_TOPICS_MAX, newsSaveSchema, newsTopicsSchema, translate } from '@meduza/contracts';
+import { aiNoteDraftSchema, aiReportSchema, formatSom, icd10SuggestSchema, type MessageKey, newsFeedbackSchema, NEWS_TOPICS_MAX, newsSaveSchema, newsTopicsSchema, translate } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { config } from '../core/config';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError, forbidden, notFound } from '../core/errors';
+import { AppError, coded, forbidden, notFound } from '../core/errors';
 import { isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { addDays, dayStart, today } from '../core/clock';
 import { branchScope } from '../core/scope';
-import { AiClient, freeTierError } from '../ai/ai-client';
+import { AiClient } from '../ai/ai-client';
 import { answerLanguage } from '../ai/lang';
 import { Icd10Service } from '../ai/icd10';
 import { NewsService, SPECIALTIES, specialtyByKey, specialtyOf } from '../ai/news';
@@ -45,6 +45,8 @@ complaints (shikoyatlar), anamnesis (anamnez), examination (ko‘rik), diagnosis
 Qoidalar: faqat matnda bor ma’lumotni qayta tartibla va imloni tuzat. Yangi tashxis, dori, doza, tekshiruv yoki matnda yo‘q klinik fakt qo‘shma.
 Matnda biror bo‘limga tegishli ma’lumot bo‘lmasa, o‘sha bo‘limga aynan "Kiritilmagan" deb yoz. Bemorning ismi yoki telefonini yozma.`;
 
+/** The «why AI is off» line in the person's language (the client takes it from the catalog key). */
+export const reasonText = (ctx: Ctx, key: MessageKey | null) => (key ? translate(ctx.locale, key) : null);
 const normalize = (s: string) => s.toLowerCase().replace(/[‘’ʻʼ'`]/g, '').replace(/\s+/g, ' ').trim();
 const noteZ = z.object({ complaints: z.string(), anamnesis: z.string(), examination: z.string(), diagnosis: z.string(), recommendations: z.string() });
 let lastNewsRefresh = 0;
@@ -69,7 +71,7 @@ export class AiController {
     // the doctor's AI buttons follow the clinical mode: a provider that may not receive this clinic's text counts as off
     const m = this.ai.clinicalMode(ctx.tenantId);
     return { data: { mode: m, provider: m === 'live' ? config.ai.provider : null, model: m === 'live' ? config.ai.model : null, sample_text: m === 'sample' ? SAMPLE_NOTE_TEXT : null,
-      reason: this.ai.clinicalOffReason(ctx.tenantId) } };
+      reason: reasonText(ctx, this.ai.clinicalOffReason(ctx.tenantId)) } };
   }
 
   /** AI-01: draft restructuring of the doctor's own text. De-identified before sending; never saves or signs. */
@@ -77,10 +79,9 @@ export class AiController {
   async noteDraft(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const { text, encounter_id } = parse(aiNoteDraftSchema, body);
     const m = this.ai.clinicalMode(ctx.tenantId);
-    if (m === 'off') throw this.ai.mode() === 'live' ? freeTierError() : new AppError(503, 'AI_OFF', 'AI yordamchisi hozir o‘chirilgan. Qaydni qo‘lda davom ettiring.');
+    if (m === 'off') throw this.ai.mode() === 'live' ? this.ai.clinicalError(ctx.tenantId) : coded(503, 'AI_OFF', 'api.ai.assistantOff');
     if (m === 'sample') {
-      if (normalize(text) !== normalize(SAMPLE_NOTE_TEXT))
-        throw new AppError(422, 'AI_SAMPLE_ONLY', 'Namunaviy rejimda faqat tayyor demo matni tartiblanadi. Haqiqiy AI ulanmagan — qaydni qo‘lda to‘ldiring.');
+      if (normalize(text) !== normalize(SAMPLE_NOTE_TEXT)) throw coded(422, 'AI_SAMPLE_ONLY', 'api.ai.sampleOnly');
       await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, 'Namunaviy AI natijasi ko‘rsatildi');
       return { data: { mode: 'sample', draft: SAMPLE_RESULT } };
     }

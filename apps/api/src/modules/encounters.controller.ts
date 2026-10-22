@@ -1,8 +1,8 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
-import { noteDraftSchema, noteSignSchema, ordersCreateSchema, REQUIRED_FOR_SIGN } from '@meduza/contracts';
+import { noteAddendumSchema, noteDraftSchema, noteSignSchema, ordersCreateSchema, REQUIRED_FOR_SIGN } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError, conflict, forbidden, invalid, notFound } from '../core/errors';
+import { AppError, coded, conflict, forbidden, invalid, notFound } from '../core/errors';
 import { isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { now } from '../core/clock';
@@ -10,7 +10,9 @@ import { completeInTx } from './appointments.controller';
 import { createBilledOrder } from './billing';
 import { Icd10Service } from '../ai/icd10';
 
+// the names are `api.noun.*` entries, so «{field} to‘ldirilishi shart» is answered in the doctor's language
 const FIELD_LABEL: Record<string, string> = { complaints: 'Shikoyatlar', examination: 'Ko‘rik', diagnosis: 'Tashxis / xulosa', recommendations: 'Tavsiyalar' };
+const ADDENDA_SQL = `SELECT id, text, reason, author_name, doctor_id, created_at, signed_at FROM note_addenda WHERE encounter_id = $1 AND tenant_id = $2 ORDER BY created_at, id`;
 
 async function loadEncounter(q: Q, ctx: Ctx, id: string, lock = false) {
   if (!isUuid(id)) throw notFound('Qabul yozuvi');
@@ -50,7 +52,29 @@ export class EncountersController {
          FROM service_orders o LEFT JOIN lab_results lr ON lr.order_id = o.id LEFT JOIN diagnostic_reports dr ON dr.order_id = o.id
         WHERE o.encounter_id = $1 AND NOT o.is_primary ORDER BY o.ordered_at`, [id]);
     orders.forEach((o) => { if (o.status !== 'verified') o.values = null; });
-    return { data: { encounter: { id: e.id, status: e.status, started_at: e.started_at, closed_at: e.closed_at, appointment_id: e.appointment_id }, appointment: appt, patient, note, orders } };
+    const addenda = await this.db.rows(ADDENDA_SQL, [id, ctx.tenantId]);
+    return { data: { encounter: { id: e.id, status: e.status, started_at: e.started_at, closed_at: e.closed_at, appointment_id: e.appointment_id }, appointment: appt, patient, note, orders, addenda } };
+  }
+
+  /**
+   * Addendum to a signed note: the only way to add to or correct a signed record. The note stays as signed; the
+   * addendum is written and signed by the treating doctor in one step and can never be edited or removed (DB trigger).
+   */
+  @Post(':id/addendum')
+  async addendum(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    const input = parse(noteAddendumSchema, body);
+    return this.db.tx(async (c) => {
+      const e = await loadEncounter(c, ctx, id, true);
+      if (e.note_status !== 'signed') throw coded(409, 'NOTE_NOT_SIGNED', 'api.ai.notSigned');
+      const t = now();
+      const row = (await c.query(
+        `INSERT INTO note_addenda (tenant_id, encounter_id, note_id, doctor_id, author_membership_id, author_name, text, reason, created_at, signed_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$9) RETURNING id, text, reason, author_name, doctor_id, created_at, signed_at`,
+        [ctx.tenantId, id, e.note_id, ctx.doctorId, ctx.membershipId, ctx.name, input.text, input.reason, t])).rows[0];
+      // no clinical text and no reason in the audit trail — only that an addendum was signed
+      await audit(c, ctx, 'clinical_note.addendum', 'encounter', id, 'Tasdiqlangan qaydga qo‘shimcha yozuv qo‘shildi', e.branch_id);
+      return { data: row };
+    });
   }
 
   @Put(':id/draft')
@@ -76,7 +100,7 @@ export class EncountersController {
     const input = parse(noteSignSchema, body);
     const missing: Record<string, string> = {};
     for (const f of REQUIRED_FOR_SIGN) if (!input[f]) missing[f] = `${FIELD_LABEL[f]} to‘ldirilishi shart`;
-    if (Object.keys(missing).length) throw invalid(missing, 'Tasdiqlash uchun majburiy maydonlarni to‘ldiring');
+    if (Object.keys(missing).length) throw invalid(missing, 'Tasdiqlash uchun majburiy maydonlarni to‘ldiring'); // api.fillRequired / api.fieldRequired
     return this.db.tx(async (c) => {
       const e = await loadEncounter(c, ctx, id, true);
       if (e.note_status === 'signed') throw conflict('IMMUTABLE', 'Qayd allaqachon tasdiqlangan');

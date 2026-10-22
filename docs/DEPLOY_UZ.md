@@ -142,7 +142,12 @@ Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta i
 
 - `deploy/.env` va `deploy/backups/` hech qachon git’ga tushmaydi (`.gitignore` da).
 - Bazaga tashqaridan ulanish yo‘q. Hisobot uchun faqat o‘qish huquqli rol kerak bo‘lsa — SSH tunnel orqali.
-- AI sukut bo‘yicha o‘chiq (`AI_MODE=off`). Klinik matn faqat to‘lovli API kalit bilan yuboriladi:
+- AI sukut bo‘yicha o‘chiq (`APP_MODE=production` da `AI_MODE` ko‘rsatilmasa — `off`). Kalit qo‘yilib `AI_MODE=live`
+  qilinganda ham klinik marshrutlar (qaydni tartiblash, MKB-10 taklifi) `AI_CLINICAL_ALLOWED=1` bo‘lmaguncha rad etiladi
+  (503 `AI_DISABLED_PRODUCTION`); mutaxassislik yangiliklari (ochiq maqolalar) ishlayveradi. `AI_CLINICAL_ALLOWED=1` ni
+  faqat bemor rozilik matni va shartnoma AI’ga uzatishni qamrab olgach yoqing. Har klinikaning kunlik sarfi
+  `AI_DAILY_LIMIT_USD` (sukut 5 $) bilan chegaralanadi — chegaradan keyin 429 `AI_BUDGET`, ertasi kuni davom etadi.
+  Klinik matn faqat to‘lovli API kalit bilan yuboriladi:
   Gemini’ning bepul tarifi haqiqiy klinikaning klinik matnini olmaydi (server buni o‘zi bloklaydi).
   AI provayderiga matn yuborish chegaradan tashqariga uzatish hisoblanadi — bemor rozilik varag‘ida va
   klinika bilan shartnomada ko‘rsatilsin, matn avval `redact()` dan o‘tadi.

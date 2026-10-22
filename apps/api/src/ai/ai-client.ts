@@ -6,7 +6,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { ZodType } from 'zod';
 import { Db } from '../core/db';
 import { config } from '../core/config';
-import { AppError } from '../core/errors';
+import { AppError, coded } from '../core/errors';
+import type { MessageKey } from '@meduza/contracts';
 import { SEED_IDS } from '@meduza/db';
 
 export type AiMode = 'off' | 'sample' | 'live';
@@ -14,9 +15,11 @@ export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary';
 /** Routes that carry only public text (PubMed abstracts). Every other route — including any new one — counts as clinical. */
 const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary']);
 const SEED_TENANTS = new Set<string>([SEED_IDS.tenant, SEED_IDS.tenant2]);
-/** The single refusal for clinical text on the Gemini free tier (status reason, note draft and json() all use it). */
-export const FREE_TIER_MESSAGE = 'Bepul Gemini tarifiga haqiqiy klinika ma’lumoti yuborilmaydi. Pullik kalit yoki Claude ulang; qaydni qo‘lda davom ettiring.';
-export const freeTierError = () => new AppError(503, 'AI_NOT_ALLOWED', FREE_TIER_MESSAGE);
+/** Why clinical text may not go to the model: the server is a production one without AI_CLINICAL_ALLOWED=1, or the Gemini free tier. */
+export type ClinicalBlock = 'production' | 'free_tier';
+/** The refusal for clinical text (status reason, note draft and json() all use it); the filter answers in the person's language. */
+export const clinicalBlockError = (block: ClinicalBlock) =>
+  block === 'production' ? coded(503, 'AI_DISABLED_PRODUCTION', 'api.ai.disabledProduction') : coded(503, 'AI_NOT_ALLOWED', 'api.ai.freeTier');
 
 /**
  * USD per 1M tokens, paid tier. Unknown models are metered without a cost. Gemini bills thinking tokens as output;
@@ -53,14 +56,15 @@ export type JsonCall<T> = {
 type Meter = { model: string; input: number; output: number; cacheRead: number; cacheWrite: number };
 /** What a provider returned, before validation. */
 type Raw = { text: string | undefined; end: 'ok' | 'refusal' | 'max_tokens'; refusalCategory: string | null };
-const ERR = {
-  timeout: [504, 'AI_TIMEOUT', 'AI javob bermadi (vaqt tugadi). Qo‘lda davom ettiring.'],
-  busy: [429, 'AI_BUSY', 'AI hozir band yoki limit tugagan. Birozdan keyin urinib ko‘ring.'],
-  key: [503, 'AI_KEY', 'AI kaliti noto‘g‘ri yoki bekor qilingan. Administratorga xabar bering.'],
-  unreachable: [502, 'AI_UNREACHABLE', 'AI xizmatiga ulanib bo‘lmadi. Internetni tekshiring yoki qo‘lda davom ettiring.'],
-  api: [502, 'AI_ERROR', 'AI xizmatida xato. Qo‘lda davom ettiring.'],
-  unexpected: [500, 'AI_ERROR', 'AI so‘rovida kutilmagan xato.'],
-} as const;
+/** Provider failures → HTTP status, error code and the message key (`api.ai.*`, translated by the error filter). */
+const ERR: Record<string, readonly [number, string, MessageKey]> = {
+  timeout: [504, 'AI_TIMEOUT', 'api.ai.timeout'],
+  busy: [429, 'AI_BUSY', 'api.ai.busy'],
+  key: [503, 'AI_KEY', 'api.ai.key'],
+  unreachable: [502, 'AI_UNREACHABLE', 'api.ai.unreachable'],
+  api: [502, 'AI_ERROR', 'api.ai.error'],
+  unexpected: [500, 'AI_ERROR', 'api.ai.unexpected'],
+};
 /**
  * Models often write Uzbek with ASCII apostrophes; the UI uses o‘ g‘ and ’ (ma’lumot). Applied to every string answered.
  * An English possessive ('s at a word end: Hodgkin's, dog's) keeps the plain right quote ’.
@@ -87,14 +91,21 @@ export class AiClient {
   }
 
   /**
-   * May clinical text (even de-identified) of this tenant go to the current provider? Not to the Gemini free tier
-   * unless it is synthetic: a seed demo tenant on a non-production deployment. Google may use free-tier prompts to
-   * improve its products, and a real clinic can be onboarded on a demo deployment too.
+   * Why clinical text (even de-identified) of this tenant may not go to the current provider, or null when it may.
+   * A production server sends clinical text only when the clinic switched it on (AI_CLINICAL_ALLOWED=1). The Gemini
+   * free tier gets it only when it is synthetic: a seed demo tenant on a non-production deployment (Google may use
+   * free-tier prompts to improve its products, and a real clinic can be onboarded on a demo deployment too).
    */
-  clinicalAllowed(tenantId: string | null): boolean {
-    if (config.ai.provider !== 'gemini' || config.ai.geminiPaid) return true;
-    return config.mode !== 'production' && !!tenantId && SEED_TENANTS.has(tenantId);
+  clinicalBlock(tenantId: string | null): ClinicalBlock | null {
+    if (config.mode === 'production' && !config.ai.clinicalInProduction) return 'production';
+    if (config.ai.provider !== 'gemini' || config.ai.geminiPaid) return null;
+    return config.mode !== 'production' && !!tenantId && SEED_TENANTS.has(tenantId) ? null : 'free_tier';
   }
+
+  clinicalAllowed(tenantId: string | null): boolean { return this.clinicalBlock(tenantId) === null; }
+
+  /** The error a clinical route answers when its text may not leave the server. */
+  clinicalError(tenantId: string | null): AppError { return clinicalBlockError(this.clinicalBlock(tenantId) ?? 'production'); }
 
   /** The mode clinical features see: a provider that may not receive this tenant's clinical text counts as off. */
   clinicalMode(tenantId: string | null): AiMode {
@@ -102,41 +113,51 @@ export class AiClient {
     return m === 'live' && !this.clinicalAllowed(tenantId) ? 'off' : m;
   }
 
-  /** Why clinical AI is off for this tenant, for the doctor's screen. */
-  clinicalOffReason(tenantId: string | null): string | null {
+  /** Why clinical AI is off for this tenant, as a message key for the doctor's screen (translated by the caller). */
+  clinicalOffReason(tenantId: string | null): MessageKey | null {
     if (this.clinicalMode(tenantId) !== 'off') return null;
-    if (this.mode() === 'live') return FREE_TIER_MESSAGE;
-    return config.ai.mode === 'live' ? 'AI kaliti sozlanmagan' : 'AI o‘chirilgan (AI_MODE=off)';
+    if (this.mode() === 'live') return this.clinicalBlock(tenantId) === 'production' ? 'api.ai.disabledProduction' : 'api.ai.freeTier';
+    return config.ai.mode === 'live' ? 'api.ai.noKey' : 'api.ai.offMode';
+  }
+
+  /** Today's spend of a clinic (Tashkent day) against AI_DAILY_LIMIT_USD; news (no tenant) is not capped per clinic. */
+  private async assertBudget(tenantId: string | null) {
+    if (!tenantId || !(config.ai.dailyLimitUsd > 0)) return;
+    const r = await this.db.one<{ spent: string }>(
+      `SELECT coalesce(sum(cost_usd), 0)::text AS spent FROM ai_usage
+        WHERE tenant_id = $1 AND created_at >= date_trunc('day', demo_now() AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent'`, [tenantId]);
+    if (Number(r?.spent ?? 0) >= config.ai.dailyLimitUsd) throw coded(429, 'AI_BUDGET', 'api.ai.budget');
   }
 
   /** One structured request. Throws AppError (AI_*) the UI can show; the caller keeps the user's own text. */
   async json<T>(c: JsonCall<T>): Promise<{ value: T; model: string }> {
-    if (this.mode() !== 'live') throw new AppError(503, 'AI_OFF', 'AI ulanmagan.');
-    if (!PUBLIC_ROUTES.has(c.route) && !this.clinicalAllowed(c.tenantId)) throw freeTierError();
+    if (this.mode() !== 'live') throw coded(503, 'AI_OFF', 'api.ai.off');
+    if (!PUBLIC_ROUTES.has(c.route)) { const block = this.clinicalBlock(c.tenantId); if (block) throw clinicalBlockError(block); }
+    await this.assertBudget(c.tenantId);
     const started = Date.now();
     const meter: Meter = { model: config.ai.model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
     try {
       const raw = config.ai.provider === 'gemini' ? await this.gemini(c, meter) : await this.anthropic(c, meter);
       if (raw.end === 'refusal') {
         await this.record(c, meter, started, 'refusal', raw.refusalCategory);
-        throw new AppError(502, 'AI_REFUSED', 'AI bu so‘rovni bajarmadi. Qo‘lda davom ettiring.');
+        throw coded(502, 'AI_REFUSED', 'api.ai.refused');
       }
       let parsed: unknown;
       try { parsed = JSON.parse(raw.text ?? ''); } catch { parsed = undefined; }
       const ok = raw.end !== 'max_tokens' ? c.validate.safeParse(parsed) : null;
       if (!ok || !ok.success) {
         await this.record(c, meter, started, 'bad_output', raw.end === 'max_tokens' ? 'max_tokens' : 'schema');
-        throw new AppError(502, 'AI_BAD_OUTPUT', 'AI javobi to‘liq emas. Qayta urinib ko‘ring yoki qo‘lda davom ettiring.');
+        throw coded(502, 'AI_BAD_OUTPUT', 'api.ai.badOutput');
       }
       await this.record(c, meter, started, 'ok', null);
       return { value: mapStrings(ok.data) as T, model: meter.model };
     } catch (e) {
       if (e instanceof AppError) throw e;
       const kind = e instanceof ProviderError ? e.kind : 'unexpected';
-      const [status, code, message] = ERR[kind];
+      const [status, code, key] = ERR[kind];
       this.log.warn(`${c.route}: ${config.ai.provider} ${e instanceof ProviderError ? e.detail : (e as Error).name}`);
       await this.record(c, meter, started, 'error', code);
-      throw new AppError(status, code, message);
+      throw coded(status, code, key);
     }
   }
 
