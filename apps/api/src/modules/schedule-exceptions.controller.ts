@@ -62,6 +62,7 @@ export class ScheduleExceptionsController {
         // a doctor's day off blocks them everywhere, so the manager must cover every branch the doctor works in
         doctor = (await c.query(
           `SELECT d.id, d.display_name FROM doctors d WHERE d.id = $1 AND d.tenant_id = $2
+              AND EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = d.id AND s.branch_id = ANY($3::uuid[]))
               AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = d.id AND s.branch_id <> ALL($3::uuid[])) FOR UPDATE OF d`,
           [input.doctor_id, ctx.tenantId, ctx.branchIds])).rows[0] ?? null;
         if (!doctor) throw notFound('Shifokor');
@@ -113,7 +114,8 @@ export class ScheduleExceptionsController {
     return this.db.tx(async (c) => {
       const e = (await c.query(
         `SELECT e.id, e.date::text AS date, e.kind, e.branch_id, e.doctor_id, d.display_name,
-                NOT EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = e.doctor_id AND s.branch_id <> ALL($3::uuid[])) AS doctor_in_scope
+                (EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = e.doctor_id AND s.branch_id = ANY($3::uuid[]))
+                 AND NOT EXISTS (SELECT 1 FROM schedules s WHERE s.doctor_id = e.doctor_id AND s.branch_id <> ALL($3::uuid[]))) AS doctor_in_scope
            FROM schedule_exceptions e LEFT JOIN doctors d ON d.id = e.doctor_id
           WHERE e.id = $1 AND e.tenant_id = $2 FOR UPDATE OF e`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!e) throw notFound('Dam olish kuni');
