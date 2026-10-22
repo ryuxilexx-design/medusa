@@ -371,9 +371,9 @@ function demoSnapshot(kind: EventKind, at: Date, camId: string) {
   const night = hour < 8 || hour >= 20;
   const pick = (names: string[]) => names[parseInt(camId.slice(0, 2), 16) % names.length];
   const name = kind === 'tamper' ? 'cash-tamper'
-    : kind === 'loitering' ? pick(['or-day-loitering', 'store-day-loitering'])
-    : night ? pick(['store-night-1', 'cash-night-intrusion', 'reception-night', 'yun-cash-night-region', 'store-night-2'])
-    : 'or-day-stranger';
+    : kind === 'loitering' ? pick(['or-day-loitering', 'store-day-loitering', 'cash-day-post'])
+    : night ? pick(['store-night-1', 'cash-night-intrusion', 'reception-night', 'yun-cash-night-region', 'store-night-2', 'entry-night-door', 'entry-night-glass', 'cash-night-lift', 'or-night-ward-door', 'yun-cash-night-hall', 'entry-night-street'])
+    : pick(['or-day-stranger', 'entry-day-stroller', 'or-day-lifts', 'store-day-window']);
   const bytes = readSeedSnapshot(name);
   return bytes ? { contentType: 'image/jpeg' as const, bytes } : null;
 }

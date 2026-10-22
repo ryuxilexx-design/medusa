@@ -862,11 +862,21 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     //      as evidence (database/seed/snapshots: photos with blurred faces, see tools/make-snapshots.py). Three alerts are still open. ----
     const NIGHT: [string, string, string, number, string, string | null, string | null][] = [
       // camera, branch, kind, days back, time, acknowledged at (the same or next morning) or null = still open, snapshot file
+      ['mrk-entry', BC, 'intrusion', 28, '23:52', '08:05', 'entry-night-door'],
       ['mrk-store', BC, 'intrusion', 26, '22:47', '08:20', null],
+      ['mrk-entry', BC, 'line_crossing', 24, '21:10', '08:00', 'entry-night-glass'],
       ['mrk-cash', BC, 'tamper', 21, '06:58', '08:10', 'cash-tamper'],
+      ['mrk-entry', BC, 'region_entrance', 20, '07:12', '08:15', 'entry-day-stroller'],
+      ['mrk-cash', BC, 'region_entrance', 19, '22:05', '08:20', 'cash-night-lift'],
       ['yun-cash', BY, 'line_crossing', 17, '21:35', '08:05', 'yun-cash-night-line'],
+      ['mrk-or', BC, 'line_crossing', 16, '12:30', '12:45', 'or-day-lifts'],
+      ['mrk-store', BC, 'region_entrance', 15, '19:30', '08:10', 'store-day-window'],
       ['mrk-store', BC, 'region_entrance', 13, '23:40', '08:30', 'store-night-1'],
+      ['mrk-or', BC, 'region_entrance', 12, '03:40', '08:00', 'or-night-ward-door'],
+      ['yun-cash', BY, 'intrusion', 11, '00:25', '08:05', 'yun-cash-night-hall'],
       ['mrk-entry', BC, 'intrusion', 9, '01:05', '08:05', 'reception-night'],
+      ['mrk-cash', BC, 'loitering', 8, '18:45', '19:00', 'cash-day-post'],
+      ['mrk-entry', BC, 'intrusion', 7, '02:50', '08:10', 'entry-night-street'],
       ['mrk-cash', BC, 'intrusion', 6, '02:15', '07:55', 'cash-night-intrusion'],
       ['mrk-store', BC, 'loitering', 4, '13:20', '13:35', 'store-day-loitering'],   // somebody hanging around the store door with a bag
       ['yun-cash', BY, 'region_entrance', 3, '22:18', null, 'yun-cash-night-region'],

@@ -133,11 +133,11 @@ ishlating.
 
 Demo’da 6 ta kamera va 30 kunlik tarix bor: xodimlar davomati (Bekzod Ergashev tez-tez kechikadi, Lola Abdullayeva
 3 kun ta’tilda, Sardor Nazarov ko‘pincha kech qoladi, Yunusobod kassiri ba’zan erta ketadi), hafta kuniga qarab
-o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va 11 ta ogohlantirish (3 tasi ko‘rib
+o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va 21 ta ogohlantirish (3 tasi ko‘rib
 chiqilmagan: kecha 23:12 dori ombori, 3 kun oldin Yunusobod kassasi, bugun 09:48 operatsiya bloki eshigida uzoq
 turib qolgan odam), bemor kelishi tarixi (tasdiqlangan va «bu emas») hamda bugungi takliflar. Hammasi sun’iy.
 
-Ogohlantirishlarning 10 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kameradan
+Ogohlantirishlarning 20 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kameradan
 emas: Wikimedia Commons’dagi ochiq litsenziyali shifoxona fotolari (`tools/snapshot-sources/`, mualliflar va
 litsenziyalar `ATTRIBUTION.md` da), `tools/make-snapshots.py` ularni CCTV ko‘rinishiga keltiradi — avval har bir yuz,
 ism yorlig‘i va o‘qiladigan yozuv pikselga aylantiriladi, keyin 960×540 kadr, tunda IR monoxrom, shovqin, kameraning

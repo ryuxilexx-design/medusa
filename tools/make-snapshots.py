@@ -56,6 +56,37 @@ SCENES = [
     dict(name='yun-cash-night-region', src='corridor-tuenmun.jpg', crop=(0, 120, 1280, 840), night=True,
          blur=[(525, 440, 560, 480), (495, 445, 525, 475), (405, 445, 440, 475), (60, 260, 500, 335), (1130, 320, 1230, 515), (1170, 525, 1250, 580)],
          channel='CAM 05 Kassa (Yunusobod)', time='15-10-2026 22:18:50', zone=[(0, 170), (300, 170), (330, 540), (0, 540)], box=(380, 240, 430, 400)),
+    # ---- second set (2026-10-22): entrance, lifts, ward door, pharmacy window, halls ----
+    dict(name='entry-night-door', src='entrance-ealing-night.jpg', crop=(0, 200, 1280, 920), night=True, gain=1.9,
+         blur=[(540, 475, 600, 650)],
+         channel='CAM 01 Asosiy kirish', time='20-09-2026 23:52:18', zone=[(300, 170), (720, 170), (760, 540), (240, 540)], box=(395, 270, 460, 470)),
+    dict(name='entry-night-glass', src='entrance-msk-night.jpg', crop=(0, 0, 1280, 677), night=True,
+         blur=[(600, 300, 690, 510), (55, 345, 235, 425), (1060, 330, 1250, 400)],
+         channel='CAM 01 Asosiy kirish', time='24-09-2026 21:10:44', line=[(180, 540), (330, 300)], box=(330, 250, 440, 460)),
+    dict(name='entry-day-stroller', src='entrance-peijas.jpg', crop=(0, 120, 1280, 840), night=False,
+         blur=[(755, 540, 815, 605), (150, 670, 220, 705), (365, 610, 415, 635), (465, 610, 515, 635), (685, 495, 775, 525)],
+         channel='CAM 01 Asosiy kirish', time='28-09-2026 07:12:03', zone=[(420, 280), (720, 280), (800, 540), (320, 540)], box=(555, 310, 640, 510)),
+    dict(name='cash-night-lift', src='lift-lobby-jilin.jpg', crop=(0, 120, 1280, 840), night=True, gain=1.35,
+         blur=[(650, 615, 710, 695), (1195, 635, 1245, 695), (95, 580, 165, 655), (775, 555, 885, 765)],
+         channel='CAM 02 Kassa', time='29-09-2026 22:05:27', zone=[(380, 300), (900, 300), (960, 540), (320, 540)], box=(480, 360, 545, 540)),
+    dict(name='or-day-lifts', src='lift-corridor-uddevalla.jpg', crop=(0, 50, 1280, 770), night=False,
+         blur=[(300, 285, 385, 405), (640, 255, 690, 300)],
+         channel='CAM 04 Operatsiya bloki', time='02-10-2026 12:30:36', line=[(470, 540), (420, 180)], box=(405, 150, 490, 400)),
+    dict(name='store-day-window', src='pharmacy-window-makalapa.jpg', crop=(0, 40, 1280, 760), night=False,
+         blur=[(635, 230, 735, 365), (690, 455, 790, 505), (0, 360, 140, 480), (440, 360, 610, 480), (925, 145, 1020, 180), (650, 670, 1000, 710)],
+         channel='CAM 03 Dori ombori', time='03-10-2026 19:30:52', zone=[(300, 20), (760, 20), (780, 520), (260, 520)], box=(470, 140, 660, 520)),
+    dict(name='or-night-ward-door', src='ward-door-northwick.jpg', crop=(0, 120, 1280, 840), night=True,
+         blur=[(565, 315, 725, 395), (235, 490, 365, 650), (370, 560, 460, 700)],
+         channel='CAM 04 Operatsiya bloki', time='06-10-2026 03:40:09', zone=[(340, 110), (620, 110), (620, 540), (330, 540)], box=(360, 150, 600, 540)),
+    dict(name='yun-cash-night-hall', src='hall-cologne.jpg', crop=(0, 0, 1280, 720), night=True,
+         blur=[(685, 190, 720, 230), (270, 170, 565, 560), (660, 110, 790, 170), (800, 165, 900, 195)],
+         channel='CAM 05 Kassa (Yunusobod)', time='07-10-2026 00:25:41', zone=[(430, 120), (700, 120), (760, 540), (430, 540)], box=(495, 135, 560, 275)),
+    dict(name='cash-day-post', src='medical-post-pirogov.jpg', crop=(0, 60, 1280, 780), night=False,
+         blur=[(455, 490, 535, 585), (630, 630, 810, 735)],
+         channel='CAM 02 Kassa', time='10-10-2026 18:45:15', zone=[(240, 300), (620, 300), (640, 540), (220, 540)], box=(300, 320, 440, 540)),
+    dict(name='entry-night-street', src='entrance-guys-night.jpg', crop=(0, 0, 1280, 720), night=True,
+         blur=[(630, 330, 770, 405), (145, 315, 215, 395), (940, 580, 1015, 610), (110, 515, 200, 565), (560, 425, 780, 455)],
+         channel='CAM 01 Asosiy kirish', time='11-10-2026 02:50:30', zone=[(380, 300), (700, 300), (720, 540), (300, 540)], box=(400, 345, 560, 540)),
 ]
 
 
@@ -74,12 +105,12 @@ def noise_layer(size, amount, seed):
     return n
 
 
-def cctv(im, night, seed):
+def cctv(im, night, seed, gain=1.0):
     im = im.resize((W, H), Image.LANCZOS)
     if night:
         g = ImageOps.grayscale(im)
         g = ImageEnhance.Contrast(g).enhance(1.25)
-        g = ImageEnhance.Brightness(g).enhance(0.72)
+        g = ImageEnhance.Brightness(g).enhance(0.72 * gain)
         # IR: highlights bloom a little, shadows go deep
         g = g.filter(ImageFilter.GaussianBlur(0.6))
         im = ImageOps.colorize(g, black=(8, 12, 16), mid=(96, 110, 112), white=(230, 240, 236))
@@ -152,7 +183,7 @@ def build(sc, idx):
     for b in sc.get('blur', []):
         pixelate(im, b)
     im = im.crop(sc['crop'])
-    im = cctv(im, sc['night'], 1000 + idx)
+    im = cctv(im, sc['night'], 1000 + idx, sc.get('gain', 1.0))
     if sc.get('tamper'):
         im = tamper(im, 2000 + idx)
     im = overlay(im, sc)
