@@ -12,6 +12,7 @@ import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeade
 import { AppointmentStatus } from '@/components/status';
 import { StaffFormModal, TempPasswordModal, type StaffRow } from '@/components/staff-form';
 import { ScheduleEditor } from '@/components/schedule-editor';
+import { DaysOff } from '@/components/days-off';
 
 export default function StaffPage() { return <Suspense><Staff /></Suspense>; }
 
@@ -146,6 +147,8 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
                 </table>
               </div>
             )}
+            <h3 className="mb-2 mt-5 flex min-h-9 items-center text-[0.9375rem] font-bold text-slate-900">{t('admin.off.title')}</h3>
+            <DaysOff doctorId={d.doctor.id} canEdit={me.role === 'manager'} />
           </section>
           <section className="min-w-0">
             <h3 className="mb-2 flex min-h-9 items-center text-[0.9375rem] font-bold text-slate-900">{t('admin.doc.today')}</h3>

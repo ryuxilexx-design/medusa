@@ -262,6 +262,30 @@ export const schedulePutSchema = z.object({
   confirm_conflicts: z.boolean().optional(),
 }).refine((d) => new Set(d.days.map((x) => x.weekday)).size === d.days.length, { message: 'Har bir hafta kuni bir marta', path: ['days'] });
 
+export const SCHEDULE_EXCEPTION_KINDS = ['day_off', 'vacation', 'holiday', 'custom_hours'] as const;
+export type ScheduleExceptionKind = (typeof SCHEDULE_EXCEPTION_KINDS)[number];
+/** A day off / vacation / holiday / custom hours for one doctor (doctor_id) or the whole clinic (null), one row per day of [from, to]. */
+export const scheduleExceptionSchema = z.object({
+  doctor_id: uuid.nullable().optional(),
+  branch_id: uuid.nullable().optional(),
+  from: isoDate,
+  to: isoDate.optional(),
+  kind: z.enum(SCHEDULE_EXCEPTION_KINDS),
+  start_time: hhmm.nullable().optional(),
+  end_time: hhmm.nullable().optional(),
+  note: optionalText(200),
+}).superRefine((d, ctx) => {
+  const to = d.to ?? d.from;
+  if (to < d.from) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'Tugash sanasi boshlanishdan oldin' });
+  if ((Date.parse(to) - Date.parse(d.from)) / 86400_000 > 92) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['to'], message: 'Davr 93 kundan oshmasin' });
+  if (d.kind === 'custom_hours') {
+    if (!d.doctor_id) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['doctor_id'], message: 'Maxsus ish vaqti faqat bitta shifokor uchun' });
+    if (!d.start_time || !d.end_time) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['end_time'], message: 'Ish vaqtining boshi va oxirini kiriting' });
+    else if (mins(d.end_time) - mins(d.start_time) < 30) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['end_time'], message: 'Ish vaqti kamida 30 daqiqa bo‘lsin' });
+  } else if (d.start_time || d.end_time) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['start_time'], message: 'Vaqt faqat maxsus ish vaqti uchun' });
+  if (d.doctor_id && d.branch_id) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['branch_id'], message: 'Shifokor uchun filial tanlanmaydi' });
+});
+
 // ---------- Visit documents (referral, certificate, prescription) ----------
 const icdCode = z.string().regex(/^[A-Z][0-9]{2}(\.[0-9]{1,2})?$/, 'Noto‘g‘ri MKB-10 kodi');
 

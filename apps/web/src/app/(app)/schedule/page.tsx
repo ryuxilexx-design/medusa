@@ -12,6 +12,7 @@ import { AppointmentStatus, SourceMark } from '@/components/status';
 import { AppointmentDialog } from '@/components/appointment-dialog';
 import { CameraArrivals } from '@/components/camera-arrivals';
 import { BookingInit, BookingModal } from '@/components/booking';
+import type { ScheduleException } from '@/components/days-off';
 import { useT } from '@/lib/i18n';
 
 // 30-minute rows, 3.5rem each (rem, so the «Katta» text size scales the grid with the text)
@@ -47,6 +48,8 @@ function Schedule() {
   const doctors = useQuery({ queryKey: ['doctors'], queryFn: () => api('/doctors').then((r) => r.data as any[]) });
   const services = useQuery({ queryKey: ['services'], queryFn: () => api('/services').then((r) => r.data as any[]) });
   const appts = useQuery({ queryKey: ['appointments', date, branchId, doctorId], queryFn: () => api(`/appointments${qs({ date, branch_id: branchId, doctor_id: doctorId })}`).then((r) => r.data as any[]), refetchInterval: 30_000 });
+  // days off, vacations, clinic holidays and custom hours of this day (the booking rules on the server use the same rows)
+  const exceptions = useQuery({ queryKey: ['schedule-exceptions', 'day', date], queryFn: () => api(`/schedule-exceptions?from=${date}&to=${date}`).then((r) => r.data as ScheduleException[]) });
   const wd = new Date(date + 'T00:00:00Z').getUTCDay();
   const columns = useMemo(() => {
     const category = new Map((services.data ?? []).map((s) => [s.id, s.category]));
@@ -58,8 +61,15 @@ function Schedule() {
       const hasAppts = appts.data?.some((a) => a.doctor_id === d.id);
       return hasAppts || (s && (!branchId || s.branch_id === branchId) && me.branches.some((b) => b.id === s.branch_id) && d.service_ids?.length && !labOnly(d));
     });
-    return list.map((d) => ({ ...d, day: d.schedule?.find((x: any) => x.weekday === wd) }));
-  }, [doctors.data, services.data, appts.data, doctorId, branchId, wd, me.branches]);
+    return list.map((d) => {
+      const s = d.schedule?.find((x: any) => x.weekday === wd);
+      // the doctor's own entry wins over a clinic-wide one; a branch holiday applies only where the doctor works that day
+      const exc = (exceptions.data ?? []).find((e) => e.doctor_id === d.id) ?? (exceptions.data ?? []).find((e) => !e.doctor_id && (!e.branch_id || e.branch_id === s?.branch_id));
+      const off = exc && exc.kind !== 'custom_hours' ? exc : null;
+      const day = s && exc?.kind === 'custom_hours' ? { ...s, start: exc.start_time, end: exc.end_time, break_start: null, break_end: null, custom: true } : s;
+      return { ...d, day: off ? null : day, off };
+    });
+  }, [doctors.data, services.data, appts.data, exceptions.data, doctorId, branchId, wd, me.branches]);
   // the grid spans every working hour and every appointment of the day (never cuts a 07:30 or 19:00 visit off)
   const [START, END] = useMemo(() => {
     let lo = 8 * 60, hi = 18 * 60;
@@ -141,10 +151,12 @@ function Schedule() {
                   const s = d.day; const ws = s ? hm(s.start) : END; const we = s ? hm(s.end) : END;
                   const bs = s?.break_start ? hm(s.break_start) : -1; const be = s?.break_end ? hm(s.break_end) : -1;
                   const list = appts.data!.filter((a) => a.doctor_id === d.id);
-                  const room = s ? s.room : t('registrar.notWorking');
+                  // a day off shows its reason (and note) in the header instead of the room; the whole column is grey
+                  const offReason = d.off ? `${t(`admin.off.kind.${d.off.kind}` as MessageKey)}${d.off.note ? ` · ${d.off.note}` : ''}` : null;
+                  const room = offReason ?? (s ? [s.room, s.custom ? t('registrar.customHours') : null].filter(Boolean).join(', ') : t('registrar.notWorking'));
                   return (
                     <div key={d.id} className="min-w-[7.25rem] flex-1 basis-0 border-r border-slate-100 last:border-r-0">
-                      <div className="h-[4.5rem] border-b border-slate-200 px-2 py-2 leading-tight" title={[d.display_name, d.specialty, room].filter(Boolean).join(', ')}>
+                      <div className={cx('h-[4.5rem] border-b border-slate-200 px-2 py-2 leading-tight', d.off && 'bg-slate-100/70')} title={[d.display_name, d.specialty, room].filter(Boolean).join(', ')}>
                         <div className="truncate text-[0.8125rem] font-bold text-slate-900">{d.display_name}</div>
                         <div className="mt-0.5 truncate text-[0.8125rem] text-slate-600">{d.specialty}</div>
                         {room && <div className={cx('truncate text-[0.8125rem]', s ? 'text-slate-600' : 'font-medium text-amber-800')}>{room}</div>}
@@ -161,7 +173,7 @@ function Schedule() {
                                 className={cx(cell, 'group cursor-pointer px-1.5 text-left hover:bg-brand-50 focus-visible:relative focus-visible:z-[6] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300')}>
                                 <span className="hidden items-center gap-1 text-[0.8125rem] font-semibold text-brand-700 group-hover:inline-flex group-focus-visible:inline-flex" aria-hidden="true"><Plus className="h-3.5 w-3.5" />{hhmm(m)}</span>
                               </button>
-                            : <div key={i} style={{ height: `${R}rem` }} className={cell} title={off ? t('registrar.offHours') : brk ? t('registrar.break') : undefined} />;
+                            : <div key={i} style={{ height: `${R}rem` }} className={cell} title={offReason ?? (off ? t('registrar.offHours') : brk ? t('registrar.break') : undefined)} />;
                         })}
                         {nowMin > START && nowMin < END && <div className="pointer-events-none absolute left-0 right-0 z-10 border-t-2 border-red-500" style={{ top: `${((nowMin - START) / ROW) * R}rem` }} />}
                         {list.map((a) => {
