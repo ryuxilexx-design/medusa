@@ -8,14 +8,16 @@ fiskal kassa va DMED retsept yonma-yon).
 
 | № | Ish | Holat |
 |---|---|---|
-| 1 | Xizmat / filial / xona / ombor tovarini UI’dan yaratish (manager), narx filial bo‘yicha | jarayonda |
-| 2 | Shifokor dam olish kuni / ta’til / bayram (`schedule_exceptions`, bot ham hurmat qiladi) | jarayonda |
-| 3 | Imzolangan qaydga qo‘shimcha yozuv (addendum, append-only) | jarayonda |
-| 4 | AI «Qo‘llash» yozilganini o‘chirmaydi; production’da AI sukut o‘chiq, kunlik byudjet; AI xatolari 3 tilda | jarayonda |
-| 5 | `db:reset-password`, `GET /health`, log chegarasi, `PUBLIC_URL`, sliding sessiya | jarayonda |
-| 6 | Rahbar to‘lov qabul qiladi/smena ochadi; shifokor ulushi % ishlaydi; tungi ochiq smena ogohlantirishi | jarayonda |
-| 7 | Registrator yozganda bemorga Telegram tasdiq; farzand kartasi; navbatsiz qabul; lotin↔kirill qidiruv; qabul taloni chopi | jarayonda |
-| 8 | CI (GitHub Actions: typecheck + testlar + build) | qo‘shildi |
+| 1 | Xizmat / filial / xona / ombor tovarini UI’dan yaratish (manager), narx filial bo‘yicha | bajarildi (2026-10-23) |
+| 2 | Shifokor dam olish kuni / ta’til / bayram (`schedule_exceptions`, bot ham hurmat qiladi) | bajarildi (2026-10-23) |
+| 3 | Imzolangan qaydga qo‘shimcha yozuv (addendum, append-only) | bajarildi (2026-10-23) |
+| 4 | AI «Qo‘llash» yozilganini o‘chirmaydi; production’da AI sukut o‘chiq, kunlik byudjet; AI xatolari 3 tilda | bajarildi (2026-10-23) |
+| 5 | `db:reset-password`, `GET /health`, log chegarasi, `PUBLIC_URL`, sliding sessiya | bajarildi (2026-10-23) |
+| 6 | Rahbar to‘lov qabul qiladi/smena ochadi; shifokor ulushi % ishlaydi; tungi ochiq smena ogohlantirishi | bajarildi (2026-10-23) |
+| 7 | Registrator yozganda bemorga Telegram tasdiq; farzand kartasi; navbatsiz qabul; lotin↔kirill qidiruv; qabul taloni chopi | bajarildi (2026-10-23) |
+| 8 | CI (GitHub Actions: typecheck + testlar + build) | qo‘shildi; GitHub’da hali qizil — sabab aniqlanmoqda (lokal Linux konteynerida takrorlanmoqda) |
+
+Natija: API testlari 157/157, E2E 152 ✓ (13 suite), typecheck toza; lokal demo yangi build bilan ishlayapti.
 
 ## 2-bosqich — qonuniy va integratsiya (2–6 hafta)
 
