@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Ban, CalendarPlus, CheckCircle2, ChevronLeft, ChevronRight, Clock, LayoutGrid, List, PlayCircle, Plus, UserCheck, UserX } from 'lucide-react';
@@ -7,7 +7,7 @@ import { APPOINTMENT_STATUS_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { addDays, fmtTime, fullName, longDate, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Select, Table, Td, Th, Toolbar } from '@/components/ui';
+import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Select, SlidingPill, Table, Td, Th, Toolbar } from '@/components/ui';
 import { AppointmentStatus, SourceMark } from '@/components/status';
 import { AppointmentDialog } from '@/components/appointment-dialog';
 import { CameraArrivals } from '@/components/camera-arrivals';
@@ -39,6 +39,7 @@ function Schedule() {
   const [doctorId, setDoctorId] = useState(me.role === 'doctor' ? me.doctor_id! : '');
   const [status, setStatus] = useState(sp.get('status') ?? '');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const viewGroup = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<any>(null);
   const [booking, setBooking] = useState<BookingInit | null>(null);
   const staff = me.role === 'manager' || me.role === 'registrar';
@@ -79,11 +80,12 @@ function Schedule() {
       <PageHeader title={me.role === 'doctor' ? t('registrar.mySchedule') : t('registrar.schedule')} subtitle={longDate(date)}
         actions={<>
           {/* day grid / list: a glass segmented control in the control layer, so the filter row stays one line at 1366 */}
-          <div role="group" aria-label={t('registrar.view')} className="glass-field inline-flex h-12 items-center gap-0.5 rounded-full p-1">
+          <div ref={viewGroup} role="group" aria-label={t('registrar.view')} className="glass-field relative inline-flex h-12 items-center gap-0.5 rounded-full p-1">
+            <SlidingPill container={viewGroup} active={view} className="rounded-full bg-white shadow-sm" />
             {([['grid', LayoutGrid, t('registrar.viewDay')], ['list', List, t('registrar.viewList')]] as const).map(([v, Icon, label]) => (
-              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)}
-                className={cx('inline-flex h-10 items-center gap-2 rounded-full px-4 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-                  view === v ? 'bg-white text-brand-800 shadow-sm' : 'text-slate-700 hover:text-slate-900')}>
+              <button key={v} type="button" aria-pressed={view === v} data-active={view === v} onClick={() => setView(v)}
+                className={cx('relative z-[1] inline-flex h-10 items-center gap-2 rounded-full px-4 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+                  view === v ? 'text-brand-800' : 'text-slate-700 hover:text-slate-900')}>
                 <Icon className="h-4 w-4" aria-hidden="true" />{label}
               </button>
             ))}

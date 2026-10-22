@@ -2,6 +2,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ToastProvider } from '@/components/ui';
+import { PressMotion } from '@/components/motion';
 import { ApiError } from '@/lib/api';
 import { I18nProvider } from '@/lib/i18n';
 import type { Locale } from '@meduza/contracts';
@@ -14,5 +15,5 @@ export function Providers({ children, initialLocale }: { children: React.ReactNo
       mutations: { retry: false, networkMode: 'always' },
     },
   }));
-  return <QueryClientProvider client={client}><I18nProvider initialLocale={initialLocale}><ToastProvider>{children}</ToastProvider></I18nProvider></QueryClientProvider>;
+  return <QueryClientProvider client={client}><I18nProvider initialLocale={initialLocale}><ToastProvider><PressMotion />{children}</ToastProvider></I18nProvider></QueryClientProvider>;
 }

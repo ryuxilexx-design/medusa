@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Banknote, DoorOpen, Printer, Scale, Undo2, Wallet } from 'lucide-react';
@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, StatCard, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, SlidingPill, StatCard, Table, Td, Th, useToast } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
 import { CloseShiftModal, expenseCategoryLabel, StatMoney, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
@@ -25,16 +25,18 @@ export function PeriodPicker({ from, to, onChange }: { from: string; to: string;
   const t = useT();
   const { me } = useSession();
   const presets = [['cash.today', 0], ['cash.days7', 6], ['cash.days30', 29]] as const;
+  const presetGroup = useRef<HTMLDivElement>(null);
   return (
     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       <DateRange from={from} to={to} onFrom={(v) => onChange(v, to)} onTo={(v) => onChange(from, v)} />
       {/* the same capsule as the Tabs: inside a white card the segmented control is a soft pill, the chosen day white */}
-      <div className="grid h-11 w-full grid-cols-3 gap-0.5 rounded-full bg-slate-100 p-1 sm:inline-grid sm:w-auto" role="group" aria-label={t('cash.period')}>
+      <div ref={presetGroup} className="relative grid h-11 w-full grid-cols-3 gap-0.5 rounded-full bg-slate-100 p-1 sm:inline-grid sm:w-auto" role="group" aria-label={t('cash.period')}>
+        <SlidingPill container={presetGroup} active={`${from}-${to}`} className="rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.12)]" />
         {presets.map(([label, d]) => {
           const on = to === me.today && from === addDays(me.today, -d);
           return (
-            <button key={label} type="button" aria-pressed={on} onClick={() => onChange(addDays(me.today, -d), me.today)}
-              className={cx('whitespace-nowrap rounded-full px-3.5 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', on ? 'bg-white text-brand-800 shadow-[0_2px_8px_rgba(15,23,42,0.12)]' : 'text-slate-700 hover:text-slate-900')}>
+            <button key={label} type="button" aria-pressed={on} data-active={on} onClick={() => onChange(addDays(me.today, -d), me.today)}
+              className={cx('relative z-[1] whitespace-nowrap rounded-full px-3.5 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', on ? 'text-brand-800' : 'text-slate-700 hover:text-slate-900')}>
               {t(label)}
             </button>
           );

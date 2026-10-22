@@ -276,7 +276,8 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
         {/* phone: the language is at the top of the menu (the top bar has no room for it) */}
         <div className="px-5 pb-2.5 md:hidden"><LanguagePicker signedIn className="w-full [&>select]:flex-1" /></div>
         {canSearch && search('relative mx-3 mt-3 sm:hidden')}
-        <nav ref={navEl} className="flex-1 overflow-y-auto px-3 py-3" aria-label={t('nav.menu')}>
+        <nav ref={navEl} className="relative flex-1 overflow-y-auto px-3 py-3" aria-label={t('nav.menu')}>
+          <SlidingPill container={navEl} active={pathname} className="glass-on rounded-full" />
           {groups.map((g, gi) => (
             <div key={g.key} className={gi ? 'mt-4' : ''}>
               {groups.length > 1 && <div className="px-4 pb-1.5 text-[0.75rem] font-bold uppercase tracking-wider text-slate-600">{t(`nav.group.${g.key}` as MessageKey)}</div>}
@@ -284,9 +285,9 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
                 const active = pathname === it.href || pathname.startsWith(it.href + '/');
                 const Icon = it.icon;
                 return (
-                  <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined}
-                    className={cx('press mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [@media(max-height:820px)]:mb-0.5 [@media(max-height:820px)]:min-h-11',
-                      active ? 'glass-on text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
+                  <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
+                    className={cx('press relative z-[1] mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [@media(max-height:820px)]:mb-0.5 [@media(max-height:820px)]:min-h-11',
+                      active ? 'text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
                     <Icon className={cx('h-[1.375rem] w-[1.375rem] shrink-0', active ? 'text-brand-700' : 'text-slate-700')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
                   </Link>
                 );

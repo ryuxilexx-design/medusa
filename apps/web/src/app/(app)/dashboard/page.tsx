@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -9,7 +9,7 @@ import { api, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtTime, formatSom, fullName, longDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, ErrorState, Money, PageHeader, Skeleton, StatCard } from '@/components/ui';
+import { Badge, Button, Card, cx, ErrorState, Money, PageHeader, Skeleton, SlidingPill, StatCard } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
 
 type T = ReturnType<typeof useT>;
@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const { me, branchId } = useSession();
   const t = useT();
   const [period, setPeriod] = useState<Period>('today');
+  const periodGroup = useRef<HTMLDivElement>(null);
   const [from, setFrom] = useState(addDays(me.today, -6));
   const [to, setTo] = useState(me.today);
   const params = period === 'custom' ? { from, to } : { period };
@@ -36,9 +37,10 @@ export default function DashboardPage() {
     <>
       <PageHeader title={t('clinical.dash.title')} subtitle={periodLabel}
         actions={
-          <div className="glass-field grid w-full grid-cols-2 gap-0.5 rounded-full p-1 sm:flex sm:w-auto" role="group" aria-label={t('clinical.period.group')}>
+          <div ref={periodGroup} className="glass-field relative grid w-full grid-cols-2 gap-0.5 rounded-full p-1 sm:flex sm:w-auto" role="group" aria-label={t('clinical.period.group')}>
+            <SlidingPill container={periodGroup} active={period} className="rounded-full bg-white shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]" />
             {([['today', 'clinical.period.today'], ['7d', 'clinical.period.last7'], ['30d', 'clinical.period.last30'], ['custom', 'clinical.period.custom']] as [Period, MessageKey][]).map(([v, l]) => (
-              <button key={v} type="button" onClick={() => setPeriod(v)} aria-pressed={period === v} className={cx('min-h-9 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', period === v ? 'bg-white text-brand-800 shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]' : 'text-slate-800 hover:bg-white/50')}>{t(l)}</button>
+              <button key={v} type="button" onClick={() => setPeriod(v)} aria-pressed={period === v} data-active={period === v} className={cx('relative z-[1] min-h-9 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', period === v ? 'text-brand-800' : 'text-slate-800 hover:bg-white/50')}>{t(l)}</button>
             ))}
           </div>
         } />
