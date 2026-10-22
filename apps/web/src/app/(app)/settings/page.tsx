@@ -10,6 +10,7 @@ import { useI18n, useT } from '@/lib/i18n';
 import { TelegramSettings } from '@/components/telegram-settings';
 import { AiSettings } from '@/components/ai-settings';
 import { MoneyInput } from '@/components/money-input';
+import { DaysOff } from '@/components/days-off';
 import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, PageHeader, Pagination, Select, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 type Tab = 'clinic' | 'services' | 'telegram' | 'ai' | 'audit' | 'demo';
@@ -65,7 +66,9 @@ function Clinic() {
           )}
         </Card>
       </div>
-      <Card title={t('admin.set.rooms')} padded={false}>
+      <div className="flex min-w-0 flex-col gap-5">
+        <Card title={t('admin.off.holidays')}><DaysOff clinic canEdit /></Card>
+        <Card title={t('admin.set.rooms')} padded={false}>
         {rooms.isLoading ? <LoadingRows rows={4} /> : rooms.isError ? <ErrorState error={rooms.error} onRetry={() => rooms.refetch()} /> : !rooms.data!.length ? <EmptyState compact title={t('admin.set.noRooms')} /> : (
           <Table>
             <thead><tr><Th>{t('admin.set.colRoom')}</Th><Th>{t('admin.set.colPurpose')}</Th><Th className="hidden sm:table-cell">{t('admin.set.colBranch')}</Th></tr></thead>
@@ -78,7 +81,8 @@ function Clinic() {
             ))}</tbody>
           </Table>
         )}
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

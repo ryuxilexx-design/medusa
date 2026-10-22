@@ -4,6 +4,10 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 00000000000000. 0.12: shifokorning dam olish kunlari
+
+Haftalik jadval ustiga istisno kunlar qo‘shildi (`schedule_exceptions`, migratsiya 018): shifokorning dam olish kuni yoki ta’tili, butun klinika yoki bitta filial uchun bayram, bir kunlik maxsus ish vaqti. Rahbar ularni xodim kartasida («Dam olish kunlari») va sozlamalarda («Bayram kunlari») kiritadi va o‘chiradi; davr bir nechta kun bo‘lsa, har kun alohida yozuv. Bu kunlarda registrator ham, Telegram bot ham yozolmaydi (409 `DOCTOR_UNAVAILABLE`, bo‘sh vaqt ro‘yxati bo‘sh, botning sana tugmalarida kun chiqmaydi); maxsus ish vaqti haftalik soat o‘rnini bosadi. Istisno kiritilganda shu kunlardagi rejalashtirilgan qabullar **bekor qilinmaydi** — javobda va ekranda ro‘yxat (bemor, vaqt, jadvalga havola) chiqadi, registrator ko‘chiradi. Jadval panjarasida shunday kun kulrang ustun va sabab bilan ko‘rinadi. Testlar: `schedule-exceptions.test.mjs` (6 ta). Cheklov: bayram kunlari qo‘lda kiritiladi (rasmiy taqvim import qilinmaydi); brauzer E2E yo‘q.
+
 ## 0000000000000. 0.11: to‘liq audit, tezlik, yangiliklar 2.0
 
 | Nima | Holat | Tekshiruv |

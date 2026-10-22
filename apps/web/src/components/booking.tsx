@@ -136,7 +136,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
             {!doctorId ? <p tabIndex={-1} className={cx('rounded-lg border-2 border-dashed p-6 text-center text-sm text-slate-600 focus:outline-none', errors.start_time ? 'border-red-300' : 'border-slate-200')}>{t('registrar.bk.pickDoctorDate')}</p>
               : avail.isLoading ? <div className="grid grid-cols-5 gap-1.5">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
               : avail.isError ? <Alert tone="red">{(avail.error as Error).message}</Alert>
-              : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{t('registrar.bk.doctorOff')}</p>
+              : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{avail.data?.reason ? t('registrar.bk.unavailable', { reason: t(`admin.off.kind.${avail.data.reason}` as MessageKey).toLowerCase() }) : t('registrar.bk.doctorOff')}</p>
               : (
                 <>
                   <p className="mb-3 text-[0.8125rem] text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, <span className="whitespace-nowrap">{t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}</span>{avail.data.break_start && <>, <span className="whitespace-nowrap">{t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}</span></>}</p>

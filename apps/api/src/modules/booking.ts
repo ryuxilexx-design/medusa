@@ -18,6 +18,24 @@ export async function lockAppointment(c: Q, ctx: Ctx, id: string) {
   return a;
 }
 
+export type DayException = { id: string; kind: 'day_off' | 'vacation' | 'holiday' | 'custom_hours'; start: string | null; end: string | null; note: string | null };
+export const EXCEPTION_REASON: Record<string, string> = { day_off: 'dam olish kuni', vacation: 'ta’til', holiday: 'bayram kuni' };
+export const BLOCKING_KINDS = ['day_off', 'vacation', 'holiday'];
+
+/**
+ * The exception that applies to a doctor on a date: the doctor's own row wins over a clinic-wide one; a clinic-wide
+ * row with a branch applies only to doctors working in that branch that day. Shared by the staff API and the
+ * Telegram bot — the only place that reads schedule_exceptions for booking.
+ */
+export async function dayException(q: Q, tenantId: string, doctorId: string, date: string, branchId: string | null): Promise<DayException | null> {
+  const rows = (await q.query(
+    `SELECT id, kind, to_char(start_time,'HH24:MI') AS start, to_char(end_time,'HH24:MI') AS "end", note
+       FROM schedule_exceptions WHERE tenant_id = $1 AND date = $2 AND (doctor_id = $3 OR (doctor_id IS NULL AND (branch_id IS NULL OR branch_id = $4)))
+      ORDER BY (doctor_id IS NULL), (branch_id IS NULL)`, [tenantId, date, doctorId, branchId])).rows;
+  return rows[0] ?? null;
+}
+export const unavailable = (exc: DayException) => conflict('DOCTOR_UNAVAILABLE', `Shifokor bu kuni qabul qilmaydi: ${EXCEPTION_REASON[exc.kind]}`, { kind: exc.kind, note: exc.note });
+
 export type SlotInput = { branch_id: string; doctor_id: string; service_id: string; date: string; start_time: string; duration_min?: number };
 /** How far in the past a start may lie: a normal booking tolerates clock skew, a walk-in starts on the grid slot that already began. */
 const PAST_GRACE_MIN = 5;
@@ -34,12 +52,17 @@ export async function validateSlot(c: Q, ctx: Ctx, input: SlotInput, pastGraceMi
   if (!link) throw invalid({ service_id: 'Bu shifokor tanlangan xizmatni ko‘rsatmaydi' });
   const sch = (await c.query(
     `SELECT s.*, b.name AS branch_name FROM schedules s JOIN branches b ON b.id = s.branch_id WHERE s.doctor_id = $1 AND s.weekday = $2`, [doctor.id, weekday(input.date)])).rows[0];
+  // a day off / vacation / holiday blocks the day even when the weekly row exists; custom hours replace the row's hours
+  const exc = await dayException(c, ctx.tenantId, doctor.id, input.date, sch?.branch_id ?? input.branch_id);
+  if (exc && BLOCKING_KINDS.includes(exc.kind)) throw unavailable(exc);
   if (!sch) throw invalid({ date: 'Shifokor bu kuni ishlamaydi' });
   if (sch.branch_id !== input.branch_id) throw invalid({ branch_id: `Shifokor bu kuni ${sch.branch_name}da qabul qiladi` });
   const duration = input.duration_min ?? service.duration_min;
   const start = toMinutes(input.start_time), end = start + duration;
-  if (start < toMinutes(sch.start_time) || end > toMinutes(sch.end_time)) throw invalid({ start_time: `Ish vaqti: ${sch.start_time.slice(0, 5)}–${sch.end_time.slice(0, 5)}` });
-  if (sch.break_start && start < toMinutes(sch.break_end) && toMinutes(sch.break_start) < end) throw invalid({ start_time: `Tanaffus vaqti: ${sch.break_start.slice(0, 5)}–${sch.break_end.slice(0, 5)}` });
+  const custom = exc?.kind === 'custom_hours';
+  const workStart: string = custom ? exc!.start! : sch.start_time, workEnd: string = custom ? exc!.end! : sch.end_time;
+  if (start < toMinutes(workStart) || end > toMinutes(workEnd)) throw invalid({ start_time: `Ish vaqti: ${workStart.slice(0, 5)}–${workEnd.slice(0, 5)}` });
+  if (!custom && sch.break_start && start < toMinutes(sch.break_end) && toMinutes(sch.break_start) < end) throw invalid({ start_time: `Tanaffus vaqti: ${sch.break_start.slice(0, 5)}–${sch.break_end.slice(0, 5)}` });
   const startsAt = localToUtc(input.date, input.start_time);
   if (startsAt.getTime() < now().getTime() - pastGraceMin * 60_000) throw invalid({ start_time: 'O‘tgan vaqtga yozib bo‘lmaydi' });
   return { startsAt, endsAt: new Date(startsAt.getTime() + duration * 60_000), roomId: sch.room_id as string | null, service, doctor };
@@ -52,7 +75,10 @@ export async function availability(q: Q, tenantId: string, doctorId: string, dat
             to_char(s.break_start,'HH24:MI') AS break_start, to_char(s.break_end,'HH24:MI') AS break_end, r.name AS room_name
        FROM schedules s JOIN branches b ON b.id = s.branch_id LEFT JOIN rooms r ON r.id = s.room_id
       WHERE s.doctor_id = $1 AND s.weekday = $2 AND s.tenant_id = $3`, [doctorId, weekday(date), tenantId])).rows[0];
+  const exc = await dayException(q, tenantId, doctorId, date, sch?.branch_id ?? null);
+  if (exc && BLOCKING_KINDS.includes(exc.kind)) return { working: false as const, reason: exc.kind, note: exc.note, slots: [], busy: [] };
   if (!sch) return { working: false as const, slots: [], busy: [] };
+  if (exc) Object.assign(sch, { start: exc.start, end: exc.end, break_start: null, break_end: null, custom_hours: true, note: exc.note }); // custom hours: the given window, no break
   const busy = (await q.query(
     `SELECT id, starts_at, ends_at FROM appointments WHERE doctor_id = $1 AND status NOT IN ('cancelled','no_show')
         AND starts_at < $3 AND ends_at > $2 AND starts_at >= $2::timestamptz - interval '1 day' AND ($4::uuid IS NULL OR id <> $4)`, // lower bound: index range, not all history

@@ -186,6 +186,8 @@ export const registrar = {
   'registrar.bk.freeSlots': ['Bo‘sh vaqtlar', 'Свободное время'],
   'registrar.bk.pickDoctorDate': ['Shifokor va sanani tanlang', 'Выберите врача и дату'],
   'registrar.bk.doctorOff': ['Shifokor bu kuni ishlamaydi', 'Врач в этот день не работает'],
+  'registrar.bk.unavailable': ['Shifokor bu kuni qabul qilmaydi: {reason}', 'Врач в этот день не принимает: {reason}'],
+  'registrar.customHours': ['maxsus ish vaqti', 'особые часы'],
   'registrar.bk.branchLabel': ['Filial:', 'Филиал:'],
   'registrar.bk.hours': ['ish vaqti {start}–{end}', 'рабочее время {start}–{end}'],
   'registrar.bk.break': ['tanaffus {start}–{end}', 'перерыв {start}–{end}'],
