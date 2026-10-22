@@ -176,10 +176,10 @@ export async function backfillSeedCameras(q: Pick<PoolClient, 'query'>, demoDate
  * new camera, its alerts and the drawn snapshots of the existing seed alerts once (only while the seed clinic has no
  * snapshot). Cameras people added themselves are untouched.
  */
+/** Adds the seed's alert pictures to a demo database seeded before they existed, and refreshes the ones whose file changed. */
 export async function backfillSeedSnapshots(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
   const seeded = (await q.query('SELECT 1 FROM cameras WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
-  const has = (await q.query('SELECT 1 FROM camera_snapshots WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
-  if (!seeded || has) return 0;
+  if (!seeded) return 0;
   const clock = (await q.query(`SELECT to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS d, to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'HH24:MI') AS t`)).rows[0];
   const seed = buildSeed(demoDate, clock.d === demoDate ? clock.t : clock.d < demoDate ? '00:00' : '23:59');
   const camIds = new Set((await q.query('SELECT id FROM cameras WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
@@ -207,6 +207,9 @@ export async function backfillSeedSnapshots(q: Pick<PoolClient, 'query'>, demoDa
   for (const s of seed.camera_snapshots) {
     const id = idOf.get(s.event_id);
     if (!id) continue;
+    // a seed alert whose picture file changed (tools/make-snapshots.py) gets the new picture on the next start;
+    // the table forbids UPDATE (append-only evidence), so the old picture is removed the way the retention purge does
+    await q.query(`DELETE FROM camera_snapshots WHERE event_id = $1 AND tenant_id = $2 AND md5(bytes) <> md5($3::bytea)`, [id, s.tenant_id, s.bytes]);
     const r = await q.query(`INSERT INTO camera_snapshots (event_id, tenant_id, content_type, bytes, created_at) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (event_id) DO NOTHING`,
       [id, s.tenant_id, s.content_type, s.bytes, s.created_at]);
     n += r.rowCount ?? 0;

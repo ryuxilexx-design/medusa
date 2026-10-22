@@ -365,7 +365,7 @@ export class CamerasController {
   }
 }
 
-/** One of the seed's drawn frames for a simulated security event: by kind and by night/day (never a real picture). */
+/** One of the seed's sample frames for a simulated security event: by kind and by night/day (never a picture from a real camera). */
 function demoSnapshot(kind: EventKind, at: Date, camId: string) {
   const hour = Math.floor(toMinutes(localTime(at)) / 60);
   const night = hour < 8 || hour >= 20;

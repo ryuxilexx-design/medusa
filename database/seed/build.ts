@@ -13,7 +13,7 @@ import * as path from 'path';
 
 export const DEMO_TIMEZONE_OFFSET_HOURS = 5; // Asia/Tashkent, no DST
 
-/** The drawn CCTV-style frames the demo attaches to its security alerts (tools/gen-snapshots.mjs; no real people). */
+/** The CCTV-style frames the demo attaches to its security alerts: licensed stock photos with every face and sign blurred (tools/make-snapshots.py, tools/snapshot-sources/ATTRIBUTION.md). */
 export const SNAPSHOT_DIR = path.resolve(__dirname, '../../seed/snapshots');
 export function readSeedSnapshot(name: string): Buffer | null {
   if (!/^[a-z0-9-]+$/.test(name)) return null;
@@ -859,7 +859,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       }
     }
     // ---- security alerts: at night (after hours) and, for the «always» cameras, by day; the camera's picture is kept
-    //      as evidence (drawn frames from database/seed/snapshots — no real people). Three alerts are still open. ----
+    //      as evidence (database/seed/snapshots: photos with blurred faces, see tools/make-snapshots.py). Three alerts are still open. ----
     const NIGHT: [string, string, string, number, string, string | null, string | null][] = [
       // camera, branch, kind, days back, time, acknowledged at (the same or next morning) or null = still open, snapshot file
       ['mrk-store', BC, 'intrusion', 26, '22:47', '08:20', null],

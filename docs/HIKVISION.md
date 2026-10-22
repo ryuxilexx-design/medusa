@@ -92,7 +92,7 @@ rasm dalil sifatida saqlanadi:
 Kamerada buning uchun *Event → Linkage → Upload to Surveillance Center* (yoki *Notify Surveillance Center*) bilan
 birga **«Capture picture»/«Upload picture»** yoqilgan bo‘lishi kerak — shunda HTTP listening xabari multipart
 bo‘lib, rasm qismi bilan keladi. Haqiqiy kameradan suratlar faqat O‘zbekistondagi serverda saqlanadi; demo’da
-(Railway) faqat chizilgan sun’iy kadrlar bor.
+(Railway) faqat namunaviy kadrlar bor (ochiq litsenziyali stok fotolar, yuzlar xiralashtirilgan).
 
 Texnik tafsilotlar, namunaviy ISAPI xabarlari va manbalar: `docs/HIKVISION_ISAPI_RESEARCH.md`.
 Kod: `apps/api/src/cameras/` (`isapi.ts` — xabarni o‘qish, `ingest.ts` — qoidalar, `cameras.controller.ts` — API,
@@ -137,10 +137,13 @@ o‘zgaradigan odam oqimi va bitta «ochiq eshiklar kuni», kunduzgi oddiy va 11
 chiqilmagan: kecha 23:12 dori ombori, 3 kun oldin Yunusobod kassasi, bugun 09:48 operatsiya bloki eshigida uzoq
 turib qolgan odam), bemor kelishi tarixi (tasdiqlangan va «bu emas») hamda bugungi takliflar. Hammasi sun’iy.
 
-Ogohlantirishlarning 10 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kadrlar
-emas: `tools/gen-snapshots.mjs` chizadigan sun’iy sahnalar (koridor, operatsiya bloki eshigi, kassa, qabulxona,
-odam siluleti, kameraning o‘z yozuvlari — zona, «Human» ramkasi, vaqt). Sahna o‘zgarsa skriptni qayta ishga
-tushiring; fayllar repoda saqlanadi, seed ularni faqat o‘qiydi. «Sinov hodisasi» tugmasi ham xavfsizlik hodisasiga
+Ogohlantirishlarning 10 tasida kameraning «surati» bor — `database/seed/snapshots/*.jpg`. Bular haqiqiy kameradan
+emas: Wikimedia Commons’dagi ochiq litsenziyali shifoxona fotolari (`tools/snapshot-sources/`, mualliflar va
+litsenziyalar `ATTRIBUTION.md` da), `tools/make-snapshots.py` ularni CCTV ko‘rinishiga keltiradi — avval har bir yuz,
+ism yorlig‘i va o‘qiladigan yozuv pikselga aylantiriladi, keyin 960×540 kadr, tunda IR monoxrom, shovqin, kameraning
+o‘z yozuvlari (vaqt, kanal nomi, zona, nishon ramkasi). Sahna o‘zgarsa skriptni qayta ishga tushiring; fayllar
+repoda saqlanadi, seed ularni faqat o‘qiydi, API ishga tushganda o‘zgargan faylni bazadagi eski surat o‘rniga qo‘yadi
+(`backfillSeedSnapshots`). «Sinov hodisasi» tugmasi ham xavfsizlik hodisasiga
 shu kadrlardan birini qo‘shadi (faqat ogohlantirish bo‘lsa saqlanadi).
 
 ## Haqiqiy kamerada hali tekshirilmagan
