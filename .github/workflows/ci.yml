@@ -1,0 +1,38 @@
+# CI: typecheck + API integration tests against a throw-away Postgres (never the demo database).
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: meduza
+          POSTGRES_PASSWORD: meduza_local
+          POSTGRES_DB: postgres
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U meduza" --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://meduza:meduza_local@127.0.0.1:5433/meduza_ci_test
+      APP_SECRET_KEY: ${{ secrets.APP_SECRET_KEY_TEST || 'BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=' }}
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - name: Build (web + api)
+        run: npm run build

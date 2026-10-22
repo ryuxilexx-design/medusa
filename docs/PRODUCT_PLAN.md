@@ -1,0 +1,34 @@
+# Mahsulot rejasi (2026-10-22 auditidan keyin)
+
+Maqsad: birinchi haqiqiy kichik klinikaga o‘rnatish, keyin «mahsulot» darajasiga chiqarish. To‘liq audit:
+https://claude.ai/artifact/Pyc7KKvHgFiXQzbZf7RgNR (xulosa: bu hafta — yozuv + navbat + ichki kassa, AI o‘chiq,
+fiskal kassa va DMED retsept yonma-yon).
+
+## 1-bosqich — blokerlar (bu hafta)
+
+| № | Ish | Holat |
+|---|---|---|
+| 1 | Xizmat / filial / xona / ombor tovarini UI’dan yaratish (manager), narx filial bo‘yicha | jarayonda |
+| 2 | Shifokor dam olish kuni / ta’til / bayram (`schedule_exceptions`, bot ham hurmat qiladi) | jarayonda |
+| 3 | Imzolangan qaydga qo‘shimcha yozuv (addendum, append-only) | jarayonda |
+| 4 | AI «Qo‘llash» yozilganini o‘chirmaydi; production’da AI sukut o‘chiq, kunlik byudjet; AI xatolari 3 tilda | jarayonda |
+| 5 | `db:reset-password`, `GET /health`, log chegarasi, `PUBLIC_URL`, sliding sessiya | jarayonda |
+| 6 | Rahbar to‘lov qabul qiladi/smena ochadi; shifokor ulushi % ishlaydi; tungi ochiq smena ogohlantirishi | jarayonda |
+| 7 | Registrator yozganda bemorga Telegram tasdiq; farzand kartasi; navbatsiz qabul; lotin↔kirill qidiruv; qabul taloni chopi | jarayonda |
+| 8 | CI (GitHub Actions: typecheck + testlar + build) | qo‘shildi |
+
+## 2-bosqich — qonuniy va integratsiya (2–6 hafta)
+
+- Fiskal chek: onlayn-KKM / virtual kassa (ОФД), IKPU kodi va QQS belgisi narxnomada, chekda QR; qaytarish cheki.
+  Nuqta: `invoices.controller.ts` to‘lov tranzaksiyasi, `cash.controller.ts` qaytarish; `fiscal_receipts` outbox.
+- SMS (Eskiz) transporti notifications outbox’da; jo‘natuvchi nomini operatorlarda ro‘yxatdan o‘tkazish.
+- DMED: shifokor hisoblari (hozir), keyin token orqali integratsiya; e-retsept; PQ-170 bo‘yicha DHP/FHIR almashinuv
+  2027-04-01 gacha.
+- Shaxsiy ma’lumotlar: bazani reestrga olish (VM-71), rozilik matni (yurist), bemorni anonimlashtirish/eksport.
+- Qarz/oldindan to‘lov, xizmat miqdori, qator bo‘yicha qaytarish, eksportlar (CSV/XLSX), ESF (yuridik shaxslar).
+
+## 3-bosqich — «shifokor faqat tasdiqlaydi» (4–6 hafta)
+
+Ovozdan matn (o‘zbek/rus), mutaxassislik shablonlari va tez iboralar, yuqori ishonchli avto-kodlash (bir bosish),
+tashxisdan buyurtma to‘plami taklifi, imzodan hujjat va qayta qabul avto-to‘ldirish, dori lug‘ati + allergiya
+tekshiruvi. Odamda qoladi: tashxis, dori va doza, tahlil tanlovi, mehnatga layoqatsizlik, imzo.
