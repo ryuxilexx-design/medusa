@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ArrowRight, CalendarCheck, CheckCircle2, PlayCircle, RefreshCw, UserCheck, Users } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CalendarCheck, CheckCircle2, PlayCircle, RefreshCw, UserCheck, Users, Zap } from 'lucide-react';
 import { api, qs } from '@/lib/api';
 import { duration, fmtTime, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
@@ -10,6 +10,7 @@ import { Badge, Button, Card, cx, EmptyState, LinkButton, ErrorState, LoadingRow
 import { AppointmentStatus, SourceMark } from '@/components/status';
 import { useAppointmentAction } from '@/components/appointment-dialog';
 import { CameraArrivals } from '@/components/camera-arrivals';
+import { WalkInModal } from '@/components/walk-in';
 import { useT } from '@/lib/i18n';
 
 export default function QueuePage() {
@@ -17,6 +18,7 @@ export default function QueuePage() {
   const t = useT();
   const router = useRouter();
   const [doctorId, setDoctorId] = useState('');
+  const [walkIn, setWalkIn] = useState(false);
   const act = useAppointmentAction();
   const doctors = useQuery({ queryKey: ['doctors'], queryFn: () => api('/doctors').then((r) => r.data as any[]), enabled: me.role !== 'doctor' });
   const q = useQuery({ queryKey: ['queue', branchId, doctorId], queryFn: () => api(`/queue${qs({ branch_id: branchId, doctor_id: doctorId })}`).then((r) => r.data), refetchInterval: 12_000 });
@@ -46,7 +48,9 @@ export default function QueuePage() {
             <option value="">{t('registrar.allDoctors')}</option>{doctors.data?.filter((d) => d.service_ids?.length).map((d) => <option key={d.id} value={d.id}>{d.display_name}</option>)}
           </Select>}
           <Button icon={<RefreshCw className={q.isFetching ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />} onClick={() => q.refetch()}>{t('registrar.q.refresh')}</Button>
+          {staff && <Button variant="primary" icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>}
         </>} />
+      {staff && <WalkInModal open={walkIn} onClose={() => setWalkIn(false)} />}
       <CameraArrivals />
       {q.isLoading ? <Card><LoadingRows /></Card> : q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : (
         <div className="grid grid-cols-1 gap-5 2xl:grid-cols-3">

@@ -16,6 +16,7 @@ import { PRICE_SQL } from '../modules/reference.controller';
 import { recordConsent } from '../modules/consent';
 import { BOT_CONSENT_VERSION, Card, humanDate, Lang, shortDate, T } from './texts';
 import { InlineButton, OutMessage, ReplyMarkup, TelegramError, Transport } from './transport';
+import { OWN_CARD_SQL } from './outbox';
 
 export type Bot = { id: string; tenant_id: string; kind: 'telegram' | 'simulator' };
 type State = { step?: string; v?: number; opts?: string[]; d?: Record<string, any> };
@@ -296,7 +297,8 @@ export class BotEngine {
   // ---------------------------------------------------------------- booking flow
 
   private async patients(t: Turn) {
-    return (await t.c.query(`SELECT id, last_name, first_name FROM patients WHERE tenant_id = $1 AND phone = $2 ORDER BY created_at, patient_number LIMIT 10`,
+    // own cards and family cards (a child's card with this number as the contact phone)
+    return (await t.c.query(`SELECT p.id, p.last_name, p.first_name FROM patients p WHERE p.tenant_id = $1 AND ${OWN_CARD_SQL('$2')} ORDER BY p.created_at, p.patient_number LIMIT 10`,
       [t.chat.tenant_id, t.chat.phone])).rows;
   }
 
@@ -304,7 +306,7 @@ export class BotEngine {
     if (!id || !isUuid(id)) return null;
     return (await t.c.query(
       `SELECT a.* FROM appointments a JOIN patients p ON p.id = a.patient_id
-        WHERE a.id = $1 AND a.tenant_id = $2 AND p.phone = $3`, [id, t.chat.tenant_id, t.chat.phone])).rows[0] ?? null;
+        WHERE a.id = $1 AND a.tenant_id = $2 AND ${OWN_CARD_SQL('$3')}`, [id, t.chat.tenant_id, t.chat.phone])).rows[0] ?? null;
   }
 
   private async startBooking(t: Turn) {
@@ -474,7 +476,7 @@ export class BotEngine {
     t.step('menu', {});
     const rows = (await t.c.query(
       `SELECT a.id, a.status, a.patient_confirmed_at FROM appointments a JOIN patients p ON p.id = a.patient_id
-        WHERE a.tenant_id = $1 AND p.phone = $2 AND a.status IN ('scheduled','arrived') AND a.starts_at >= $3
+        WHERE a.tenant_id = $1 AND ${OWN_CARD_SQL('$2')} AND a.status IN ('scheduled','arrived') AND a.starts_at >= $3
         ORDER BY a.starts_at LIMIT 5`, [t.chat.tenant_id, t.chat.phone, now()])).rows;
     if (!rows.length) return t.send(t.t.mineNone, this.menuKb(t.lang));
     for (const a of rows) {

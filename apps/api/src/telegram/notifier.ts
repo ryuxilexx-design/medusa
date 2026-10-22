@@ -3,7 +3,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Db } from '../core/db';
 import { decryptSecret } from '../core/secrets';
-import { syncClock } from '../core/clock';
+import { addDays, localDate, localTime, localToUtc, now, syncClock } from '../core/clock';
 import { BotEngine, cardFor } from './engine';
 import { LINKED_CHATS_SQL, NOTICES_ALLOWED_SQL } from './outbox';
 import { Lang, T } from './texts';
@@ -11,6 +11,19 @@ import { HttpTransport, OutMessage, SimTransport, TelegramError, Transport } fro
 
 export type BotRow = { id: string; tenant_id: string; kind: 'telegram' | 'simulator'; token_enc: string | null };
 const MAX_ATTEMPTS = 5;
+/** Quiet hours (Tashkent): nothing is sent before 08:00 or from 21:00 — except a cancellation or move by the clinic, which must not wait. */
+export const SEND_FROM_HOUR = 8, SEND_UNTIL_HOUR = 21;
+const URGENT_KINDS = ['cancelled_by_clinic', 'rescheduled_by_clinic'];
+/** The day-before reminder is pointless for a booking made less than this long before the visit (the 2-hour one still goes). */
+const DAY_REMINDER_MIN_LEAD = '20 hours';
+
+/** When the next sending window opens after instant `t` (null while it is open). */
+export function quietUntil(t: Date): Date | null {
+  const h = Number(localTime(t).slice(0, 2));
+  if (h >= SEND_FROM_HOUR && h < SEND_UNTIL_HOUR) return null;
+  const date = h >= SEND_UNTIL_HOUR ? addDays(localDate(t), 1) : localDate(t);
+  return localToUtc(date, `${String(SEND_FROM_HOUR).padStart(2, '0')}:00`);
+}
 
 @Injectable()
 export class BotRegistry {
@@ -39,14 +52,15 @@ export class Notifier {
   /** Queues the day-before (3–24 h ahead) and soon (20 min–2 h ahead) reminders for patients with a linked chat. */
   async planReminders(): Promise<number> {
     let n = 0;
-    for (const [kind, from, to, age] of [['reminder_day', '3 hours', '24 hours', '1 hour'], ['reminder_soon', '20 minutes', '2 hours', '20 minutes']] as const) {
+    for (const [kind, from, to, age, minLead] of [['reminder_day', '3 hours', '24 hours', '1 hour', DAY_REMINDER_MIN_LEAD], ['reminder_soon', '20 minutes', '2 hours', '20 minutes', '0']] as const) {
       const r = await this.db.pool.query(
         `INSERT INTO notifications (tenant_id, kind, patient_id, appointment_id, dedupe_key)
          SELECT a.tenant_id, $1, a.patient_id, a.id, $1 || ':' || a.id || ':' || extract(epoch FROM a.starts_at)::bigint
            FROM appointments a JOIN patients p ON p.id = a.patient_id
           WHERE a.status = 'scheduled' AND a.starts_at > demo_now() + $2::interval AND a.starts_at <= demo_now() + $3::interval
-            AND a.created_at <= demo_now() - $4::interval AND EXISTS (${LINKED_CHATS_SQL}) AND ${NOTICES_ALLOWED_SQL}
-         ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`, [kind, from, to, age]);
+            AND a.created_at <= demo_now() - $4::interval AND a.created_at <= a.starts_at - $5::interval
+            AND EXISTS (${LINKED_CHATS_SQL}) AND ${NOTICES_ALLOWED_SQL}
+         ON CONFLICT (tenant_id, dedupe_key) DO NOTHING`, [kind, from, to, age, minLead]);
       n += r.rowCount ?? 0;
     }
     return n;
@@ -56,6 +70,9 @@ export class Notifier {
   async deliverDue(limit = 50): Promise<{ sent: number; skipped: number; failed: number }> {
     const stats = { sent: 0, skipped: 0, failed: 0 };
     syncClock((await this.db.one('SELECT demo_now() AS n'))!.n);
+    // quiet hours: due notices wait for 08:00 (a clinic's cancellation or move still goes out)
+    const until = quietUntil(now());
+    if (until) await this.db.rows(`UPDATE notifications SET next_attempt_at = $1 WHERE status = 'pending' AND next_attempt_at < $1 AND NOT (kind = ANY($2))`, [until, URGENT_KINDS]);
     for (let i = 0; i < limit; i++) {
       const done = await this.db.tx(async (c) => {
         const n = (await c.query(`SELECT * FROM notifications WHERE status = 'pending' AND next_attempt_at <= demo_now() ORDER BY next_attempt_at FOR UPDATE SKIP LOCKED LIMIT 1`)).rows[0];
@@ -69,17 +86,19 @@ export class Notifier {
         if (!(await c.query(`SELECT 1 FROM patients p WHERE p.id = $1 AND ${NOTICES_ALLOWED_SQL}`, [n.patient_id])).rowCount) { await finish('skipped', 'bemor Telegram xabarnomalariga rozi emas'); return true; }
         const chats = (await c.query(`SELECT x.*, b.token_enc FROM patients p, LATERAL (${LINKED_CHATS_SQL}) x JOIN telegram_bots b ON b.id = x.bot_id WHERE p.id = $1`, [n.patient_id])).rows;
         if (!chats.length) { await finish('skipped', 'bog‘langan chat yo‘q'); return true; }
-        let retryError: string | null = null;
+        let retryError: string | null = null, delivered = 0;
         for (const ch of chats) {
           const msg = await this.message(c, n, Number(ch.chat_id), ch.lang as Lang);
           try {
             await this.bots.transportFor({ id: ch.bot_id, tenant_id: n.tenant_id, kind: ch.bot_kind, token_enc: ch.token_enc }).call('sendMessage', msg as any);
+            delivered++;
           } catch (e) {
             if (e instanceof TelegramError && e.code === 403) { await c.query(`UPDATE telegram_chats SET blocked = true WHERE id = $1`, [ch.id]); continue; }
             retryError = (e as Error).message.slice(0, 300);
           }
         }
-        if (!retryError) { await finish('sent'); return true; }
+        // nobody reached (every chat has blocked the bot) is not «sent»
+        if (!retryError) { await (delivered ? finish('sent') : finish('skipped', 'bemor botni bloklagan')); return true; }
         const attempts = n.attempts + 1;
         await c.query(`UPDATE notifications SET attempts = $2, error = $3, status = CASE WHEN $2 >= $4 THEN 'failed' ELSE 'pending' END,
                               next_attempt_at = demo_now() + make_interval(mins => power(2, $2)::int) WHERE id = $1`, [n.id, attempts, retryError, MAX_ATTEMPTS]);
@@ -118,6 +137,7 @@ export class Notifier {
     }
     if (n.kind === 'reminder_soon') return { chat_id: chatId, text: t.reminderSoon(card) };
     if (n.kind === 'cancelled_by_clinic') return { chat_id: chatId, text: t.cancelledByClinic(card), reply_markup: this.engine.menuKb(lang) };
+    if (n.kind === 'booked') return { chat_id: chatId, text: t.bookedByClinic(card) };
     return { chat_id: chatId, text: t.rescheduledByClinic(card) };
   }
 }

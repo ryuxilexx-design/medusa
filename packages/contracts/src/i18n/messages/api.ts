@@ -57,6 +57,7 @@ export const api = {
   'api.badJson': ['So‘rov formati noto‘g‘ri', 'Неверный формат запроса'],
   'api.roomBusy': ['Xona bu vaqtda band. Boshqa vaqtni tanlang.', 'Кабинет в это время занят. Выберите другое время.'],
   'api.doctorBusy': ['Shifokor bu vaqtda band. Boshqa vaqtni tanlang.', 'Врач в это время занят. Выберите другое время.'],
+  'api.noSlot': ['Shifokorda yaqin bir soatda bo‘sh vaqt yo‘q. Boshqa shifokorni tanlang yoki qabulga yozing.', 'У врача нет свободного времени в ближайший час. Выберите другого врача или запишите на приём.'],
   'api.duplicate': ['Bu yozuv allaqachon mavjud.', 'Такая запись уже есть.'],
   'api.immutable': ['Tasdiqlangan yozuvni o‘zgartirib bo‘lmaydi.', 'Подтверждённую запись нельзя изменить.'],
   'api.badValue': ['Noto‘g‘ri qiymat yuborildi.', 'Отправлено неверное значение.'],

@@ -98,6 +98,8 @@ before(async () => {
   await db.assertDatabaseName(pool, '_test');
   await pool.query(`DELETE FROM telegram_chats`);
   await pool.query(`DELETE FROM telegram_sim_messages`);
+  // the suite boots at 07:30 — quiet hours for patient notices (08:00–21:00): the bot's day starts at 09:30
+  await pool.query(`UPDATE demo_clock SET demo_anchor = demo_anchor + interval '2 hours' WHERE id = 1`);
   registrar = session(); await registrar.demo(M.registrar);
   lab = session(); await lab.demo(M.lab);
   await startFake();
@@ -329,7 +331,10 @@ test('eslatmalar: bir kun oldin (tugmalar bilan) va 2 soat oldin; ikki marta yub
     throw new Error('no slot for ' + hoursAhead);
   }
   const dayId = await bookAt(5), soonId = await bookAt(1.25);
-  await pool.query(`UPDATE appointments SET created_at = demo_now() - interval '2 hours' WHERE id = ANY($1)`, [[dayId, soonId]]);
+  // booked yesterday (a booking made less than 20 h before the visit gets no day-before reminder); the staff booking
+  // confirmations are delivered first so the reminder texts are read from a clean mark
+  await pool.query(`UPDATE appointments SET created_at = starts_at - interval '25 hours' WHERE id = ANY($1)`, [[dayId, soonId]]);
+  await notifier.deliverDue();
   const mark = await lastId(chat);
   assert.ok((await notifier.planReminders()) >= 2);
   await notifier.deliverDue();

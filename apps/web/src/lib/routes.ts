@@ -35,6 +35,7 @@ const DETAIL_ROLES: Record<string, Role[]> = {
   '/print/uzi/': ['doctor'],
   '/print/document/': ['doctor'],
   '/print/consent/': ['manager', 'registrar', 'doctor', 'cashier', 'lab'],
+  '/print/appointment/': ['manager', 'registrar'],
 };
 
 /** May this role open this path? Unknown paths are allowed (Next shows its own 404). */

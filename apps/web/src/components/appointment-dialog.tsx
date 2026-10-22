@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ban, CalendarClock, PlayCircle, UserCheck, UserX } from 'lucide-react';
+import { Ban, CalendarClock, PlayCircle, Printer, UserCheck, UserX } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, fmtDateTime, fmtTime, formatPhone, formatSom, fullName, pid, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
@@ -59,6 +59,7 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
             {staff && !cancel && !noShow && appt.status === 'scheduled' && <Button icon={<CalendarClock className="h-4 w-4" />} onClick={() => setResched(true)}>{t('registrar.ap.reschedule')}</Button>}
             {staff && !cancel && !noShow && ['scheduled', 'arrived'].includes(appt.status) && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => { setNoShow(false); setCancel(true); }}>{t('registrar.ap.cancel')}</Button>}
             {noShowOpen && !noShow && !cancel && <Button variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-slate-900" icon={<UserX className="h-4 w-4" />} onClick={() => { setCancel(false); setNoShow(true); }}>{t('registrar.noShow')}</Button>}
+            {staff && !cancel && !noShow && ['scheduled', 'arrived'].includes(appt.status) && <LinkButton variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-slate-900" icon={<Printer className="h-4 w-4" />} href={`/print/appointment/${appt.id}${appt.queue_number ? '?ticket=1' : ''}`} target="_blank">{t('registrar.ap.print')}</LinkButton>}
             {/* the one primary action sits on the right and gets the first focus */}
             <div className="ml-auto flex gap-2">
               {staff && !cancel && !noShow && appt.status === 'scheduled' && isToday && <Button data-autofocus variant="primary" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.action === 'check-in'} onClick={() => act.mutate({ id: appt.id, action: 'check-in', body: { version: appt.version } }, done())}>{t('registrar.checkIn')}</Button>}

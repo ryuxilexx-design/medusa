@@ -104,8 +104,8 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
 
   // ---------- tenant, branches ----------
   data.branches.push(
-    { id: BC, tenant_id: T, name: 'Markaziy filial', code: 'MRK', address: 'Toshkent, Amir Temur ko‘chasi (demo manzil)', timezone: 'Asia/Tashkent', created_at: createdBase },
-    { id: BY, tenant_id: T, name: 'Yunusobod filiali', code: 'YUN', address: 'Toshkent, Yunusobod tumani (demo manzil)', timezone: 'Asia/Tashkent', created_at: createdBase },
+    { id: BC, tenant_id: T, name: 'Markaziy filial', code: 'MRK', address: 'Toshkent, Amir Temur ko‘chasi (demo manzil)', phone: '+998712000001', timezone: 'Asia/Tashkent', created_at: createdBase },
+    { id: BY, tenant_id: T, name: 'Yunusobod filiali', code: 'YUN', address: 'Toshkent, Yunusobod tumani (demo manzil)', phone: '+998712000002', timezone: 'Asia/Tashkent', created_at: createdBase },
   );
 
   // ---------- staff ----------
@@ -759,7 +759,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   // ---------- second tenant (isolation test) ----------
   const T2 = SEED_IDS.tenant2;
   data.tenants.push({ id: T2, name: 'Izolyatsiya Test Klinikasi', status: 'active', patient_seq: 3, invoice_seq: 0, receipt_seq: 0, shift_seq: 0, refund_seq: 0, created_at: createdBase, updated_at: createdBase });
-  data.branches.push({ id: SEED_IDS.branchTenant2, tenant_id: T2, name: 'Test filiali', code: 'TST', address: 'Demo manzil', timezone: 'Asia/Tashkent', created_at: createdBase });
+  data.branches.push({ id: SEED_IDS.branchTenant2, tenant_id: T2, name: 'Test filiali', code: 'TST', address: 'Demo manzil', phone: null, timezone: 'Asia/Tashkent', created_at: createdBase });
   addStaff('t2rahbar', M.tenant2Manager, 'Test Rahbar (2-tenant)', 'manager', [SEED_IDS.branchTenant2], 'Klinika rahbari', true, T2);
   [['Boshqa', 'Bemor', '1990-01-01'], ['Izolyatsiya', 'Sinov', '1975-06-15'], ['Ikkinchi', 'Tenant', '2001-09-09']].forEach(([l, f, b], i) =>
     data.patients.push({ id: sid(`t2patient:${i}`), tenant_id: T2, patient_number: 1 + i, last_name: l, first_name: f, middle_name: null, birth_date: b, sex: 'unspecified',

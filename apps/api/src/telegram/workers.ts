@@ -57,7 +57,7 @@ export class TelegramWorkers implements OnApplicationBootstrap, OnModuleDestroy 
   private log = new Logger('TelegramWorkers');
   private timers: NodeJS.Timeout[] = [];
   private pollers = new Map<string, Poller>();
-  private busy = { plan: false, deliver: false, sync: false };
+  private busy = { plan: false, deliver: false, sync: false, purge: false };
   constructor(private db: Db, private bots: BotRegistry, private engine: BotEngine, private notifier: Notifier) {}
 
   onApplicationBootstrap() {
@@ -74,6 +74,13 @@ export class TelegramWorkers implements OnApplicationBootstrap, OnModuleDestroy 
     every(60_000, 'plan', () => this.notifier.planReminders());
     every(5_000, 'deliver', () => this.notifier.deliverDue());
     every(30_000, 'sync', () => this.syncPollers());
+    every(24 * 3600_000, 'purge', () => this.purgeUpdates());
+  }
+
+  /** Processed update ids only guard against Telegram re-delivery (minutes): rows older than a week are dropped daily. */
+  async purgeUpdates(): Promise<number> {
+    const r = await this.db.pool.query(`DELETE FROM telegram_updates WHERE received_at < clock_timestamp() - interval '7 days'`);
+    return r.rowCount ?? 0;
   }
 
   onModuleDestroy() {

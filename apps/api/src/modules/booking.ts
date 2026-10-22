@@ -19,9 +19,12 @@ export async function lockAppointment(c: Q, ctx: Ctx, id: string) {
 }
 
 export type SlotInput = { branch_id: string; doctor_id: string; service_id: string; date: string; start_time: string; duration_min?: number };
+/** How far in the past a start may lie: a normal booking tolerates clock skew, a walk-in starts on the grid slot that already began. */
+const PAST_GRACE_MIN = 5;
+export const WALK_IN_GRACE_MIN = 15, WALK_IN_WINDOW_MIN = 60, SLOT_GRID_MIN = 15;
 
 /** Validates doctor/service/branch/schedule and returns the time window + room. */
-export async function validateSlot(c: Q, ctx: Ctx, input: SlotInput) {
+export async function validateSlot(c: Q, ctx: Ctx, input: SlotInput, pastGraceMin = PAST_GRACE_MIN) {
   assertBranch(ctx, input.branch_id);
   const doctor = (await c.query(`SELECT id, display_name FROM doctors WHERE id = $1 AND tenant_id = $2 AND active`, [input.doctor_id, ctx.tenantId])).rows[0];
   if (!doctor) throw invalid({ doctor_id: 'Shifokor topilmadi yoki faol emas' });
@@ -38,7 +41,7 @@ export async function validateSlot(c: Q, ctx: Ctx, input: SlotInput) {
   if (start < toMinutes(sch.start_time) || end > toMinutes(sch.end_time)) throw invalid({ start_time: `Ish vaqti: ${sch.start_time.slice(0, 5)}–${sch.end_time.slice(0, 5)}` });
   if (sch.break_start && start < toMinutes(sch.break_end) && toMinutes(sch.break_start) < end) throw invalid({ start_time: `Tanaffus vaqti: ${sch.break_start.slice(0, 5)}–${sch.break_end.slice(0, 5)}` });
   const startsAt = localToUtc(input.date, input.start_time);
-  if (startsAt.getTime() < now().getTime() - 5 * 60_000) throw invalid({ start_time: 'O‘tgan vaqtga yozib bo‘lmaydi' });
+  if (startsAt.getTime() < now().getTime() - pastGraceMin * 60_000) throw invalid({ start_time: 'O‘tgan vaqtga yozib bo‘lmaydi' });
   return { startsAt, endsAt: new Date(startsAt.getTime() + duration * 60_000), roomId: sch.room_id as string | null, service, doctor };
 }
 
@@ -67,8 +70,30 @@ export async function availability(q: Q, tenantId: string, doctorId: string, dat
   return { working: true as const, ...sch, duration_min: duration, slots, busy: busy.map((b) => ({ start: localTime(b.starts_at), end: localTime(b.ends_at) })) };
 }
 
+/**
+ * Walk-in («Hozir qabul qilish»): the start time for a patient standing at the desk — the grid slot «now» falls in
+ * (already begun, within WALK_IN_GRACE_MIN) or the first free one within WALK_IN_WINDOW_MIN. The same availability
+ * rules as every other booking; null when the doctor has nothing free in that window.
+ */
+export async function walkInSlot(q: Q, tenantId: string, doctorId: string, duration: number): Promise<{ date: string; start_time: string; branch_id: string } | null> {
+  const date = localDate(now());
+  const av = await availability(q, tenantId, doctorId, date, duration);
+  if (!av.working) return null;
+  const nowMin = toMinutes(localTime(now()));
+  const from = Math.floor(nowMin / SLOT_GRID_MIN) * SLOT_GRID_MIN; // the slot that already began
+  const slot = (av.slots as { time: string; free: boolean }[]).find((s) => s.free && toMinutes(s.time) >= from && toMinutes(s.time) >= nowMin - WALK_IN_GRACE_MIN && toMinutes(s.time) <= nowMin + WALK_IN_WINDOW_MIN);
+  return slot ? { date, start_time: slot.time, branch_id: av.branch_id as string } : null;
+}
+
+export type CreateOptions = {
+  source?: 'staff' | 'telegram';
+  /** Walk-in: the slot that already began is allowed, and the patient at the desk gets no «you are booked» notice. */
+  walkIn?: boolean;
+};
+
 /** Creates a booking. A repeated request_key returns the original appointment instead of a duplicate. */
-export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { patient_id: string; note?: string | null }, requestKey: string | null, source: 'staff' | 'telegram' = 'staff') {
+export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { patient_id: string; note?: string | null }, requestKey: string | null, opts: CreateOptions | 'staff' | 'telegram' = {}) {
+  const { source = 'staff', walkIn = false } = typeof opts === 'string' ? { source: opts } : opts;
   if (requestKey) {
     // serialise retries of the same request, then return the original booking if it already exists
     await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`appt:${ctx.tenantId}:${requestKey}`]);
@@ -81,14 +106,16 @@ export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { pat
   }
   const patient = (await c.query(`SELECT id, patient_number FROM patients WHERE id = $1 AND tenant_id = $2`, [input.patient_id, ctx.tenantId])).rows[0];
   if (!patient) throw invalid({ patient_id: 'Bemor topilmadi' });
-  const slot = await validateSlot(c, ctx, input);
+  const slot = await validateSlot(c, ctx, input, walkIn ? WALK_IN_GRACE_MIN : undefined);
   const row = (await c.query(
     `INSERT INTO appointments (id, tenant_id, branch_id, patient_id, doctor_id, service_id, room_id, starts_at, ends_at, status, note, created_by, created_at, updated_at, request_key, source)
      VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,'scheduled',$9,$10, demo_now(), demo_now(), $11, $12) RETURNING id`,
     [ctx.tenantId, input.branch_id, input.patient_id, input.doctor_id, input.service_id, slot.roomId, slot.startsAt, slot.endsAt, input.note ?? null,
       ctx.membershipId || null, requestKey, source])).rows[0];
   await audit(c, ctx, 'appointment.create', 'appointment', row.id,
-    `#${patient.patient_number}: ${slot.service.name}, ${input.date} ${input.start_time}, ${slot.doctor.display_name}${source === 'telegram' ? ' (Telegram)' : ''}`, input.branch_id);
+    `#${patient.patient_number}: ${slot.service.name}, ${input.date} ${input.start_time}, ${slot.doctor.display_name}${source === 'telegram' ? ' (Telegram)' : walkIn ? ' (navbatsiz)' : ''}`, input.branch_id);
+  // the patient hears about a booking the clinic made for them (the bot already answered its own booking)
+  if (source === 'staff' && !walkIn) await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'booked', patientId: input.patient_id, appointmentId: row.id, dedupeKey: `booked:${row.id}` });
   return { id: row.id as string, replayed: false };
 }
 

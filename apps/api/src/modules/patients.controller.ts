@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
-import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema } from '@meduza/contracts';
+import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema, searchTranslit } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, forbidden, notFound } from '../core/errors';
@@ -12,7 +12,7 @@ import { consentHistory, latestConsents, recordConsent } from './consent';
 
 const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.created_at, p.updated_at, p.source,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
-           WHERE tc.tenant_id = p.tenant_id AND tc.phone = p.phone AND NOT tc.blocked AND b.status = 'active') AS telegram_linked`;
+           WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND tc.phone IN (p.phone, p.contact_phone) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked`;
 const MIN_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex`;
 
 /** Doctors only see patients that have (had) an appointment with them. */
@@ -40,9 +40,15 @@ export class PatientsController {
     if (search) {
       const digits = search.replace(/[\s+\-()]/g, '');
       const like = (v: string) => `%${v.replace(/[\\%_]/g, '\\$&')}%`; // % and _ typed by a person are literal
-      params.push(like(search.toLowerCase()));
+      const anyApostrophe = (pattern: string) => pattern.replace(/[‘’'`ʻʼ]/g, '_'); // o‘ / o' / oʻ are one name
+      params.push(anyApostrophe(like(search.toLowerCase())));
       const i = params.length;
-      const conds = [`lower(p.last_name || ' ' || p.first_name || ' ' || coalesce(p.middle_name,'')) LIKE $${i}`, `lower(p.first_name || ' ' || p.last_name) LIKE $${i}`];
+      // the same two indexed expressions (migration 015) for every pattern: OR of indexed conditions keeps the trigram index
+      const nameConds = (n: number) => [`lower(p.last_name || ' ' || p.first_name || ' ' || coalesce(p.middle_name,'')) LIKE $${n}`, `lower(p.first_name || ' ' || p.last_name) LIKE $${n}`];
+      const conds = nameConds(i);
+      // a name typed in the other script finds the card too (Каримов ↔ Karimov); any apostrophe form is accepted (o‘/o')
+      const other = searchTranslit(search);
+      if (other) { params.push(anyApostrophe(like(other.toLowerCase()))); conds.push(...nameConds(params.length)); }
       if (/^\d+$/.test(digits)) {
         params.push(like(digits)); conds.push(`replace(coalesce(p.phone,''),'+','') LIKE $${params.length}`);
         // a full phone number is longer than any patient number (integer): only short digit strings are IDs
