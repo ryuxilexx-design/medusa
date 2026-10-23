@@ -154,6 +154,24 @@ Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta i
 - Har hafta: `backups/restore-test.log` da oxirgi qator `OK restore-test` bo‘lsin; disk joyi `df -h`.
 - Sertifikat Caddy tomonidan avtomatik yangilanadi; `docker compose logs caddy` da xato bo‘lmasin.
 
+## 6a. SMS eslatmalar (Eskiz.uz)
+
+Telegram ulanmagan bemorlarga eslatma SMS bilan boradi. Buning uchun klinikaning o‘z Eskiz hisobi kerak:
+
+1. <https://eskiz.uz> da hisob oching, shartnoma tuzing va balansni to‘ldiring (SMS klinika hisobidan yechiladi).
+2. Shaxsiy kabinetda **jo‘natuvchi nomini** (klinika nomi, lotin, 11 belgigacha) ro‘yxatdan o‘tkazing — operatorlar tasdig‘i
+   1–2 hafta oladi. Ungacha Eskiz’ning umumiy nomi `4546` ishlaydi: Med.uz.ai’da shu nom sukut bo‘yicha qo‘yilgan,
+   tasdiqdan keyin Sozlamalar → SMS da o‘zgartiriladi.
+3. Med.uz.ai: Sozlamalar → **SMS** → Eskiz login (elektron pochta) va parolni kiriting, «SMS yuborish yoqilgan»ni
+   belgilang, saqlang (parol Eskiz’da tekshiriladi, serverda `APP_SECRET_KEY` bilan shifrlangan saqlanadi va qayta
+   ko‘rsatilmaydi), keyin o‘z raqamingizga «Sinov SMS» yuboring (Eskiz tasdiqlanmagan hisobdan faqat
+   «Bu Eskiz dan test» matnini qabul qiladi — sinov shu matn bilan ketadi).
+
+Matnda faqat qabul fakti (sana, vaqt, shifokor, filial) bo‘ladi; tahlil natijasi, tashxis yuborilmaydi. Bazada SMS
+matni saqlanmaydi — faqat tur, raqam va yetkazilganlik holati. Bemor «xabarnoma istamayman» desa (rozilik yozuvi),
+SMS ham, Telegram ham bormaydi. Soat 21:00–08:00 da eslatma yuborilmaydi (bekor qilish/ko‘chirish bundan mustasno).
+Server o‘zgaruvchilari: `ESKIZ_BASE_URL` (sukut `https://notify.eskiz.uz`, o‘zgartirish shart emas), `ESKIZ_TIMEOUT_MS`.
+
 ## 7. Xavfsizlik eslatmalari
 
 - `deploy/.env` va `deploy/backups/` hech qachon git’ga tushmaydi (`.gitignore` da).

@@ -86,6 +86,8 @@ export const registrar = {
   'registrar.debt': ['Qarzdorlik: {sum}', 'Задолженность: {sum}'],
   'registrar.telegramLinked': ['Telegram ulangan — eslatmalar boradi', 'Telegram подключён — напоминания приходят'],
   'registrar.telegramCard': ['Karta Telegram bot orqali ochilgan', 'Карта создана через Telegram-бота'],
+  'registrar.noticeSms': ['Eslatmalar SMS orqali boradi', 'Напоминания приходят по СМС'],
+  'registrar.noticeNone': ['Eslatmalar bormaydi', 'Напоминания не приходят'],
   'registrar.allergy': ['Allergiya: {state}', 'Аллергия: {state}'],
   'registrar.newAppt': ['Yangi qabul', 'Новый приём'],
   'registrar.kind.visit': ['Tashrif', 'Визит'],

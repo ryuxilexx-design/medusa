@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
+import { BellOff, CalendarPlus, FileText, MessageSquareText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
 import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -63,10 +63,13 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
                   pt.phone !== undefined && <span key="phone" className="inline-flex items-center gap-1.5 tabular-nums"><Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />{pt.phone ? formatPhone(pt.phone) : '—'}</span>,
                 ].filter(Boolean).map((el, i) => <span key={i} className="inline-flex items-center gap-2 whitespace-nowrap">{i > 0 && <Dot />}{el}</span>)}
               </p>
-              {(pt.balance_due > 0 || pt.telegram_linked || pt.source === 'telegram') && (
+              {(pt.balance_due > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined) && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {pt.balance_due > 0 && <Badge tone="red" icon={<Wallet className="h-3.5 w-3.5" />}>{t('registrar.debt', { sum: formatSom(pt.balance_due) })}</Badge>}
+                  {/* which way the patient's reminders go: Telegram, SMS (clinic's Eskiz channel), or nowhere */}
                   {pt.telegram_linked && <Badge tone="blue" icon={<Send className="h-3.5 w-3.5" />}>{t('registrar.telegramLinked')}</Badge>}
+                  {pt.notice_channel === 'sms' && <Badge tone="blue" icon={<MessageSquareText className="h-3.5 w-3.5" />}>{t('registrar.noticeSms')}</Badge>}
+                  {pt.notice_channel === null && !pt.telegram_linked && <Badge icon={<BellOff className="h-3.5 w-3.5" />}>{t('registrar.noticeNone')}</Badge>}
                   {pt.source === 'telegram' && <span className="text-[0.8125rem] text-slate-600">{t('registrar.telegramCard')}</span>}
                 </div>
               )}

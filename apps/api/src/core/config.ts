@@ -41,6 +41,11 @@ export const config = {
     workers: (process.env.BACKGROUND_WORKERS ?? process.env.TELEGRAM_WORKERS) !== 'off' && process.env.MEDUZA_TEST !== '1',
     apiBase: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org',
   },
+  sms: {
+    /** Eskiz.uz gateway. The base URL changes only for tests (fake server) or a proxy. */
+    baseUrl: (process.env.ESKIZ_BASE_URL || 'https://notify.eskiz.uz').replace(/\/+$/, ''),
+    timeoutMs: Number(process.env.ESKIZ_TIMEOUT_MS || 10000),
+  },
   ai: {
     /** off | sample | live. A production server starts with AI off; the demo shows the sample result. */
     mode: (process.env.AI_MODE || (mode === 'production' ? 'off' : 'sample')) as 'off' | 'sample' | 'live',
