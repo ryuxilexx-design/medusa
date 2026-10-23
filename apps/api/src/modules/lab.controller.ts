@@ -4,6 +4,7 @@ import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { conflict, forbidden, invalid, notFound } from '../core/errors';
 import { isDate, isUuid, pageParams, parse } from '../core/validate';
+import { enqueueDhp } from '../dhp/outbox';
 import { audit } from '../core/audit';
 import { enqueueNotice } from '../telegram/outbox';
 import { addDays, dayStart, now } from '../core/clock';
@@ -125,6 +126,8 @@ export class LabController {
       await audit(c, ctx, 'lab_result.verify', 'order', id, `${o.service_name} tasdiqlandi`, o.branch_id);
       // patient gets "your result is ready" (never the values) if their Telegram is linked
       await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'result_ready', patientId: o.patient_id, orderId: id, dedupeKey: `result:${id}` });
+      // Digital Health Platform: one Observation per verified value (nothing when the mode is off)
+      await enqueueDhp(c, ctx.tenantId, 'lab_result', id);
       return { data: { id, verified_at: t } };
     });
   }

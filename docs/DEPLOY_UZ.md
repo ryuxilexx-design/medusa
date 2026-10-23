@@ -198,6 +198,13 @@ o‘zgartirmasdan qo‘shiladi: uning nomi `FISCAL_PROVIDER` ga yoziladi, `fisca
 qatorlarni o‘zi qayta uradi (`FISCAL_RETRY_SECONDS`, sukut 60). Provayder xatosi savdoni to‘xtatmaydi — qator
 `failed` bo‘lib, xato matni saqlanadi va kassir raqamni qo‘lda kiritishi mumkin.
 
+## 7b. Raqamli sog‘liqni saqlash platformasi (DMED / DHP)
+
+PQ-170 bo‘yicha 2027-yil 1-apreldan platforma bilan almashinuv litsenziya sharti. Med.uz.ai FHIR to‘plamlarini
+`dhp_outbox` ga yig‘adi: Sozlamalar → DMED → «Faqat eksport» (fayl) yoki kirish ma’lumoti kelgach «Jonli yuborish».
+Token `APP_SECRET_KEY` bilan shifrlanadi. Worker oralig‘i `DHP_INTERVAL_SECONDS` (60), so‘rov vaqti `DHP_TIMEOUT_MS`
+(15000). Batafsil, tasdiqlanmagan joylar va klinika qadamlari: `docs/DMED_INTEGRATION.md`.
+
 ## 7a. Bemorning ma’lumot huquqlari (O‘RQ-547: olish va o‘chirish so‘rovlari)
 
 «Shaxsga doir ma’lumotlar to‘g‘risida»gi Qonun bemorga o‘z ma’lumotlarini olish va ularni qayta ishlashni to‘xtatishni

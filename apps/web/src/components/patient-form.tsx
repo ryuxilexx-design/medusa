@@ -11,11 +11,11 @@ import { useT } from '@/lib/i18n';
 
 export type PatientFormValue = {
   last_name: string; first_name: string; middle_name: string; birth_date: string; sex: string; phone: string;
-  contact_name: string; contact_phone: string; address: string; note: string;
+  contact_name: string; contact_phone: string; address: string; note: string; pinfl: string; id_document: string;
 };
 type ConsentValue = { data: boolean; method: 'signed_paper' | 'verbal'; notifications: boolean };
 const NO_CONSENT: ConsentValue = { data: false, method: 'signed_paper', notifications: false };
-const EMPTY: PatientFormValue = { last_name: '', first_name: '', middle_name: '', birth_date: '', sex: 'unspecified', phone: '', contact_name: '', contact_phone: '', address: '', note: '' };
+const EMPTY: PatientFormValue = { last_name: '', first_name: '', middle_name: '', birth_date: '', sex: 'unspecified', phone: '', contact_name: '', contact_phone: '', address: '', note: '', pinfl: '', id_document: '' };
 
 /** Create or edit basic patient data. Duplicate warning (same phone, or same name + birth date) needs explicit confirmation. */
 export function PatientFormModal({ open, onClose, patient, onSaved }: { open: boolean; onClose: () => void; patient?: any; onSaved?: (id: string, created: boolean) => void }) {
@@ -54,6 +54,10 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
     else if (v.birth_date < '1900-01-01') e.birth_date = t('registrar.form.birthTooOld');
     const digits = v.phone.replace(/[\s\-()+]/g, '');
     if (v.phone.trim() && !(digits.length === 9 || (digits.length === 12 && digits.startsWith('998')))) e.phone = t('registrar.form.phoneFormat');
+    const pinfl = v.pinfl.replace(/[\s-]/g, '');
+    if (pinfl && !/^\d{14}$/.test(pinfl)) e.pinfl = t('registrar.form.pinflFormat');
+    const doc = v.id_document.replace(/[\s-]/g, '');
+    if (doc && !/^[A-Za-z]{2}\d{7}$/.test(doc)) e.id_document = t('registrar.form.idDocumentFormat');
     if (!patient && consentRequired && !consent.data) e.consent = t('consent.form.required');
     setErrors(e);
     if (Object.keys(e).length) { focusFirstError(); return false; }
@@ -115,6 +119,8 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
           <Field label={t('registrar.phone')} error={errors.phone} hint={t('registrar.form.phoneHint')}>{(id) => <Input id={id} value={v.phone} onChange={set('phone')} invalid={!!errors.phone} inputMode="tel" placeholder="+998 90 123 45 67" />}</Field>
           <Field label={t('registrar.form.contactName')} className="sm:col-span-2" error={errors.contact_name} hint={t('registrar.form.contactHint')}>{(id) => <Input id={id} value={v.contact_name} onChange={set('contact_name')} />}</Field>
           <Field label={t('registrar.form.contactPhone')} error={errors.contact_phone}>{(id) => <Input id={id} value={v.contact_phone} onChange={set('contact_phone')} invalid={!!errors.contact_phone} inputMode="tel" />}</Field>
+          <Field label={t('registrar.form.pinfl')} className="sm:col-span-2" error={errors.pinfl} hint={t('registrar.form.pinflHint')}>{(id) => <Input id={id} value={v.pinfl} onChange={set('pinfl')} invalid={!!errors.pinfl} inputMode="numeric" maxLength={20} autoComplete="off" placeholder="12345678901234" />}</Field>
+          <Field label={t('registrar.form.idDocument')} error={errors.id_document}>{(id) => <Input id={id} value={v.id_document} onChange={set('id_document')} invalid={!!errors.id_document} maxLength={12} autoComplete="off" placeholder="AA1234567" />}</Field>
           <Field label={t('registrar.form.address')} className="sm:col-span-3" error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
           <Field label={t('registrar.note')} className="sm:col-span-3" error={errors.note} hint={t('registrar.form.noteHint')}>{(id) => <Textarea id={id} rows={2} value={v.note} onChange={set('note')} />}</Field>
           {!patient && <ConsentFields value={consent} required={consentRequired} error={errors.consent} onChange={(c) => { setConsent(c); setErrors((x) => ({ ...x, consent: '' })); }} />}

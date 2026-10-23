@@ -73,6 +73,11 @@ export const config = {
     /** How often the outbox worker retries pending rows of automatic providers (seconds). */
     retrySeconds: Number(process.env.FISCAL_RETRY_SECONDS || 60),
   },
+  dhp: {
+    /** Digital Health Platform (DMED) outbox: how often the worker runs, and the per-request timeout. */
+    intervalSeconds: Number(process.env.DHP_INTERVAL_SECONDS || 60),
+    timeoutMs: Number(process.env.DHP_TIMEOUT_MS || 15000),
+  },
   news: {
     /** Daily specialty news for doctors (PubMed + AI summary). off = no fetching. */
     enabled: process.env.NEWS_ENABLED !== 'off',
