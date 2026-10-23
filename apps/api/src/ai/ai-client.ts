@@ -11,7 +11,7 @@ import type { MessageKey } from '@meduza/contracts';
 import { SEED_IDS } from '@meduza/db';
 
 export type AiMode = 'off' | 'sample' | 'live';
-export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary' | 'bot_faq' | 'manager_digest' | 'manager_ask' | 'lab_commentary' | 'warehouse_brief';
+export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary' | 'bot_faq' | 'manager_digest' | 'manager_ask' | 'lab_commentary' | 'warehouse_brief' | 'patient_summary' | 'document_draft';
 /**
  * Routes that carry no clinical text: PubMed abstracts, and the manager's AI (a fact sheet of SQL-computed numbers with
  * doctor/service/item names — never a patient name or clinical text, see ai/manager-facts.ts). Every other route —
