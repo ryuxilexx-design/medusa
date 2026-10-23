@@ -670,6 +670,8 @@ export class WarehouseController {
       for (const l of input.lines) {
         const r = await c.query(`UPDATE inventory_count_lines SET counted_qty = $3, reason = $4, counted_by = $5 WHERE id = $1 AND count_id = $2`,
           [l.line_id, id, l.counted_qty == null ? null : fromC(toC(l.counted_qty)), l.reason, ctx.membershipId || null]);
+        // every editor is remembered on the count (never overwritten by a later editor)
+        if (ctx.membershipId) await c.query(`UPDATE inventory_counts SET counters = array_append(counters, $2::uuid) WHERE id = $1 AND NOT ($2::uuid = ANY(counters))`, [id, ctx.membershipId]);
         if (!r.rowCount) throw invalid({ lines: 'Qator topilmadi' });
       }
       return { data: { ok: true } };
@@ -704,7 +706,7 @@ export class WarehouseController {
       if (cnt.status !== 'submitted') throw staleState();
       // the person who counted cannot approve their own differences (same rule as write-off acts)
       // nobody who started, counted or submitted the count decides its differences
-      const counted = (await c.query(`SELECT 1 FROM inventory_count_lines WHERE count_id = $1 AND counted_by = $2 LIMIT 1`, [id, ctx.membershipId])).rowCount;
+      const counted = (cnt.counters ?? []).includes(ctx.membershipId);
       if (cnt.started_by === ctx.membershipId || cnt.submitted_by === ctx.membershipId || counted) throw conflict('SECOND_SIGNATURE', 'Ikkinchi imzo boshqa xodimdan bo‘lsin');
       const docNo = `${DOC_PREFIX.count}-${cnt.number}`;
       let adjusted = 0;

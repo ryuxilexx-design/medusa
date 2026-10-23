@@ -255,6 +255,54 @@ export async function ensureStarterTemplates(q: Pick<PoolClient, 'query'>, tenan
   return n;
 }
 
+/**
+ * Demo databases seeded before migration 030 have no storekeeper and no warehouse demo data. Adds, without a reset:
+ * the storekeeper account, the seed's new medicine items with their receipts, batches and movements, the requests
+ * that only use those items, and the fridge log. Existing items keep their opening batch from migration 030 (their
+ * ledger stays balanced); the pending write-off of an old item is left out. Idempotent: nothing happens once the
+ * storekeeper exists.
+ */
+export async function backfillSeedWarehouse(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const seeded = (await q.query('SELECT 1 FROM tenants WHERE id = $1', [SEED_IDS.tenant])).rowCount;
+  const has = (await q.query(`SELECT 1 FROM memberships WHERE tenant_id = $1 AND role = 'storekeeper' LIMIT 1`, [SEED_IDS.tenant])).rowCount;
+  if (!seeded || has) return 0;
+  const clock = (await q.query(`SELECT to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS d, to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'HH24:MI') AS t`)).rows[0];
+  const seed = buildSeed(demoDate, clock.d === demoDate ? clock.t : clock.d < demoDate ? '00:00' : '23:59');
+  const keepers = seed.memberships.filter((m) => m.role === 'storekeeper');
+  const keeperUsers = new Set(keepers.map((m) => m.user_id));
+  const existingUsers = new Set((await q.query('SELECT id FROM users').then((r) => r.rows.map((x) => x.id))));
+  await insertRows(q as PoolClient, 'users', seed.users.filter((u) => keeperUsers.has(u.id) && !existingUsers.has(u.id)));
+  await insertRows(q as PoolClient, 'memberships', keepers);
+  const existingItems = new Set((await q.query('SELECT id FROM inventory_items WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const newItems = seed.inventory_items.filter((i) => !existingItems.has(i.id));
+  const newItemIds = new Set(newItems.map((i) => i.id));
+  const batches = seed.inventory_batches.filter((b) => newItemIds.has(b.item_id as string));
+  const receiptIds = new Set(batches.map((b) => b.receipt_id).filter(Boolean));
+  const requests = seed.inventory_requests.filter((r) => {
+    const lines = seed.inventory_request_lines.filter((l) => l.request_id === r.id);
+    return lines.length > 0 && lines.every((l) => newItemIds.has(l.item_id as string));
+  });
+  const requestIds = new Set(requests.map((r) => r.id));
+  const allNew = seed.inventory_movements.filter((m) => newItemIds.has(m.item_id as string));
+  const moves = allNew.filter((m) => !m.writeoff_id && (!m.request_id || requestIds.has(m.request_id)));
+  // a movement left out (its request also used an older item) is undone on its batch, so Σ batches = the ledger
+  const kept = new Set(moves.map((m) => m.id));
+  const back = new Map<string, number>();
+  for (const m of allNew) if (!kept.has(m.id) && m.batch_id) back.set(m.batch_id as string, (back.get(m.batch_id as string) ?? 0) + Math.round(Number(m.quantity) * 100) * (m.type === 'out' ? 1 : -1));
+  for (const b of batches) if (back.has(b.id as string)) b.qty = ((Math.round(Number(b.qty) * 100) + back.get(b.id as string)!) / 100).toFixed(2);
+  await insertRows(q as PoolClient, 'inventory_items', newItems);
+  await insertRows(q as PoolClient, 'inventory_receipts', seed.inventory_receipts.filter((r) => receiptIds.has(r.id)));
+  await insertRows(q as PoolClient, 'inventory_batches', batches);
+  await insertRows(q as PoolClient, 'inventory_requests', requests);
+  await insertRows(q as PoolClient, 'inventory_request_lines', seed.inventory_request_lines.filter((l) => requestIds.has(l.request_id)));
+  await insertRows(q as PoolClient, 'inventory_movements', moves);
+  const fridgeHas = (await q.query('SELECT 1 FROM fridge_temperature_log WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
+  if (!fridgeHas) await insertRows(q as PoolClient, 'fridge_temperature_log', seed.fridge_temperature_log);
+  for (const c of seed.inventory_doc_counters)
+    await q.query(`INSERT INTO inventory_doc_counters (tenant_id, kind, last) VALUES ($1,$2,$3) ON CONFLICT (tenant_id, kind) DO UPDATE SET last = GREATEST(inventory_doc_counters.last, EXCLUDED.last)`, [c.tenant_id, c.kind, c.last]);
+  return keepers.length;
+}
+
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */
 export async function assertDatabaseName(q: Pick<PoolClient, 'query'>, expectSuffix: string): Promise<string> {
   const name = (await q.query('SELECT current_database() AS n')).rows[0].n as string;

@@ -305,7 +305,8 @@ test('inventarizatsiya: kutilgan → sanalgan → farq sababi → rahbar tasdig�
   const c2 = (await keeper.get(`/warehouse/counts/${s2.body.data.id}`)).body.data;
   const lines2 = c2.lines.map((l) => ({ line_id: l.id, counted_qty: Number(l.expected_qty), reason: null }));
   assert.equal((await manager.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2.slice(0, 1) })).status, 200);
-  await keeper.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2.slice(1) });
+  // the storekeeper then re-enters every line (including the manager's): the manager stays a counter
+  await keeper.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2 });
   assert.equal((await keeper.post(`/warehouse/counts/${c2.id}/submit`)).status, 200);
   assert.equal((await manager.post(`/warehouse/counts/${c2.id}/decide`, { approve: true })).status, 409, 'sanagan rahbar o‘zi tasdiqlamaydi');
   await ledgerMatchesBatches();

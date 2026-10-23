@@ -4,7 +4,7 @@ import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { randomUUID } from 'crypto';
-import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, ensureDemoClock, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { purgeSnapshots } from './cameras/ingest';
 import { config } from './core/config';
 import { syncClock } from './core/clock';
@@ -47,6 +47,8 @@ export async function createApp(): Promise<INestApplication> {
     const cams = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedCameras(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
     if (cams) console.log(`Demo: ${cams} ta demo kamera va ularning hodisalari qo‘shildi (migratsiya 012 dan oldingi baza)`);
     const snaps = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedSnapshots(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    const keepers = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedWarehouse(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    if (keepers) console.log(`Ombor demo: omborchi va dori partiyalari qo‘shildi`);
     if (snaps) console.log(`Demo: ${snaps} ta kamera ogohlantirish surati qo‘shildi (migratsiya 016 dan oldingi baza)`);
   } else if (await readDemoClock(pool)) {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than
