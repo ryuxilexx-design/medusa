@@ -404,3 +404,12 @@ test('provayder: Gemini bepul tarifi faqat seed klinikada; production’da klini
     server.close();
   }
 });
+
+test('MKB guruhi bo‘yicha sarf — jadval faqat serverda, modelga yuborilmaydi (jamlangan bo‘lsa ham tashxis ma’lumoti)', async () => {
+  const before = claude.calls.length;
+  const r = await manager.post('/ai/ask', { template: 'warehouse_consumption', params: { group_by: 'icd_group' } });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.body.data.status, 'answered');
+  assert.equal(r.body.data.answer_source, 'template');
+  assert.equal(claude.calls.length, before, 'MKB jadvali bilan model chaqirilmadi');
+});

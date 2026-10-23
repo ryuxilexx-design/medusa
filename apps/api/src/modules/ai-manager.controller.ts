@@ -214,7 +214,9 @@ Savolga hech bir shablon mos kelmasa (masalan, aniq bemor, tashxis, davolash yok
     const facts = rowFacts(res);
     const title = translate(L, `mgrai.t.${id}` as MessageKey);
     let answer = templateAnswer(L, title, res), answerSource: 'model' | 'template' = 'template', dropped = 0;
-    if (mode === 'live' && res.rows.length) {
+    // a diagnosis grouping is health data even in aggregate: those rows are shown as a table, never sent to the model
+    const clinicalRows = checked.run.group === 'icd_group';
+    if (mode === 'live' && res.rows.length && !clinicalRows) {
       try {
         const { value } = await this.ai.json({
           route: 'manager_ask', system: `${ANSWER_SYSTEM}\n${answerLanguage(L)}`,
