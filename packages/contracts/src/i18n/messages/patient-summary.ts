@@ -1,0 +1,73 @@
+import type { Catalog } from '../core';
+
+/** Patient-friendly visit summary («Bemor uchun xulosa») and document autofill (docs/AI.md). */
+export const patientSummary = {
+  // ---------- the summary text itself (server; in the patient's language the doctor picked) ----------
+  'ps.h.found': ['Sizda nima aniqlandi', 'Что у вас обнаружено'],
+  'ps.h.steps': ['Nima qilish kerak', 'Что нужно делать'],
+  'ps.h.followUp': ['Qachon qayta kelish kerak', 'Когда прийти повторно'],
+  'ps.h.redFlags': ['Qachon darhol shifokorga murojaat qiling', 'Когда срочно обратиться к врачу'],
+  'ps.followUpLine': ['{date} kuni qayta ko‘rikka keling.', 'Приходите на повторный осмотр {date}.'],
+
+  // ---------- server errors ----------
+  'api.ps.notSigned': ['Bemor uchun xulosa faqat tasdiqlangan qayddan tayyorlanadi', 'Памятка для пациента готовится только по подписанной записи'],
+  'api.ps.noChannel': ['Bemorga yuborib bo‘lmaydi: Telegram ulanmagan, SMS o‘chiq yoki bemor xabarnomalarga rozi emas. Xulosani chop eting.', 'Отправить пациенту нельзя: Telegram не подключён, СМС выключены или нет согласия на уведомления. Распечатайте памятку.'],
+
+  'api.ps.notYours': ['Bu xulosa sizga tegishli emas', 'Эта памятка не ваша'],
+  'api.ps.noteEmpty': ['Qaydda tashxis yoki shikoyat yozilmagan', 'В записи нет ни диагноза, ни жалоб'],
+
+  // ---------- doctor's screen ----------
+  'ps.button': ['Bemorga xulosa tayyorlash', 'Подготовить памятку пациенту'],
+  'ps.title': ['Bemor uchun xulosa', 'Памятка для пациента'],
+  'ps.language': ['Bemor tili', 'Язык пациента'],
+  'ps.lang.uz': ['O‘zbekcha (lotin)', 'Узбекский (латиница)'],
+  'ps.lang.uzCyrl': ['O‘zbekcha (kirill)', 'Узбекский (кириллица)'],
+  'ps.lang.ru': ['Ruscha', 'Русский'],
+  'ps.tab.uz': ['Lotin', 'Латиница'],
+  'ps.tab.uzCyrl': ['Kirill', 'Кириллица'],
+  'ps.tab.ru': ['Ruscha', 'Русский'],
+  'ps.make': ['Loyihani tayyorlash', 'Подготовить черновик'],
+  'ps.remake': ['Qayta tayyorlash', 'Подготовить заново'],
+  'ps.text': ['Xulosa matni', 'Текст памятки'],
+  'ps.tabEdit': ['Tahrirlash', 'Редактировать'],
+  'ps.tabPreview': ['Ko‘rinishi', 'Просмотр'],
+  'ps.empty': ['Bemor tilini tanlang va «Loyihani tayyorlash» ni bosing', 'Выберите язык пациента и нажмите «Подготовить черновик»'],
+  'ps.live': ['AI loyihasi — shifokor tekshirishi kerak', 'Черновик AI — врач должен проверить'],
+  'ps.sample': ['Namunaviy AI natijasi — qayd asosidagi shablon, model chaqirilmagan', 'Пример результата AI — шаблон по записи, модель не вызывалась'],
+  'ps.template': ['AI o‘chiq — qayd asosidagi shablon', 'AI выключен — шаблон по записи'],
+  'ps.templateReason': ['AI o‘chiq — qayd asosidagi shablon ({reason})', 'AI выключен — шаблон по записи ({reason})'],
+  'ps.templateLang': ['Shablon qayd matnini tarjima qilmaydi — kerak bo‘lsa, tahrirlang.', 'Шаблон не переводит текст записи — при необходимости отредактируйте.'],
+  'ps.dropped': ['Qaydda yo‘q dori yoki son bor gaplar olib tashlandi: {n}', { one: 'Удалено предложений с лекарством или числом не из записи: {n}', few: 'Удалено предложений с лекарством или числом не из записи: {n}', many: 'Удалено предложений с лекарством или числом не из записи: {n}' }],
+  'ps.failed': ['Loyiha tayyorlanmadi: {msg}', 'Черновик не подготовлен: {msg}'],
+  'ps.send': ['Bemorga yuborish', 'Отправить пациенту'],
+  'ps.viaTelegram': ['Telegram: xulosa matni bemorning o‘z chatiga yuboriladi', 'Telegram: текст памятки придёт в собственный чат пациента'],
+  'ps.viaSms': ['SMS: faqat «Xulosangiz tayyor, klinikadan oling» — matn yuborilmaydi', 'СМС: только «Памятка готова, получите в клинике» — без текста'],
+  'ps.viaNone': ['Yuborib bo‘lmaydi — xulosani chop eting', 'Отправить нельзя — распечатайте памятку'],
+  'ps.confirmSend': ['Matnni tekshirdim, bemorga yuborishni tasdiqlayman', 'Я проверил(а) текст и подтверждаю отправку пациенту'],
+  'ps.approve': ['Tasdiqlash', 'Подтвердить'],
+  'ps.approveSend': ['Tasdiqlash va yuborish', 'Подтвердить и отправить'],
+  'ps.approved': ['Xulosa tasdiqlandi', 'Памятка подтверждена'],
+  'ps.approvedSent': ['Xulosa tasdiqlandi va yuborishga qo‘yildi', 'Памятка подтверждена и поставлена на отправку'],
+  'ps.versions': ['Bemor uchun xulosalar', 'Памятки для пациента'],
+  'ps.none': ['Hali tasdiqlangan xulosa yo‘q', 'Подтверждённых памяток пока нет'],
+  'ps.version': ['{n}-versiya', 'Версия {n}'],
+  'ps.st.pending': ['Yuborilmoqda', 'Отправляется'],
+  'ps.st.sent': ['Yuborildi', 'Отправлено'],
+  'ps.st.failed': ['Yuborilmadi', 'Не отправлено'],
+  'ps.st.skipped': ['Yuborilmadi', 'Не отправлено'],
+  'ps.ch.telegram': ['Telegram', 'Telegram'],
+  'ps.ch.sms': ['SMS', 'СМС'],
+  'ps.st.none': ['Faqat chop etish', 'Только печать'],
+  'ps.print.title': ['Bemor uchun xulosa', 'Памятка для пациента'],
+  'ps.print.approved': ['Shifokor tasdiqladi: {name}, {at}', 'Подтвердил(а) врач: {name}, {at}'],
+  'ps.print.status': ['Tasdiqlangan', 'Подтверждена'],
+
+  // ---------- documents: fill from the note ----------
+  'docs.autofill': ['Qayddan to‘ldirish', 'Заполнить из записи'],
+  'docs.autofilled': ['Qayddan to‘ldirildi — tekshiring', 'Заполнено из записи — проверьте'],
+  'docs.autofilledDraft': ['Qayd hali tasdiqlanmagan — qoralamadan to‘ldirildi, tekshiring', 'Запись ещё не подписана — заполнено из черновика, проверьте'],
+  'docs.reasonAi': ['AI bilan yozish', 'Написать с AI'],
+  'docs.reasonAiLive': ['Sabab AI loyihasi — tekshiring', 'Причина — черновик AI, проверьте'],
+  'docs.reasonAiSample': ['Namunaviy AI natijasi — qayd asosidagi shablon', 'Пример результата AI — шаблон по записи'],
+  'docs.reasonAiFailed': ['AI sababni yozmadi: {msg}', 'AI не написал причину: {msg}'],
+} as const satisfies Catalog;

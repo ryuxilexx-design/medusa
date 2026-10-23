@@ -104,6 +104,9 @@ export async function patientExport(q: Q, ctx: Ctx, patientId: string) {
   const documents = await rows(
     `SELECT m.id, m.kind, m.number, m.status, m.issued_at, m.issued_by_name, m.voided_at, m.void_reason, m.encounter_id
        FROM medical_documents m WHERE m.patient_id = $1 AND m.tenant_id = $2 ORDER BY m.issued_at`);
+  // the plain-language summaries the doctor approved for the patient (migration 036)
+  const summaries = await rows(
+    `SELECT s.encounter_id, s.version, s.language, s.text, s.approved_by_name, s.approved_at FROM patient_summaries s WHERE s.patient_id = $1 AND s.tenant_id = $2 ORDER BY s.approved_at`);
   const labResults = await rows(
     `SELECT o.id AS order_id, o.service_name, o.ordered_at, d.display_name AS ordered_by, r.values, r.comment, r.collected_at, r.verified_at, r.verified_by_name
        FROM service_orders o JOIN lab_results r ON r.order_id = o.id AND r.status = 'verified' LEFT JOIN doctors d ON d.id = o.doctor_id
@@ -141,7 +144,7 @@ export async function patientExport(q: Q, ctx: Ctx, patientId: string) {
     format: 'med.uz.ai/patient-export', version: 1,
     purpose: 'Bemorning so‘rovi bo‘yicha (O‘RQ-547, shaxsga doir ma’lumotlar subyektining o‘z ma’lumotlarini olish huquqi)',
     generated_at: now(), clinic: clinic?.name ?? null, exported_by: { name: ctx.name, role: ctx.role },
-    patient, consents, allergies, appointments, clinical_notes: notes, intake_forms: intake, documents, lab_results: labResults, diagnostic_reports: diagnostics,
+    patient, consents, allergies, appointments, clinical_notes: notes, patient_summaries: summaries, intake_forms: intake, documents, lab_results: labResults, diagnostic_reports: diagnostics,
     invoices, deposits, camera_events: cameraEvents, notices,
   };
 }

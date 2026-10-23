@@ -6,7 +6,7 @@ import { decryptSecret } from '../core/secrets';
 import { addDays, localDate, localTime, localToUtc, now, syncClock } from '../core/clock';
 import { BotEngine, cardFor } from './engine';
 import { LINKED_CHATS_SQL, NOTICE_CHANNEL_SQL, NOTICES_ALLOWED_SQL, SMS_PHONE_SQL } from './outbox';
-import { Lang, T } from './texts';
+import { humanDate, Lang, T } from './texts';
 import { HttpTransport, OutMessage, SimTransport, TelegramError, Transport } from './transport';
 import { SmsSender } from '../sms/transport';
 import { EskizError } from '../sms/eskiz';
@@ -140,6 +140,8 @@ export class Notifier {
 
   private async stillValid(c: { query: Db['pool']['query'] }, n: any): Promise<boolean> {
     if (n.kind === 'result_ready') return !!(await c.query(`SELECT 1 FROM service_orders WHERE id = $1 AND status = 'verified'`, [n.order_id])).rowCount;
+    // an approved summary never changes; it is still «current» as long as it belongs to this patient
+    if (n.kind === 'patient_summary') return !!(await c.query(`SELECT 1 FROM patient_summaries WHERE id = $1 AND patient_id = $2 AND send_requested`, [n.summary_id, n.patient_id])).rowCount;
     const a = (await c.query(`SELECT status, starts_at > demo_now() AS future FROM appointments WHERE id = $1`, [n.appointment_id])).rows[0];
     if (!a) return false;
     if (n.kind === 'cancelled_by_clinic') return a.status === 'cancelled';
@@ -153,6 +155,11 @@ export class Notifier {
       const r = (await c.query(`SELECT p.first_name AS patient FROM service_orders o JOIN patients p ON p.id = o.patient_id WHERE o.id = $1`, [n.order_id])).rows[0];
       return smsText('result_ready', 'uz', { patient: r.patient, service: '' });
     }
+    // the summary's text never goes by SMS (unencrypted, any holder of the phone reads it): only «it is ready»
+    if (n.kind === 'patient_summary') {
+      const s = (await c.query(`SELECT language FROM patient_summaries WHERE id = $1`, [n.summary_id])).rows[0];
+      return smsText('patient_summary', s?.language === 'ru' ? 'ru' : 'uz', {});
+    }
     return smsText(n.kind, 'uz', { card: await cardFor(c as any, n.tenant_id, n.appointment_id, 'uz') });
   }
 
@@ -161,6 +168,11 @@ export class Notifier {
     if (n.kind === 'result_ready') {
       const r = (await c.query(`SELECT p.last_name || ' ' || p.first_name AS patient, o.service_name FROM service_orders o JOIN patients p ON p.id = o.patient_id WHERE o.id = $1`, [n.order_id])).rows[0];
       return { chat_id: chatId, text: t.resultReady(r.patient, r.service_name) };
+    }
+    if (n.kind === 'patient_summary') {
+      // the text the doctor approved, as approved (in the language the doctor picked for the patient); header in the chat's language
+      const s = (await c.query(`SELECT s.text, s.approved_at, d.display_name AS doctor FROM patient_summaries s JOIN doctors d ON d.id = s.doctor_id WHERE s.id = $1`, [n.summary_id])).rows[0];
+      return { chat_id: chatId, text: `${t.patientSummary(s.doctor, humanDate(localDate(s.approved_at), lang, false))}\n\n${s.text}\n\n${t.patientSummaryFoot}` };
     }
     const card = await cardFor(c as any, n.tenant_id, n.appointment_id, lang);
     if (n.kind === 'reminder_day') {

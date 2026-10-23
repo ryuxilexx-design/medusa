@@ -564,6 +564,25 @@ export const documentVoidSchema = z.object({ reason: trimmed(3, 300, 'Bekor qili
 /** Items to check against the patient's allergies before the prescription is issued (same item shape). */
 export const prescriptionCheckSchema = z.object({ items: z.array(prescriptionItemSchema.partial({ name: true, dose: true, frequency: true, duration: true })).max(15) });
 
+// ---------- Patient-friendly visit summary and document autofill (migration 036, docs/AI.md) ----------
+export const SUMMARY_LANGUAGES = ['uz', 'uz-Cyrl', 'ru'] as const;
+export type SummaryLanguage = (typeof SUMMARY_LANGUAGES)[number];
+const summaryLanguage = z.enum(SUMMARY_LANGUAGES, { errorMap: () => ({ message: 'Tilni tanlang' }) });
+export const patientSummaryDraftSchema = z.object({ language: summaryLanguage });
+export const patientSummaryApproveSchema = z.object({
+  language: summaryLanguage,
+  /** Multi-line text (headings, numbered steps): line breaks are kept, runs of spaces and blank lines are squeezed. */
+  text: z.string({ required_error: 'Xulosa matni kiritilishi shart' })
+    .transform((s) => cleanText(s).replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim())
+    .pipe(z.string().min(20, 'Xulosa matni kamida 20 belgidan iborat bo‘lsin').max(4000, 'Xulosa matni 4000 belgidan oshmasin')),
+  draft_source: z.enum(['live', 'sample', 'template']),
+  /** Send to the patient: the text in Telegram (own linked chat only), or the SMS «ready» line. */
+  send: z.boolean().default(false),
+  /** The doctor's explicit confirmation of sending; required when `send` is true. */
+  confirm_send: z.boolean().optional(),
+}).refine((d) => !d.send || d.confirm_send === true, { message: 'Yuborishni tasdiqlang', path: ['confirm_send'] });
+export const DOCUMENT_AUTOFILL_KINDS = ['referral', 'certificate', 'prescription'] as const;
+
 // ---------- Drugs and structured allergies (migration 028, docs/DRUGS.md) ----------
 export const DRUG_FORMS = ['tab', 'caps', 'susp', 'syrup', 'sol_oral', 'drops_oral', 'gran', 'powder', 'lozenge', 'inj', 'inhaler', 'neb', 'spray_nasal', 'drops_nasal',
   'drops_eye', 'drops_ear', 'spray_oral', 'cream', 'ointment', 'gel', 'sol_ext', 'spray', 'shampoo', 'supp', 'pess', 'patch'] as const;

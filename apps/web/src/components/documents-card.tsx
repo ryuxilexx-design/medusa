@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, FileText, Pill, Plus, Printer, Send, ShieldAlert, Trash2 } from 'lucide-react';
+import { Ban, ClipboardList, FileText, Pill, Plus, Printer, Send, ShieldAlert, Sparkles, Trash2 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
@@ -91,6 +91,27 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
   const [items, setItems] = useState<Row[]>([emptyItem()]);
   const [rxNotes, setRxNotes] = useState('');
   const [override, setOverride] = useState('');
+  // «fill from the note»: the server reads the note (signed or draft) without a model; the doctor reviews every field
+  const [autoFrom, setAutoFrom] = useState<'signed' | 'draft' | null>(null);
+  const autofill = useMutation({
+    mutationFn: () => api<{ data: { body: any; meta: { note_status: 'signed' | 'draft' } } }>(`/encounters/${encounterId}/documents/autofill?kind=${kind}`).then((r) => r.data),
+    onSuccess: ({ body: b, meta }) => {
+      if (kind === 'referral') setRef((r) => ({ ...r, reason: b.reason || r.reason, icd10: b.icd10?.length ? b.icd10 : r.icd10, notes: b.notes ?? r.notes }));
+      else if (kind === 'certificate') setCert((c) => ({ ...c, rest_days: String(b.rest_days ?? 0) }));
+      else {
+        if (b.items?.length) setItems(b.items.map((i: any) => ({ name: i.name ?? '', form: i.form ?? '', dose: i.dose ?? '', frequency: i.frequency ?? '', duration: i.duration ?? '', instructions: i.instructions ?? '', drug_id: i.drug_id ?? null, rx: false })));
+        if (b.notes) setRxNotes(b.notes);
+      }
+      setErrors({}); setFormError(null); setAutoFrom(meta.note_status);
+    },
+    onError: (e) => setFormError((e as Error).message),
+  });
+  // the referral reason written by the model from the note (AI route document_draft); sample/off → the labelled template
+  const aiStatus = useQuery({ queryKey: ['ai-status'], queryFn: () => api('/ai/status').then((r) => r.data), enabled: kind === 'referral' });
+  const reasonAi = useMutation({
+    mutationFn: () => api<{ data: { mode: 'live' | 'sample' | 'off'; reason: string } }>(`/encounters/${encounterId}/documents/reason-draft`, { method: 'POST', body: { to_specialty: ref.to_specialty || null } }).then((r) => r.data),
+    onSuccess: (d) => { setRef((r) => ({ ...r, reason: d.reason })); setErrors((x) => ({ ...x, reason: '' })); },
+  });
   // the allergy check runs while the doctor picks drugs (same rules as on issue); a 409 on issue brings the same list
   const checkBody = useDebounced(JSON.stringify(items.filter((i) => i.name.trim().length >= 2).map((i) => ({ drug_id: i.drug_id, name: i.name.trim() }))), 400);
   const check = useQuery({
@@ -157,6 +178,10 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
       footer={<><ModalCancel /><Button variant="primary" loading={issue.isPending} onClick={() => { setFormError(null); issue.mutate(); }}>{t('docs.issue')}</Button></>}>
       <div className="space-y-3">
         {formError && <Alert tone="red">{formError}</Alert>}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Button size="sm" icon={<ClipboardList className="h-4 w-4 text-brand-600" />} loading={autofill.isPending} onClick={() => autofill.mutate()} data-testid="doc-autofill">{t('docs.autofill')}</Button>
+          {autoFrom && <span className="text-[0.8125rem] font-medium text-slate-700" role="status">{t(autoFrom === 'draft' ? 'docs.autofilledDraft' : 'docs.autofilled')}</span>}
+        </div>
         {kind === 'referral' && <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label={t('docs.to')} required error={errors.to_specialty}>
@@ -168,6 +193,13 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
           <Field label={t('docs.refReason')} required error={errors.reason} hint={t('docs.refReasonHint')}>
             {(id) => <Textarea id={id} rows={3} value={ref.reason} onChange={(e) => setRef({ ...ref, reason: e.target.value })} invalid={!!errors.reason} />}
           </Field>
+          {aiStatus.data && aiStatus.data.mode !== 'off' && (
+            <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Button size="sm" variant="ghost" icon={<Sparkles className="h-4 w-4 text-brand-600" />} loading={reasonAi.isPending} onClick={() => reasonAi.mutate()} data-testid="doc-reason-ai">{t('docs.reasonAi')}</Button>
+              {reasonAi.data && <Badge tone={reasonAi.data.mode === 'live' ? 'teal' : 'yellow'}>{t(reasonAi.data.mode === 'live' ? 'docs.reasonAiLive' : 'docs.reasonAiSample')}</Badge>}
+              {reasonAi.isError && <span className="text-[0.8125rem] font-medium text-red-700">{t('docs.reasonAiFailed', { msg: (reasonAi.error as Error).message })}</span>}
+            </div>
+          )}
           <IcdPicker value={ref.icd10} diagnosis={ref.reason} encounterId={encounterId} onChange={(icd10) => setRef({ ...ref, icd10 })} />
           {errors.icd10 && <p className="text-sm font-medium text-red-700">{errors.icd10}</p>}
           <fieldset className="flex gap-5 text-[0.9375rem]"><legend className="sr-only">{t('docs.urgency')}</legend>

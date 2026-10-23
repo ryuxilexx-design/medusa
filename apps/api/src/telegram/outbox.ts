@@ -1,6 +1,6 @@
 import { Q } from '../core/db';
 
-export type NoticeKind = 'reminder_day' | 'reminder_soon' | 'result_ready' | 'cancelled_by_clinic' | 'rescheduled_by_clinic' | 'booked';
+export type NoticeKind = 'reminder_day' | 'reminder_soon' | 'result_ready' | 'cancelled_by_clinic' | 'rescheduled_by_clinic' | 'booked' | 'patient_summary';
 
 /**
  * SQL fragment: active, unblocked chats linked to patient `p` by the phone Telegram verified. A family card (a child's
@@ -48,12 +48,22 @@ export const NOTICE_CHANNEL_SQL = `(CASE WHEN NOT ${NOTICES_ALLOWED_SQL} THEN NU
  * one without — by SMS when the clinic has switched SMS on; a patient who said «no» to notices, or who cannot be
  * reached either way, gets nothing queued.
  */
-export async function enqueueNotice(c: Q, n: { tenantId: string; kind: NoticeKind; patientId: string; appointmentId?: string | null; orderId?: string | null; dedupeKey: string }) {
-  const channel: NoticeChannel | null = (await c.query(`SELECT ${NOTICE_CHANNEL_SQL} AS channel FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [n.patientId, n.tenantId])).rows[0]?.channel ?? null;
-  if (!channel) return false;
+export async function enqueueNotice(c: Q, n: { tenantId: string; kind: NoticeKind; patientId: string; appointmentId?: string | null; orderId?: string | null; summaryId?: string | null; dedupeKey: string }) {
+  return (await enqueueNoticeChannel(c, n)) !== null;
+}
+
+/** enqueueNotice that also says which channel the notice was queued on (null: nothing queued). */
+export async function enqueueNoticeChannel(c: Q, n: { tenantId: string; kind: NoticeKind; patientId: string; appointmentId?: string | null; orderId?: string | null; summaryId?: string | null; dedupeKey: string }): Promise<NoticeChannel | null> {
+  const channel = await noticeChannel(c, n.tenantId, n.patientId);
+  if (!channel) return null;
   const r = await c.query(
-    `INSERT INTO notifications (tenant_id, kind, patient_id, appointment_id, order_id, dedupe_key, channel) VALUES ($1,$2,$3,$4,$5,$6,$7)
+    `INSERT INTO notifications (tenant_id, kind, patient_id, appointment_id, order_id, summary_id, dedupe_key, channel) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      ON CONFLICT (tenant_id, channel, dedupe_key) DO NOTHING`,
-    [n.tenantId, n.kind, n.patientId, n.appointmentId ?? null, n.orderId ?? null, n.dedupeKey, channel]);
-  return (r.rowCount ?? 0) > 0;
+    [n.tenantId, n.kind, n.patientId, n.appointmentId ?? null, n.orderId ?? null, n.summaryId ?? null, n.dedupeKey, channel]);
+  return (r.rowCount ?? 0) > 0 ? channel : null;
+}
+
+/** The channel a notice to this patient would go through now (null: cannot be reached, or said «no»). */
+export async function noticeChannel(c: Q, tenantId: string, patientId: string): Promise<NoticeChannel | null> {
+  return (await c.query(`SELECT ${NOTICE_CHANNEL_SQL} AS channel FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [patientId, tenantId])).rows[0]?.channel ?? null;
 }

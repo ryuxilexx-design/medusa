@@ -12,13 +12,14 @@ import { consent } from './messages/consent';
 import { cameras } from './messages/cameras';
 import { warehouse } from './messages/warehouse';
 import { managerAi } from './messages/manager-ai';
+import { patientSummary } from './messages/patient-summary';
 
 export * from './core';
 export { cyrillicToLatin, latinToCyrillic, searchTranslit } from './translit';
 export { BIOMETRIC_CONSENT_TEXT, BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, CONSENT_TEXTS, type ConsentTextVersion } from './messages/consent';
 
 /** Every interface message. Each area keeps its own file; keys are prefixed by area, so they never collide. */
-export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print, ...consent, ...cameras, ...warehouse, ...managerAi };
+export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print, ...consent, ...cameras, ...warehouse, ...managerAi, ...patientSummary };
 export type MessageKey = keyof typeof MESSAGES;
 export const translate: (locale: Locale, key: MessageKey, params?: Params) => string = createTranslator(MESSAGES);
 

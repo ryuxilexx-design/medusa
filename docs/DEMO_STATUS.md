@@ -4,6 +4,15 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Bemor uchun xulosa va hujjatlarni qayddan to‘ldirish (migratsiya 036, `docs/AI.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Tasdiqlangan qayd ostida «Bemorga xulosa tayyorlash»: bemor tili (lotin / kirill / rus) → loyiha «Sizda nima aniqlandi», «Nima qilish kerak», «Qachon qayta kelish kerak» (qayddagi sanadan, server yozadi), «Qachon darhol shifokorga murojaat qiling» (faqat qaydda ogohlantirish bo‘lsa). AI (`patient_summary`) yashirilgan qaydni oladi; server qaydda yoki shu qabulning retseptida yo‘q dori, dori shakli yoki sonli har bir gapni va MKB kodlarini olib tashlaydi (soni ko‘rsatiladi). Shifokor tahrirlaydi, «Ko‘rinishi», «Tasdiqlash» — o‘zgarmas versiya; «Bemorga yuborish» + aniq tasdiq belgisi bilan: Telegram — matn faqat bemorning o‘z chatiga, SMS — faqat «Xulosangiz tayyor, klinikadan oling»; yetib bo‘lmasa yuborilmaydi (chop etish). A5 chop etish `/print/summary/<id>` | Ishlaydi (**namunaviy rejimda** — qayd asosidagi shablon, «Namunaviy AI natijasi» belgisi; jonli AI soxta Claude serveri bilan sinalgan, **haqiqiy model bilan sinalmagan**) | API test `patient-summary.test.mjs` (9 ta): faqat davolovchi shifokor (boshqa shifokor / registrator / rahbar 403), tasdiqlanmagan qayd 409, promptda ism va telefon yo‘q, to‘qilgan dori/doza/son va MKB kodi tashlanadi, tasdiqlash versiyasi + matnsiz audit + o‘zgartirib bo‘lmaydi, yuborish faqat tasdiqdan keyin va faqat o‘z chatiga (katta yoshli bemorning kontakt raqami olmaydi), SMS matni umumiy, namunaviy/o‘chiq shablon, production himoyasi, `ai_usage` matnsiz. Skrinshot 1366×768 va 390 px, uz + ru |
+| Hujjatlar oynasida «Qayddan to‘ldirish» (modelsiz): yo‘llanma — sabab = tashxis, MKB-10, izoh = tavsiyalar; ma’lumotnoma — «N kun uyda dam olish» dan dam kunlari (tashxis hech qachon avtomatik belgilanmaydi); dori tavsiyasi — tavsiyadagi dori/doza gaplari qatorlarga (nom, doza, «kuniga N marta», «N kun», ro‘yxatdagi dori bilan bog‘lanadi). Yo‘llanma sababi uchun «AI bilan yozish» (`document_draft`, xuddi shu gap tekshiruvi). Hech narsa avtomatik berilmaydi | Ishlaydi | API test: maydonlar qayddan, hujjat soni o‘zgarmaydi, rollar 403; AI sababida to‘qilgan dori gapi tashlanadi; skrinshot |
+
+Cheklovlar: dori tekshiruvi ma’lumotnoma ro‘yxati va nom oxirlari bo‘yicha — g‘ayrioddiy yangi brend nomi o‘tib ketishi mumkin; so‘z bilan yozilgan sonlar («uch marta») tekshirilmaydi; shablon qaydni rus tiliga tarjima qilmaydi; brauzer E2E yo‘q.
+
 ## Telegram bot klinika haqidagi savollarga javob beradi (migratsiya 035, `docs/AI.md`)
 
 | Nima | Holat | Tekshiruv |
