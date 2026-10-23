@@ -363,6 +363,7 @@ export const api = {
   'api.keyUsedOther': ['Bu kalit boshqa amal uchun ishlatilgan', 'Этот ключ уже использован для другой операции'],
   'api.doctorBooksOwnOnly': ['Shifokor faqat o‘zi ko‘rgan bemorni qayta qabulga yozadi', 'Врач записывает на повторный приём только своих пациентов'],
   'api.doctorProfileMissing': ['Shifokor profili topilmadi', 'Профиль врача не найден'],
+  'api.wh.controlledByManager': ['Nazorat rejimini faqat rahbar o‘zgartiradi', 'Режим особого контроля меняет только руководитель'],
   'api.depositBranch': ['Bu bemorning depoziti sizning filialingizda olinmagan', 'Депозит этого пациента принят не в вашем филиале'],
   'api.shiftOtherBranchShort': ['Smenangiz boshqa filialda ochilgan.', 'Ваша смена открыта в другом филиале.'],
   'api.notADebt': ['Bu hisobda qarz yo‘q', 'По этому счёту долга нет'],
