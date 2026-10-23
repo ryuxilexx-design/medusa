@@ -149,8 +149,9 @@ export class Notifier {
   /** The SMS text of a notice. A patient without Telegram has no language choice on record: Uzbek (Latin). */
   private async smsMessage(c: { query: Db['pool']['query'] }, n: any): Promise<string> {
     if (n.kind === 'result_ready') {
-      const r = (await c.query(`SELECT p.last_name || ' ' || p.first_name AS patient, o.service_name FROM service_orders o JOIN patients p ON p.id = o.patient_id WHERE o.id = $1`, [n.order_id])).rows[0];
-      return smsText('result_ready', 'uz', { patient: r.patient, service: r.service_name });
+      // first name only and no service name: an SMS can be read by anyone holding the phone
+      const r = (await c.query(`SELECT p.first_name AS patient FROM service_orders o JOIN patients p ON p.id = o.patient_id WHERE o.id = $1`, [n.order_id])).rows[0];
+      return smsText('result_ready', 'uz', { patient: r.patient, service: '' });
     }
     return smsText(n.kind, 'uz', { card: await cardFor(c as any, n.tenant_id, n.appointment_id, 'uz') });
   }

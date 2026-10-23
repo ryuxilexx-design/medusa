@@ -13,7 +13,8 @@ const uz = {
   reminder_soon: (x: Card) => `Qabulingiz soat ${x.time} da: ${x.doctor}. ${x.place}.`,
   cancelled_by_clinic: (x: Card) => `Klinika ${x.date}, ${x.time} dagi qabulingizni bekor qildi. Qayta yozilish uchun klinikaga murojaat qiling.`,
   rescheduled_by_clinic: (x: Card) => `Qabulingiz yangi vaqtga: ${x.date}, ${x.time}, ${x.doctor}. ${x.place}.`,
-  result_ready: (patient: string, service: string) => `${patient}: "${service}" natijasi tayyor. Natijani shifokoringizdan yoki klinikadan oling.`,
+  // SMS is not encrypted: no service name (a test's name is itself sensitive), only the first name as the addressee
+  result_ready: (patient: string, _service: string) => `${patient}, tahlil natijangiz tayyor. Natijani shifokoringizdan yoki klinikadan oling.`,
 };
 const ru: typeof uz = {
   booked: (x) => `Вы записаны на приём: ${x.date}, ${x.time}, ${x.doctor}. ${x.place}.`,
@@ -21,7 +22,7 @@ const ru: typeof uz = {
   reminder_soon: (x) => `Ваш приём в ${x.time}: ${x.doctor}. ${x.place}.`,
   cancelled_by_clinic: (x) => `Клиника отменила ваш приём ${x.date}, ${x.time}. Чтобы записаться снова, обратитесь в клинику.`,
   rescheduled_by_clinic: (x) => `Ваш приём перенесён: ${x.date}, ${x.time}, ${x.doctor}. ${x.place}.`,
-  result_ready: (patient, service) => `${patient}: результат «${service}» готов. Получите его у врача или в клинике.`,
+  result_ready: (patient, _service) => `${patient}, ваш результат готов. Получите его у врача или в клинике.`,
 };
 export const SMS_T: Record<SmsLang, typeof uz> = { uz, ru };
 
