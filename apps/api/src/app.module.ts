@@ -57,7 +57,7 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DocumentsController, CashController, CamerasController, HikController, CameraIsapiController],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, CashController, CamerasController, HikController, CameraIsapiController],
   providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker],
 })
 export class AppModule implements NestModule {
