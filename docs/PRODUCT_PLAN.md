@@ -34,7 +34,7 @@ Natija: API testlari 157/157, E2E 152 ✓ (13 suite), typecheck toza; lokal demo
 
 ## 3-bosqich — «shifokor faqat tasdiqlaydi» (4–6 hafta)
 
-**Bajarildi (2026-10-23):** 12 ta boshlang‘ich qayd shabloni (mutaxassislik bo‘yicha, shifokor tekshiruvidan o‘tmagan), tez iboralar, shablondan buyurtma *taklifi*, qayta qabulni imzodan bir bosishda band qilish. Qoldi: ovozdan matn, dori lug‘ati + allergiya tekshiruvi, avto-kodlash.
+**Bajarildi (2026-10-23):** 12 ta boshlang‘ich qayd shabloni (mutaxassislik bo‘yicha, shifokor tekshiruvidan o‘tmagan), tez iboralar, shablondan buyurtma *taklifi*, qayta qabulni imzodan bir bosishda band qilish. **Bajarildi (2026-10-23):** ovozdan matn (o‘z serverdagi Whisper, o‘zbekcha uchun fine-tune model kerak — `docs/VOICE_SCRIBE.md`), dori lug‘ati (417 INN, klinik tekshiruv kutilmoqda) va allergiya tekshiruvi (og‘ir allergiyada sababsiz berilmaydi), DMED/DHP uchun FHIR qatlam (eksport rejimi; jonli yuborish uchun R5 va OAuth2 — `docs/DMED_INTEGRATION.md`). Qoldi: avto-kodlash, haqiqiy ovoz/Uzbek model sinovi, SSV bilan ulanish.
 
 
 Ovozdan matn (o‘zbek/rus), mutaxassislik shablonlari va tez iboralar, yuqori ishonchli avto-kodlash (bir bosish),
