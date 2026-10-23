@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellOff, CalendarPlus, FileText, MessageSquareText, Pencil, Phone, PiggyBank, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
+import { BellOff, CalendarPlus, FileText, MessageSquareText, Pencil, Phone, PiggyBank, Printer, Send, ShieldAlert, ShieldOff, Wallet, Zap } from 'lucide-react';
 import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -16,6 +16,7 @@ import { LabValues } from '@/components/lab-values';
 import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
 import { useT } from '@/lib/i18n';
 import { canDeposit, DepositCard, DepositModal } from '@/components/deposits';
+import { PatientRights } from '@/components/patient-rights';
 
 /** Quiet separator between the facts of the header line. */
 const Dot = () => <span className="text-slate-400" aria-hidden="true">·</span>;
@@ -36,7 +37,9 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   const [allergy, setAllergy] = useState(false);
   const [consentKind, setConsentKind] = useState<ConsentKind | null>(null);
   const [depositing, setDepositing] = useState(false);
-  const canEdit = role === 'manager' || role === 'registrar';
+  // an anonymised card (ZRU-547 erasure) keeps its record but takes no new visits, edits, deposits or contact actions
+  const anonymised = !!p.data?.anonymised_at;
+  const canEdit = (role === 'manager' || role === 'registrar') && !anonymised;
 
   if (p.isLoading) return <Card><LoadingRows rows={4} /></Card>;
   if (p.isError) return <Card><ErrorState error={p.error} onRetry={() => p.refetch()} /></Card>;
@@ -60,12 +63,13 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-slate-700">
                 {[
                   <span key="id" className="font-semibold tabular-nums text-slate-900">{pid(pt.patient_number)}</span>,
-                  <span key="birth" className="tabular-nums">{fmtDate(pt.birth_date)} ({ageFrom(pt.birth_date, me.today)})</span>,
+                  !anonymised && <span key="birth" className="tabular-nums">{fmtDate(pt.birth_date)} ({ageFrom(pt.birth_date, me.today)})</span>,
                   pt.sex && pt.sex !== 'unspecified' && <span key="sex">{t(`sex.${pt.sex}` as MessageKey)}</span>,
-                  pt.phone !== undefined && <span key="phone" className="inline-flex items-center gap-1.5 tabular-nums"><Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />{pt.phone ? formatPhone(pt.phone) : '—'}</span>,
+                  !anonymised && pt.phone !== undefined && <span key="phone" className="inline-flex items-center gap-1.5 tabular-nums"><Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />{pt.phone ? formatPhone(pt.phone) : '—'}</span>,
                 ].filter(Boolean).map((el, i) => <span key={i} className="inline-flex items-center gap-2 whitespace-nowrap">{i > 0 && <Dot />}{el}</span>)}
               </p>
-              {(pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined) && (
+              {anonymised && <div className="mt-2"><Badge icon={<ShieldOff className="h-3.5 w-3.5" />}>{t('registrar.anonymisedAt', { date: fmtDate(pt.anonymised_at) })}</Badge></div>}
+              {!anonymised && (pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined) && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {pt.balance_due > 0 && <Badge tone="red" icon={<Wallet className="h-3.5 w-3.5" />}>{t('registrar.debt', { sum: formatSom(pt.balance_due) })}</Badge>}
                   {pt.deposit_balance > 0 && <Badge tone="green" icon={<PiggyBank className="h-3.5 w-3.5" />}>{t('cash.depositBalance', { sum: formatSom(pt.deposit_balance) })}</Badge>}
@@ -78,9 +82,9 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
               )}
             </div>
           </div>
-          {(canEdit || canDeposit(role)) && (
+          {(canEdit || (canDeposit(role) && !anonymised)) && (
             <div className="flex flex-wrap gap-2">
-              {canDeposit(role) && <Button icon={<PiggyBank className="h-4 w-4" />} onClick={() => setDepositing(true)}>{t('cash.depositButton')}</Button>}
+              {canDeposit(role) && !anonymised && <Button icon={<PiggyBank className="h-4 w-4" />} onClick={() => setDepositing(true)}>{t('cash.depositButton')}</Button>}
               {canEdit && <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>}
               {canEdit && <Button icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>}
               {canEdit && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook(true)}>{t('registrar.newAppt')}</Button>}
@@ -96,7 +100,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
             <Button size="sm" className="ml-auto" onClick={() => setAllergy(true)}>{t('registrar.change')}</Button>
           </div>
         )}
-        <ConsentNotice patientId={pt.id} consents={pt.consents} role={role} onRecord={() => setConsentKind('data_processing')} />
+        {!anonymised && <ConsentNotice patientId={pt.id} consents={pt.consents} role={role} onRecord={() => setConsentKind('data_processing')} />}
       </div>
 
       <Card padded={false}>
@@ -116,7 +120,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
       <BookingModal open={book} init={{ patient: pt }} onClose={() => setBook(false)} />
       {canEdit && <WalkInModal open={walkIn} patient={pt} onClose={() => setWalkIn(false)} />}
       {role === 'doctor' && <AllergyModal open={allergy} onClose={() => setAllergy(false)} patient={pt} />}
-      {depositing && <DepositModal patient={pt} onClose={() => setDepositing(false)} />}
+      {depositing && !anonymised && <DepositModal patient={pt} onClose={() => setDepositing(false)} />}
       {pt.consents && <ConsentModal open={!!consentKind} kind={consentKind ?? 'data_processing'} patientId={pt.id} onClose={() => setConsentKind(null)} />}
     </>
   );
@@ -149,7 +153,8 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
             </dl>
           ) : <p className="text-sm text-slate-600">{t('registrar.minimalInfo')}</p>}
         </section>
-        {pt.consents && <ConsentBlock patientId={pt.id} patientNumber={pt.patient_number} patientName={fullName(pt)} consents={pt.consents} role={role} onRecord={onConsent} />}
+        {pt.consents && <ConsentBlock patientId={pt.id} patientNumber={pt.patient_number} patientName={fullName(pt)} consents={pt.consents} role={role} onRecord={onConsent} locked={!!pt.anonymised_at} />}
+        {['manager', 'registrar', 'doctor'].includes(role) && <PatientRights patient={pt} role={role} />}
       </div>
       <div className="min-w-0">
         <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.timeline')}</h3>

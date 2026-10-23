@@ -198,6 +198,49 @@ o‘zgartirmasdan qo‘shiladi: uning nomi `FISCAL_PROVIDER` ga yoziladi, `fisca
 qatorlarni o‘zi qayta uradi (`FISCAL_RETRY_SECONDS`, sukut 60). Provayder xatosi savdoni to‘xtatmaydi — qator
 `failed` bo‘lib, xato matni saqlanadi va kassir raqamni qo‘lda kiritishi mumkin.
 
+## 7a. Bemorning ma’lumot huquqlari (O‘RQ-547: olish va o‘chirish so‘rovlari)
+
+«Shaxsga doir ma’lumotlar to‘g‘risida»gi Qonun bemorga o‘z ma’lumotlarini olish va ularni qayta ishlashni to‘xtatishni
+talab qilish huquqini beradi. Med.uz.ai da bu so‘rovlar bemor kartasidagi «Bemorning huquqlari (O‘RQ-547)» bo‘limidan
+bajariladi; har bir amal audit jurnaliga yoziladi (`patient.export`, `patient.anonymise`).
+
+**Kim bajaradi.** Kartani chop etish — rahbar, registrator, shifokor (shifokor faqat o‘z bemorini). Ma’lumot faylini
+yuklab olish va anonimlashtirish — **faqat rahbar**. Bemorning shaxsini (pasport) tekshirish va yozma arizani olish —
+klinikaning o‘z tartibi; arizani qog‘ozda saqlang, so‘rov sababi maydoniga uning sanasini yozing.
+
+**Olish so‘rovi (ma’lumotlarni berish).**
+1. Bemor kartasi → «Kartani chop etish» — A4 varaq: shaxsiy ma’lumotlar, roziliklar (versiya, sana, usul, kim qayd etgan),
+   qabullar ro‘yxati, hisoblar xulosasi. Rahbar va registrator nusxasida klinik matn yo‘q; tashxis (MKB-10) faqat
+   shifokor nusxasida — bemor klinik qismini davolovchi shifokordan oladi.
+2. To‘liq fayl: rahbar → «Ma’lumotlar faylini yuklab olish» → `med-uz-ai-patient-<raqam>.json`. Faylda bemorning butun
+   yozuvi bor: karta, roziliklar, qabullar, imzolangan qaydlar (qo‘shimcha yozuvlari bilan), hujjatlar ro‘yxati (metama’lumot),
+   tasdiqlangan laboratoriya natijalari, imzolangan UZI xulosalari, hisoblar/to‘lovlar/qaytarishlar, depozitlar, kamera
+   voqealari (faqat vaqt), xabarnomalar jurnali (faqat tur va holat — matn saqlanmaydi). Fayl «bemorning so‘rovi bo‘yicha»
+   deb belgilanadi. Dastur faylni ekranda ko‘rsatmaydi — rahbar uni bemorga topshiradi (klinik matnni o‘qish rahbar vazifasi emas).
+   Chegara: klinikaga daqiqada 5 ta eksport; rad etilgan so‘rov audit qilinmaydi. Faylni elektron pochta orqali shifrlanmagan
+   holda yubormang; bemorga shaxsan yoki bemor ko‘rsatgan himoyalangan kanal orqali bering.
+
+**O‘chirish so‘rovi (anonimlashtirish).**
+1. Avval moliya va jadvalni yoping: qarz to‘lansin (yoki hisob bekor qilinsin), depozit qoldig‘i qaytarilsin, kelgusi
+   qabullar bekor qilinsin — aks holda dastur 409 bilan rad etadi va nima to‘sganini ko‘rsatadi.
+2. Bemor kartasi → «Ma’lumotlarni anonimlashtirish» → sabab (bemor arizasi va sanasi) → tasdiqlash. Amal **qaytarib bo‘lmaydi**
+   (bazadagi trigger ham tiklashni rad etadi).
+3. Nima o‘zgaradi: ism → «Anonim bemor #<raqam>», telefon, yaqin kishi, manzil, izoh o‘chiriladi, tug‘ilgan sana → 1900-01-01,
+   jins → ko‘rsatilmagan; bemorning o‘z raqami bilan ulangan Telegram chati uziladi, kutilayotgan xabarnomalar bekor bo‘ladi,
+   barcha berilgan roziliklar uchun «qaytarib olingan» qatori yoziladi (yuz kodi `P-n` bekor qilinadi, kamera kutubxonasidan
+   o‘chiriladi). Karta kulrang «Anonimlashtirilgan» belgisi bilan qoladi, ism/telefon bo‘yicha qidiruvda, yozishda va botda
+   ko‘rinmaydi; faqat raqami bilan ochiladi.
+4. Nima saqlanadi va nima uchun: o‘tgan qabullar, imzolangan qaydlar va qo‘shimchalar, tasdiqlangan natijalar, berilgan
+   hujjatlar, hisoblar, to‘lovlar, qaytarishlar, smena yozuvlari — tibbiy hujjatlar va buxgalteriya hisobi uchun qonun
+   belgilagan saqlash muddati tugamaguncha o‘chirib bo‘lmaydi (bu yozuvlar bazada o‘zgarmas). Ular endi anonim karta ostida
+   turadi va shaxsga bog‘lanmaydi; rozilik qatorlari dalil sifatida qoladi. Kamera voqealari faqat kod va vaqt — yuz tasviri
+   dasturda yo‘q.
+5. Saqlash muddati tugagach yozuvlarni butunlay o‘chirish — alohida tartib (DBA, zaxira nusxalar bilan birga); hozirgi
+   versiyada avtomatlashtirilmagan.
+
+Bu bo‘lim yuridik maslahat emas: muddatlar va javob tartibini (qonun bo‘yicha javob muddati, arizaning shakli) yurist bilan
+kelishib, klinikaning ichki tartibiga yozing.
+
 ## 8. Xavfsizlik eslatmalari
 
 - `deploy/.env` va `deploy/backups/` hech qachon git’ga tushmaydi (`.gitignore` da).

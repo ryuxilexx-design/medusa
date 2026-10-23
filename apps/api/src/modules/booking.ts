@@ -130,8 +130,10 @@ export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { pat
       return { id: prev.id as string, replayed: true };
     }
   }
-  const patient = (await c.query(`SELECT id, patient_number FROM patients WHERE id = $1 AND tenant_id = $2`, [input.patient_id, ctx.tenantId])).rows[0];
+  const patient = (await c.query(`SELECT id, patient_number, anonymised_at FROM patients WHERE id = $1 AND tenant_id = $2`, [input.patient_id, ctx.tenantId])).rows[0];
   if (!patient) throw invalid({ patient_id: 'Bemor topilmadi' });
+  // an anonymised card (ZRU-547 erasure) is closed for new visits: the person asked the clinic to stop processing their data
+  if (patient.anonymised_at) throw invalid({ patient_id: 'Bemor kartasi anonimlashtirilgan' });
   const slot = await validateSlot(c, ctx, input, walkIn ? WALK_IN_GRACE_MIN : undefined);
   const row = (await c.query(
     `INSERT INTO appointments (id, tenant_id, branch_id, patient_id, doctor_id, service_id, room_id, starts_at, ends_at, status, note, created_by, created_at, updated_at, request_key, source)

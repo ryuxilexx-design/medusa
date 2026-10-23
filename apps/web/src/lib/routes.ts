@@ -35,6 +35,7 @@ const DETAIL_ROLES: Record<string, Role[]> = {
   '/print/uzi/': ['doctor'],
   '/print/document/': ['doctor'],
   '/print/consent/': ['manager', 'registrar', 'doctor', 'cashier', 'lab'],
+  '/print/patient/': ['manager', 'registrar', 'doctor'],
   '/print/appointment/': ['manager', 'registrar'],
 };
 

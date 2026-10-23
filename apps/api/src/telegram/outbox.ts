@@ -13,7 +13,7 @@ export const GUARDIAN_CARD_SQL = `(p.phone IS NULL OR p.birth_date > ((demo_now(
 export const LINKED_CHATS_SQL = `
   SELECT tc.id, tc.bot_id, tc.chat_id, tc.lang, b.kind AS bot_kind
     FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
-   WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active'`;
+   WHERE tc.tenant_id = p.tenant_id AND p.anonymised_at IS NULL AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active'`;
 
 /** The number patient `p` gets SMS on: their own phone, else the contact's (a child's card or a card without its own number). */
 export const SMS_PHONE_SQL = `(CASE WHEN p.phone IS NOT NULL THEN p.phone WHEN ${GUARDIAN_CARD_SQL} THEN p.contact_phone END)`;
@@ -21,7 +21,7 @@ export const SMS_PHONE_SQL = `(CASE WHEN p.phone IS NOT NULL THEN p.phone WHEN $
 export const SMS_ELIGIBLE_SQL = `(${SMS_PHONE_SQL} LIKE '+998%' AND EXISTS (SELECT 1 FROM sms_settings ss WHERE ss.tenant_id = p.tenant_id AND ss.enabled))`;
 
 /** SQL condition: chat phone `$n` owns patient `p` (own card or a family card with that contact number). */
-export const OWN_CARD_SQL = (param: string) => `(p.phone = ${param} OR (p.contact_phone = ${param} AND ${GUARDIAN_CARD_SQL}))`;
+export const OWN_CARD_SQL = (param: string) => `(p.anonymised_at IS NULL AND (p.phone = ${param} OR (p.contact_phone = ${param} AND ${GUARDIAN_CARD_SQL})))`;
 
 /**
  * SQL condition: patient `p` has not refused / withdrawn the Telegram notifications consent. Linking the bot with

@@ -1,21 +1,23 @@
 import { GUARDIAN_CARD_SQL, NOTICE_CHANNEL_SQL } from '../telegram/outbox';
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { z } from 'zod';
-import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientCreateSchema, patientUpdateSchema, searchTranslit } from '@meduza/contracts';
+import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientAnonymiseSchema, patientCreateSchema, patientUpdateSchema, searchTranslit } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError, forbidden, notFound } from '../core/errors';
+import { AppError, coded, forbidden, notFound } from '../core/errors';
 import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { today } from '../core/clock';
 import { config } from '../core/config';
 import { consentHistory, latestConsents, recordConsent } from './consent';
+import { anonymisePatient, patientCard, patientExport, takeExportSlot } from './erasure';
 
-const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.created_at, p.updated_at, p.source,
+const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.created_at, p.updated_at, p.source, p.anonymised_at,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
            WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked,
   ${NOTICE_CHANNEL_SQL} AS notice_channel`;
-const MIN_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex`;
+const MIN_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.anonymised_at`;
 
 /** Doctors only see patients that have (had) an appointment with them. */
 export async function assertPatientAccess(q: Q, ctx: Ctx, patientId: string) {
@@ -51,12 +53,12 @@ export class PatientsController {
       // a name typed in the other script finds the card too (Каримов ↔ Karimov); any apostrophe form is accepted (o‘/o')
       const other = searchTranslit(search);
       if (other) { params.push(anyApostrophe(like(other.toLowerCase()))); conds.push(...nameConds(params.length)); }
-      if (/^\d+$/.test(digits)) {
-        params.push(like(digits)); conds.push(`replace(coalesce(p.phone,''),'+','') LIKE $${params.length}`);
-        // a full phone number is longer than any patient number (integer): only short digit strings are IDs
-        if (digits.length <= 9) { params.push(Number(digits)); conds.push(`p.patient_number = $${params.length}`); }
-      }
-      where.push(`(${conds.join(' OR ')})`);
+      if (/^\d+$/.test(digits)) params.push(like(digits)), conds.push(`replace(coalesce(p.phone,''),'+','') LIKE $${params.length}`);
+      // an anonymised card (ZRU-547 erasure) is never found by name or phone — only by its number, the one handle the record keeps
+      let byNumber = '';
+      // a full phone number is longer than any patient number (integer): only short digit strings are IDs
+      if (/^\d+$/.test(digits) && digits.length <= 9) { params.push(Number(digits)); byNumber = ` OR p.patient_number = $${params.length}`; }
+      where.push(`((p.anonymised_at IS NULL AND (${conds.join(' OR ')}))${byNumber})`);
     }
     if (ctx.role === 'doctor') { params.push(ctx.doctorId); where.push(`EXISTS (SELECT 1 FROM appointments a WHERE a.patient_id = p.id AND a.doctor_id = $${params.length})`); }
     const minimal = ctx.role === 'cashier' || ctx.role === 'lab';
@@ -89,7 +91,7 @@ export class PatientsController {
     const rows = (await q.query(
       `SELECT p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
               CASE WHEN ${input.last_name && input.first_name && input.birth_date ? `lower(p.last_name) = $${params.length - 2} AND lower(p.first_name) = $${params.length - 1} AND p.birth_date = $${params.length}` : 'false'} THEN 'name_birth' ELSE 'phone' END AS match
-         FROM patients p WHERE p.tenant_id = $1 AND ($2::uuid IS NULL OR p.id <> $2) AND (${conds.join(' OR ')}) ORDER BY p.patient_number LIMIT 10`, params)).rows;
+         FROM patients p WHERE p.tenant_id = $1 AND p.anonymised_at IS NULL AND ($2::uuid IS NULL OR p.id <> $2) AND (${conds.join(' OR ')}) ORDER BY p.patient_number LIMIT 10`, params)).rows;
     return rows;
   }
 
@@ -155,7 +157,8 @@ export class PatientsController {
       throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { method: 'Yuzni tanish uchun faqat imzolangan varaqa' });
     const row = await this.db.tx(async (c) => {
       // the patient row is locked so the consent and any concurrent card change are ordered
-      await c.query(`SELECT 1 FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId]);
+      const p = (await c.query(`SELECT anonymised_at FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
+      if (p?.anonymised_at) throw coded(409, 'PATIENT_ANONYMISED', 'api.erasure.anonymised');
       return recordConsent(c, ctx, id, { kind: input.kind, granted: input.granted, method: input.method, textVersion: input.kind === 'biometric' ? BIOMETRIC_CONSENT_VERSION : CONSENT_TEXT_VERSION, note: input.note });
     });
     return { data: row };
@@ -171,11 +174,47 @@ export class PatientsController {
     if (!keys.length) return { data: { ok: true } };
     if (input.birth_date && input.birth_date > today()) throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { birth_date: 'Tug‘ilgan sana kelajakda bo‘lishi mumkin emas' });
     await this.db.tx(async (c) => {
+      // an anonymised card has no identity to edit (the DB trigger refuses too); the doctor's allergy note is medical record and stays editable
+      const cur = (await c.query(`SELECT anonymised_at FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
+      if (cur?.anonymised_at && ctx.role !== 'doctor') throw coded(409, 'PATIENT_ANONYMISED', 'api.erasure.anonymised');
       const sets = keys.map((k, i) => `${k} = $${i + 3}`);
       await c.query(`UPDATE patients SET ${sets.join(', ')}, updated_at = demo_now() WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId, ...keys.map((k) => input[k])]);
       await audit(c, ctx, ctx.role === 'doctor' ? 'patient.allergy_update' : 'patient.update', 'patient', id, `O‘zgargan maydonlar: ${keys.join(', ')}`);
     });
     return { data: { ok: true } };
+  }
+
+  /** Printable patient card (ZRU-547 access right): role-filtered — diagnosis for the doctor only, invoices for the finance roles only. */
+  @Roles('manager', 'registrar', 'doctor') @Get(':id/card')
+  async card(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
+    await assertPatientAccess(this.db.pool, ctx, id);
+    return { data: await patientCard(this.db.pool, ctx, id) };
+  }
+
+  /**
+   * Subject-access export (ZRU-547): the whole record as a sealed JSON download for the patient. Manager only, audited,
+   * 5 per minute per clinic. The web client offers only «Yuklab olish» and never renders the content (see erasure.ts).
+   */
+  @Roles('manager') @Get(':id/export.json')
+  async exportJson(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Res({ passthrough: true }) res: Response) {
+    await assertPatientAccess(this.db.pool, ctx, id);
+    if (!takeExportSlot(ctx.tenantId)) throw coded(429, 'EXPORT_RATE_LIMIT', 'api.erasure.rateLimit');
+    const data = await this.db.tx(async (c) => {
+      const out = await patientExport(c, ctx, id);
+      await audit(c, ctx, 'patient.export', 'patient', id, `Bemor #${out.patient.patient_number} ma’lumotlari eksport qilindi (O‘RQ-547 so‘rovi)`);
+      return out;
+    });
+    res.setHeader('Content-Disposition', `attachment; filename="med-uz-ai-patient-${data.patient.patient_number}.json"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return data;
+  }
+
+  /** Erasure request (ZRU-547): irreversible anonymisation of the card; the medical record stays under the anonymous number. */
+  @Roles('manager') @Post(':id/anonymise')
+  async anonymise(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    await assertPatientAccess(this.db.pool, ctx, id);
+    const input = parse(patientAnonymiseSchema, body);
+    return { data: await this.db.tx((c) => anonymisePatient(c, ctx, id, input)) };
   }
 
   /** Role-filtered timeline: visits, clinical notes (doctor), lab results, diagnostics (doctor), invoices (finance roles). */

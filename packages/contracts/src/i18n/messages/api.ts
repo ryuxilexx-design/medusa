@@ -371,4 +371,9 @@ export const api = {
   'api.fiscal.alreadyIssued': ['Fiskal chek allaqachon kiritilgan: № {n}', 'Фискальный чек уже введён: № {n}'],
   'api.fiscal.enterNumber': ['Fiskal chek raqamini kiriting', 'Введите номер фискального чека'],
   'api.fiscal.ikpu17': ['IKPU kodi 17 ta raqamdan iborat bo‘lsin', 'Код ИКПУ — 17 цифр'],
+  // ---------- data-subject rights (ZRU-547): export and anonymisation ----------
+  'api.erasure.already': ['Bemor kartasi allaqachon anonimlashtirilgan', 'Карта пациента уже анонимизирована'],
+  'api.erasure.anonymised': ['Bemor kartasi anonimlashtirilgan — ma’lumotlarni o‘zgartirib bo‘lmaydi', 'Карта пациента анонимизирована — данные изменить нельзя'],
+  'api.erasure.blocked': ['Anonimlashtirish mumkin emas: bemorning qarzi, depoziti yoki kelgusi qabuli bor', 'Анонимизация невозможна: у пациента есть долг, депозит или предстоящий приём'],
+  'api.erasure.rateLimit': ['Eksport chegarasi: bir daqiqada 5 ta. Birozdan keyin qayta urinib ko‘ring.', 'Лимит экспорта: 5 в минуту. Повторите чуть позже.'],
 } as const satisfies Catalog;
