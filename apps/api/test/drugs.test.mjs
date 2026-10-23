@@ -86,6 +86,10 @@ test('allergiyalar: shifokor qo‘shadi (karta «ma’lum» bo‘ladi), registra
 
   // reception: patient's words only, never a class; cannot read the list
   assert.equal((await registrar.post(`/patients/${patientId}/allergies`, { class_code: 'penicillins' })).status, 403);
+  // the registrar cannot grade a reaction: «severe» from the front desk is stored as unknown (warns, never blocks)
+  const graded = await registrar.post(`/patients/${patientId}/allergies`, { free_text: 'Yong‘oqqa shish', severity: 'severe' });
+  assert.equal(graded.status, 201, graded.text);
+  assert.equal((await pool.query(`SELECT severity FROM patient_allergies WHERE id = $1`, [graded.body.data.id])).rows[0].severity, 'unknown');
   const r = await registrar.post(`/patients/${patientId}/allergies`, { free_text: 'Asalga toshma chiqadi' });
   assert.equal(r.status, 201, r.text);
   assert.equal((await registrar.get(`/patients/${patientId}/allergies`)).status, 403);

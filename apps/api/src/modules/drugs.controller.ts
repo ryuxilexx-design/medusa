@@ -73,6 +73,8 @@ export class AllergiesController {
       if (input.class_code && !(await c.query(`SELECT 1 FROM allergy_classes WHERE code = $1`, [input.class_code])).rowCount) throw invalid({ class_code: 'Noma’lum allergiya sinfi' });
       if (input.drug_id && !(await c.query(`SELECT 1 FROM drugs WHERE id = $1`, [input.drug_id])).rowCount) throw invalid({ drug_id: 'Dori ro‘yxatda topilmadi' });
       const source = doctor ? input.source : 'intake';
+      // only a doctor grades a reaction: a patient-reported entry is 'unknown' until a doctor confirms it (it warns, never blocks)
+      const severity = doctor ? input.severity : 'unknown';
       // the same patient-reported text twice (a second click on the intake answer) is the same allergy
       if (source === 'intake' && input.free_text && !input.class_code && !input.drug_id) {
         const same = (await c.query(`SELECT id FROM patient_allergies WHERE tenant_id = $1 AND patient_id = $2 AND withdrawn_at IS NULL AND source = 'intake'
@@ -82,7 +84,7 @@ export class AllergiesController {
       const row = (await c.query(
         `INSERT INTO patient_allergies (tenant_id, patient_id, class_code, drug_id, free_text, reaction, severity, source, recorded_by, recorded_by_name, recorded_by_role, confirmed_at, confirmed_by_name)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $11 = 'doctor' THEN demo_now() END, CASE WHEN $11 = 'doctor' THEN $10 END) RETURNING id`,
-        [ctx.tenantId, id, input.class_code ?? null, input.drug_id ?? null, input.free_text, input.reaction, input.severity, source, ctx.membershipId || null, ctx.name, doctor ? 'doctor' : 'registrar'])).rows[0];
+        [ctx.tenantId, id, input.class_code ?? null, input.drug_id ?? null, input.free_text, input.reaction, severity, source, ctx.membershipId || null, ctx.name, doctor ? 'doctor' : 'registrar'])).rows[0];
       // a doctor-recorded allergy makes the card's allergy status «known» (the old note stays as written)
       if (doctor) await c.query(`UPDATE patients SET allergy_state = 'known' WHERE id = $1 AND tenant_id = $2 AND allergy_state <> 'known'`, [id, ctx.tenantId]);
       await audit(c, ctx, doctor ? 'patient.allergy_add' : 'patient.allergy_reported', 'patient', id, doctor ? 'Allergiya qayd etildi' : 'Bemor aytgan allergiya qayd etildi (shifokor tasdig‘ini kutadi)');
