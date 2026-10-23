@@ -21,9 +21,12 @@ Natija: API testlari 157/157, E2E 152 ✓ (13 suite), typecheck toza; lokal demo
 
 ## 2-bosqich — qonuniy va integratsiya (2–6 hafta)
 
-- Fiskal chek: onlayn-KKM / virtual kassa (ОФД), IKPU kodi va QQS belgisi narxnomada, chekda QR; qaytarish cheki.
-  Nuqta: `invoices.controller.ts` to‘lov tranzaksiyasi, `cash.controller.ts` qaytarish; `fiscal_receipts` outbox.
-- SMS (Eskiz) transporti notifications outbox’da; jo‘natuvchi nomini operatorlarda ro‘yxatdan o‘tkazish.
+- **Bajarildi (2026-10-23):** fiskal asos — parallel rejim (kassir KKM chekining raqamini kiritadi), IKPU/QQS maydonlari,
+  `fiscal_receipts` outbox va provayder interfeysi (haqiqiy ОФД provayderi hali yo‘q); SMS (Eskiz) kanali — Telegram’siz
+  bemorlarga eslatma, Sozlamalar → SMS; kassa: xizmat miqdori, qator bo‘yicha qaytarish, oldindan to‘lov/depozit,
+  qarzdorlar (yosh bo‘yicha), CSV eksportlar (to‘lovlar, qaytarishlar, xarajatlar, smenalar, shifokor ulushi).
+- Qoldi: haqiqiy ОФД provayderi (klinika qaysi virtual kassani ishlatishini aniqlash), Eskiz haqiqiy hisob bilan sinov,
+  jo‘natuvchi nomini operatorlarda ro‘yxatdan o‘tkazish.
 - DMED: shifokor hisoblari (hozir), keyin token orqali integratsiya; e-retsept; PQ-170 bo‘yicha DHP/FHIR almashinuv
   2027-04-01 gacha.
 - Shaxsiy ma’lumotlar: bazani reestrga olish (VM-71), rozilik matni (yurist), bemorni anonimlashtirish/eksport.
