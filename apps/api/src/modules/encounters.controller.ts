@@ -48,7 +48,7 @@ export class EncountersController {
     const patient = await this.db.one(
       `SELECT id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, allergy_state, allergy_note FROM patients WHERE id = $1`, [e.patient_id]);
     const orders = await this.db.rows(
-      `SELECT o.id, o.service_name, o.category, o.status, o.ordered_at, o.price_snapshot, lr.values, lr.verified_at, lr.verified_by_name, dr.status AS report_status, dr.conclusion
+      `SELECT o.id, o.service_name, o.category, o.status, o.ordered_at, o.price_snapshot, o.quantity, lr.values, lr.verified_at, lr.verified_by_name, dr.status AS report_status, dr.conclusion
          FROM service_orders o LEFT JOIN lab_results lr ON lr.order_id = o.id LEFT JOIN diagnostic_reports dr ON dr.order_id = o.id
         WHERE o.encounter_id = $1 AND NOT o.is_primary ORDER BY o.ordered_at`, [id]);
     orders.forEach((o) => { if (o.status !== 'verified') o.values = null; });
@@ -124,21 +124,28 @@ export class EncountersController {
   @Post(':id/orders')
   async createOrders(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     const input = parse(ordersCreateSchema, body);
+    const qtyOf = new Map<string, number>();
+    for (const it of input.items) qtyOf.set(it.service_id, Math.max(qtyOf.get(it.service_id) ?? 1, it.quantity));
+    const ids = [...qtyOf.keys()];
     return this.db.tx(async (c) => {
       const e = await loadEncounter(c, ctx, id, true);
-      const services = (await c.query(`SELECT id, name, category, active FROM services WHERE id = ANY($1) AND tenant_id = $2`, [input.service_ids, ctx.tenantId])).rows;
-      if (services.length !== new Set(input.service_ids).size || services.some((s: any) => !s.active || s.category === 'consultation'))
+      const services = (await c.query(`SELECT id, name, category, active FROM services WHERE id = ANY($1) AND tenant_id = $2`, [ids, ctx.tenantId])).rows;
+      if (services.length !== ids.length || services.some((s: any) => !s.active || s.category === 'consultation'))
         throw invalid({ service_ids: 'Tanlangan tekshiruvlardan biri mavjud emas yoki buyurtma qilinmaydi' });
-      const performers = (await c.query(`SELECT ds.service_id, min(ds.doctor_id::text) AS doctor_id FROM doctor_services ds WHERE ds.service_id = ANY($1) GROUP BY 1`, [input.service_ids])).rows;
+      // a quantity above 1 is a course of procedures; a lab test or a scan has exactly one result
+      const multi = services.find((s: any) => (qtyOf.get(s.id) ?? 1) > 1 && s.category !== 'procedure');
+      if (multi) throw invalid({ items: `«${multi.name}» uchun miqdor faqat 1 bo‘ladi (miqdor muolajalar kursi uchun)` });
+      const performers = (await c.query(`SELECT ds.service_id, min(ds.doctor_id::text) AS doctor_id FROM doctor_services ds WHERE ds.service_id = ANY($1) GROUP BY 1`, [ids])).rows;
       const created: string[] = [];
       for (const s of services) {
         const dup = (await c.query(`SELECT 1 FROM service_orders WHERE encounter_id = $1 AND service_id = $2 AND status <> 'cancelled'`, [id, s.id])).rows[0];
         if (dup) throw conflict('DUPLICATE_ORDER', `«${s.name}» bu qabulda allaqachon buyurtma qilingan`);
         const performer = performers.find((p: any) => p.service_id === s.id)?.doctor_id ?? null;
+        const quantity = qtyOf.get(s.id) ?? 1;
         const { orderId } = await createBilledOrder(c, ctx, { branchId: e.branch_id, patientId: e.patient_id, appointmentId: e.appointment_id, encounterId: id,
-          serviceId: s.id, isPrimary: false, doctorId: ctx.doctorId, performerDoctorId: performer });
+          serviceId: s.id, isPrimary: false, doctorId: ctx.doctorId, performerDoctorId: performer, quantity });
         created.push(orderId);
-        await audit(c, ctx, 'order.create', 'order', orderId, `Buyurtma: ${s.name}`, e.branch_id);
+        await audit(c, ctx, 'order.create', 'order', orderId, `Buyurtma: ${s.name}${quantity > 1 ? ` × ${quantity}` : ''}`, e.branch_id);
       }
       return { data: { order_ids: created } };
     });

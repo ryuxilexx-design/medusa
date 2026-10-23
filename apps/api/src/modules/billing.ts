@@ -33,17 +33,20 @@ export async function nextInvoiceNumber(q: Q, tenantId: string): Promise<number>
 export async function createBilledOrder(q: Q, ctx: Ctx, o: {
   branchId: string; patientId: string; appointmentId: string | null; encounterId: string | null; serviceId: string; isPrimary: boolean;
   doctorId: string | null; performerDoctorId: string | null;
+  /** 1–50; more than one only for a procedure (a course of injections): a lab test or a scan has one result */
+  quantity?: number;
 }): Promise<{ orderId: string; invoiceId: string }> {
   const s = (await q.query(`SELECT id, name, category, share_percent FROM services WHERE id = $1 AND tenant_id = $2`, [o.serviceId, ctx.tenantId])).rows[0];
-  const price = await currentPrice(q, o.serviceId, o.branchId);
+  const qty = Math.max(1, Math.min(50, Math.round(o.quantity ?? 1)));
+  const price = await currentPrice(q, o.serviceId, o.branchId); // unit price; the line carries qty × price
   const share = await sharePercentFor(q, ctx.tenantId, o.performerDoctorId ?? o.doctorId, Number(s.share_percent));
   const at = now();
   const orderId = (await q.query(
     `INSERT INTO service_orders (id, tenant_id, branch_id, patient_id, appointment_id, encounter_id, service_id, category, service_name, is_primary, price_snapshot,
-                                 share_percent_snapshot, doctor_id, performer_doctor_id, status, ordered_at, created_by)
-     VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ordered',$14,$15) RETURNING id`,
+                                 share_percent_snapshot, doctor_id, performer_doctor_id, status, ordered_at, created_by, quantity)
+     VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ordered',$14,$15,$16) RETURNING id`,
     [ctx.tenantId, o.branchId, o.patientId, o.appointmentId, o.encounterId, s.id, s.category, s.name, o.isPrimary, price, share,
-      o.doctorId, o.performerDoctorId, at, ctx.membershipId])).rows[0].id;
+      o.doctorId, o.performerDoctorId, at, ctx.membershipId, qty])).rows[0].id;
 
   let invoice = o.appointmentId ? (await q.query(
     `SELECT id FROM invoices WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'unpaid' AND paid_amount = 0 AND credit_amount = 0 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
@@ -57,18 +60,24 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
   const pos = (await q.query(`SELECT coalesce(max(position), -1) + 1 AS p FROM invoice_items WHERE invoice_id = $1`, [invoice.id])).rows[0].p;
   await q.query(
     `INSERT INTO invoice_items (tenant_id, invoice_id, order_id, service_id, description, quantity, unit_price, line_subtotal, discount_share, line_total, position)
-     VALUES ($1,$2,$3,$4,$5,1,$6,$6,0,$6,$7)`, [ctx.tenantId, invoice.id, orderId, s.id, s.name, price, pos]);
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$8,$9)`, [ctx.tenantId, invoice.id, orderId, s.id, s.name, qty, price, price * qty, pos]);
   await recalcInvoice(q, invoice.id);
   return { orderId, invoiceId: invoice.id };
 }
 
-/** Recomputes subtotal, discount allocation (proportional, remainder on the last line) and total. Only valid before any payment. */
 /**
- * Line value after refunds (SQL, needs aliases `it` = invoice_items and `i` = invoices). A refund reduces the whole
- * invoice (credit), so each line keeps its share: line_total × total / (subtotal − discount). Without refunds the
- * value is exactly line_total. Used for service revenue, doctor share and service rankings.
+ * Line value after refunds (SQL, needs aliases `it` = invoice_items and `i` = invoices). Two kinds of refund:
+ *  - a line refund (refunds.order_id) is subtracted from exactly that line (`it.refunded_amount`, summed on the invoice
+ *    as `i.line_refunded_amount`);
+ *  - an invoice-level refund (the rest of `i.credit_amount`) is spread over the lines in proportion to what is left of
+ *    them: (line_total − refunded) × total / (subtotal − discount − line_refunded).
+ * Without refunds the value is exactly line_total. Used for service revenue, doctor share and service rankings.
  */
-export const NET_LINE = `(CASE WHEN i.credit_amount = 0 THEN it.line_total ELSE coalesce(round(it.line_total * i.total::numeric / NULLIF(i.subtotal - i.discount_amount, 0)), 0) END)`;
+export const NET_LINE = `(CASE WHEN i.credit_amount = 0 THEN it.line_total
+  WHEN i.credit_amount = i.line_refunded_amount THEN it.line_total - it.refunded_amount
+  ELSE coalesce(round((it.line_total - it.refunded_amount) * i.total::numeric / NULLIF(i.subtotal - i.discount_amount - i.line_refunded_amount, 0)), 0) END)`;
+/** Service count for reports: a course of 10 procedures counts as 10 (alias `it`). */
+export const LINE_QTY = `it.quantity`;
 
 /** One rule for invoice status everywhere (payments, refunds, recalculation). paid is net of refunds. */
 export function invoiceStatus(inv: { status?: string; total: number; paid: number; credit: number; hasItems: boolean }) {
@@ -78,6 +87,7 @@ export function invoiceStatus(inv: { status?: string; total: number; paid: numbe
   return inv.paid >= inv.total ? 'paid' : 'partially_paid';
 }
 
+/** Recomputes subtotal, discount allocation (proportional, remainder on the last line) and total. Only valid before any payment. */
 export async function recalcInvoice(q: Q, invoiceId: string) {
   const inv = (await q.query(`SELECT * FROM invoices WHERE id = $1`, [invoiceId])).rows[0];
   const items = (await q.query(`SELECT id, line_subtotal FROM invoice_items WHERE invoice_id = $1 ORDER BY position, id`, [invoiceId])).rows;

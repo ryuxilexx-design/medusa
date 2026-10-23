@@ -128,9 +128,10 @@ export class PatientsController {
     const minimal = ctx.role === 'cashier' || ctx.role === 'lab';
     const p = await this.db.one(
       `SELECT ${minimal ? MIN_COLS : FULL_COLS}${ctx.role === 'doctor' ? ', p.allergy_state, p.allergy_note' : ''},
-              (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void' AND i.branch_id = ANY($3))::bigint AS balance_due
+              (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void' AND i.branch_id = ANY($3))::bigint AS balance_due,
+              (SELECT coalesce(sum(CASE WHEN d.kind = 'in' THEN d.amount ELSE -d.amount END),0) FROM patient_deposits d WHERE d.patient_id = p.id)::bigint AS deposit_balance
          FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId, ctx.branchIds]);
-    if (ctx.role === 'doctor' || ctx.role === 'lab') delete (p as any).balance_due;
+    if (ctx.role === 'doctor' || ctx.role === 'lab') { delete (p as any).balance_due; delete (p as any).deposit_balance; }
     // consent status: for the roles that collect it (not cashier/lab, who see only the minimal card)
     if (!minimal) (p as any).consents = await latestConsents(this.db.pool, ctx.tenantId, id);
     return { data: p };
@@ -204,7 +205,7 @@ export class PatientsController {
         WHERE o.patient_id = $1 AND o.tenant_id = $2 AND o.category = 'ultrasound' ORDER BY o.ordered_at DESC`, [id, ctx.tenantId]);
     const invoices = r === 'doctor' || r === 'lab' ? [] : await this.db.rows(
       `SELECT i.id, i.invoice_number, i.status, i.total, i.paid_amount, i.created_at, b.name AS branch_name,
-              (SELECT string_agg(it.description, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id) AS services
+              (SELECT string_agg(it.description || CASE WHEN it.quantity > 1 THEN ' × ' || it.quantity ELSE '' END, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id) AS services
          FROM invoices i JOIN branches b ON b.id = i.branch_id WHERE i.patient_id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3) ORDER BY i.created_at DESC`, [id, ctx.tenantId, ctx.branchIds]);
     return { data: { visits, notes, labs, diagnostics, invoices } };
   }

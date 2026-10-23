@@ -50,6 +50,8 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
               {row(t('print.shift.cashPayments', { n: tot.payments.cash.n }), formatSom(tot.payments.cash.sum))}
               {row(t('print.shift.cashRefunds', { n: tot.refunds.cash.n }), formatSom(tot.refunds.cash.sum))}
               {row(t('print.shift.cashExpenses', { n: tot.cash_expenses.n }), formatSom(tot.cash_expenses.sum))}
+              {(tot.deposit_in?.cash.sum ?? 0) > 0 && row(t('print.shift.depositIn', { n: tot.deposit_in!.cash.n }), formatSom(tot.deposit_in!.cash.sum))}
+              {(tot.deposit_out?.cash.sum ?? 0) > 0 && row(t('print.shift.depositOut', { n: tot.deposit_out!.cash.n }), formatSom(tot.deposit_out!.cash.sum))}
               {row(t('print.shift.expected'), formatSom(s.expected_cash), true)}
               {closed && row(t('print.shift.counted'), formatSom(s.counted_cash))}
               {closed && row(t('print.shift.difference'), `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`, true)}

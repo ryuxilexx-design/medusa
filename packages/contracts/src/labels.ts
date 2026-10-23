@@ -18,7 +18,9 @@ export const LAB_STATUS_LABEL: Record<string, string> = {
   ordered: 'Buyurtma berildi', sample_collected: 'Namuna olindi', draft_result: 'Natija qoralama', verified: 'Tasdiqlangan', cancelled: 'Bekor qilingan',
 };
 
-export const PAYMENT_METHOD_LABEL: Record<string, string> = { cash: 'Naqd', card: 'Karta', transfer: 'O‘tkazma' };
+/** Ways money actually arrives (choices for a cashier); 'deposit' is a payment covered from the patient's prepayment. */
+export const PAYMENT_METHODS = ['cash', 'card', 'transfer'] as const;
+export const PAYMENT_METHOD_LABEL: Record<string, string> = { cash: 'Naqd', card: 'Karta', transfer: 'O‘tkazma', deposit: 'Depozitdan' };
 export const SERVICE_CATEGORY_LABEL: Record<string, string> = {
   consultation: 'Konsultatsiya', lab: 'Laboratoriya', ultrasound: 'UZI', procedure: 'Muolaja',
 };

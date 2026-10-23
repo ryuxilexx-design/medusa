@@ -15,7 +15,9 @@ export type Shift = {
   expected_cash: number; counted_cash: number | null; difference: number | null;
   /** Opened before today (left open overnight): the server takes no payment until it is closed. Only on /cash-shifts/current. */
   stale?: boolean;
-  totals: { payments: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; refunds: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; cash_expenses: { n: number; sum: number }; cash_in: number; cash_out: number };
+  totals: { payments: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; refunds: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; cash_expenses: { n: number; sum: number }; cash_in: number; cash_out: number;
+    /** patient prepayments taken in / paid back from this drawer (absent on shifts closed before deposits existed) */
+    deposit_in?: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; deposit_out?: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }> };
 };
 
 /** Who may run a drawer and take money: the cashier and the manager (the server allows the same two roles). */

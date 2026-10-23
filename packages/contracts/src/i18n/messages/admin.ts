@@ -445,4 +445,5 @@ export const admin = {
   'admin.off.openDay': ['Jadval', 'Расписание'],
   'admin.off.endAfterStart': ['Tugash boshlanishdan keyin', 'Окончание должно быть позже начала'],
   'admin.off.hoursBoth': ['Ish vaqtining boshi va oxirini kiriting', 'Укажите начало и конец работы'],
+  'admin.inv.movementsShown': ['{total} ta harakatdan oxirgi {n} tasi ko‘rsatilgan', 'Показаны последние {n} из {total} движений'],
 } as const satisfies Catalog;

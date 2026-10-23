@@ -137,4 +137,5 @@ export const clinical = {
   'clinical.rep.share': ['Hisoblangan ulush', 'Начисленная доля'],
   'clinical.rep.shareSub': ['hisob-kitob, maosh emas', 'расчёт, не зарплата'],
   'clinical.rep.valueSub': ['chegirmadan keyin', 'после скидки'],
+  'clinical.rep.csv': ['{format} yuklab olish', 'Скачать {format}'],
 } as const satisfies Catalog;

@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, FileText, Pencil, Phone, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
+import { CalendarPlus, FileText, Pencil, Phone, PiggyBank, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
 import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -15,6 +15,7 @@ import { WalkInModal } from '@/components/walk-in';
 import { LabValues } from '@/components/lab-values';
 import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
 import { useT } from '@/lib/i18n';
+import { canDeposit, DepositCard, DepositModal } from '@/components/deposits';
 
 /** Quiet separator between the facts of the header line. */
 const Dot = () => <span className="text-slate-400" aria-hidden="true">·</span>;
@@ -34,6 +35,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   const [walkIn, setWalkIn] = useState(false);
   const [allergy, setAllergy] = useState(false);
   const [consentKind, setConsentKind] = useState<ConsentKind | null>(null);
+  const [depositing, setDepositing] = useState(false);
   const canEdit = role === 'manager' || role === 'registrar';
 
   if (p.isLoading) return <Card><LoadingRows rows={4} /></Card>;
@@ -63,20 +65,22 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
                   pt.phone !== undefined && <span key="phone" className="inline-flex items-center gap-1.5 tabular-nums"><Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />{pt.phone ? formatPhone(pt.phone) : '—'}</span>,
                 ].filter(Boolean).map((el, i) => <span key={i} className="inline-flex items-center gap-2 whitespace-nowrap">{i > 0 && <Dot />}{el}</span>)}
               </p>
-              {(pt.balance_due > 0 || pt.telegram_linked || pt.source === 'telegram') && (
+              {(pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram') && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {pt.balance_due > 0 && <Badge tone="red" icon={<Wallet className="h-3.5 w-3.5" />}>{t('registrar.debt', { sum: formatSom(pt.balance_due) })}</Badge>}
+                  {pt.deposit_balance > 0 && <Badge tone="green" icon={<PiggyBank className="h-3.5 w-3.5" />}>{t('cash.depositBalance', { sum: formatSom(pt.deposit_balance) })}</Badge>}
                   {pt.telegram_linked && <Badge tone="blue" icon={<Send className="h-3.5 w-3.5" />}>{t('registrar.telegramLinked')}</Badge>}
                   {pt.source === 'telegram' && <span className="text-[0.8125rem] text-slate-600">{t('registrar.telegramCard')}</span>}
                 </div>
               )}
             </div>
           </div>
-          {canEdit && (
+          {(canEdit || canDeposit(role)) && (
             <div className="flex flex-wrap gap-2">
-              <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>
-              <Button icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>
-              <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook(true)}>{t('registrar.newAppt')}</Button>
+              {canDeposit(role) && <Button icon={<PiggyBank className="h-4 w-4" />} onClick={() => setDepositing(true)}>{t('cash.depositButton')}</Button>}
+              {canEdit && <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>}
+              {canEdit && <Button icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>}
+              {canEdit && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook(true)}>{t('registrar.newAppt')}</Button>}
             </div>
           )}
         </div>
@@ -100,7 +104,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
             {tab === 'visits' && <Visits visits={h.data.visits} />}
             {tab === 'notes' && <Notes notes={h.data.notes} />}
             {tab === 'labs' && <Labs labs={h.data.labs} diagnostics={h.data.diagnostics} role={role} />}
-            {tab === 'invoices' && <Invoices invoices={h.data.invoices} />}
+            {tab === 'invoices' && <><Invoices invoices={h.data.invoices} /><div className="mt-6"><DepositCard patientId={pt.id} /></div></>}
             {tab === 'docs' && <Docs h={h.data} role={role} />}
           </div>
         )}
@@ -109,6 +113,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
       <BookingModal open={book} init={{ patient: pt }} onClose={() => setBook(false)} />
       {canEdit && <WalkInModal open={walkIn} patient={pt} onClose={() => setWalkIn(false)} />}
       {role === 'doctor' && <AllergyModal open={allergy} onClose={() => setAllergy(false)} patient={pt} />}
+      {depositing && <DepositModal patient={pt} onClose={() => setDepositing(false)} />}
       {pt.consents && <ConsentModal open={!!consentKind} kind={consentKind ?? 'data_processing'} patientId={pt.id} onClose={() => setConsentKind(null)} />}
     </>
   );

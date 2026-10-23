@@ -25,6 +25,7 @@ import { ScheduleExceptionsController } from './modules/schedule-exceptions.cont
 import { TelegramController } from './telegram/telegram.controller';
 import { DocumentsController } from './modules/documents.controller';
 import { CashController } from './modules/cash.controller';
+import { DepositsController } from './modules/deposits.controller';
 import { CamerasController } from './cameras/cameras.controller';
 import { HikController } from './cameras/hik.controller';
 import { CameraIsapiController } from './cameras/isapi.controller';
@@ -53,7 +54,7 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, DocumentsController, CashController, CamerasController, HikController, CameraIsapiController],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, DocumentsController, CashController, DepositsController, CamerasController, HikController, CameraIsapiController],
   providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
 })
 export class AppModule implements NestModule {

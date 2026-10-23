@@ -1,20 +1,28 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { createHash } from 'crypto';
-import { discountSchema, paymentSchema, voidSchema, PAYMENT_METHOD_LABEL } from '@meduza/contracts';
+import { discountSchema, paymentSchema, promiseSchema, voidSchema, PAYMENT_METHOD_LABEL } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, conflict, invalid, notFound } from '../core/errors';
 import { isDate, isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
-import { addDays, dayStart, localDate, now, today, TZ_OFFSET_MS } from '../core/clock';
+import { addDays, dayStart, localDate, now, today } from '../core/clock';
 import { branchScope } from '../core/scope';
+import { csvDate, csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
 import { invoiceStatus, recalcInvoice } from './billing';
+import { applyDeposit } from './deposits';
 
 /** A shift opened before today's local day start (left open overnight) must be closed before it takes money. */
 export const shiftIsStale = (openedAt: Date | string) => new Date(openedAt) < dayStart(today());
 
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
+
+/** Services of an invoice in one line: «Umumiy qon tahlili, Fizioterapiya × 10». */
+export const SERVICES_SQL = `(SELECT string_agg(it.description || CASE WHEN it.quantity > 1 THEN ' × ' || it.quantity ELSE '' END, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id)`;
+/** Debt age in whole days since the invoice was created (demo clock). */
+const AGE_DAYS = `floor(EXTRACT(EPOCH FROM ((SELECT demo_now()) - i.created_at)) / 86400)`;
+const AGE_BUCKETS: Record<string, string> = { '0-7': `${AGE_DAYS} <= 7`, '8-30': `${AGE_DAYS} BETWEEN 8 AND 30`, '31+': `${AGE_DAYS} >= 31` };
 
 async function lockInvoice(q: Q, ctx: Ctx, id: string) {
   if (!isUuid(id)) throw notFound('Hisob');
@@ -35,7 +43,9 @@ export class InvoicesController {
     if (isDate(q.from)) { params.push(dayStart(q.from)); where.push(`i.created_at >= $${params.length}`); }
     if (isDate(q.to)) { params.push(dayStart(addDays(q.to, 1))); where.push(`i.created_at < $${params.length}`); }
     if (q.status) { params.push(String(q.status).split(',')); where.push(`i.status = ANY($${params.length})`); }
-    if (q.debt === '1') where.push(`i.status IN ('unpaid','partially_paid') AND i.total > i.paid_amount`);
+    const debt = q.debt === '1';
+    if (debt) where.push(`i.status IN ('unpaid','partially_paid') AND i.total > i.paid_amount`);
+    if (debt && AGE_BUCKETS[q.age]) where.push(AGE_BUCKETS[q.age]);
     if (isUuid(q.patient_id)) { params.push(q.patient_id); where.push(`i.patient_id = $${params.length}`); }
     if (q.search) {
       const s = String(q.search).trim().toLowerCase();
@@ -45,13 +55,40 @@ export class InvoicesController {
     const base = `FROM invoices i JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = i.branch_id WHERE ${where.join(' AND ')}`;
     const agg = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(i.total) FILTER (WHERE i.status <> 'void'),0)::bigint AS total,
         coalesce(sum(i.paid_amount),0)::bigint AS paid, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE i.status <> 'void'),0)::bigint AS due ${base}`, params))!;
+    // debtors: how old the debts are (days since the invoice), for the collections card
+    const ageing = debt ? await this.ageing(base, params) : undefined;
     params.push(pageSize, offset);
     const rows = await this.db.rows(
       `SELECT i.id, i.invoice_number, i.status, i.subtotal, i.discount_amount, i.total, i.paid_amount, (i.total - i.paid_amount) AS due, i.created_at, i.branch_id, b.name AS branch_name,
-              p.id AS patient_id, p.patient_number, p.last_name, p.first_name,
-              (SELECT string_agg(it.description, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id) AS services
-         ${base} ORDER BY CASE WHEN i.status IN ('unpaid','partially_paid') THEN 0 ELSE 1 END, i.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    return { data: rows, meta: { page, page_size: pageSize, total: agg.n, sums: { total: Number(agg.total), paid: Number(agg.paid), due: Number(agg.due) } } };
+              p.id AS patient_id, p.patient_number, p.last_name, p.first_name, p.phone, i.promise_date, i.promise_note, ${AGE_DAYS}::int AS age_days,
+              ${SERVICES_SQL} AS services
+         ${base} ORDER BY CASE WHEN i.status IN ('unpaid','partially_paid') THEN 0 ELSE 1 END, i.created_at ${debt ? 'ASC' : 'DESC'} LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    return { data: rows, meta: { page, page_size: pageSize, total: agg.n, sums: { total: Number(agg.total), paid: Number(agg.paid), due: Number(agg.due) }, ...(ageing ? { ageing } : {}) } };
+  }
+
+  private async ageing(base: string, params: unknown[]) {
+    const a = (await this.db.one(
+      `SELECT count(*) FILTER (WHERE ${AGE_BUCKETS['0-7']})::int AS n1, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${AGE_BUCKETS['0-7']}),0)::bigint AS s1,
+              count(*) FILTER (WHERE ${AGE_BUCKETS['8-30']})::int AS n2, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${AGE_BUCKETS['8-30']}),0)::bigint AS s2,
+              count(*) FILTER (WHERE ${AGE_BUCKETS['31+']})::int AS n3, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${AGE_BUCKETS['31+']}),0)::bigint AS s3 ${base}`, params))!;
+    return { '0-7': { n: a.n1, sum: Number(a.s1) }, '8-30': { n: a.n2, sum: Number(a.s2) }, '31+': { n: a.n3, sum: Number(a.s3) } };
+  }
+
+  /** Debtors list as CSV (a snapshot, so no period; at most 10 000 rows, oldest debt first; a totals row at the end). */
+  @Roles('manager', 'cashier') @Get('debtors.csv')
+  async debtorsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
+    const params: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id)];
+    const where = [`i.tenant_id = $1`, `i.branch_id = ANY($2)`, `i.status IN ('unpaid','partially_paid')`, `i.total > i.paid_amount`];
+    if (AGE_BUCKETS[q.age]) where.push(AGE_BUCKETS[q.age]);
+    const rows = await this.db.rows(
+      `SELECT i.invoice_number, i.created_at, ${AGE_DAYS}::int AS age_days, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, p.phone,
+              ${SERVICES_SQL} AS services, i.total, i.paid_amount, (i.total - i.paid_amount) AS due, i.promise_date, i.promise_note
+         FROM invoices i JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = i.branch_id WHERE ${where.join(' AND ')} ORDER BY i.created_at LIMIT 10000`, params);
+    const total = rows.reduce((a, r) => a + BigInt(r.due), 0n);
+    sendCsv(res, `meduzai-qarzdorlar-${today()}.csv`,
+      ['Hisob №', 'Sana (Toshkent)', 'Kun', 'Filial', 'Bemor ID', 'Bemor', 'Telefon', 'Xizmatlar', 'Jami (so‘m)', 'To‘langan (so‘m)', 'Qarz (so‘m)', 'Va’da sanasi', 'Izoh'],
+      [...rows.map((r) => [r.invoice_number, csvTime(r.created_at), r.age_days, r.branch, r.patient_number, r.patient, r.phone, r.services, csvSom(r.total), csvSom(r.paid_amount), csvSom(r.due), csvDate(r.promise_date), r.promise_note]),
+        ['Jami', '', '', '', '', `${rows.length} ta hisob`, '', '', '', '', csvSom(total), '', '']]);
   }
 
   @Roles('manager', 'cashier', 'registrar') @Get(':id')
@@ -65,14 +102,19 @@ export class InvoicesController {
         WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!inv) throw notFound('Hisob');
     const items = await this.db.rows(
-      `SELECT it.id, it.description, it.quantity, it.unit_price, it.line_subtotal, it.discount_share, it.line_total, o.category, o.status AS order_status, o.ordered_at
+      `SELECT it.id, it.order_id, it.description, it.quantity, it.unit_price, it.line_subtotal, it.discount_share, it.line_total, it.refunded_amount,
+              (it.line_total - it.refunded_amount) AS refundable, o.category, o.status AS order_status, o.ordered_at
          FROM invoice_items it JOIN service_orders o ON o.id = it.order_id WHERE it.invoice_id = $1 ORDER BY it.position`, [id]);
+    // the patient's prepayment that could cover this invoice (a cashier offers «Depozitdan» only when it is above 0)
+    const dep = await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE patient_id = $1 AND tenant_id = $2`, [inv.patient_id, ctx.tenantId]);
+    (inv as any).deposit_balance = Number(dep?.balance ?? 0);
     const payments = await this.db.rows(
       `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.paid_at, pm.note,
               (pm.amount - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.payment_id = pm.id), 0))::bigint AS refundable
          FROM payments pm WHERE pm.invoice_id = $1 ORDER BY pm.paid_at`, [id]);
     const refunds = await this.db.rows(
-      `SELECT r.id, r.refund_number, r.payment_id, r.amount, r.method, r.reason_code, r.reason, r.approved_by_name, r.refunded_at FROM refunds r WHERE r.invoice_id = $1 ORDER BY r.refunded_at`, [id]);
+      `SELECT r.id, r.refund_number, r.payment_id, r.amount, r.method, r.reason_code, r.reason, r.approved_by_name, r.refunded_at, r.order_id, o.service_name
+         FROM refunds r LEFT JOIN service_orders o ON o.id = r.order_id WHERE r.invoice_id = $1 ORDER BY r.refunded_at`, [id]);
     return { data: { ...inv, items, payments: payments.map((p) => ({ ...p, refundable: Math.min(Number(p.refundable), Number(inv.paid_amount)) })), refunds } };
   }
 
@@ -93,10 +135,25 @@ export class InvoicesController {
     });
   }
 
+  /** Debtor's promise: the date the patient said they will pay and a note. Only on an invoice that still has a balance due. */
+  @Roles('manager', 'cashier') @Post(':id/promise') @HttpCode(200)
+  async promise(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    const input = parse(promiseSchema, body);
+    if (input.promise_date && input.promise_date < today()) throw invalid({ promise_date: 'Va’da sanasi o‘tgan kun bo‘lmasin' });
+    return this.db.tx(async (c) => {
+      const inv = await lockInvoice(c, ctx, id);
+      if (!['unpaid', 'partially_paid'].includes(inv.status) || Number(inv.total) <= Number(inv.paid_amount)) throw conflict('NOT_A_DEBT', 'Bu hisobda qarz yo‘q');
+      await c.query(`UPDATE invoices SET promise_date = $2, promise_note = $3, updated_at = demo_now() WHERE id = $1`, [id, input.promise_date, input.note ?? null]);
+      await audit(c, ctx, 'invoice.promise', 'invoice', id, input.promise_date ? `Va’da: ${input.promise_date}${input.note ? ` — ${input.note}` : ''}` : 'Va’da olib tashlandi', inv.branch_id);
+      return { data: { ok: true, promise_date: input.promise_date, promise_note: input.note ?? null } };
+    });
+  }
+
   /**
    * Records a payment. Idempotency-Key is mandatory: a retry with the same key returns the original payment.
    * The invoice row is locked, so concurrent payments can never exceed the remaining balance.
    * A cashier or the manager: whoever takes the money needs their own open shift in the invoice's branch.
+   * Method 'deposit' uses the patient's prepayment instead: no cash moves, no shift; the balance is locked and reduced.
    */
   @Roles('cashier', 'manager') @Post(':id/payments')
   async pay(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown, @Headers('idempotency-key') key: string | undefined, @Res({ passthrough: true }) res: Response) {
@@ -115,17 +172,27 @@ export class InvoicesController {
       const due = Number(inv.total) - Number(inv.paid_amount);
       if (due <= 0) throw conflict('INVOICE_PAID', 'Hisob to‘liq to‘langan');
       if (input.amount > due) throw invalid({ amount: `Summa qoldiqdan (${som(due)} so‘m) oshmasligi kerak` });
-      // money is taken only in an open shift of this branch (FOR SHARE: a concurrent close waits for this payment)
-      const shift = (await c.query(`SELECT id, branch_id, opened_at FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' FOR SHARE`, [ctx.tenantId, ctx.membershipId])).rows[0];
-      if (!shift) throw conflict('SHIFT_REQUIRED', 'To‘lov qabul qilish uchun avval kassa smenasini oching');
-      if (shift.branch_id !== inv.branch_id) throw conflict('SHIFT_OTHER_BRANCH', 'Smenangiz boshqa filialda ochilgan. Shu filial hisobiga to‘lov olish uchun smenani yopib, shu filialda oching.');
-      // a shift left open overnight: money of a new day never lands in yesterday's Z-report — close it first
-      if (shiftIsStale(shift.opened_at)) throw conflict('SHIFT_STALE', `Smena ${localDate(shift.opened_at)} kuni ochilgan. Avval uni yoping, keyin bugungi smenani oching.`, { opened_at: shift.opened_at });
+      let shiftId: string | null = null;
+      if (input.method === 'deposit') {
+        // the prepayment covers it: lock the patient (the ledger's serialization point) and check the balance
+        await applyDeposit(c, ctx, inv.patient_id, input.amount);
+      } else {
+        // money is taken only in an open shift of this branch (FOR SHARE: a concurrent close waits for this payment)
+        const shift = (await c.query(`SELECT id, branch_id, opened_at FROM cash_shifts WHERE tenant_id = $1 AND cashier_membership_id = $2 AND status = 'open' FOR SHARE`, [ctx.tenantId, ctx.membershipId])).rows[0];
+        if (!shift) throw conflict('SHIFT_REQUIRED', 'To‘lov qabul qilish uchun avval kassa smenasini oching');
+        if (shift.branch_id !== inv.branch_id) throw conflict('SHIFT_OTHER_BRANCH', 'Smenangiz boshqa filialda ochilgan. Shu filial hisobiga to‘lov olish uchun smenani yopib, shu filialda oching.');
+        // a shift left open overnight: money of a new day never lands in yesterday's Z-report — close it first
+        if (shiftIsStale(shift.opened_at)) throw conflict('SHIFT_STALE', `Smena ${localDate(shift.opened_at)} kuni ochilgan. Avval uni yoping, keyin bugungi smenani oching.`, { opened_at: shift.opened_at });
+        shiftId = shift.id;
+      }
       const receipt = (await c.query(`UPDATE tenants SET receipt_seq = receipt_seq + 1 WHERE id = $1 RETURNING receipt_seq`, [ctx.tenantId])).rows[0].receipt_seq;
       const payment = (await c.query(
         `INSERT INTO payments (id, tenant_id, branch_id, invoice_id, receipt_number, amount, method, cashier_membership_id, cashier_name, paid_at, note, idempotency_key, request_hash, shift_id)
          VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
-        [ctx.tenantId, inv.branch_id, id, receipt, input.amount, input.method, ctx.membershipId, ctx.name, now(), input.note, key, hash, shift.id])).rows[0];
+        [ctx.tenantId, inv.branch_id, id, receipt, input.amount, input.method, ctx.membershipId, ctx.name, now(), input.note, key, hash, shiftId])).rows[0];
+      if (input.method === 'deposit')
+        await c.query(`INSERT INTO patient_deposits (tenant_id, branch_id, patient_id, kind, amount, invoice_id, payment_id, actor_membership_id, actor_name, occurred_at)
+                       VALUES ($1,$2,$3,'apply',$4,$5,$6,$7,$8,$9)`, [ctx.tenantId, inv.branch_id, inv.patient_id, input.amount, id, payment.id, ctx.membershipId || null, ctx.name, now()]);
       const paid = Number(inv.paid_amount) + input.amount;
       await c.query(`UPDATE invoices SET paid_amount = $2, status = $3, version = version + 1, updated_at = demo_now() WHERE id = $1`,
         [id, paid, invoiceStatus({ status: inv.status, total: Number(inv.total), paid, credit: Number(inv.credit_amount), hasItems: true })]);
@@ -187,24 +254,14 @@ export class PaymentsController {
   @Roles('manager', 'cashier') @Get('export.csv')
   async csv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     // a bounded period: one export is built in memory, so «all time» would stall the server for everyone
-    if (!isDate(q.from) || !isDate(q.to)) throw invalid({ from: 'Davrni tanlang' });
-    if (q.from > q.to || addDays(q.from, 366) < q.to) throw invalid({ from: 'Eksport davri 1 yildan oshmasin' });
+    const period = csvPeriod(q);
     const { params, where } = this.filters(ctx, q);
     const rows = await this.db.rows(
       `SELECT pm.receipt_number, pm.paid_at, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, i.invoice_number, pm.method, pm.amount, pm.cashier_name, pm.note
          FROM payments pm JOIN invoices i ON i.id = pm.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = pm.branch_id
         WHERE ${where} ORDER BY pm.paid_at`, params);
-    const cell = (v: unknown) => {
-      let s = v == null ? '' : String(v);
-      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-      return `"${s.replace(/"/g, '""')}"`;
-    };
-    const fmt = (d: Date) => new Date(d.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 16).replace('T', ' ');
-    const lines = [['Qayd №', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Usul', 'Summa (so‘m)', 'Kassir', 'Izoh'].map(cell).join(';')];
-    for (const r of rows) lines.push([r.receipt_number, fmt(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], (Number(r.amount) / 100).toFixed(2), r.cashier_name, r.note].map(cell).join(';'));
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="meduzai-tolovlar-${q.from || 'all'}-${q.to || ''}.csv"`);
-    res.send('﻿' + lines.join('\r\n'));
+    sendCsv(res, `meduzai-tolovlar-${period.from}-${period.to}.csv`, ['Qayd №', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Usul', 'Summa (so‘m)', 'Kassir', 'Izoh'],
+      rows.map((r) => [r.receipt_number, csvTime(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], csvSom(r.amount), r.cashier_name, r.note]));
   }
 
   @Roles('manager', 'cashier') @Get(':id')

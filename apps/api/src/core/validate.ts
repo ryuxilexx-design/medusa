@@ -1,8 +1,8 @@
 import { isRealDate } from '@meduza/contracts';
-import { ZodSchema } from 'zod';
+import { ZodType, ZodTypeDef } from 'zod';
 import { invalid } from './errors';
 
-export function parse<T>(schema: ZodSchema<T>, input: unknown): T {
+export function parse<T>(schema: ZodType<T, ZodTypeDef, any>, input: unknown): T {
   const r = schema.safeParse(input ?? {});
   if (r.success) return r.data;
   const fields: Record<string, string> = {};

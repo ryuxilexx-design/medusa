@@ -10,6 +10,7 @@ import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Card, EmptyState, Money, ErrorState, LoadingRows, PageHeader, StatCard, Table, Tabs, Td, Th } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
+import { CsvLink } from '@/components/finance-extra';
 
 /** Sum of integer tiyin amounts, added exactly (BigInt) — never a floating-point money sum. */
 const sumTiyin = (rows: any[], key: string) => Number(rows.reduce((a: bigint, b: any) => a + BigInt(b[key] ?? 0), 0n));
@@ -42,7 +43,7 @@ function Reports() {
   return (
     <>
       <PageHeader title={me.role === 'doctor' ? t('clinical.rep.myActivity') : t('clinical.rep.title')} subtitle={t('clinical.rep.subtitle')}
-        actions={<DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />} />
+        actions={<><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} />{manager && tab === 'doctors' && <CsvLink href={`/api/v1/reports/doctors/export.csv${qs(f)}`} label={t('clinical.rep.csv', { format: 'CSV' })} />}</>} />
       <div className="space-y-5">
         {(svc.isError || doc.isError) ? <Card><ErrorState error={svc.error ?? doc.error} onRetry={() => { svc.refetch(); doc.refetch(); }} /></Card> : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">

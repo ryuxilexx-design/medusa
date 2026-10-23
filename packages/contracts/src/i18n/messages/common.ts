@@ -123,4 +123,5 @@ export const common = {
   'lab.lowShort': ['↓ past', '↓ ниже'],
   'lab.normal': ['Me’yorda', 'В норме'],
   'lab.referenceTitle': ['Namunaviy referens: {ref}', 'Референс (образец): {ref}'],
+  'payment.deposit': ['Depozitdan', 'С депозита'],
 } as const satisfies Catalog;

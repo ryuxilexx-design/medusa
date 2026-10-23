@@ -2,8 +2,8 @@
 import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Ban, CheckCircle2, Percent, Printer, Undo2, Wallet } from 'lucide-react';
-import { PAYMENT_METHOD_LABEL, type MessageKey } from '@meduza/contracts';
+import { ArrowLeft, Ban, CalendarClock, CheckCircle2, Percent, Printer, Undo2, Wallet } from 'lucide-react';
+import { PAYMENT_METHODS, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey } from '@/lib/api';
 import { fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
@@ -23,6 +23,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const [discount, setDiscount] = useState(false);
   const [voiding, setVoiding] = useState(false);
   const [refunding, setRefunding] = useState(false);
+  const [promising, setPromising] = useState(false);
   if (q.isLoading) return <Card><LoadingRows /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   const inv = q.data;
@@ -31,6 +32,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const canDiscount = me.role === 'manager' && inv.status === 'unpaid' && inv.paid_amount === 0;
   const canVoid = (me.role === 'manager' || me.role === 'cashier') && inv.status === 'unpaid' && inv.paid_amount === 0;
   const canRefund = me.role === 'manager' && inv.status !== 'void' && Number(inv.paid_amount) > 0;
+  const canPromise = canTakeMoney(me.role) && open && inv.due > 0;
   return (
     <>
       <Link href="/cashier" className="mb-2 flex w-fit min-h-9 items-center gap-1 rounded-lg text-[0.9375rem] font-semibold text-brand-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><ArrowLeft className="h-4 w-4" />{t('cash.backToList')}</Link>
@@ -50,6 +52,13 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <KeyVal k={t('cash.invoiceTotal')} v={<span className="tabular-nums">{formatSom(inv.total)}</span>} />
               <KeyVal k={t('cash.colPaid')} v={<span className="tabular-nums text-emerald-800">{formatSom(inv.paid_amount)}</span>} />
               <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3"><span className="text-[0.9375rem] font-semibold text-slate-700">{t('cash.colDue')}</span><span className={cx('text-2xl font-bold tabular-nums', inv.status !== 'void' && inv.due > 0 ? 'text-red-700' : 'text-slate-900')}>{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
+              {/* a debt: when the patient promised to pay (cashier or manager sets it) */}
+              {canPromise && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[0.9375rem]">
+                <span className="text-slate-700">{t('cash.promise')}</span>
+                <Button size="sm" variant="ghost" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setPromising(true)}>{inv.promise_date ? <span className="tabular-nums">{fmtDate(inv.promise_date)}</span> : t('cash.noPromise')}</Button>
+                {inv.promise_note && <span className="w-full text-[0.8125rem] text-slate-600">{inv.promise_note}</span>}
+              </div>}
+              {Number(inv.deposit_balance) > 0 && open && <p className="border-t border-slate-100 pt-3 text-[0.9375rem] text-emerald-800">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
             </div>
           </Card>
           {/* a cashier or the manager takes money (each in their own open shift); the registrar only looks */}
@@ -80,7 +89,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <thead><tr><Th>{t('cash.colService')}</Th><Th className="hidden 2xl:table-cell">{t('cash.colType')}</Th><Th right className="hidden sm:table-cell">{t('cash.colQty')}</Th><Th right className="hidden sm:table-cell">{t('cash.colPrice')}</Th>{hasDiscount && <Th right>{t('cash.discount')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
               <tbody>
                 {inv.items.map((it: any) => (
-                  <tr key={it.id}><Td className="min-w-[10rem]">{it.description}<div className="mt-1 2xl:hidden"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></div></Td><Td className="hidden 2xl:table-cell"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></Td><Td right className="hidden sm:table-cell">{it.quantity}</Td><Td right className="hidden sm:table-cell">{formatSom(it.unit_price)}</Td>{hasDiscount && <Td right>{it.discount_share ? `−${formatSom(it.discount_share)}` : '—'}</Td>}<Td right className="font-medium">{formatSom(it.line_total)}</Td></tr>
+                  <tr key={it.id}><Td className="min-w-[10rem]">{it.description}{it.quantity > 1 && <span className="ml-1 whitespace-nowrap font-semibold tabular-nums text-slate-700">{t('cash.times', { n: it.quantity })}</span>}{Number(it.refunded_amount) > 0 && <div className="text-[0.8125rem] text-red-700">{t('cash.refundedLine', { sum: formatSom(it.refunded_amount) })}</div>}<div className="mt-1 2xl:hidden"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></div></Td><Td className="hidden 2xl:table-cell"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></Td><Td right className="hidden sm:table-cell">{it.quantity}</Td><Td right className="hidden sm:table-cell">{formatSom(it.unit_price)}</Td>{hasDiscount && <Td right>{it.discount_share ? `−${formatSom(it.discount_share)}` : '—'}</Td>}<Td right className="font-medium">{formatSom(it.line_total)}</Td></tr>
                 ))}
               </tbody>
               <tfoot><tr className="bg-slate-50 font-semibold text-slate-900"><td className="border-b border-slate-100 px-3 py-3">{t('cash.colTotal')}</td><td className="hidden border-b border-slate-100 2xl:table-cell" /><td className="hidden border-b border-slate-100 sm:table-cell" /><td className="hidden whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums sm:table-cell">{hasDiscount && formatSom(inv.subtotal)}</td>{hasDiscount && <td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">−{formatSom(inv.discount_amount)}</td>}<td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">{formatSom(inv.total)}</td></tr></tfoot>
@@ -101,7 +110,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <Table>
                 <thead><tr><Th>№</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th><Th>{t('cash.colReason')}</Th><Th>{t('cash.colApprovedBy')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{inv.refunds.map((r: any) => (
-                  <tr key={r.id}><Td className="tabular-nums">{r.refund_number}</Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}</Td><Td>{t(`payment.${r.method}` as MessageKey)}</Td>
+                  <tr key={r.id}><Td className="tabular-nums">{r.refund_number}</Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}</Td><Td>{t(`payment.${r.method}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}</span></Td>
                     <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.reason}</span></Td><Td>{r.approved_by_name}</Td><Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td></tr>
                 ))}</tbody>
               </Table>
@@ -112,6 +121,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
       {discount && <DiscountModal inv={inv} onClose={() => setDiscount(false)} />}
       {voiding && <VoidModal inv={inv} onClose={() => setVoiding(false)} />}
       {refunding && <RefundModal inv={inv} onClose={() => setRefunding(false)} />}
+      {promising && <PromiseModal inv={inv} onClose={() => setPromising(false)} />}
     </>
   );
 }
@@ -159,7 +169,7 @@ function PaymentForm({ inv }: { inv: any }) {
     onSuccess: (r: any) => {
       key.current = newIdempotencyKey();
       setPending(null); setLast(r.data.payment); setError(null); setFieldErr(null); setNote('');
-      ['invoices', 'payments', 'dashboard', 'patient'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ['invoices', 'payments', 'dashboard', 'patient', 'deposits', 'cash-shift'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(r.data.replayed ? t('cash.paymentReplayed', { receipt: r.data.payment.receipt_number }) : t('cash.paymentSaved', { amount: formatSom(r.data.payment.amount) }));
     },
     onError: (e, body) => {
@@ -182,6 +192,7 @@ function PaymentForm({ inv }: { inv: any }) {
     const tiyin = parseSomToTiyin(amount);
     if (tiyin == null || tiyin <= 0) { setFieldErr(t('cash.amountPositive')); return; }
     if (tiyin > inv.due) { setFieldErr(t('cash.amountOverDue', { due: formatSom(inv.due) })); return; }
+    if (method === 'deposit' && tiyin > Number(inv.deposit_balance)) { setFieldErr(t('cash.atMost', { max: formatSom(inv.deposit_balance) })); return; }
     setFieldErr(null); setError(null);
     inflight.current = true;
     m.mutate({ amount: tiyin, method, note: note || null });
@@ -206,8 +217,12 @@ function PaymentForm({ inv }: { inv: any }) {
           ))}
         </div>}
         <Field label={t('cash.paymentMethod')} required>{(id) => (
-          <Select id={id} value={pending ? pending.method : method} disabled={!!pending} onChange={(e) => setMethod(e.target.value)}>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>
+          <Select id={id} value={pending ? pending.method : method} disabled={!!pending} onChange={(e) => setMethod(e.target.value)}>
+            {PAYMENT_METHODS.map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}
+            {Number(inv.deposit_balance) > 0 && <option value="deposit">{t('payment.deposit')} — {formatSom(inv.deposit_balance, false)}</option>}
+          </Select>
         )}</Field>
+        {method === 'deposit' && !pending && <p className="text-[0.8125rem] text-slate-600">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
         <Field label={t('cash.note')}>{(id) => <Textarea id={id} rows={2} value={pending ? pending.note ?? '' : note} disabled={!!pending} onChange={(e) => setNote(e.target.value)} placeholder={t('common.optional')} />}</Field>
         <Button type="submit" variant="primary" className="w-full" loading={m.isPending} icon={<CheckCircle2 className="h-4 w-4" />}>{pending ? t('cash.resend') : t('cash.recordPayment')}</Button>
         {pending && <Button type="button" className="w-full" disabled={m.isPending} onClick={abandon}>{t('cash.abandon')}</Button>}
@@ -266,6 +281,32 @@ function VoidModal({ inv, onClose }: { inv: any; onClose: () => void }) {
       <Field label={t('cash.colReason')} required>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
       <p className="mt-2 text-[0.8125rem] text-slate-600">{t('cash.voidHint')}</p>
       {reason.trim().length < 3 && <p className="mt-2 text-sm text-slate-600">{t('cash.fillRequired')}</p>}
+    </Modal>
+  );
+}
+
+/** Debtor's promise: a date (not in the past) and a short note; an empty date removes the promise. */
+function PromiseModal({ inv, onClose }: { inv: any; onClose: () => void }) {
+  const t = useT();
+  const { me } = useSession();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [date, setDate] = useState<string>(inv.promise_date ? String(inv.promise_date).slice(0, 10) : '');
+  const [note, setNote] = useState(inv.promise_note ?? '');
+  const [err, setErr] = useState<Record<string, string>>({});
+  const m = useMutation({
+    mutationFn: (clear: boolean) => api(`/invoices/${inv.id}/promise`, { method: 'POST', body: { promise_date: clear || !date ? null : date, note: clear ? null : note.trim() || null } }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); toast.success(t('cash.promiseSaved')); onClose(); },
+    onError: (e) => { if (e instanceof ApiError && e.fields) setErr(e.fields); toast.error(e); },
+  });
+  return (
+    <Modal open onClose={onClose} dirty={date !== (inv.promise_date ? String(inv.promise_date).slice(0, 10) : '') || note !== (inv.promise_note ?? '')} title={t('cash.promiseTitle')}
+      footer={<>{inv.promise_date && <Button variant="ghost" className="mr-auto" disabled={m.isPending} onClick={() => m.mutate(true)}>{t('cash.promiseRemove')}</Button>}<ModalCancel /><Button variant="primary" disabled={!date} loading={m.isPending} onClick={() => m.mutate(false)}>{t('common.save')}</Button></>}>
+      <div className="space-y-3">
+        <Field label={t('cash.promise')} required error={err.promise_date}>{(id) => <Input id={id} type="date" min={me.today} value={date} onChange={(e) => setDate(e.target.value)} data-autofocus />}</Field>
+        <Field label={t('cash.note')} error={err.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('common.optional')} />}</Field>
+        <p className="text-[0.8125rem] text-slate-600">{t('cash.promiseHint')}</p>
+      </div>
     </Modal>
   );
 }
