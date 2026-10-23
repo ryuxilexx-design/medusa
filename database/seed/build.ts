@@ -10,6 +10,7 @@
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { buildWarehouse } from './warehouse';
 
 export const DEMO_TIMEZONE_OFFSET_HOURS = 5; // Asia/Tashkent, no DST
 
@@ -27,6 +28,8 @@ export interface SeedData {
   appointments: Row[]; queue_counters: Row[]; queue_tickets: Row[]; encounters: Row[]; clinical_notes: Row[];
   service_orders: Row[]; lab_results: Row[]; diagnostic_reports: Row[]; invoices: Row[]; invoice_items: Row[];
   payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[]; cash_shifts: Row[];
+  inventory_receipts: Row[]; inventory_batches: Row[]; inventory_requests: Row[]; inventory_request_lines: Row[]; inventory_writeoffs: Row[];
+  inventory_writeoff_lines: Row[]; inventory_doc_counters: Row[]; fridge_temperature_log: Row[];
   patient_consents: Row[];
   cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[]; camera_snapshots: Row[];
 }
@@ -49,6 +52,7 @@ export const SEED_IDS = {
     cashier: sid('membership:cashier1'),
     cashier2: sid('membership:cashier2'),
     lab: sid('membership:lab'),
+    storekeeper: sid('membership:storekeeper'),
     tenant2Manager: sid('membership:t2manager'),
     doctor: (i: number) => sid(`membership:doctor:${i}`),
   },
@@ -98,6 +102,8 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     service_prices: [], doctor_services: [], patients: [], appointments: [], queue_counters: [], queue_tickets: [],
     encounters: [], clinical_notes: [], service_orders: [], lab_results: [], diagnostic_reports: [], invoices: [],
     invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [], cash_shifts: [],
+    inventory_receipts: [], inventory_batches: [], inventory_requests: [], inventory_request_lines: [], inventory_writeoffs: [], inventory_writeoff_lines: [],
+    inventory_doc_counters: [], fridge_temperature_log: [],
     patient_consents: [],
     cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [], camera_snapshots: [],
   };
@@ -123,6 +129,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   addStaff('kassir1', M.cashier, 'Nodira Aliyeva', 'cashier', [BC, BY], 'Kassir', true);
   addStaff('kassir2', M.cashier2, 'Jasur Toshmatov', 'cashier', [BY], 'Kassir', false);
   addStaff('laborant', M.lab, 'Gulnora Saidova', 'lab', [BC, BY], 'Laboratoriya operatori', true);
+  addStaff('omborchi', M.storekeeper, 'Sherzod Qodirov', 'storekeeper', [BC, BY], 'Omborchi (provizor)', true);
 
   // doctors: index, name, specialty, share, branch by weekday (0=Sun..6=Sat), room key, off days
   const DOCS = [
@@ -748,7 +755,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     data.inventory_items.push({ id, tenant_id: T, branch_id: b, name, unit, opening_qty: open, minimum_qty: min });
     const moves = [...ins.map((q) => ({ type: 'in', q })), ...outs.map((q) => ({ type: 'out', q }))];
     moves.forEach((m, j) => {
-      data.inventory_movements.push({ id: sid(`invmv:${i}:${j}`), tenant_id: T, item_id: id, type: m.type, quantity: m.q,
+      data.inventory_movements.push({ id: sid(`invmv:${i}:${j}`), tenant_id: T, item_id: id, branch_id: b, type: m.type, quantity: m.q,
         reason: m.type === 'in' ? 'Yetkazib beruvchidan kirim' : 'Bo‘limga berildi', actor_name: m.type === 'in' ? 'Dilnoza Karimova' : 'Gulnora Saidova',
         occurred_at: at(addDays(demoDate, -26 + ((i * 3 + j * 7) % 25)), hm('10:00') + j * 30) });
       mv++;
@@ -942,6 +949,10 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     const sh = SHIFTS.find((x) => x.branch === pm.branch_id && x.cashierId === pm.cashier_membership_id);
     pm.shift_id = sh && pm.paid_at >= dayStart && pm.paid_at < dayEnd ? sh.id : null;
   }
+
+  // ---------- warehouse (migration 030): batches, receipts, requests, controlled journal, write-off, fridge log ----------
+  // No RNG: every number below is fixed, so the seeded KPIs above stay exactly as they were.
+  buildWarehouse(data, demoDate, demoTime);
 
   return data;
 }

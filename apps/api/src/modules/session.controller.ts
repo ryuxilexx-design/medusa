@@ -44,7 +44,7 @@ export class SessionController {
       `SELECT m.id AS membership_id, m.role, m.title, u.full_name, d.specialty
          FROM memberships m JOIN users u ON u.id = m.user_id LEFT JOIN doctors d ON d.membership_id = m.id
         WHERE m.demo_card AND m.status = 'active' AND m.tenant_id = $1
-        ORDER BY array_position(ARRAY['manager','registrar','doctor','cashier','lab'], m.role), u.full_name`, [SEED_IDS.tenant]);
+        ORDER BY array_position(ARRAY['manager','registrar','doctor','cashier','lab','storekeeper'], m.role), u.full_name`, [SEED_IDS.tenant]);
     return { data: rows, meta: { access_code_required: !!config.demoAccessCode } };
   }
 

@@ -2,7 +2,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
-import { ArrowRight, Banknote, Briefcase, ClipboardList, FlaskConical, Stethoscope } from 'lucide-react';
+import { ArrowRight, Banknote, Boxes, Briefcase, ClipboardList, FlaskConical, Stethoscope } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { HOME_BY_ROLE } from '@/lib/session';
@@ -18,6 +18,7 @@ const CARDS: { role: Role; icon: React.ReactNode }[] = [
   { role: 'doctor', icon: <Stethoscope className="h-5 w-5" /> },
   { role: 'cashier', icon: <Banknote className="h-5 w-5" /> },
   { role: 'lab', icon: <FlaskConical className="h-5 w-5" /> },
+  { role: 'storekeeper', icon: <Boxes className="h-5 w-5" /> },
 ];
 
 export default function LoginPage() {

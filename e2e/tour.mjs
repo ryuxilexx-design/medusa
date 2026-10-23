@@ -4,9 +4,10 @@ const b = await launch();
 const tours = {
   Rahbar: ['/dashboard', '/patients', '/schedule', '/queue', '/lab', '/cashier', '/finance', '/staff', '/inventory', '/reports', '/settings'],
   Registrator: ['/schedule', '/patients', '/queue'],
-  Shifokor: ['/doctor', '/patients', '/diagnostics', '/reports'],
+  Shifokor: ['/doctor', '/patients', '/diagnostics', '/reports', '/materials'],
   Kassir: ['/cashier', '/finance'],
-  Laboratoriya: ['/lab'],
+  Laboratoriya: ['/lab', '/materials'],
+  Omborchi: ['/inventory', '/inventory?tab=requests', '/inventory?tab=controlled'],
 };
 let p = await newPage(b, errors);
 await p.goto(BASE + '/login', { waitUntil: 'networkidle0' }); await shot(p, '00-login');

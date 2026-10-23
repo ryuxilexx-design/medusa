@@ -158,7 +158,8 @@ export class PatientsController {
     });
   }
 
-  @Get(':id')
+  // every role that meets patients; the storekeeper never opens a patient card (it sees only name and number on a request)
+  @Roles('manager', 'registrar', 'doctor', 'cashier', 'lab') @Get(':id')
   async get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     await assertPatientAccess(this.db.pool, ctx, id);
     const minimal = ctx.role === 'cashier' || ctx.role === 'lab';
@@ -253,7 +254,7 @@ export class PatientsController {
   }
 
   /** Role-filtered timeline: visits, clinical notes (doctor), lab results, diagnostics (doctor), invoices (finance roles). */
-  @Get(':id/history')
+  @Roles('manager', 'registrar', 'doctor', 'cashier', 'lab') @Get(':id/history')
   async history(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     await assertPatientAccess(this.db.pool, ctx, id);
     const r = ctx.role;
