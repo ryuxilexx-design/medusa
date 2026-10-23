@@ -128,7 +128,17 @@ export const preferencesSchema = z.object({
 
 export const REQUIRED_FOR_SIGN = ['complaints', 'examination', 'diagnosis', 'recommendations'] as const;
 
-export const ordersCreateSchema = z.object({ service_ids: z.array(uuid).min(1, 'Kamida bitta tekshiruv tanlang').max(10) });
+/** Doctor's orders: `items` with a quantity (1–50, a course of procedures) or the older `service_ids` (quantity 1). */
+export const orderItemSchema = z.object({
+  service_id: uuid,
+  quantity: z.number({ invalid_type_error: 'Miqdorni kiriting' }).int('Miqdor butun son bo‘lsin').min(1, 'Miqdor 1–50 oralig‘ida bo‘lsin').max(50, 'Miqdor 1–50 oralig‘ida bo‘lsin').default(1),
+});
+export const ordersCreateSchema = z.object({
+  service_ids: z.array(uuid).max(10).optional(),
+  items: z.array(orderItemSchema).max(10).optional(),
+}).transform((o) => ({ items: [...(o.items ?? []), ...(o.service_ids ?? []).map((service_id) => ({ service_id, quantity: 1 }))] }))
+  .refine((o) => o.items.length >= 1, { message: 'Kamida bitta tekshiruv tanlang', path: ['service_ids'] })
+  .refine((o) => o.items.length <= 10, { message: 'Ko‘pi bilan 10 ta tekshiruv', path: ['service_ids'] });
 
 export const labResultSchema = z.object({
   values: z.array(z.object({ code: z.string().max(20), value: z.string().max(40).transform((s) => s.trim()) })).max(30),
@@ -146,7 +156,8 @@ export const discountSchema = z.object({
 
 export const paymentSchema = z.object({
   amount: z.number({ invalid_type_error: 'Summa kiritilishi shart' }).int('Summa tiyinda butun son bo‘lsin').positive('Summa 0 dan katta bo‘lsin'),
-  method: z.enum(['cash', 'card', 'transfer'], { errorMap: () => ({ message: 'To‘lov usulini tanlang' }) }),
+  // 'deposit' = covered from the patient's prepayment balance (no cash moves, no shift)
+  method: z.enum(['cash', 'card', 'transfer', 'deposit'], { errorMap: () => ({ message: 'To‘lov usulini tanlang' }) }),
   note: optionalText(300),
 });
 export const voidSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
@@ -431,6 +442,27 @@ export const refundCreateSchema = z.object({
   reason_code: z.enum(['service_not_provided', 'appointment_cancelled', 'patient_complaint', 'other'], { errorMap: () => ({ message: 'Sababni tanlang' }) }),
   reason: trimmed(3, 500, 'Izoh'),
   shift_id: uuid.optional(),
+  /** one line of the invoice: only that service's net value drops; without it the refund is spread proportionally */
+  order_id: uuid.optional(),
+});
+
+/** Patient deposit (prepayment) taken by a cashier in an open shift. */
+export const depositCreateSchema = z.object({
+  amount: tiyin('Summa').positive('Summa 0 dan katta bo‘lsin').max(100_000_000_000),
+  method: z.enum(['cash', 'card', 'transfer'], { errorMap: () => ({ message: 'To‘lov usulini tanlang' }) }),
+  note: optionalText(300),
+});
+/** Unused deposit returned by the manager; cash leaves an open drawer. */
+export const depositRefundSchema = z.object({
+  amount: tiyin('Summa').positive('Summa 0 dan katta bo‘lsin'),
+  method: z.enum(['cash', 'card', 'transfer'], { errorMap: () => ({ message: 'Qaytarish usulini tanlang' }) }),
+  note: trimmed(3, 300, 'Izoh'),
+  shift_id: uuid.optional(),
+});
+/** Debtor's promise: when the patient said they will pay, and a short note. */
+export const promiseSchema = z.object({
+  promise_date: isoDate.nullable(),
+  note: optionalText(300),
 });
 
 export const expenseCreateSchema = z.object({

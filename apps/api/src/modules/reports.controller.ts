@@ -1,11 +1,14 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, Res } from '@nestjs/common';
+import { Response } from 'express';
+import { EXPENSE_PAID_FROM_LABEL } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { forbidden, notFound } from '../core/errors';
 import { isUuid, pageParams } from '../core/validate';
 import { branchScope } from '../core/scope';
+import { csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
 import { range } from './dashboard.controller';
-import { NET_LINE } from './billing';
+import { LINE_QTY, NET_LINE } from './billing';
 
 // Performed services = consultations completed / lab verified / ultrasound & procedures completed, on non-void invoices.
 const PERFORMED = `o.status IN ('completed','verified') AND i.status <> 'void'`;
@@ -18,7 +21,7 @@ export class ReportsController {
   async services(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const r = range(q);
     const rows = await this.db.rows(
-      `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(it.line_subtotal)::bigint AS gross, sum(it.discount_share)::bigint AS discount, sum(it.line_total - ${NET_LINE})::bigint AS refunded, sum(${NET_LINE})::bigint AS value
+      `SELECT o.service_id, o.service_name, o.category, sum(${LINE_QTY})::int AS count, sum(it.line_subtotal)::bigint AS gross, sum(it.discount_share)::bigint AS discount, sum(it.line_total - ${NET_LINE})::bigint AS refunded, sum(${NET_LINE})::bigint AS value
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
         WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND ${PERFORMED}
         GROUP BY 1,2,3 ORDER BY value DESC`, [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
@@ -29,30 +32,63 @@ export class ReportsController {
   @Roles('manager', 'doctor') @Get('reports/doctors')
   async doctors(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const r = range(q);
+    const rows = await this.doctorRows(ctx, q, r);
+    return { data: rows, meta: { from: r.from, to: r.to } };
+  }
+
+  /** Doctor shares of a period as CSV (manager; bounded ≤ 1 year), with a totals row. */
+  @Roles('manager') @Get('reports/doctors/export.csv')
+  async doctorsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
+    const period = csvPeriod(q);
+    const rows = await this.doctorRows(ctx, q, range(q));
+    const value = rows.reduce((a, x) => a + BigInt(x.value), 0n), share = rows.reduce((a, x) => a + BigInt(x.share), 0n);
+    sendCsv(res, `meduzai-shifokor-ulushi-${period.from}-${period.to}.csv`, ['Shifokor', 'Mutaxassislik', 'Xizmatlar', 'Qiymat (so‘m)', 'Ulush (so‘m)'],
+      [...rows.map((x) => [x.name, x.specialty, x.services, csvSom(x.value), csvSom(x.share)]), ['Jami', `${rows.length} ta shifokor`, rows.reduce((a, x) => a + Number(x.services), 0), csvSom(value), csvSom(share)]]);
+  }
+
+  private async doctorRows(ctx: Ctx, q: any, r: ReturnType<typeof range>) {
     const params: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end];
     let docFilter = '';
     if (ctx.role === 'doctor') { params.push(ctx.doctorId); docFilter = `AND d.id = $${params.length}`; }
     const rows = await this.db.rows(
       `SELECT d.id AS doctor_id, d.display_name AS name, d.specialty,
-              count(o.id)::int AS services, coalesce(sum(${NET_LINE}),0)::bigint AS value,
+              coalesce(sum(${LINE_QTY}),0)::int AS services, coalesce(sum(${NET_LINE}),0)::bigint AS value,
               coalesce(sum(round(${NET_LINE} * o.share_percent_snapshot / 100)),0)::bigint AS share
          FROM doctors d
          LEFT JOIN service_orders o ON o.performer_doctor_id = d.id AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND o.status IN ('completed','verified')
          LEFT JOIN invoice_items it ON it.order_id = o.id LEFT JOIN invoices i ON i.id = it.invoice_id
         WHERE d.tenant_id = $1 AND (o.id IS NULL OR i.status <> 'void') ${docFilter}
         GROUP BY d.id ORDER BY value DESC`, params);
-    return { data: rows.map((x) => ({ ...x, value: Number(x.value), share: Number(x.share) })), meta: { from: r.from, to: r.to } };
+    return rows.map((x) => ({ ...x, value: Number(x.value), share: Number(x.share) }));
+  }
+
+  private static EXPENSE_ROWS = `SELECT e.id, e.category, e.amount, e.occurred_at, e.note, e.status, e.paid_from, e.shift_id, e.created_by_name, e.void_reason, e.voided_by_name,
+              b.name AS branch_name, s.number AS shift_number, s.status AS shift_status FROM expenses e JOIN branches b ON b.id = e.branch_id LEFT JOIN cash_shifts s ON s.id = e.shift_id
+        WHERE e.tenant_id = $1 AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4`;
+
+  /** Expenses of a period as CSV (bounded ≤ 1 year); the totals row counts active expenses only. */
+  @Roles('manager') @Get('expenses/export.csv')
+  async expensesCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
+    const period = csvPeriod(q);
+    const r = range(q);
+    const rows = await this.db.rows(`${ReportsController.EXPENSE_ROWS} ORDER BY e.occurred_at`, [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
+    const active = rows.filter((x) => x.status === 'active');
+    const total = active.reduce((a, x) => a + BigInt(x.amount), 0n);
+    sendCsv(res, `meduzai-xarajatlar-${period.from}-${period.to}.csv`, ['Sana (Toshkent)', 'Filial', 'Kategoriya', 'Izoh', 'Manba', 'Smena', 'Kiritgan', 'Holat', 'Bekor sababi', 'Summa (so‘m)'],
+      [...rows.map((x) => [csvTime(x.occurred_at), x.branch_name, x.category, x.note, EXPENSE_PAID_FROM_LABEL[x.paid_from] ?? x.paid_from, x.shift_number ? `№${x.shift_number}` : '', x.created_by_name,
+          x.status === 'void' ? 'Bekor qilingan' : 'Faol', x.void_reason, csvSom(x.amount)]),
+        ['Jami (faol)', '', `${active.length} ta xarajat`, '', '', '', '', '', '', csvSom(total)]]);
   }
 
   @Roles('manager') @Get('expenses')
   async expenses(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const r = range(q);
-    const rows = await this.db.rows(
-      `SELECT e.id, e.category, e.amount, e.occurred_at, e.note, e.status, e.paid_from, e.shift_id, e.created_by_name, e.void_reason, e.voided_by_name,
-              b.name AS branch_name, s.number AS shift_number, s.status AS shift_status FROM expenses e JOIN branches b ON b.id = e.branch_id LEFT JOIN cash_shifts s ON s.id = e.shift_id
-        WHERE e.tenant_id = $1 AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4 ORDER BY e.occurred_at DESC`,
-      [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
-    return { data: rows, meta: { from: r.from, to: r.to, total: rows.filter((x) => x.status === 'active').reduce((a, b) => a + Number(b.amount), 0) } };
+    const { page, pageSize, offset } = pageParams(q);
+    const P: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end];
+    const agg = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(e.amount) FILTER (WHERE e.status = 'active'),0)::bigint AS total FROM expenses e
+        WHERE e.tenant_id = $1 AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4`, P))!;
+    const rows = await this.db.rows(`${ReportsController.EXPENSE_ROWS} ORDER BY e.occurred_at DESC LIMIT $5 OFFSET $6`, [...P, pageSize, offset]);
+    return { data: rows, meta: { from: r.from, to: r.to, page, page_size: pageSize, count: agg.n, total: Number(agg.total) } };
   }
 
   @Roles('manager') @Get('staff')

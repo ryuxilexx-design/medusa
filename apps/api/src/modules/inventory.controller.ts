@@ -3,7 +3,7 @@ import { inventoryItemCreateSchema, inventoryItemPatchSchema, inventoryMovementS
 import { Db } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { conflict, invalid, notFound } from '../core/errors';
-import { isUuid, parse } from '../core/validate';
+import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { localToUtc, now, today } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
@@ -81,8 +81,21 @@ export class InventoryController {
     const item = await this.db.one(`SELECT i.*, b.name AS branch_name, ${QTY} AS qty FROM inventory_items i JOIN branches b ON b.id = i.branch_id
       WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!item) throw notFound('Material');
-    const movements = await this.db.rows(`SELECT id, type, quantity, reason, actor_name, occurred_at FROM inventory_movements WHERE item_id = $1 ORDER BY occurred_at DESC`, [id]);
-    return { data: { ...item, movements } };
+    // the card shows the latest 100 movements; older ones come page by page from /inventory/:id/movements
+    const movements = await this.db.rows(`SELECT id, type, quantity, reason, actor_name, occurred_at FROM inventory_movements WHERE item_id = $1 ORDER BY occurred_at DESC, id DESC LIMIT 100`, [id]);
+    const total = (await this.db.one(`SELECT count(*)::int AS n FROM inventory_movements WHERE item_id = $1`, [id]))!.n;
+    return { data: { ...item, movements, movements_total: total } };
+  }
+
+  @Roles('manager') @Get(':id/movements')
+  async movements(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Query() q: any) {
+    if (!isUuid(id)) throw notFound('Material');
+    const { page, pageSize, offset } = pageParams(q);
+    const item = await this.db.one(`SELECT id FROM inventory_items i WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
+    if (!item) throw notFound('Material');
+    const total = (await this.db.one(`SELECT count(*)::int AS n FROM inventory_movements WHERE item_id = $1`, [id]))!.n;
+    const rows = await this.db.rows(`SELECT id, type, quantity, reason, actor_name, occurred_at FROM inventory_movements WHERE item_id = $1 ORDER BY occurred_at DESC, id DESC LIMIT $2 OFFSET $3`, [id, pageSize, offset]);
+    return { data: rows, meta: { page, page_size: pageSize, total } };
   }
 
   @Roles('manager') @Post(':id/movements')

@@ -317,8 +317,8 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
             {enc.data.orders.map((o: any) => (
               <li key={o.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <span className="min-w-[12rem] flex-1"><span className="text-[0.9375rem] font-semibold text-slate-900">{o.service_name}</span>
-                    <span className="block text-[0.8125rem] text-slate-600">{t(`service.${o.category}` as MessageKey)} · {fmtTime(o.ordered_at)} · {formatSom(o.price_snapshot)}</span></span>
+                  <span className="min-w-[12rem] flex-1"><span className="text-[0.9375rem] font-semibold text-slate-900">{o.service_name}{o.quantity > 1 && <span className="ml-1 tabular-nums text-slate-700">{t('orders.times', { n: o.quantity })}</span>}</span>
+                    <span className="block text-[0.8125rem] text-slate-600">{t(`service.${o.category}` as MessageKey)} · {fmtTime(o.ordered_at)} · {formatSom(o.price_snapshot * (o.quantity ?? 1))}</span></span>
                   {o.category === 'ultrasound' ? <NoteStatus status={o.report_status} /> : <LabStatus status={o.status} />}
                 </div>
                 {o.category === 'lab' && o.status === 'verified' && o.values && <div className="mt-2"><LabValues values={o.values} compact /><p className="mt-1 text-[0.8125rem] text-slate-600">{t('orders.verifiedBy', { name: o.verified_by_name, at: fmtDateTime(o.verified_at) })}</p></div>}
@@ -576,15 +576,19 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
   const t = useT();
   const services = useQuery({ queryKey: ['services'], queryFn: () => api('/services').then((r) => r.data as any[]), enabled: open });
   const [sel, setSel] = useState<string[]>([]);
-  useEffect(() => { if (open) setSel([]); }, [open]);
+  // quantity per chosen service: only a procedure can be a course (× 10 injections); a test or a scan has one result
+  const [qty, setQty] = useState<Record<string, number>>({});
+  useEffect(() => { if (open) { setSel([]); setQty({}); } }, [open]);
   const taken = new Set(existing.filter((o) => o.status !== 'cancelled').map((o) => o.service_name));
   const groups = useMemo(() => ['lab', 'ultrasound', 'procedure'].map((c) => ({ c, items: (services.data ?? []).filter((s) => s.category === c) })), [services.data]);
+  const qtyOf = (id: string) => qty[id] ?? 1;
   const m = useMutation({
-    mutationFn: () => api(`/encounters/${encounterId}/orders`, { method: 'POST', body: { service_ids: sel } }),
+    mutationFn: () => api(`/encounters/${encounterId}/orders`, { method: 'POST', body: { items: sel.map((id) => ({ service_id: id, quantity: qtyOf(id) })) } }),
     onSuccess: () => { ['encounter', 'invoices', 'orders'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); toast.success(t('orders.done', { n: sel.length })); onClose(); },
     onError: (e) => toast.error(e),
   });
-  const total = (services.data ?? []).filter((s) => sel.includes(s.id)).reduce((a, s) => a + s.price, 0);
+  const total = (services.data ?? []).filter((s) => sel.includes(s.id)).reduce((a, s) => a + s.price * qtyOf(s.id), 0);
+  const step = (id: string, d: number) => setQty((x) => ({ ...x, [id]: Math.min(50, Math.max(1, (x[id] ?? 1) + d)) }));
   return (
     <Modal open={open} onClose={onClose} width="max-w-3xl" dirty={sel.length > 0} title={t('orders.modalTitle')}
       footer={<><span className="mr-auto text-sm text-slate-700">{t('orders.selected', { n: sel.length, sum: formatSom(total) })}</span><ModalCancel /><Button variant="primary" disabled={!sel.length} loading={m.isPending} onClick={() => m.mutate()}>{t('orders.submit')}</Button></>}>
@@ -592,12 +596,25 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {groups.map((g) => (
             <fieldset key={g.c}><legend className="mb-1 text-sm font-bold text-slate-800">{t(`service.${g.c}` as MessageKey)}</legend>
-              {g.items.map((s) => (
-                <label key={s.id} className={cx('flex min-h-10 cursor-pointer items-start gap-2.5 rounded-lg px-2 py-1.5 text-[0.9375rem] hover:bg-slate-50', taken.has(s.name) && 'cursor-not-allowed opacity-60')}>
-                  <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" disabled={taken.has(s.name)} checked={sel.includes(s.id)} onChange={(e) => setSel((x) => e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id))} />
-                  <span className="min-w-0 flex-1">{s.name}{taken.has(s.name) && <span className="text-[0.8125rem] text-slate-600"> {t('orders.taken')}</span>}</span><span className="shrink-0 whitespace-nowrap tabular-nums text-[0.8125rem] text-slate-600">{formatSom(s.price, false)}</span>
-                </label>
-              ))}
+              {g.items.map((s) => {
+                const on = sel.includes(s.id);
+                return (
+                  <div key={s.id} className={cx('rounded-lg px-2 py-1.5 hover:bg-slate-50', taken.has(s.name) && 'opacity-60')}>
+                    <label className={cx('flex min-h-10 cursor-pointer items-start gap-2.5 text-[0.9375rem]', taken.has(s.name) && 'cursor-not-allowed')}>
+                      <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" disabled={taken.has(s.name)} checked={on} onChange={(e) => setSel((x) => e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id))} />
+                      <span className="min-w-0 flex-1">{s.name}{taken.has(s.name) && <span className="text-[0.8125rem] text-slate-600"> {t('orders.taken')}</span>}</span><span className="shrink-0 whitespace-nowrap tabular-nums text-[0.8125rem] text-slate-600">{formatSom(s.price, false)}</span>
+                    </label>
+                    {on && g.c === 'procedure' && (
+                      <div className="ml-7 mt-1 flex items-center gap-2" role="group" aria-label={t('orders.qty')}>
+                        <Button type="button" size="sm" aria-label={t('orders.qtyLess')} disabled={qtyOf(s.id) <= 1} onClick={() => step(s.id, -1)}>−</Button>
+                        <span className="min-w-[3.5rem] text-center text-[0.9375rem] font-semibold tabular-nums">{t('orders.times', { n: qtyOf(s.id) })}</span>
+                        <Button type="button" size="sm" aria-label={t('orders.qtyMore')} disabled={qtyOf(s.id) >= 50} onClick={() => step(s.id, 1)}>+</Button>
+                        {qtyOf(s.id) > 1 && <span className="text-[0.8125rem] tabular-nums text-slate-600">= {formatSom(s.price * qtyOf(s.id), false)}</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </fieldset>
           ))}
         </div>

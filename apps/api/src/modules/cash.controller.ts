@@ -7,10 +7,11 @@ import { expenseCreateSchema, expenseVoidSchema, PAYMENT_METHOD_LABEL, REFUND_RE
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, conflict, forbidden, invalid, notFound } from '../core/errors';
-import { isUuid, parse } from '../core/validate';
+import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { localToUtc, now, today } from '../core/clock';
 import { branchScope } from '../core/scope';
+import { csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
 import { invoiceStatus } from './billing';
 import { range } from './dashboard.controller';
 import { FISCAL_JSON, FISCAL_JSON_REFUND, FISCAL_MISSING, shiftIsStale } from './invoices.controller';
@@ -18,23 +19,30 @@ import { recordFiscal } from '../fiscal/provider';
 
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
 type MethodSum = { n: number; sum: number };
+type ByMethod = Record<'cash' | 'card' | 'transfer', MethodSum>;
 export type ShiftTotals = {
-  payments: Record<'cash' | 'card' | 'transfer', MethodSum>; refunds: Record<'cash' | 'card' | 'transfer', MethodSum>;
+  payments: ByMethod; refunds: ByMethod;
+  /** patient prepayments taken in this shift / unused prepayments paid back from it (cash ones move the drawer) */
+  deposit_in: ByMethod; deposit_out: ByMethod;
   cash_expenses: MethodSum; cash_in: number; cash_out: number;
 };
+const zeroByMethod = (): ByMethod => ({ cash: { n: 0, sum: 0 }, card: { n: 0, sum: 0 }, transfer: { n: 0, sum: 0 } });
+/** A closed shift's snapshot from before deposits existed lacks the deposit keys: fill them with zeros. */
+export const normalizeTotals = (t: Partial<ShiftTotals>): ShiftTotals => ({ payments: zeroByMethod(), refunds: zeroByMethod(), deposit_in: zeroByMethod(), deposit_out: zeroByMethod(), cash_expenses: { n: 0, sum: 0 }, cash_in: 0, cash_out: 0, ...t });
 
-/** Live totals for many shifts in three grouped queries (no N+1). */
+/** Live totals for many shifts in four grouped queries (no N+1). */
 export async function shiftTotalsMany(q: Q, ids: string[]): Promise<Map<string, ShiftTotals>> {
-  const zero = () => ({ cash: { n: 0, sum: 0 }, card: { n: 0, sum: 0 }, transfer: { n: 0, sum: 0 } });
-  const out = new Map<string, ShiftTotals>(ids.map((id) => [id, { payments: zero(), refunds: zero(), cash_expenses: { n: 0, sum: 0 }, cash_in: 0, cash_out: 0 }]));
+  const out = new Map<string, ShiftTotals>(ids.map((id) => [id, normalizeTotals({})]));
   if (!ids.length) return out;
   for (const r of (await q.query(`SELECT shift_id, method, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM payments WHERE shift_id = ANY($1::uuid[]) GROUP BY 1,2`, [ids])).rows)
     out.get(r.shift_id)!.payments[r.method as 'cash'] = { n: r.n, sum: Number(r.sum) };
   for (const r of (await q.query(`SELECT shift_id, method, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM refunds WHERE shift_id = ANY($1::uuid[]) GROUP BY 1,2`, [ids])).rows)
     out.get(r.shift_id)!.refunds[r.method as 'cash'] = { n: r.n, sum: Number(r.sum) };
+  for (const r of (await q.query(`SELECT shift_id, kind, method, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM patient_deposits WHERE shift_id = ANY($1::uuid[]) AND kind IN ('in','out') GROUP BY 1,2,3`, [ids])).rows)
+    out.get(r.shift_id)![r.kind === 'in' ? 'deposit_in' : 'deposit_out'][r.method as 'cash'] = { n: r.n, sum: Number(r.sum) };
   for (const r of (await q.query(`SELECT shift_id, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM expenses WHERE shift_id = ANY($1::uuid[]) AND status = 'active' AND paid_from = 'cash_drawer' GROUP BY 1`, [ids])).rows)
     out.get(r.shift_id)!.cash_expenses = { n: r.n, sum: Number(r.sum) };
-  for (const t of out.values()) { t.cash_in = t.payments.cash.sum; t.cash_out = t.refunds.cash.sum + t.cash_expenses.sum; }
+  for (const t of out.values()) { t.cash_in = t.payments.cash.sum + t.deposit_in.cash.sum; t.cash_out = t.refunds.cash.sum + t.cash_expenses.sum + t.deposit_out.cash.sum; }
   return out;
 }
 /** Live totals of one shift (all methods for the report; cash movements for the drawer). */
@@ -43,8 +51,8 @@ export async function shiftTotals(q: Q, shiftId: string): Promise<ShiftTotals> {
 }
 const expectedCash = (opening: number, t: ShiftTotals) => opening + t.cash_in - t.cash_out;
 
-/** Cash can leave a drawer only if it is there: refunds and drawer expenses never push the expected cash below zero. */
-async function assertCashAvailable(q: Q, shiftId: string, amount: number) {
+/** Cash can leave a drawer only if it is there: refunds, deposit refunds and drawer expenses never push the expected cash below zero. */
+export async function assertCashAvailable(q: Q, shiftId: string, amount: number) {
   const s = (await q.query(`SELECT opening_cash FROM cash_shifts WHERE id = $1`, [shiftId])).rows[0];
   const available = expectedCash(Number(s.opening_cash), await shiftTotals(q, shiftId));
   if (amount > available) throw conflict('INSUFFICIENT_CASH', `Kassada yetarli naqd pul yo‘q (bor: ${som(Math.max(available, 0))} so‘m)`);
@@ -59,7 +67,7 @@ export class CashController {
 
   private async withTotals(q: Q, s: any, live?: ShiftTotals) {
     if (!s) return null;
-    const totals = s.status === 'closed' && s.totals ? s.totals as ShiftTotals : live ?? await shiftTotals(q, s.id);
+    const totals = s.status === 'closed' && s.totals ? normalizeTotals(s.totals) : live ?? await shiftTotals(q, s.id);
     const expected = s.status === 'closed' ? Number(s.expected_cash) : expectedCash(Number(s.opening_cash), totals);
     return { ...s, opening_cash: Number(s.opening_cash), totals, expected_cash: expected,
       counted_cash: s.counted_cash == null ? null : Number(s.counted_cash), difference: s.difference == null ? null : Number(s.difference) };
@@ -83,6 +91,37 @@ export class CashController {
       WHERE s.tenant_id = $1 AND s.cashier_membership_id = $2 AND s.status = 'open' AND s.branch_id = ANY($3)`, [ctx.tenantId, ctx.membershipId, ctx.branchIds]);
     const data = await this.withTotals(this.db.pool, s);
     return { data: data ? { ...data, stale: shiftIsStale(data.opened_at) } : null };
+  }
+
+  /** Shifts of a period as CSV (a cashier: their own), one row per shift and a totals row. */
+  @Roles('cashier', 'manager') @Get('cash-shifts/export.csv')
+  async shiftsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
+    const period = csvPeriod(q);
+    const r = range(q);
+    const params: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end];
+    let own = '';
+    if (ctx.role === 'cashier') { params.push(ctx.membershipId); own = `AND s.cashier_membership_id = $${params.length}`; }
+    const rows = await this.db.rows(`SELECT ${SHIFT_COLS} FROM cash_shifts s JOIN branches b ON b.id = s.branch_id
+      WHERE s.tenant_id = $1 AND s.branch_id = ANY($2) AND s.opened_at < $4 AND coalesce(s.closed_at, 'infinity') >= $3 ${own} ORDER BY s.opened_at LIMIT 5000`, params);
+    const live = await shiftTotalsMany(this.db.pool, rows.filter((s) => s.status === 'open').map((s) => s.id));
+    const full = await Promise.all(rows.map((s) => this.withTotals(this.db.pool, s, live.get(s.id))));
+    const sum = { opening: 0n, cash: 0n, card: 0n, transfer: 0n, refunds: 0n, depIn: 0n, depOut: 0n, expenses: 0n, expected: 0n, counted: 0n, diff: 0n };
+    const out: unknown[][] = [];
+    for (const s of full) {
+      const t: ShiftTotals = s!.totals;
+      const refunds = t.refunds.cash.sum + t.refunds.card.sum + t.refunds.transfer.sum;
+      const depIn = t.deposit_in.cash.sum + t.deposit_in.card.sum + t.deposit_in.transfer.sum, depOut = t.deposit_out.cash.sum + t.deposit_out.card.sum + t.deposit_out.transfer.sum;
+      out.push([s!.number, s!.branch_name, s!.cashier_name, csvTime(s!.opened_at), s!.closed_at ? csvTime(s!.closed_at) : '', s!.status === 'open' ? 'Ochiq' : 'Yopilgan',
+        csvSom(s!.opening_cash), csvSom(t.payments.cash.sum), csvSom(t.payments.card.sum), csvSom(t.payments.transfer.sum), csvSom(refunds), csvSom(depIn), csvSom(depOut), csvSom(t.cash_expenses.sum),
+        csvSom(s!.expected_cash), s!.counted_cash == null ? '' : csvSom(s!.counted_cash), s!.difference == null ? '' : csvSom(s!.difference), s!.close_note]);
+      sum.opening += BigInt(s!.opening_cash); sum.cash += BigInt(t.payments.cash.sum); sum.card += BigInt(t.payments.card.sum); sum.transfer += BigInt(t.payments.transfer.sum);
+      sum.refunds += BigInt(refunds); sum.depIn += BigInt(depIn); sum.depOut += BigInt(depOut); sum.expenses += BigInt(t.cash_expenses.sum); sum.expected += BigInt(s!.expected_cash);
+      sum.counted += BigInt(s!.counted_cash ?? 0); sum.diff += BigInt(s!.difference ?? 0);
+    }
+    out.push(['Jami', '', `${rows.length} ta smena`, '', '', '', csvSom(sum.opening), csvSom(sum.cash), csvSom(sum.card), csvSom(sum.transfer), csvSom(sum.refunds), csvSom(sum.depIn), csvSom(sum.depOut), csvSom(sum.expenses), csvSom(sum.expected), csvSom(sum.counted), csvSom(sum.diff), '']);
+    sendCsv(res, `meduzai-smenalar-${period.from}-${period.to}.csv`,
+      ['№', 'Filial', 'Kassir', 'Ochilgan (Toshkent)', 'Yopilgan (Toshkent)', 'Holat', 'Boshlang‘ich (so‘m)', 'Naqd to‘lov (so‘m)', 'Karta (so‘m)', 'O‘tkazma (so‘m)', 'Qaytarish (so‘m)',
+        'Depozit kirim (so‘m)', 'Depozit qaytarish (so‘m)', 'Kassadan xarajat (so‘m)', 'Kutilgan naqd (so‘m)', 'Sanalgan (so‘m)', 'Farq (so‘m)', 'Izoh'], out);
   }
 
   @Roles('cashier', 'manager') @Post('cash-shifts') @HttpCode(201)
@@ -149,9 +188,12 @@ export class CashController {
       `SELECT r.id, r.refund_number, r.amount, r.method, r.refunded_at, r.reason_code, r.approved_by_name, i.invoice_number, p.last_name, p.first_name, p.patient_number, ${FISCAL_JSON_REFUND} AS fiscal
          FROM refunds r JOIN invoices i ON i.id = r.invoice_id JOIN patients p ON p.id = i.patient_id WHERE r.shift_id = $1 ORDER BY r.refunded_at`, [id]);
     const expenses = await this.db.rows(`SELECT id, category, amount, occurred_at, note, status, created_by_name FROM expenses WHERE shift_id = $1 ORDER BY occurred_at`, [id]);
+    const deposits = await this.db.rows(
+      `SELECT d.id, d.kind, d.amount, d.method, d.occurred_at, d.note, d.actor_name, p.last_name, p.first_name, p.patient_number
+         FROM patient_deposits d JOIN patients p ON p.id = d.patient_id WHERE d.shift_id = $1 ORDER BY d.occurred_at`, [id]);
     // payments of this shift whose fiscal receipt is still owed (parallel mode: KKM number not typed in yet)
     const fiscalPending = payments.filter((p) => p.fiscal && (p.fiscal.status === 'pending' || p.fiscal.status === 'failed')).length;
-    return { data: { ...s, payments, refunds, expenses, fiscal_pending: fiscalPending } };
+    return { data: { ...s, payments, refunds, expenses, deposits, fiscal_pending: fiscalPending } };
   }
 
   // ---------------------------------------------------------------- refunds
@@ -166,13 +208,15 @@ export class CashController {
     if (!key || key.length < 8 || key.length > 100) throw new AppError(422, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key sarlavhasi majburiy');
     if (!isUuid(id)) throw notFound('Hisob');
     const input = parse(refundCreateSchema, body);
-    const fingerprint = createHash('sha256').update(`${id}|${input.payment_id}|${input.amount}|${input.method}`).digest('hex').slice(0, 16);
+    const fp = (invoiceId: string, paymentId: string, amount: unknown, method: string, orderId: string | null) =>
+      createHash('sha256').update(`${invoiceId}|${paymentId}|${amount}|${method}|${orderId ?? ''}`).digest('hex').slice(0, 16);
+    const fingerprint = fp(id, input.payment_id, input.amount, input.method, input.order_id ?? null);
     return this.db.tx(async (c) => {
       const inv = (await c.query(`SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
       if (!inv || !ctx.branchIds.includes(inv.branch_id)) throw notFound('Hisob');
       const prev = (await c.query(`SELECT * FROM refunds WHERE tenant_id = $1 AND idempotency_key = $2`, [ctx.tenantId, key])).rows[0];
       if (prev) {
-        const same = createHash('sha256').update(`${prev.invoice_id}|${prev.payment_id}|${prev.amount}|${prev.method}`).digest('hex').slice(0, 16) === fingerprint;
+        const same = fp(prev.invoice_id, prev.payment_id, prev.amount, prev.method, prev.order_id) === fingerprint;
         if (!same) throw new AppError(422, 'IDEMPOTENCY_MISMATCH', 'Bu kalit boshqa qaytarish uchun ishlatilgan');
         res.status(200);
         return { data: { refund: prev, replayed: true } };
@@ -184,6 +228,17 @@ export class CashController {
       const refundable = Math.min(Number(pay.amount) - already, Number(inv.paid_amount));
       if (refundable <= 0) throw conflict('NOTHING_TO_REFUND', 'Bu to‘lov to‘liq qaytarilgan');
       if (input.amount > refundable) throw invalid({ amount: `Ko‘pi bilan ${som(refundable)} so‘m qaytarish mumkin` });
+      // one line of the invoice: the refund is charged to exactly that service (doctor share, service revenue)
+      let line: { id: string; service_name: string } | null = null;
+      if (input.order_id) {
+        const it = (await c.query(
+          `SELECT it.id, it.line_total, it.refunded_amount, o.service_name FROM invoice_items it JOIN service_orders o ON o.id = it.order_id
+            WHERE it.order_id = $1 AND it.invoice_id = $2 FOR UPDATE OF it`, [input.order_id, id])).rows[0];
+        if (!it) throw invalid({ order_id: 'Xizmat shu hisobga tegishli emas' });
+        const left = Number(it.line_total) - Number(it.refunded_amount);
+        if (input.amount > left) throw invalid({ amount: `«${it.service_name}» bo‘yicha ko‘pi bilan ${som(left)} so‘m qaytarish mumkin` });
+        line = { id: it.id, service_name: it.service_name };
+      }
       let shiftId: string | null = null;
       if (input.method === 'cash') {
         if (!input.shift_id) throw invalid({ shift_id: 'Naqd pul qaysi kassadan berilishini tanlang (ochiq smena)' });
@@ -196,32 +251,52 @@ export class CashController {
       }
       const number = (await c.query(`UPDATE tenants SET refund_seq = refund_seq + 1 WHERE id = $1 RETURNING refund_seq`, [ctx.tenantId])).rows[0].refund_seq;
       const refund = (await c.query(
-        `INSERT INTO refunds (tenant_id, branch_id, invoice_id, payment_id, refund_number, amount, method, reason_code, reason, shift_id, approved_by, approved_by_name, refunded_at, idempotency_key)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-        [ctx.tenantId, inv.branch_id, id, pay.id, number, input.amount, input.method, input.reason_code, input.reason, shiftId, ctx.membershipId || null, ctx.name, now(), key])).rows[0];
+        `INSERT INTO refunds (tenant_id, branch_id, invoice_id, payment_id, refund_number, amount, method, reason_code, reason, shift_id, approved_by, approved_by_name, refunded_at, idempotency_key, order_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+        [ctx.tenantId, inv.branch_id, id, pay.id, number, input.amount, input.method, input.reason_code, input.reason, shiftId, ctx.membershipId || null, ctx.name, now(), key, input.order_id ?? null])).rows[0];
+      if (line) await c.query(`UPDATE invoice_items SET refunded_amount = refunded_amount + $2 WHERE id = $1`, [line.id, input.amount]);
       const paid = Number(inv.paid_amount) - input.amount, credit = Number(inv.credit_amount) + input.amount, total = Number(inv.total) - input.amount;
       const hasItems = !!(await c.query(`SELECT 1 FROM invoice_items WHERE invoice_id = $1 LIMIT 1`, [id])).rowCount;
       await c.query(
-        `UPDATE invoices SET paid_amount = $2, credit_amount = $3, total = $4, refunded_amount = refunded_amount + $5, status = $6, version = version + 1, updated_at = demo_now() WHERE id = $1`,
-        [id, paid, credit, total, input.amount, invoiceStatus({ status: inv.status, total, paid, credit, hasItems })]);
+        `UPDATE invoices SET paid_amount = $2, credit_amount = $3, total = $4, refunded_amount = refunded_amount + $5, line_refunded_amount = line_refunded_amount + $7,
+                status = $6, version = version + 1, updated_at = demo_now() WHERE id = $1`,
+        [id, paid, credit, total, input.amount, invoiceStatus({ status: inv.status, total, paid, credit, hasItems }), line ? input.amount : 0]);
       await audit(c, ctx, 'refund.create', 'invoice', id,
-        `Qaytarildi: ${som(input.amount)} so‘m (${PAYMENT_METHOD_LABEL[input.method]}), №${number}, sabab: ${REFUND_REASON_LABEL[input.reason_code]}`, inv.branch_id);
+        `Qaytarildi: ${som(input.amount)} so‘m (${PAYMENT_METHOD_LABEL[input.method]}), №${number}${line ? `, xizmat: ${line.service_name}` : ''}, sabab: ${REFUND_REASON_LABEL[input.reason_code]}`, inv.branch_id);
       const fiscal = await recordFiscal(c, { tenantId: ctx.tenantId, branchId: inv.branch_id, kind: 'refund', refundId: refund.id, invoiceId: id, amount: input.amount, method: input.method });
       res.status(201);
       return { data: { refund, fiscal, replayed: false } };
     });
   }
 
+  private static REFUND_ROWS = `SELECT rf.id, rf.refund_number, rf.amount, rf.method, rf.reason_code, rf.reason, rf.refunded_at, rf.approved_by_name, rf.invoice_id, i.invoice_number,
+              b.name AS branch_name, p.last_name, p.first_name, p.patient_number, s.number AS shift_number, s.cashier_name AS shift_cashier, rf.order_id, o.service_name
+         FROM refunds rf JOIN invoices i ON i.id = rf.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = rf.branch_id
+         LEFT JOIN cash_shifts s ON s.id = rf.shift_id LEFT JOIN service_orders o ON o.id = rf.order_id
+        WHERE rf.tenant_id = $1 AND rf.branch_id = ANY($2) AND rf.refunded_at >= $3 AND rf.refunded_at < $4`;
+
+  /** Refunds of a period as CSV (bounded ≤ 1 year), with a totals row. */
+  @Roles('manager') @Get('refunds/export.csv')
+  async refundsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
+    const period = csvPeriod(q);
+    const r = range(q);
+    const rows = await this.db.rows(`${CashController.REFUND_ROWS} ORDER BY rf.refunded_at`, [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
+    const total = rows.reduce((a, x) => a + BigInt(x.amount), 0n);
+    sendCsv(res, `meduzai-qaytarishlar-${period.from}-${period.to}.csv`,
+      ['№', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Xizmat', 'Usul', 'Smena', 'Sabab', 'Izoh', 'Tasdiqlagan', 'Summa (so‘m)'],
+      [...rows.map((x) => [x.refund_number, csvTime(x.refunded_at), x.branch_name, x.patient_number, `${x.last_name} ${x.first_name}`, x.invoice_number, x.service_name ?? 'Butun hisob',
+          PAYMENT_METHOD_LABEL[x.method], x.shift_number ? `№${x.shift_number} ${x.shift_cashier}` : '', REFUND_REASON_LABEL[x.reason_code], x.reason, x.approved_by_name, csvSom(x.amount)]),
+        ['Jami', '', '', '', `${rows.length} ta qaytarish`, '', '', '', '', '', '', '', csvSom(total)]]);
+  }
+
   @Roles('manager') @Get('refunds')
   async refunds(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const r = range(q);
-    const rows = await this.db.rows(
-      `SELECT rf.id, rf.refund_number, rf.amount, rf.method, rf.reason_code, rf.reason, rf.refunded_at, rf.approved_by_name, rf.invoice_id, i.invoice_number,
-              b.name AS branch_name, p.last_name, p.first_name, p.patient_number, s.number AS shift_number, s.cashier_name AS shift_cashier
-         FROM refunds rf JOIN invoices i ON i.id = rf.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = rf.branch_id LEFT JOIN cash_shifts s ON s.id = rf.shift_id
-        WHERE rf.tenant_id = $1 AND rf.branch_id = ANY($2) AND rf.refunded_at >= $3 AND rf.refunded_at < $4 ORDER BY rf.refunded_at DESC LIMIT 200`,
-      [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end]);
-    return { data: rows, meta: { from: r.from, to: r.to, total: rows.reduce((a, b) => a + Number(b.amount), 0) } };
+    const { page, pageSize, offset } = pageParams(q);
+    const P: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id), r.start, r.end];
+    const agg = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(rf.amount),0)::bigint AS sum FROM refunds rf WHERE rf.tenant_id = $1 AND rf.branch_id = ANY($2) AND rf.refunded_at >= $3 AND rf.refunded_at < $4`, P))!;
+    const rows = await this.db.rows(`${CashController.REFUND_ROWS} ORDER BY rf.refunded_at DESC LIMIT $5 OFFSET $6`, [...P, pageSize, offset]);
+    return { data: rows, meta: { from: r.from, to: r.to, page, page_size: pageSize, count: agg.n, total: Number(agg.sum) } };
   }
 
   // ---------------------------------------------------------------- expenses
@@ -288,6 +363,11 @@ export class CashController {
     const pay = await this.db.rows(`SELECT method, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4 GROUP BY 1`, P);
     const ref = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4`, P))!;
     const exp = await this.db.rows(`SELECT category, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM expenses WHERE tenant_id = $1 AND branch_id = ANY($2) AND occurred_at >= $3 AND occurred_at < $4 AND status = 'active' GROUP BY 1 ORDER BY 3 DESC`, P);
+    // deposits: a liability, not revenue — money in / paid back in the period, and the outstanding balance of all patients
+    const dep = (await this.db.one(`SELECT coalesce(sum(amount) FILTER (WHERE kind = 'in'),0)::bigint AS inflow, coalesce(sum(amount) FILTER (WHERE kind = 'out'),0)::bigint AS outflow,
+        coalesce(sum(amount) FILTER (WHERE kind = 'apply'),0)::bigint AS applied FROM patient_deposits WHERE tenant_id = $1 AND branch_id = ANY($2) AND occurred_at >= $3 AND occurred_at < $4`, P))!;
+    // the outstanding balance counts where the money was taken / applied / paid back (every ledger row has its branch), within the manager's scope
+    const liability = (await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE tenant_id = $1 AND branch_id = ANY($2)`, [P[0], P[1]]))!;
     const gross = pay.reduce((a, b) => a + Number(b.sum), 0), refunds = Number(ref.sum), expenses = exp.reduce((a, b) => a + Number(b.sum), 0);
     const fiscal = (await this.db.one(`SELECT count(*)::int AS n FROM payments pm WHERE pm.tenant_id = $1 AND pm.branch_id = ANY($2) AND pm.paid_at >= $3 AND pm.paid_at < $4 AND ${FISCAL_MISSING}`, P))!;
     return { data: {
@@ -298,6 +378,7 @@ export class CashController {
       net_revenue: gross - refunds,
       expenses: { total: expenses, by_category: exp.map((x) => ({ category: x.category, count: x.n, sum: Number(x.sum) })) },
       net_result: gross - refunds - expenses,
+      deposits: { in: Number(dep.inflow), out: Number(dep.outflow), applied: Number(dep.applied), balance: Number(liability.balance) },
     } };
   }
 }

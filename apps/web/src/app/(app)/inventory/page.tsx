@@ -131,6 +131,7 @@ function ItemDetail({ id, onClose }: { id: string; onClose: () => void }) {
               <span className={cx('whitespace-nowrap font-semibold tabular-nums', mv.type === 'in' ? 'text-emerald-700' : 'text-slate-800')}>{mv.type === 'in' ? '+' : '−'}{n(mv.quantity)}</span>
             </li>
           ))}
+          {it.movements_total > it.movements.length && <li className="py-2.5 text-[0.8125rem] text-slate-600">{t('admin.inv.movementsShown', { n: it.movements.length, total: it.movements_total })}</li>}
           <li className="flex items-start gap-3 py-2.5 text-slate-600">
             <span className="min-w-0 flex-1">{t('admin.inv.opening')}</span><span className="tabular-nums">{n(it.opening_qty)}</span>
           </li>

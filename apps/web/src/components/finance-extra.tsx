@@ -2,13 +2,13 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Banknote, DoorOpen, Printer, ReceiptText, Scale, Undo2, Wallet } from 'lucide-react';
+import { Ban, Banknote, DoorOpen, Download, HandCoins, PiggyBank, Printer, ReceiptText, Scale, Undo2, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, EXPENSE_PAID_FROM_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, SlidingPill, StatCard, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Select, SlidingPill, StatCard, Table, Td, Th, useToast } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
 import { CloseShiftModal, expenseCategoryLabel, StatMoney, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
@@ -17,8 +17,15 @@ import { useFiscalEnabled } from '@/components/fiscal';
 type T = ReturnType<typeof useT>;
 
 /** 2–4 key numbers in one row (one column on a phone, two on a tablet). */
-export function StatRow({ children, label }: { children: React.ReactNode; label?: string }) {
-  return <div className="mb-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4" role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
+export function StatRow({ children, label, cols = 4 }: { children: React.ReactNode; label?: string; cols?: 2 | 4 }) {
+  return <div className={cx('mb-5 grid grid-cols-2 gap-3 sm:gap-4', cols === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-2')} role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
+}
+
+/** A plain download link (the browser saves the file), dressed as the other glass capsules. */
+export function CsvLink({ href, label }: { href: string; label?: string }) {
+  const t = useT();
+  const title = label ?? t('cash.csvExport', { format: 'CSV' });
+  return <a href={href} download aria-label={title} title={title} className="glass-btn inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full border-2 border-transparent px-5 text-[0.9375rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><Download className="h-4 w-4" />CSV</a>;
 }
 
 /** Period: two date fields + «Bugun / 7 kun / 30 kun» in one segmented control, all 44 px high. */
@@ -56,7 +63,7 @@ export function FootRow({ cells }: { cells: { span?: number; value?: React.React
   );
 }
 
-type Summary = { payments: { total: number; count: number }; refunds: { total: number; count: number }; net_revenue: number; expenses: { total: number }; net_result: number; fiscal?: { missing: number } };
+type Summary = { payments: { total: number; count: number }; refunds: { total: number; count: number }; net_revenue: number; expenses: { total: number }; net_result: number; fiscal?: { missing: number }; deposits: { in: number; out: number; applied: number; balance: number } };
 
 /** Manager: cash-basis result for the period. Net revenue = payments − refunds; net result = net revenue − expenses. */
 export function FinanceStats({ from, to, branchId }: { from: string; to: string; branchId: string }) {
@@ -76,29 +83,48 @@ export function FinanceStats({ from, to, branchId }: { from: string; to: string;
   );
 }
 
-export function RefundsTab({ from, to, branchId, showBranch }: { from: string; to: string; branchId: string; showBranch: boolean }) {
+/** Manager: who owes (by age of the debt) and what the clinic holds for patients (deposits are a liability, not revenue). */
+export function DebtorsDepositsRow({ from, to, branchId, onDebtors }: { from: string; to: string; branchId: string; onDebtors: () => void }) {
   const t = useT();
-  const q = useQuery({ queryKey: ['refunds', from, to, branchId], queryFn: () => api(`/refunds${qs({ from, to, branch_id: branchId })}`) });
+  const sum = useQuery({ queryKey: ['finance-summary', from, to, branchId], queryFn: () => api<{ data: Summary }>(`/finance/summary${qs({ from, to, branch_id: branchId })}`).then((r) => r.data) });
+  const debt = useQuery({ queryKey: ['invoices', 'debts', 'ageing', branchId], queryFn: () => api(`/invoices${qs({ debt: 1, branch_id: branchId, page_size: 1 })}`).then((r) => r.meta) });
+  const a = debt.data?.ageing;
+  const d = sum.data?.deposits;
+  return (
+    <StatRow cols={2} label={t('cash.debtors')}>
+      <button type="button" onClick={onDebtors} className="text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 rounded-[22px]">
+        <StatCard icon={<HandCoins />} label={t('cash.debtors')} loading={!debt.data} tone={debt.data?.sums.due ? 'danger' : 'default'} value={debt.data && <StatMoney tiyin={debt.data.sums.due} />}
+          sub={a && t('cash.debtorsSub', { a: formatSom(a['0-7'].sum, false), b: formatSom(a['8-30'].sum, false), c: formatSom(a['31+'].sum, false) })} />
+      </button>
+      <StatCard icon={<PiggyBank />} label={t('cash.depositsCard')} loading={!d} value={d && <StatMoney tiyin={d.balance} />} sub={d && t('cash.depositsSub', { inflow: formatSom(d.in, false), applied: formatSom(d.applied, false) })} />
+    </StatRow>
+  );
+}
+
+export function RefundsTab({ from, to, branchId, showBranch, page, onPage }: { from: string; to: string; branchId: string; showBranch: boolean; page: number; onPage: (p: number) => void }) {
+  const t = useT();
+  const q = useQuery({ queryKey: ['refunds', from, to, branchId, page], queryFn: () => api(`/refunds${qs({ from, to, branch_id: branchId, page, page_size: 20 })}`), placeholderData: (p) => p });
   if (q.isLoading) return <LoadingRows />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data.data.length) return <EmptyState compact title={t('cash.noRefundsPeriod')} />;
-  return (
+  return (<>
     <Table>
       <thead><tr><Th>{t('cash.colTime')}</Th><Th>{t('cash.colPatient')}</Th><Th>{t('cash.colInvoice')}</Th><Th>{t('cash.colMethodDrawer')}</Th><Th>{t('cash.colReason')}</Th><Th>{t('cash.colApprovedBy')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
       <tbody>{q.data.data.map((r: any) => (
         <tr key={r.id} className="hover:bg-slate-50">
           <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}<div className="text-[0.8125rem] text-slate-600">№{r.refund_number}</div></Td>
           <Td><div className="whitespace-nowrap font-medium text-slate-900">{fullName(r)}</div><div className="text-[0.8125rem] text-slate-600">{pid(r.patient_number)}</div></Td>
-          <Td><Link href={`/cashier/${r.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{r.invoice_number}</Link>{showBranch && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{r.branch_name}</div>}</Td>
+          <Td><Link href={`/cashier/${r.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{r.invoice_number}</Link><div className="text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}{showBranch && ` · ${r.branch_name}`}</div></Td>
           <Td>{t(`payment.${r.method}` as MessageKey)}{r.shift_number ? <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{t('cash.shiftRef', { n: r.shift_number, cashier: r.shift_cashier })}</div> : null}</Td>
           <Td className="min-w-[12rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<div className="text-[0.8125rem] text-slate-600">{r.reason}</div></Td>
           <Td className="whitespace-nowrap">{r.approved_by_name}</Td>
           <Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td>
         </tr>
       ))}</tbody>
-      <tfoot><FootRow cells={[{ left: true, span: 6, value: t('cash.footRefunds', { n: q.data.data.length }) }, { className: 'text-red-700', value: `−${formatSom(q.data.meta.total)}` }]} /></tfoot>
+      <tfoot><FootRow cells={[{ left: true, span: 6, value: t('cash.footRefunds', { n: q.data.meta.count }) }, { className: 'text-red-700', value: `−${formatSom(q.data.meta.total)}` }]} /></tfoot>
     </Table>
-  );
+    <Pagination page={page} pageSize={20} total={q.data.meta.count} onPage={onPage} />
+  </>);
 }
 
 export function ShiftsTab({ from, to, branchId }: { from: string; to: string; branchId: string }) {
@@ -137,13 +163,13 @@ export function ShiftsTab({ from, to, branchId }: { from: string; to: string; br
   );
 }
 
-export function ExpensesTab({ from, to, branchId, showBranch }: { from: string; to: string; branchId: string; showBranch: boolean }) {
+export function ExpensesTab({ from, to, branchId, showBranch, page, onPage }: { from: string; to: string; branchId: string; showBranch: boolean; page: number; onPage: (p: number) => void }) {
   const t = useT();
-  const q = useQuery({ queryKey: ['expenses', from, to, branchId], queryFn: () => api(`/expenses${qs({ from, to, branch_id: branchId })}`) });
+  const q = useQuery({ queryKey: ['expenses', from, to, branchId, page], queryFn: () => api(`/expenses${qs({ from, to, branch_id: branchId, page, page_size: 20 })}`), placeholderData: (p) => p });
   if (q.isLoading) return <LoadingRows />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
   if (!q.data.data.length) return <EmptyState compact title={t('cash.noExpensesPeriod')} />;
-  return (
+  return (<>
     <Table>
       <thead><tr><Th className="hidden sm:table-cell">{t('cash.colDate')}</Th><Th>{t('cash.category')}</Th><Th className="hidden md:table-cell">{t('cash.note')}</Th><Th className="hidden lg:table-cell">{t('cash.colSource')}</Th><Th right>{t('cash.colSum')}</Th><Th className="right-0 z-10" /></tr></thead>
       <tbody>{q.data.data.map((e: any) => (
@@ -156,7 +182,8 @@ export function ExpensesTab({ from, to, branchId, showBranch }: { from: string; 
       ))}</tbody>
       <tfoot><FootRow cells={[{ className: 'hidden sm:table-cell' }, { left: true, value: t('cash.footExpenses') }, { className: 'hidden md:table-cell' }, { className: 'hidden lg:table-cell' }, { value: formatSom(q.data.meta.total) }, {}]} /></tfoot>
     </Table>
-  );
+    <Pagination page={page} pageSize={20} total={q.data.meta.count} onPage={onPage} />
+  </>);
 }
 
 export function ExpenseRowActions({ e }: { e: any }) {

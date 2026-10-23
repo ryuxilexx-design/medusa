@@ -300,4 +300,9 @@ export const doctor = {
   'docs.sp.xray': ['Rentgen', 'Рентген'],
   'docs.sp.ctmri': ['MSKT / MRT', 'МСКТ / МРТ'],
   'docs.sp.inpatient': ['Statsionar davolash', 'Стационарное лечение', 'Стационар даволаш'],
+  // quantity on an order (a course of procedures)
+  'orders.qty': ['Miqdor', 'Количество'],
+  'orders.qtyLess': ['Kamaytirish', 'Уменьшить'],
+  'orders.qtyMore': ['Ko‘paytirish', 'Увеличить'],
+  'orders.times': ['× {n}', '× {n}'],
 } as const satisfies Catalog;

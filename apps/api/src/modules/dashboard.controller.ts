@@ -58,7 +58,7 @@ export class DashboardController {
          LEFT JOIN pay ON pay.day = d::date LEFT JOIN ref ON ref.day = d::date
         ORDER BY 1`, P);
     const byService = await this.db.rows(
-      `SELECT o.service_id, o.service_name, o.category, count(*)::int AS count, sum(${NET_LINE})::bigint AS value
+      `SELECT o.service_id, o.service_name, o.category, sum(it.quantity)::int AS count, sum(${NET_LINE})::bigint AS value
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id
         WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.performed_at >= $3 AND o.performed_at < $4 AND o.status IN ('completed','verified') AND i.status <> 'void'
         GROUP BY 1,2,3 ORDER BY value DESC`, P);

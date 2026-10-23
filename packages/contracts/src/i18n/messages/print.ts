@@ -135,6 +135,8 @@ export const print = {
   'print.appt.comeEarly': ['Qabuldan 10 daqiqa oldin keling.', 'Приходите за 10 минут до приёма.'],
   'print.appt.ticket': ['Kichik talon', 'Малый талон'],
   'print.appt.a5': ['Varaq', 'Лист'],
+  'print.shift.depositIn': ['Depozit kirim, naqd ({n})', 'Поступление депозита наличными ({n})'],
+  'print.shift.depositOut': ['Depozit qaytarish, naqd ({n})', 'Возврат депозита наличными ({n})'],
 
   // payment slip with a recorded fiscal receipt
   'print.pay.fiscalTitle': ['To‘lov qaydi — fiskal chek № {n}', 'Запись об оплате — фискальный чек № {n}'],

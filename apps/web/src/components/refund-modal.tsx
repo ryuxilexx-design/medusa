@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { PAYMENT_METHOD_LABEL, REFUND_REASON_LABEL, type MessageKey } from '@meduza/contracts';
+import { PAYMENT_METHODS, REFUND_REASON_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey } from '@/lib/api';
 import { formatSom, parseSomToTiyin } from '@/lib/format';
 import { useT } from '@/lib/i18n';
@@ -22,10 +22,14 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
   const [paymentId, setPaymentId] = useState(payable[0]?.id ?? '');
   const payment = payable.find((p) => p.id === paymentId);
   const [amount, setAmount] = useState(payment ? String(Number(payment.refundable) / 100) : '');
-  const [method, setMethod] = useState<string>(payment?.method ?? 'cash');
+  const [method, setMethod] = useState<string>(payment?.method && payment.method !== 'deposit' ? payment.method : 'cash');
   const [reasonCode, setReasonCode] = useState(inv.appointment_status === 'cancelled' ? 'appointment_cancelled' : 'service_not_provided');
   const [reason, setReason] = useState('');
   const [shiftId, setShiftId] = useState('');
+  // what is refunded: the whole invoice (spread over its lines) or one service line (only that line's value drops)
+  const lines = (inv.items as any[]).filter((it) => Number(it.refundable) > 0);
+  const [orderId, setOrderId] = useState('');
+  const line = lines.find((it) => it.order_id === orderId);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
   const key = useRef(newIdempotencyKey());
@@ -34,16 +38,16 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
   const chosenShift = shiftId || (openShifts.length === 1 ? openShifts[0].id : '');
   const drawer = openShifts.find((s) => s.id === chosenShift);
   const tiyin = amount.trim() ? parseSomToTiyin(amount) : null;
-  const max = payment ? Number(payment.refundable) : 0;
+  const max = Math.min(payment ? Number(payment.refundable) : 0, line ? Number(line.refundable) : Number.MAX_SAFE_INTEGER);
   const tooMuch = tiyin != null && tiyin > max;
 
   const m = useMutation({
     mutationFn: () => api<{ data: { refund: { refund_number: number }; replayed: boolean } }>(`/invoices/${inv.id}/refunds`, {
       method: 'POST', headers: { 'Idempotency-Key': key.current },
-      body: { payment_id: paymentId, amount: tiyin, method, reason_code: reasonCode, reason: reason.trim(), shift_id: method === 'cash' ? chosenShift || undefined : undefined },
+      body: { payment_id: paymentId, amount: tiyin, method, reason_code: reasonCode, reason: reason.trim(), shift_id: method === 'cash' ? chosenShift || undefined : undefined, order_id: orderId || undefined },
     }),
     onSuccess: (r) => {
-      ['invoices', 'invoice', 'payments', 'dashboard', 'cash-shift', 'cash-shifts', 'finance-summary', 'refunds'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      ['invoices', 'invoice', 'payments', 'dashboard', 'cash-shift', 'cash-shifts', 'finance-summary', 'refunds', 'reports'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(r.data.replayed ? t('cash.refundReplayed') : t('cash.refundSaved', { n: r.data.refund.refund_number }));
       onClose();
     },
@@ -64,8 +68,14 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
       <div className="space-y-3">
         {err && <Alert tone="red">{err}</Alert>}
         <p className="text-sm text-slate-600">{t('cash.refundIntro')}</p>
+        {lines.length > 0 && <Field label={t('cash.refundScope')} required error={errors.order_id}>
+          {(id) => <Select id={id} value={orderId} onChange={(e) => { setOrderId(e.target.value); const l = lines.find((x) => x.order_id === e.target.value); if (l) setAmount(String(Math.min(Number(l.refundable), payment ? Number(payment.refundable) : Number(l.refundable)) / 100)); }}>
+            <option value="">{t('cash.refundWhole')}</option>
+            {lines.map((it) => <option key={it.order_id} value={it.order_id}>{t('cash.refundLineOption', { service: it.quantity > 1 ? `${it.description} ${t('cash.times', { n: it.quantity })}` : it.description, left: formatSom(it.refundable) })}</option>)}
+          </Select>}
+        </Field>}
         <Field label={t('cash.fromPayment')} required error={errors.payment_id}>
-          {(id) => <Select id={id} value={paymentId} onChange={(e) => { setPaymentId(e.target.value); const p = payable.find((x) => x.id === e.target.value); if (p) { setAmount(String(Number(p.refundable) / 100)); setMethod(p.method); } }}>
+          {(id) => <Select id={id} value={paymentId} onChange={(e) => { setPaymentId(e.target.value); const p = payable.find((x) => x.id === e.target.value); if (p) { setAmount(String(Number(p.refundable) / 100)); if (p.method !== 'deposit') setMethod(p.method); } }}>
             {payable.map((p) => <option key={p.id} value={p.id}>{t('cash.paymentOption', { receipt: p.receipt_number, method: t(`payment.${p.method}` as MessageKey), amount: formatSom(p.amount) })}</option>)}
           </Select>}
         </Field>
@@ -74,7 +84,7 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
             {(id) => <MoneyInput id={id} value={amount} onChange={(e) => setAmount(e.target.value)} invalid={tooMuch || !!errors.amount} />}
           </Field>
           <Field label={t('cash.refundMethod')} required>
-            {(id) => <Select id={id} value={method} onChange={(e) => setMethod(e.target.value)}>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>}
+            {(id) => <Select id={id} value={method} onChange={(e) => setMethod(e.target.value)}>{PAYMENT_METHODS.map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>}
           </Field>
         </div>
         {method === 'cash' && (
