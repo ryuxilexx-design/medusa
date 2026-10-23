@@ -37,6 +37,7 @@ import { HikController } from './cameras/hik.controller';
 import { CameraIsapiController } from './cameras/isapi.controller';
 import { CameraWorkers } from './cameras/pull-worker';
 import { BotEngine } from './telegram/engine';
+import { BotFaq } from './telegram/faq';
 import { BotRegistry, Notifier } from './telegram/notifier';
 import { TelegramWorkers } from './telegram/workers';
 import { AiClient } from './ai/ai-client';
@@ -66,7 +67,7 @@ function requestLog(req: any, res: any) {
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, DiagnosticsController, AiController,
     AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController],
-  providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
+  providers: [Db, BotEngine, BotFaq, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

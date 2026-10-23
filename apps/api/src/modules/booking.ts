@@ -34,7 +34,39 @@ export async function dayException(q: Q, tenantId: string, doctorId: string, dat
       ORDER BY (doctor_id IS NULL), (branch_id IS NULL)`, [tenantId, date, doctorId, branchId])).rows;
   return rows[0] ?? null;
 }
-export const unavailable = (exc: DayException) => conflict('DOCTOR_UNAVAILABLE', `Shifokor bu kuni qabul qilmaydi: ${EXCEPTION_REASON[exc.kind]}`, { kind: exc.kind, note: exc.note });
+
+/** One doctor's day in a period summary: where and when they see patients, or why not (an exception). */
+export type WorkingDay = { doctor_id: string; date: string; branch_id: string; start: string; end: string; off: DayException['kind'] | null };
+
+/**
+ * Every active doctor's working days in [from, from + days): the weekly schedule with schedule_exceptions applied
+ * by the same precedence as dayException (the doctor's own row, then the branch's, then the clinic's). Two queries
+ * for the whole period — a read-only summary (the bot's clinic info), never a substitute for availability().
+ */
+export async function workingDays(q: Q, tenantId: string, from: string, days: number): Promise<WorkingDay[]> {
+  const to = addDays(from, days);
+  const sch = (await q.query(
+    `SELECT s.doctor_id, s.branch_id, s.weekday, to_char(s.start_time,'HH24:MI') AS start, to_char(s.end_time,'HH24:MI') AS "end"
+       FROM schedules s JOIN doctors d ON d.id = s.doctor_id JOIN branches b ON b.id = s.branch_id
+      WHERE s.tenant_id = $1 AND d.active AND b.active LIMIT 2000`, [tenantId])).rows;
+  const exc = (await q.query(
+    `SELECT doctor_id, branch_id, to_char(date,'YYYY-MM-DD') AS date, kind, to_char(start_time,'HH24:MI') AS start, to_char(end_time,'HH24:MI') AS "end"
+       FROM schedule_exceptions WHERE tenant_id = $1 AND date >= $2 AND date < $3 LIMIT 5000`, [tenantId, from, to])).rows;
+  const out: WorkingDay[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = addDays(from, i), wd = weekday(date);
+    for (const s of sch) {
+      if (s.weekday !== wd) continue;
+      const e = exc.filter((x) => x.date === date && (x.doctor_id === s.doctor_id || (x.doctor_id == null && (x.branch_id == null || x.branch_id === s.branch_id))))
+        .sort((a, b) => Number(a.doctor_id == null) - Number(b.doctor_id == null) || Number(a.branch_id == null) - Number(b.branch_id == null))[0];
+      if (e && BLOCKING_KINDS.includes(e.kind)) out.push({ doctor_id: s.doctor_id, date, branch_id: s.branch_id, start: s.start, end: s.end, off: e.kind });
+      else if (e) out.push({ doctor_id: s.doctor_id, date, branch_id: s.branch_id, start: e.start, end: e.end, off: null }); // custom hours
+      else out.push({ doctor_id: s.doctor_id, date, branch_id: s.branch_id, start: s.start, end: s.end, off: null });
+    }
+  }
+  return out;
+}
+export const unavailable =(exc: DayException) => conflict('DOCTOR_UNAVAILABLE', `Shifokor bu kuni qabul qilmaydi: ${EXCEPTION_REASON[exc.kind]}`, { kind: exc.kind, note: exc.note });
 
 export type SlotInput = { branch_id: string; doctor_id: string; service_id: string; date: string; start_time: string; duration_min?: number };
 /** How far in the past a start may lie: a normal booking tolerates clock skew, a walk-in starts on the grid slot that already began. */

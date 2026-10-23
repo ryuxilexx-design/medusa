@@ -55,6 +55,23 @@ const uz = {
   consentAsk: (clinic: string) => `Karta ochishdan oldin roziligingiz kerak.\n\n«${clinic}» klinikasi ism-familiya, tug‘ilgan sana, telefon raqami va sog‘lig‘ingiz haqidagi ma’lumotlarni davolash, tibbiy hujjatlar, hisob-kitob va qabul eslatmalari uchun qayta ishlaydi. Ma’lumotlar O‘zbekistonda saqlanadi.\n\nIstalgan vaqtda registratura orqali ma’lumotlaringizni ko‘rishingiz, tuzattirishingiz yoki roziligingizni qaytarib olishingiz mumkin. Telegram’da tahlil natijalari va tashxis yuborilmaydi.\n\n«✅ Roziman» — ma’lumotlarimni qayta ishlashga va shu botda eslatmalar olishga roziman.`,
   consentYes: '✅ Roziman', consentNo: 'Yo‘q',
   consentDeclined: 'Tushunarli. Roziliksiz karta ochilmaydi va ma’lumotlaringiz saqlanmadi. Qabulga yozilish uchun registraturaga qo‘ng‘iroq qiling yoki klinikaga keling.',
+  // questions about the clinic (faq.ts) — never medicine
+  faqMedical: 'Tibbiy savolga javob bera olmayman — buni faqat shifokor aytadi. Shifokorga yoziling 👇',
+  faqAskRegistrar: (phone: string) => `Buni aniq ayta olmayman. Buni registratordan so‘rang: ${phone}`,
+  faqAskRegistrarNoPhone: 'Buni aniq ayta olmayman. Buni registraturadan so‘rang.',
+  faqUnknown: 'Savolingizni tushunmadim. Narxlar, manzil, ish vaqti yoki shifokorlar haqida so‘rashingiz mumkin 👇',
+  faqLimited: 'Savollar juda ko‘p bo‘ldi. Bir soatdan keyin yozing yoki registraturaga qo‘ng‘iroq qiling.',
+  faqAuto: 'ℹ️ Avtomatik javob. Aniqlashtirish uchun registraturaga murojaat qiling.',
+  faqPrices: (list: string) => `💳 Xizmatlar narxi:\n\n${list}`,
+  faqPricesMore: 'Boshqa xizmatlar narxini registraturadan so‘rang.',
+  faqHours: (list: string) => `🕘 Ish vaqti:\n\n${list}`,
+  faqClosed: 'dam olish kuni',
+  faqDoctors: (list: string) => `👨‍⚕️ Shifokorlarimiz:\n\n${list}`,
+  faqContacts: (list: string) => `📞 Registratura:\n\n${list}`,
+  faqNoPhone: 'Telefon raqami ko‘rsatilmagan.',
+  faqPay: (list: string) => `To‘lov usullari: ${list}.`,
+  payCash: 'naqd', payCard: 'bank kartasi', payTransfer: 'o‘tkazma',
+  btnRegistrar: '📞 Registrator bilan bog‘lanish', btnPrices: '💳 Narxlar',
 };
 type Texts = typeof uz;
 
@@ -110,6 +127,22 @@ const ru: Texts = {
   consentAsk: (clinic) => `Чтобы открыть карту, нужно ваше согласие.\n\nКлиника «${clinic}» обрабатывает ФИО, дату рождения, номер телефона и сведения о вашем здоровье для лечения, ведения медицинских документов, расчётов и напоминаний о приёме. Данные хранятся в Узбекистане.\n\nВ любое время через регистратуру можно посмотреть и исправить свои данные или отозвать согласие. Результаты анализов и диагноз в Telegram не отправляются.\n\n«✅ Согласен(-на)» — согласие на обработку моих данных и на напоминания в этом боте.`,
   consentYes: '✅ Согласен(-на)', consentNo: 'Нет',
   consentDeclined: 'Понятно. Без согласия карта не создаётся, ваши данные не сохранены. Чтобы записаться, позвоните в регистратуру или приходите в клинику.',
+  faqMedical: 'Я не могу отвечать на медицинские вопросы — это может сделать только врач. Запишитесь к врачу 👇',
+  faqAskRegistrar: (phone) => `Точно ответить не могу. Уточните у регистратора: ${phone}`,
+  faqAskRegistrarNoPhone: 'Точно ответить не могу. Уточните в регистратуре.',
+  faqUnknown: 'Не понял вопрос. Можно спросить о ценах, адресе, часах работы или врачах 👇',
+  faqLimited: 'Слишком много вопросов. Напишите через час или позвоните в регистратуру.',
+  faqAuto: 'ℹ️ Автоматический ответ. Уточнить можно в регистратуре.',
+  faqPrices: (list) => `💳 Цены на услуги:\n\n${list}`,
+  faqPricesMore: 'Цены на другие услуги уточните в регистратуре.',
+  faqHours: (list) => `🕘 Часы работы:\n\n${list}`,
+  faqClosed: 'выходной',
+  faqDoctors: (list) => `👨‍⚕️ Наши врачи:\n\n${list}`,
+  faqContacts: (list) => `📞 Регистратура:\n\n${list}`,
+  faqNoPhone: 'Телефон не указан.',
+  faqPay: (list) => `Способы оплаты: ${list}.`,
+  payCash: 'наличные', payCard: 'банковская карта', payTransfer: 'перевод',
+  btnRegistrar: '📞 Связаться с регистратором', btnPrices: '💳 Цены',
 };
 
 /**
