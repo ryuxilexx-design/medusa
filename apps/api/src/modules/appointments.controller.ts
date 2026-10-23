@@ -62,6 +62,15 @@ export class AppointmentsController {
     if (ctx.role === 'doctor' && input.doctor_id !== ctx.doctorId) throw forbidden('Shifokor faqat o‘z qabuliga yozadi');
     const requestKey = key && key.length >= 8 && key.length <= 100 ? key : null;
     return this.db.tx(async (c) => {
+      if (ctx.role === 'doctor') {
+        // a doctor books only a follow-up: the patient must already have a signed note of this doctor
+        // (a new booking must never be what gives a doctor access to a patient)
+        const seen = (await c.query(
+          `SELECT 1 FROM encounters e JOIN clinical_notes n ON n.encounter_id = e.id
+            WHERE e.tenant_id = $1 AND e.patient_id = $2 AND e.doctor_id = $3 AND n.status = 'signed' LIMIT 1`,
+          [ctx.tenantId, input.patient_id, ctx.doctorId])).rowCount;
+        if (!seen) throw forbidden('Shifokor faqat o‘zi ko‘rgan bemorni qayta qabulga yozadi');
+      }
       const r = await createAppointment(c, ctx, input, requestKey, { source: ctx.role === 'doctor' ? 'doctor' : 'staff' });
       return { data: r.replayed ? { id: r.id, replayed: true } : { id: r.id } };
     });

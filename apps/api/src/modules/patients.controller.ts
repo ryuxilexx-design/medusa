@@ -34,7 +34,7 @@ export async function assertPatientAccess(q: Q, ctx: Ctx, patientId: string) {
  * The follow-up the treating doctor recommended in the latest signed note (a date, no clinical text) and whether it is
  * booked: any later booking of the patient with that doctor that is not cancelled. Reception sees the marker and books it.
  */
-export async function followUp(q: Q, tenantId: string, patientId: string) {
+export async function followUp(q: Q, tenantId: string, patientId: string, onlyDoctorId: string | null = null) {
   // an anonymised card (migration 026, patients.anonymised_at) never offers a follow-up; read through to_jsonb so the
   // check works on a database with or without that column
   const gone = (await q.query(`SELECT (to_jsonb(p) ->> 'anonymised_at') IS NOT NULL AS gone FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [patientId, tenantId])).rows[0];
@@ -43,7 +43,8 @@ export async function followUp(q: Q, tenantId: string, patientId: string) {
     `SELECT n.follow_up_date AS date, n.signed_at, e.doctor_id, d.display_name AS doctor_name, e.id AS encounter_id, e.appointment_id
        FROM encounters e JOIN clinical_notes n ON n.encounter_id = e.id JOIN doctors d ON d.id = e.doctor_id
       WHERE e.patient_id = $1 AND e.tenant_id = $2 AND n.status = 'signed' AND n.follow_up_date IS NOT NULL
-      ORDER BY n.signed_at DESC LIMIT 1`, [patientId, tenantId])).rows[0];
+        AND ($3::uuid IS NULL OR e.doctor_id = $3)
+      ORDER BY n.signed_at DESC LIMIT 1`, [patientId, tenantId, onlyDoctorId])).rows[0];
   if (!n) return null;
   const booked = (await q.query(
     `SELECT a.id, a.starts_at FROM appointments a WHERE a.patient_id = $1 AND a.doctor_id = $2 AND a.starts_at > $3 AND a.id <> $4 AND a.status NOT IN ('cancelled', 'no_show')
@@ -158,7 +159,7 @@ export class PatientsController {
     if (ctx.role === 'doctor' || ctx.role === 'lab') { delete (p as any).balance_due; delete (p as any).deposit_balance; }
     // consent status: for the roles that collect it (not cashier/lab, who see only the minimal card)
     if (!minimal) (p as any).consents = await latestConsents(this.db.pool, ctx.tenantId, id);
-    if (!minimal) (p as any).follow_up = await followUp(this.db.pool, ctx.tenantId, id);
+    if (!minimal) (p as any).follow_up = await followUp(this.db.pool, ctx.tenantId, id, ctx.role === 'doctor' ? ctx.doctorId : null); // a doctor sees only their own recommendation
     return { data: p };
   }
 

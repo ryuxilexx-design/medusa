@@ -118,6 +118,7 @@ export class QuickPhrasesController {
   @Roles('doctor', 'manager') @Post()
   async create(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(quickPhraseSchema, body);
+    if (ctx.role === 'doctor' && !ctx.doctorId) throw forbidden('Shifokor profili topilmadi');
     const shared = ctx.role === 'manager' || !!input.shared;
     if (shared && ctx.role !== 'manager') throw forbidden('Umumiy iborani faqat rahbar qo‘shadi');
     const owner = shared ? null : ctx.doctorId;
@@ -132,6 +133,7 @@ export class QuickPhrasesController {
   @Roles('doctor', 'manager') @Post(':id/use') @HttpCode(200)
   async use(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     if (!isUuid(id)) throw notFound('Ibora');
+    if (ctx.role === 'doctor' && !ctx.doctorId) throw forbidden('Shifokor profili topilmadi');
     const r = await this.db.one(`UPDATE quick_phrases SET uses = uses + 1 WHERE id = $1 AND tenant_id = $2 AND (doctor_id IS NULL OR doctor_id = $3) RETURNING id, uses`, [id, ctx.tenantId, OWNER(ctx)]);
     if (!r) throw notFound('Ibora');
     return { data: r };
@@ -143,7 +145,8 @@ export class QuickPhrasesController {
     if (!isUuid(id)) throw notFound('Ibora');
     const p = await this.db.one(`SELECT doctor_id FROM quick_phrases WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
     if (!p) throw notFound('Ibora');
-    if (ctx.role === 'manager' ? p.doctor_id !== null : p.doctor_id !== ctx.doctorId) throw forbidden('Faqat o‘z iboralaringizni o‘chira olasiz');
+    const mine = ctx.role === 'manager' ? p.doctor_id === null : (!!ctx.doctorId && p.doctor_id !== null && p.doctor_id === ctx.doctorId);
+    if (!mine) throw forbidden('Faqat o‘z iboralaringizni o‘chira olasiz');
     await this.db.pool.query(`DELETE FROM quick_phrases WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
     return { data: { ok: true } };
   }

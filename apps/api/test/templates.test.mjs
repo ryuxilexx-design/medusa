@@ -197,6 +197,13 @@ test('qayta qabul: tasdiqlashda sana → bemor kartasida follow_up.booked=false 
   const otherDoc = docs.find((d) => d.id !== me.doctor_id);
   const wrong = await doctor.post('/appointments', { patient_id: open.patient_id, branch_id: branch, doctor_id: otherDoc.id, service_id: svc.id, date, start_time: slot }, { 'Idempotency-Key': randomUUID() });
   assert.equal(wrong.status, 403, wrong.text);
+  // …and only for a patient they have already seen (a signed note): a booking must never be what grants access
+  const stranger = (await pool.query(
+    `SELECT p.id FROM patients p WHERE p.tenant_id = (SELECT tenant_id FROM doctors WHERE id = $1)
+        AND NOT EXISTS (SELECT 1 FROM encounters e JOIN clinical_notes n ON n.encounter_id = e.id WHERE e.patient_id = p.id AND e.doctor_id = $1 AND n.status = 'signed')
+      LIMIT 1`, [me.doctor_id])).rows[0];
+  const unseen = await doctor.post('/appointments', { patient_id: stranger.id, branch_id: branch, doctor_id: me.doctor_id, service_id: svc.id, date, start_time: slot }, { 'Idempotency-Key': randomUUID() });
+  assert.equal(unseen.status, 403, unseen.text);
   const book = await doctor.post('/appointments', { patient_id: open.patient_id, branch_id: branch, doctor_id: me.doctor_id, service_id: svc.id, date, start_time: slot }, { 'Idempotency-Key': randomUUID() });
   assert.equal(book.status, 201, book.text);
   const appt = (await registrar.get(`/appointments/${book.body.data.id}`)).body.data;
