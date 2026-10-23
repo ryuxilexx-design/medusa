@@ -299,6 +299,15 @@ test('inventarizatsiya: kutilgan → sanalgan → farq sababi → rahbar tasdig�
   assert.equal(await batchQty(c.lines[0].batch_id), q0 - 1);
   const adj = (await pool.query(`SELECT kind, type, quantity FROM inventory_movements WHERE count_id = $1`, [c.id])).rows;
   assert.deepEqual(adj.map((x) => [x.kind, x.type, Number(x.quantity)]), [['adjust', 'out', 1]]);
+  // a manager who entered a counted quantity cannot approve that count (the person counting ≠ the person approving)
+  const s2 = await keeper.post('/warehouse/counts', { branch_id: BC, scope: 'controlled', commission: ['Sherzod Qodirov', 'Dilnoza Karimova', 'Feruza Mirzayeva'] });
+  assert.equal(s2.status, 201, s2.text);
+  const c2 = (await keeper.get(`/warehouse/counts/${s2.body.data.id}`)).body.data;
+  const lines2 = c2.lines.map((l) => ({ line_id: l.id, counted_qty: Number(l.expected_qty), reason: null }));
+  assert.equal((await manager.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2.slice(0, 1) })).status, 200);
+  await keeper.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2.slice(1) });
+  assert.equal((await keeper.post(`/warehouse/counts/${c2.id}/submit`)).status, 200);
+  assert.equal((await manager.post(`/warehouse/counts/${c2.id}/decide`, { approve: true })).status, 409, 'sanagan rahbar o‘zi tasdiqlamaydi');
   await ledgerMatchesBatches();
 });
 

@@ -668,8 +668,8 @@ export class WarehouseController {
       if (!cnt) throw notFound('Inventarizatsiya');
       if (cnt.status !== 'open') throw staleState();
       for (const l of input.lines) {
-        const r = await c.query(`UPDATE inventory_count_lines SET counted_qty = $3, reason = $4 WHERE id = $1 AND count_id = $2`,
-          [l.line_id, id, l.counted_qty == null ? null : fromC(toC(l.counted_qty)), l.reason]);
+        const r = await c.query(`UPDATE inventory_count_lines SET counted_qty = $3, reason = $4, counted_by = $5 WHERE id = $1 AND count_id = $2`,
+          [l.line_id, id, l.counted_qty == null ? null : fromC(toC(l.counted_qty)), l.reason, ctx.membershipId || null]);
         if (!r.rowCount) throw invalid({ lines: 'Qator topilmadi' });
       }
       return { data: { ok: true } };
@@ -687,7 +687,7 @@ export class WarehouseController {
       if (missing) throw invalid({ lines: `${missing} ta qator sanalmagan` });
       const noReason = (await c.query(`SELECT count(*)::int AS n FROM inventory_count_lines WHERE count_id = $1 AND counted_qty <> expected_qty AND reason IS NULL`, [id])).rows[0].n;
       if (noReason) throw invalid({ lines: `${noReason} ta farq uchun sabab yozilmagan` });
-      await c.query(`UPDATE inventory_counts SET status = 'submitted', submitted_at = $2 WHERE id = $1`, [id, now()]);
+      await c.query(`UPDATE inventory_counts SET status = 'submitted', submitted_at = $2, submitted_by = $3 WHERE id = $1`, [id, now(), ctx.membershipId || null]);
       await audit(c, ctx, 'warehouse.count_submit', 'inventory_count', id, `Inventarizatsiya I-${cnt.number} topshirildi`, cnt.branch_id);
       return { data: { ok: true } };
     });
@@ -703,7 +703,9 @@ export class WarehouseController {
       if (!cnt) throw notFound('Inventarizatsiya');
       if (cnt.status !== 'submitted') throw staleState();
       // the person who counted cannot approve their own differences (same rule as write-off acts)
-      if (cnt.started_by === ctx.membershipId) throw conflict('SECOND_SIGNATURE', 'Ikkinchi imzo boshqa xodimdan bo‘lsin');
+      // nobody who started, counted or submitted the count decides its differences
+      const counted = (await c.query(`SELECT 1 FROM inventory_count_lines WHERE count_id = $1 AND counted_by = $2 LIMIT 1`, [id, ctx.membershipId])).rowCount;
+      if (cnt.started_by === ctx.membershipId || cnt.submitted_by === ctx.membershipId || counted) throw conflict('SECOND_SIGNATURE', 'Ikkinchi imzo boshqa xodimdan bo‘lsin');
       const docNo = `${DOC_PREFIX.count}-${cnt.number}`;
       let adjusted = 0;
       if (input.approve) {
