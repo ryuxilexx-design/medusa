@@ -10,6 +10,8 @@ export interface Me {
   membership_id: string; name: string; title: string | null; role: Role; tenant_id: string; clinic_name: string;
   doctor_id: string | null; doctor_specialty: string | null; branches: { id: string; name: string; code: string }[];
   today: string; now: string; demo: boolean; ai_mode: 'off' | 'sample' | 'live'; ai_off_reason: string | null;
+  /** Doctor dictation: local = the clinic's own speech server, cloud = OpenAI, off (with a short reason). */
+  dictation_mode: 'off' | 'local' | 'cloud'; dictation_off_reason: string | null;
   /** Interface language saved for this person (staff account) or this session (demo card). */
   locale: Locale;
   /** 'demo' = role card, 'password' = real staff account */

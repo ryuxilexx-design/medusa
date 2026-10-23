@@ -31,10 +31,10 @@ export class ErrorFilter implements ExceptionFilter {
     const request_id = req.requestId;
     let status = 500, code = 'INTERNAL', message = 'Kutilmagan xatolik. Qayta urinib ko‘ring.', fields: Record<string, string> | undefined, extra: any;
     let key: MessageKey | undefined, params: Params | undefined;
-    if (err?.type === 'entity.too.large' || err?.status === 413) {
-      status = 413; code = 'TOO_LARGE'; message = 'So‘rov juda katta';
-    } else if (err instanceof AppError) {
+    if (err instanceof AppError) {
       ({ status, code, message, fields, extra, key, params } = err);
+    } else if (err?.type === 'entity.too.large' || err?.status === 413) {
+      status = 413; code = 'TOO_LARGE'; message = 'So‘rov juda katta';
     } else if (err instanceof HttpException) {
       status = err.getStatus();
       code = status === 404 ? 'NOT_FOUND' : 'HTTP_' + status;

@@ -316,6 +316,16 @@ export const uziReportSchema = z.object({
 });
 
 export const aiNoteDraftSchema = z.object({ text: z.string().trim().min(10, 'Kamida 10 belgi kiriting').max(6000), encounter_id: uuid.optional() });
+/** Doctor dictation (multipart text fields beside the `audio` file): which note field, or `all` for the whole note. */
+export const DICTATION_TARGETS = [...NOTE_TEXT_FIELDS, 'all'] as const;
+export type DictationTarget = (typeof DICTATION_TARGETS)[number];
+export const dictationSchema = z.object({
+  field: z.enum(DICTATION_TARGETS, { errorMap: () => ({ message: 'Maydonni tanlang' }) }),
+  encounter_id: uuid,
+  language: z.enum(['uz', 'ru']).optional(),
+  structure: z.enum(['0', '1']).optional(),
+  seconds: z.coerce.number().min(0).max(600).optional(),
+});
 export const icd10SuggestSchema = z.object({ text: z.string().trim().min(3, 'Tashxis matnini kiriting').max(2000), encounter_id: uuid.optional() });
 export const newsFeedbackSchema = z.object({ useful: z.boolean() });
 /** Extra news topics a doctor follows besides their own specialty (at most 5). */

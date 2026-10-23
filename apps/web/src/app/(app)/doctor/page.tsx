@@ -15,12 +15,13 @@ import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { NewsCard } from '@/components/news-card';
 import { DocumentsCard } from '@/components/documents-card';
 import { AllergiesPanel } from '@/components/allergies';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
 import { applyFields, type Choice, FieldApplyList } from '@/components/apply-fields';
 import { QuickPhrases, SaveTemplateModal, TemplateModal, useFieldDefs } from '@/components/note-templates';
 import { BookingModal } from '@/components/booking';
+import { DictationBar, type DictResult, MicButton, useDictation } from '@/components/dictation';
 
 type TextKey = 'complaints' | 'anamnesis' | 'examination' | 'diagnosis' | 'recommendations' | 'follow_up_date' | 'bp_sys' | 'bp_dia' | 'pulse' | 'temp';
 type NoteForm = Record<TextKey, string> & { icd10: Icd[] };
@@ -183,6 +184,36 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   const lastAttempt = useRef<NoteForm | null>(null); // text of the most recent save whose outcome is unknown/failed
   const fieldRefs = useRef<Partial<Record<TextKey, HTMLTextAreaElement | null>>>({});
 
+  // ---- dictation: a field's text goes in at the cursor (or under the text); the whole note opens the apply dialog ----
+  const dictOn = me.dictation_mode !== 'off';
+  const [dictResult, setDictResult] = useState<DictResult | null>(null);
+  /** where the cursor was when a field lost focus, and whether focus went straight to that field's microphone */
+  const lastSel = useRef<{ key: TextKey; start: number; end: number; toMic: boolean } | null>(null);
+  const insertAt = useRef<{ key: TextKey; start: number; end: number } | null>(null);
+  const rememberCursor = (k: TextKey) => {
+    const el = fieldRefs.current[k];
+    const sel = el && document.activeElement === el ? { start: el.selectionStart, end: el.selectionEnd }
+      : lastSel.current?.key === k && lastSel.current.toMic ? lastSel.current : null;
+    insertAt.current = sel ? { key: k, start: sel.start, end: sel.end } : null;
+  };
+  const insertDictated = (k: TextKey, text: string) => {
+    const at = insertAt.current?.key === k ? insertAt.current : null;
+    insertAt.current = null;
+    setForm((f) => {
+      const v = f![k];
+      let next: string;
+      if (at && v.trim()) {
+        const before = v.slice(0, Math.min(at.start, v.length)), after = v.slice(Math.min(at.end, v.length));
+        next = `${before}${before && !/\s$/.test(before) ? ' ' : ''}${text}${after && !/^\s/.test(after) ? ' ' : ''}${after}`;
+      } else next = v.trim() ? `${v.replace(/\s+$/, '')}\n${text}` : text;
+      return { ...f!, [k]: next };
+    });
+    setErrors((x) => ({ ...x, [k]: '' }));
+    toast.info(t('dict.inserted'));
+    requestAnimationFrame(() => fieldRefs.current[k]?.focus({ preventScroll: true }));
+  };
+  const dict = useDictation({ encounterId, structure: me.ai_mode !== 'off', onResult: (r) => (r.field === 'all' ? setDictResult(r) : insertDictated(r.field, r.text)) });
+
   /**
    * Saves the draft. If an earlier save reached the server but its response was lost, the server version has moved on:
    * we detect that (server text == our last attempt), adopt the server version and save the current text again.
@@ -252,15 +283,21 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   // the summary stays only while a required field is still empty (it clears as soon as they are filled)
   const missingToSign = REQUIRED_FOR_SIGN.some((k) => errors[k] === t('note.fillToSign'));
   const aiDisabledReason = me.ai_mode === 'off' ? (me.ai_off_reason ?? t('note.aiOff')).replace(/\.$/, '') : null;
+  const applyDraft = (d: Partial<NoteForm>, done: MessageKey = 'note.aiApplied') => { if (!Object.keys(d).length) { toast.info(t('ai.nothingApplied')); return; } setForm((f) => ({ ...f!, ...d })); setErrors((x) => ({ ...x, ...Object.fromEntries(Object.keys(d).map((k) => [k, ''])) })); toast.info(t(done)); };
   const printLink = <LinkButton size="sm" variant="ghost" target="_blank" href={`/print/note/${encounterId}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>;
   // a chip puts its line under the text already in the field (a new line), never over it
   const insertPhrase = (k: NoteTextField) => (text: string) => { setForm((f) => ({ ...f!, [k]: f![k].trim() ? `${f![k].replace(/\s+$/, '')}\n${text}` : text })); setErrors((x) => ({ ...x, [k]: '' })); };
   const textField = (f: (typeof FIELDS)[number]) => (
     <div key={f.key} className="space-y-2">
       <Field label={t(f.label)} required={f.required} error={errors[f.key]}>
-        {(id) => <Textarea ref={(el) => { fieldRefs.current[f.key] = el; }} id={id} rows={f.rows} value={form[f.key]} onChange={set(f.key)} invalid={!!errors[f.key]} placeholder={t('common.notEntered')} />}
+        {(id) => <Textarea ref={(el) => { fieldRefs.current[f.key] = el; }} id={id} rows={f.rows} value={form[f.key]} onChange={set(f.key)} invalid={!!errors[f.key]} placeholder={t('common.notEntered')}
+          onBlur={(e) => { lastSel.current = { key: f.key, start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd, toMic: (e.relatedTarget as HTMLElement | null)?.dataset?.testid === `dict-${f.key}` }; }} />}
       </Field>
-      <QuickPhrases field={f.key as NoteTextField} value={form[f.key]} textarea={{ current: fieldRefs.current[f.key] ?? null }} onInsert={insertPhrase(f.key as NoteTextField)} />
+      <div className="flex flex-wrap items-start gap-2">
+        <div className="min-w-0 flex-1"><QuickPhrases field={f.key as NoteTextField} value={form[f.key]} textarea={{ current: fieldRefs.current[f.key] ?? null }} onInsert={insertPhrase(f.key as NoteTextField)} /></div>
+        {dictOn && <MicButton d={dict} target={f.key as NoteTextField} className="ml-auto" label={t('dict.fieldTitle', { field: t(f.label) })} onBeforeStart={() => rememberCursor(f.key)}>{t('dict.field')}</MicButton>}
+      </div>
+      <DictationBar d={dict} target={f.key as NoteTextField} />
     </div>
   );
   const vital = (k: 'bp_sys' | 'bp_dia' | 'pulse' | 'temp', cls: string, mode: 'numeric' | 'decimal' = 'numeric') => (
@@ -280,10 +317,14 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
             <Button size="sm" icon={<LayoutTemplate className="h-4 w-4 text-brand-600" />} data-testid="tpl-open" onClick={() => setTplOpen(true)}>{t('tpl.button')}</Button>
             <Button size="sm" icon={<Sparkles className="h-4 w-4 text-brand-600" />} disabled={!!aiDisabledReason} title={aiDisabledReason ?? t('note.aiButtonTitle')} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</Button>
             {FIELDS.some((f) => form[f.key].trim()) && <Button size="sm" variant="ghost" icon={<Save className="h-4 w-4" />} onClick={() => setSaveTplOpen(true)}>{t('tpl.save')}</Button>}
+            {dictOn && <MicButton d={dict} target="all" variant="secondary" label={t('dict.wholeNote')}>{t('dict.wholeNote')}</MicButton>}
             {aiDisabledReason && <span className="text-[0.8125rem] text-slate-600">{t('note.aiOffLine', { reason: aiDisabledReason })}</span>}
+            {!dictOn && me.dictation_off_reason && <span className="text-[0.8125rem] text-slate-600" data-testid="dict-off">{t('dict.offLine', { reason: me.dictation_off_reason.replace(/\.$/, '') })}</span>}
+            {dictOn && dict.micBlocked && <span className="text-[0.8125rem] text-red-700">{t('dict.offLine', { reason: t('dict.micBlocked') })}</span>}
           </Toolbar>
         )}
         <div className="space-y-4 p-5">
+          {!signed && <DictationBar d={dict} target="all" />}
           {signed && <p className="text-[0.8125rem] text-slate-600">{t('note.signedBy', { name: enc.data.note.signed_by_name, at: fmtDateTime(enc.data.note.signed_at) })}</p>}
           <IntakePanel appointmentId={appointmentId} recordAllergyFor={enc.data.patient?.id} onUseComplaints={signed ? undefined : (text) => {
             setForm((f) => ({ ...f!, complaints: f!.complaints.trim() ? `${f!.complaints.trim()}\n${text}` : text }));
@@ -368,8 +409,8 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
         </div>
       )}
 
-      <AiModal open={aiOpen} encounterId={encounterId} current={form} onClose={() => setAiOpen(false)}
-        onApply={(d) => { if (!Object.keys(d).length) { toast.info(t('ai.nothingApplied')); return; } setForm((f) => ({ ...f!, ...d })); setErrors((x) => ({ ...x, ...Object.fromEntries(Object.keys(d).map((k) => [k, ''])) })); toast.info(t('note.aiApplied')); }} />
+      <AiModal open={aiOpen} encounterId={encounterId} current={form} onClose={() => setAiOpen(false)} onApply={(d) => applyDraft(d)} />
+      <DictationModal result={dictResult} current={form} onClose={() => setDictResult(null)} onApply={applyDraft} />
       <TemplateModal open={tplOpen} onClose={() => setTplOpen(false)} encounterId={encounterId} current={form} existingOrders={enc.data.orders}
         onApply={({ fields, icd10 }) => {
           setForm((f) => ({ ...f!, ...fields, icd10: [...f!.icd10, ...icd10].slice(0, 5) }));
@@ -580,6 +621,48 @@ function AiModal({ open, onClose, onApply, encounterId, current }: { open: boole
               </div>
             ) : <p className="rounded-lg border-2 border-dashed border-slate-300 p-8 text-center text-[0.9375rem] text-slate-600">{t('ai.empty')}</p>}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * The whole note dictated: the transcript split into the five fields (AI note draft, when AI is on) with the same
+ * keep / replace / append choice as the AI and template dialogs; without a draft the doctor puts the text into one field.
+ */
+function DictationModal({ result, current, onClose, onApply }: { result: DictResult | null; current: NoteForm; onClose: () => void; onApply: (d: Partial<NoteForm>, done?: MessageKey) => void }) {
+  const t = useT();
+  const fields = useFieldDefs();
+  const [choice, setChoice] = useState<Partial<Record<AiField, Choice>>>({});
+  const [text, setText] = useState('');
+  const [into, setInto] = useState<AiField>('complaints');
+  useEffect(() => { setChoice({}); setText(result?.text ?? ''); setInto('complaints'); }, [result]);
+  const d = result?.draft?.draft;
+  const draftOf = (k: AiField) => (d && d[k] && d[k] !== 'Kiritilmagan' ? String(d[k]).trim() : '');
+  const apply = () => {
+    if (d) onApply(applyFields(AI_FIELDS, draftOf, current, choice));
+    else if (text.trim()) onApply({ [into]: current[into].trim() ? `${current[into].replace(/\s+$/, '')}\n${text.trim()}` : text.trim() }, 'dict.inserted');
+    onClose();
+  };
+  const label = result?.draft?.mode === 'sample' ? t('ai.sampleLabel') : t('ai.liveLabel');
+  return (
+    <Modal open={!!result} onClose={onClose} width="max-w-3xl" dirty={!!result} title={t('dict.resultTitle')}
+      footer={<><ModalCancel /><Button variant="primary" disabled={!d && !text.trim()} onClick={apply} data-testid="dict-apply">{d ? t('ai.apply') : t('dict.add')}</Button></>}>
+      <div className="space-y-3">
+        <Alert tone={result?.draft?.mode === 'sample' ? 'yellow' : 'blue'}>{d ? t('ai.rules', { label }) : t('dict.review')}</Alert>
+        {result?.draft_error && <Alert tone="yellow">{t('dict.noDraft', { msg: result.draft_error.message })}</Alert>}
+        {d ? (
+          <>
+            <FieldApplyList fields={fields} draftOf={draftOf} current={current} choice={choice} onChoice={(k, c) => setChoice((x) => ({ ...x, [k]: c }))} testIdPrefix="dict-choice" />
+            <details className="rounded-lg border border-slate-200 px-3 py-2"><summary className="cursor-pointer text-sm font-semibold text-slate-800">{t('dict.transcript')}</summary>
+              <p className="mt-1 whitespace-pre-wrap text-[0.9375rem] text-slate-900">{result?.text}</p></details>
+          </>
+        ) : (
+          <>
+            <Field label={t('dict.transcript')}>{(id) => <Textarea id={id} data-autofocus rows={6} value={text} onChange={(e) => setText(e.target.value)} />}</Field>
+            <Field label={t('dict.putInto')}>{(id) => <Select id={id} className="sm:w-72" value={into} onChange={(e) => setInto(e.target.value as AiField)}>{fields.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}</Select>}</Field>
+          </>
+        )}
       </div>
     </Modal>
   );

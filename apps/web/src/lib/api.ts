@@ -15,8 +15,9 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   try {
     res = await fetch(`/api/v1${path}`, {
       method: opts.method ?? 'GET',
-      headers: { ...(opts.body !== undefined ? { 'content-type': 'application/json' } : {}), ...opts.headers },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      // a FormData body (a recording) goes as multipart: the browser sets the content type with its boundary
+      headers: { ...(opts.body !== undefined && !(opts.body instanceof FormData) ? { 'content-type': 'application/json' } : {}), ...opts.headers },
+      body: opts.body === undefined ? undefined : opts.body instanceof FormData ? opts.body : JSON.stringify(opts.body),
       credentials: 'same-origin',
       cache: 'no-store',
       signal: opts.signal,

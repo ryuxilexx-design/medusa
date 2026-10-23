@@ -19,6 +19,8 @@ import { ReportsController } from './modules/reports.controller';
 import { InventoryController } from './modules/inventory.controller';
 import { DiagnosticsController } from './modules/diagnostics.controller';
 import { AiController } from './modules/ai.controller';
+import { DictationController } from './modules/dictation.controller';
+import { SttClient } from './ai/stt';
 import { AuthController } from './modules/auth.controller';
 import { StaffController } from './modules/staff.controller';
 import { ScheduleExceptionsController } from './modules/schedule-exceptions.controller';
@@ -62,8 +64,8 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController],
-  providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController],
+  providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

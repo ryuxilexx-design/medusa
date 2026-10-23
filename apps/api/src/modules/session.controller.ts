@@ -3,6 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { Request, Response } from 'express';
 import { isLocale, loginSchema, preferencesSchema } from '@meduza/contracts';
 import { AiClient } from '../ai/ai-client';
+import { SttClient } from '../ai/stt';
 import { reasonText } from './ai.controller';
 import { assertDatabaseName, RealTenantsPresentError, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
 import { fiscalProviderName } from '../fiscal/provider';
@@ -34,7 +35,7 @@ const demoOnly = () => { if (!config.demoEnabled) throw new AppError(404, 'NOT_F
 
 @Controller()
 export class SessionController {
-  constructor(private db: Db, private ai: AiClient) {}
+  constructor(private db: Db, private ai: AiClient, private stt: SttClient) {}
 
   @Public() @Get('demo/accounts')
   async accounts() {
@@ -80,6 +81,8 @@ export class SessionController {
         membership_id: ctx.membershipId, name: ctx.name, title: ctx.title, role: ctx.role, tenant_id: ctx.tenantId, clinic_name: ctx.tenantName,
         doctor_id: ctx.doctorId, doctor_specialty: ctx.doctorSpecialty, branches, auth_kind: ctx.authKind, must_change_password: ctx.mustChangePassword,
         today: today(), now: now().toISOString(), demo: config.demoEnabled, clock_reason: (await this.db.one(`SELECT set_reason FROM demo_clock WHERE id = 1`))?.set_reason ?? null, ai_mode: this.ai.clinicalMode(ctx.tenantId), ai_off_reason: reasonText(ctx, this.ai.clinicalOffReason(ctx.tenantId)),
+        // doctor dictation: local = the clinic's own speech server, cloud = OpenAI (allowed here), off = with a short reason
+        dictation_mode: this.stt.mode(), dictation_off_reason: reasonText(ctx, this.stt.offReason()),
         locale: ctx.locale, text_size: ctx.textSize,
         // fiscal mode of the clinic: the cashier screens show the KKM receipt field only when a receipt is owed (not «none»)
         fiscal_provider: await fiscalProviderName(this.db.pool, ctx.tenantId),
