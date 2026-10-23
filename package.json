@@ -30,7 +30,8 @@
     "db:readonly-role": "node database/scripts/readonly-role.mjs",
     "db:create-clinic": "npm run build:packages && node database/dist/src/cli.js create-clinic",
     "db:reset-password": "npm run build:packages && node database/dist/src/cli.js reset-password",
-    "db:import-icd10": "npm run build:packages && node database/dist/src/cli.js import-icd10"
+    "db:import-icd10": "npm run build:packages && node database/dist/src/cli.js import-icd10",
+    "db:import-drugs": "npm run build:packages && node database/dist/src/cli.js import-drugs"
   },
   "devDependencies": {
     "railway": "3.12.0",

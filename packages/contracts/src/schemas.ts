@@ -444,6 +444,8 @@ export const certificateBodySchema = z.object({
 });
 
 export const prescriptionItemSchema = z.object({
+  /** The drug picked from the reference list (migration 028): enables the allergy and duplicate checks. Free text stays possible. */
+  drug_id: uuid.nullable().optional(),
   name: trimmed(2, 120, 'Dori nomi'),
   form: optionalText(60),
   dose: trimmed(1, 60, 'Doza'),
@@ -454,6 +456,8 @@ export const prescriptionItemSchema = z.object({
 export const prescriptionBodySchema = z.object({
   items: z.array(prescriptionItemSchema).min(1, 'Kamida bitta dori kiriting').max(15, 'Ko‘pi bilan 15 ta dori'),
   notes: optionalText(1000),
+  /** Required when a drug hits a severe allergy (409 ALLERGY_CONFLICT otherwise); kept in the document and audited. */
+  override_reason: optionalText(300),
 });
 
 export const documentCreateSchema = z.discriminatedUnion('kind', [
@@ -462,6 +466,28 @@ export const documentCreateSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('prescription'), body: prescriptionBodySchema }),
 ]);
 export const documentVoidSchema = z.object({ reason: trimmed(3, 300, 'Bekor qilish sababi') });
+
+/** Items to check against the patient's allergies before the prescription is issued (same item shape). */
+export const prescriptionCheckSchema = z.object({ items: z.array(prescriptionItemSchema.partial({ name: true, dose: true, frequency: true, duration: true })).max(15) });
+
+// ---------- Drugs and structured allergies (migration 028, docs/DRUGS.md) ----------
+export const DRUG_FORMS = ['tab', 'caps', 'susp', 'syrup', 'sol_oral', 'drops_oral', 'gran', 'powder', 'lozenge', 'inj', 'inhaler', 'neb', 'spray_nasal', 'drops_nasal',
+  'drops_eye', 'drops_ear', 'spray_oral', 'cream', 'ointment', 'gel', 'sol_ext', 'spray', 'shampoo', 'supp', 'pess', 'patch'] as const;
+export const ALLERGY_SEVERITIES = ['mild', 'moderate', 'severe', 'unknown'] as const;
+export type AllergySeverity = (typeof ALLERGY_SEVERITIES)[number];
+export const allergyCreateSchema = z.object({
+  class_code: z.string().regex(/^[a-z][a-z0-9_]{1,40}$/, 'Noma’lum allergiya sinfi').nullable().optional(),
+  drug_id: uuid.nullable().optional(),
+  free_text: optionalText(300),
+  reaction: optionalText(300),
+  severity: z.enum(ALLERGY_SEVERITIES).default('unknown'),
+  /** manual — the doctor's own entry; intake — what the patient said (reception, or the Telegram intake answer). */
+  source: z.enum(['manual', 'intake']).default('manual'),
+}).superRefine((d, ctx) => {
+  if (!d.class_code && !d.drug_id && !d.free_text) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['free_text'], message: 'Allergiya sinfi, dori yoki matnni kiriting' });
+  if (d.free_text && d.free_text.length < 2) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['free_text'], message: 'Kamida 2 belgi kiriting' });
+});
+export const allergyWithdrawSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
 
 export const DOCUMENT_KIND_LABEL: Record<'referral' | 'certificate' | 'prescription', string> = {
   referral: 'Yo‘llanma', certificate: 'Tibbiy ma’lumotnoma', prescription: 'Dori tavsiyasi',

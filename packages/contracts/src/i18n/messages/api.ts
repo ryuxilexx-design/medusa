@@ -384,4 +384,16 @@ export const api = {
   'api.erasure.anonymised': ['Bemor kartasi anonimlashtirilgan — ma’lumotlarni o‘zgartirib bo‘lmaydi', 'Карта пациента анонимизирована — данные изменить нельзя'],
   'api.erasure.blocked': ['Anonimlashtirish mumkin emas: bemorning qarzi, depoziti yoki kelgusi qabuli bor', 'Анонимизация невозможна: у пациента есть долг, депозит или предстоящий приём'],
   'api.erasure.rateLimit': ['Eksport chegarasi: bir daqiqada 5 ta. Birozdan keyin qayta urinib ko‘ring.', 'Лимит экспорта: 5 в минуту. Повторите чуть позже.'],
+  // ---------- drugs and structured allergies (migration 028, docs/DRUGS.md) ----------
+  'api.noun.allergy': ['Allergiya yozuvi', 'Запись об аллергии'],
+  'api.allergy.registrarTextOnly': ['Registrator faqat bemor aytgan allergiyani matn bilan yozadi', 'Регистратор записывает только аллергию со слов пациента, текстом'],
+  'api.allergy.withdrawn': ['Allergiya yozuvi allaqachon bekor qilingan', 'Запись об аллергии уже отменена'],
+  'api.allergy.confirmed': ['Allergiya allaqachon tasdiqlangan', 'Аллергия уже подтверждена'],
+  'api.allergy.conflict': ['{drug}: bemorda og‘ir allergiya qayd etilgan. Dorini almashtiring yoki sababini yozing.', '{drug}: у пациента отмечена тяжёлая аллергия. Замените препарат или укажите причину.'],
+  'api.allergy.unknownClass': ['Noma’lum allergiya sinfi', 'Неизвестный класс аллергенов'],
+  'api.allergy.drugNotFound': ['Dori ro‘yxatda topilmadi', 'Препарат не найден в справочнике'],
+  'api.allergy.duplicate': ['Bu dori retseptda ikki marta yozilgan', 'Этот препарат указан в рецепте дважды'],
+  'api.allergy.overrideShort': ['Sababni aniqroq yozing (kamida 5 belgi)', 'Опишите причину подробнее (не менее 5 символов)'],
+  'api.allergy.needWhat': ['Allergiya sinfi, dori yoki matnni kiriting', 'Укажите класс аллергенов, препарат или текст'],
+  'api.allergy.min2': ['Kamida 2 belgi kiriting', 'Введите не менее 2 символов'],
 } as const satisfies Catalog;

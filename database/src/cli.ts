@@ -4,6 +4,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import { randomUUID } from 'crypto';
 import { buildSeed, createPool, ensureStarterTemplates, migrate, resetDemo, SEED_IDS } from './index';
 import { generateTempPassword, hashPassword } from './password';
+import { parseDrugsCsv, upsertDrugs } from './drugs';
 
 /** --key value pairs from argv. */
 function args(argv: string[]): Record<string, string> {
@@ -151,6 +152,30 @@ async function importIcd10(pool: ReturnType<typeof createPool>, argv: string[]) 
   } catch (e) { await c.query('ROLLBACK').catch(() => undefined); throw e; } finally { c.release(); }
 }
 
+/**
+ * Loads an official drug list (docs/DRUGS.md): CSV inn;inn_ru;atc;forms;allergy_classes;prescription_only (header optional).
+ * Existing INNs are updated, new ones added; with --replace the starter drugs missing from the file are deactivated
+ * (never deleted: issued prescriptions keep their own snapshot, and allergies may point at a drug).
+ */
+async function importDrugs(pool: ReturnType<typeof createPool>, argv: string[]) {
+  const file = argv.find((a) => !a.startsWith('--'));
+  if (!file) { console.error('Foydalanish: npm run db:import-drugs -- <fayl.csv> [--replace]'); process.exit(2); }
+  const fs = await import('fs');
+  const { rows, bad } = parseDrugsCsv(fs.readFileSync(file, 'utf8'));
+  if (!rows.length) { console.error('Faylda yaroqli qator topilmadi'); process.exit(2); }
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    const { n, unknownClasses } = await upsertDrugs(c, rows, 'official');
+    let off = 0;
+    if (argv.includes('--replace')) off = (await c.query(`UPDATE drugs SET active = false, updated_at = now() WHERE source = 'starter' AND active AND NOT (lower(inn) = ANY($1))`, [rows.map((r) => r.inn.toLowerCase())])).rowCount ?? 0;
+    await c.query('COMMIT');
+    console.log(`Dorilar: ${n} ta yuklandi${off ? `, ${off} ta boshlang‘ich dori o‘chirildi` : ''}` +
+      `${unknownClasses.length ? `; noma’lum allergiya sinflari (tashlab ketildi): ${unknownClasses.join(', ')}` : ''}` +
+      `${bad.length ? `; o‘tkazib yuborilgan qatorlar: ${bad.slice(0, 20).join(', ')}${bad.length > 20 ? '…' : ''}` : ''}`);
+  } catch (e) { await c.query('ROLLBACK').catch(() => undefined); throw e; } finally { c.release(); }
+}
+
 async function main() {
   const cmd = process.argv[2];
   const pool = createPool();
@@ -159,6 +184,7 @@ async function main() {
     if (cmd === 'create-clinic') await createClinic(pool, args(process.argv.slice(3)));
     if (cmd === 'reset-password') await resetPassword(pool, args(process.argv.slice(3)));
     if (cmd === 'import-icd10') await importIcd10(pool, process.argv.slice(3));
+    if (cmd === 'import-drugs') await importDrugs(pool, process.argv.slice(3));
     if (cmd === 'reset' || cmd === 'seed') {
       const demoDate = process.env.DEMO_DATE || '2026-10-18';
       const { counts, clock } = await resetDemo(pool, demoDate, process.env.DEMO_TIME);

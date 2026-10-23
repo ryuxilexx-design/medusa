@@ -26,6 +26,7 @@ import { TelegramController } from './telegram/telegram.controller';
 import { SmsController } from './sms/sms.controller';
 import { SmsSender } from './sms/transport';
 import { DocumentsController } from './modules/documents.controller';
+import { AllergiesController, DrugsController } from './modules/drugs.controller';
 import { CashController } from './modules/cash.controller';
 import { DepositsController } from './modules/deposits.controller';
 import { NoteTemplatesController, QuickPhrasesController } from './modules/templates.controller';
@@ -59,7 +60,7 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController],
   providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker],
 })
 export class AppModule implements NestModule {

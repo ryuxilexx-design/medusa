@@ -17,6 +17,7 @@ import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent'
 import { useT } from '@/lib/i18n';
 import { canDeposit, DepositCard, DepositModal } from '@/components/deposits';
 import { PatientRights } from '@/components/patient-rights';
+import { AllergiesPanel, ReportAllergyButton } from '@/components/allergies';
 
 /** Quiet separator between the facts of the header line. */
 const Dot = () => <span className="text-slate-400" aria-hidden="true">·</span>;
@@ -161,6 +162,8 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
             </dl>
           ) : <p className="text-sm text-slate-600">{t('registrar.minimalInfo')}</p>}
         </section>
+        {role === 'doctor' && <AllergiesPanel patientId={pt.id} legacyNote={pt.allergy_note} />}
+        {role === 'registrar' && !pt.anonymised_at && <div><ReportAllergyButton patientId={pt.id} /></div>}
         {pt.consents && <ConsentBlock patientId={pt.id} patientNumber={pt.patient_number} patientName={fullName(pt)} consents={pt.consents} role={role} onRecord={onConsent} locked={!!pt.anonymised_at} />}
         {['manager', 'registrar', 'doctor'].includes(role) && <PatientRights patient={pt} role={role} />}
       </div>

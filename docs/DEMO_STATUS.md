@@ -4,6 +4,12 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Dori ro‘yxati va allergiya tekshiruvi (migratsiya 028, `docs/DRUGS.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Dori tavsiyasida dori ro‘yxatdan tanlanadi (XPN, ruscha nomi, ATX, shakllar; ~417 ta boshlang‘ich dori, **klinik tekshiruv talab etiladi**), erkin matn ham qoladi; tuzilgan allergiyalar (sinf / dori / matn, reaksiya, og‘irligi; registrator faqat «bemor aytdi» matni, shifokor tasdiqlaydi; Telegram so‘rovnomasidan bir bosishda); har bir dori allergiyaga va qisman o‘zaro reaksiyaga tekshiriladi — og‘ir allergiyada sababsiz 409, sabab hujjatda va audit’da; bir XPN ikki marta 422; retsept bo‘yicha dorilar bosma nusxada «DMED e-retsept kerak» | Ishlaydi | API test `drugs.test.mjs` (10 ta): qidiruv, rollar, klinika ajratilishi, append-only trigger, penitsillin → amoksitsillin / seftriakson, og‘ir → 409 / sabab bilan 201 + audit, takror XPN, DMED belgisi. Skrinshot 1366×768 va 390 px, uz + ru (test bazasida) |
+
 ## 00000000000000000. 0.16: shifokor kamroq yozadi — shablonlar, tez iboralar, qayta qabul
 
 | Nima | Holat | Tekshiruv |
