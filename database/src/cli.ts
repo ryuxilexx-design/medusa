@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import { randomUUID } from 'crypto';
-import { buildSeed, createPool, migrate, resetDemo, SEED_IDS } from './index';
+import { buildSeed, createPool, ensureStarterTemplates, migrate, resetDemo, SEED_IDS } from './index';
 import { generateTempPassword, hashPassword } from './password';
 
 /** --key value pairs from argv. */
@@ -57,10 +57,12 @@ async function createClinic(pool: ReturnType<typeof createPool>, a: Record<strin
         services++;
       }
     }
+    // starter note templates (database/seed/templates.ts): the doctors start with something to tap instead of typing
+    const templates = await ensureStarterTemplates(c, tenantId);
     await c.query(`INSERT INTO audit_logs (tenant_id, actor_name, action, resource_type, resource_id, summary) VALUES ($1, 'CLI', 'tenant.create', 'tenant', $2, $3)`,
       [tenantId, tenantId, `Klinika yaratildi: ${name}; rahbar ${managerName} (${login})`]);
     await c.query('COMMIT');
-    console.log(`Klinika yaratildi: ${name}\n  filial: ${branch} (${code})\n  xizmatlar: ${services}\n  rahbar: ${managerName}\n  login: ${login}\n  vaqtinchalik parol: ${temp}\n` +
+    console.log(`Klinika yaratildi: ${name}\n  filial: ${branch} (${code})\n  xizmatlar: ${services}\n  qayd shablonlari: ${templates}\n  rahbar: ${managerName}\n  login: ${login}\n  vaqtinchalik parol: ${temp}\n` +
       `Parolni rahbarga shaxsan bering — birinchi kirishda u yangi parol o‘rnatadi. Bu parol boshqa ko‘rsatilmaydi.`);
   } catch (e) {
     await c.query('ROLLBACK').catch(() => undefined);

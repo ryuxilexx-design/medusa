@@ -128,6 +128,38 @@ export const preferencesSchema = z.object({
 
 export const REQUIRED_FOR_SIGN = ['complaints', 'examination', 'diagnosis', 'recommendations'] as const;
 
+/** Note fields a template or a quick phrase can fill (the vitals and the follow-up date are never templated). */
+export const NOTE_TEXT_FIELDS = ['complaints', 'anamnesis', 'examination', 'diagnosis', 'recommendations'] as const;
+export type NoteTextField = (typeof NOTE_TEXT_FIELDS)[number];
+const tplIcd = z.string().regex(/^[A-Z][0-9]{2}(\.[0-9]{1,2})?$/, 'Noto‘g‘ri MKB-10 kodi');
+/** A note template: name, specialty (null = every doctor), pre-written fields, ICD codes and the orders it proposes. */
+export const noteTemplateSchema = z.object({
+  name: trimmed(1, 120, 'Shablon nomi'),
+  specialty: z.string().max(80, 'Mutaxassislik 80 belgidan oshmasin').optional().nullable().transform((s) => { const v = s == null ? '' : cleanText(s).trim(); return v === '' ? null : v; }),
+  fields: z.object({
+    complaints: optionalText(4000), anamnesis: optionalText(4000), examination: optionalText(4000), diagnosis: optionalText(2000), recommendations: optionalText(4000),
+  }).partial().default({}),
+  icd_codes: z.array(tplIcd).max(5, 'Ko‘pi bilan 5 ta kod').default([]),
+  order_service_ids: z.array(uuid).max(10, 'Ko‘pi bilan 10 ta tekshiruv').default([]),
+  sort: z.number().int().min(0).max(10_000).optional(),
+}).refine((t) => Object.values(t.fields).some(Boolean) || t.icd_codes.length || t.order_service_ids.length, { message: 'Shablon bo‘sh: kamida bitta maydon, kod yoki tekshiruv kiriting', path: ['fields'] });
+export const noteTemplateUpdateSchema = z.object({
+  name: trimmed(1, 120, 'Shablon nomi').optional(),
+  specialty: noteTemplateSchema.innerType().shape.specialty,
+  fields: noteTemplateSchema.innerType().shape.fields.optional(),
+  icd_codes: z.array(tplIcd).max(5, 'Ko‘pi bilan 5 ta kod').optional(),
+  order_service_ids: z.array(uuid).max(10, 'Ko‘pi bilan 10 ta tekshiruv').optional(),
+  sort: z.number().int().min(0).max(10_000).optional(),
+  active: z.boolean().optional(),
+});
+export type NoteTemplateInput = z.infer<typeof noteTemplateSchema>;
+/** A quick phrase: one line for one note field; `shared` (manager only) makes it the clinic's instead of the doctor's. */
+export const quickPhraseSchema = z.object({
+  field: z.enum(NOTE_TEXT_FIELDS, { errorMap: () => ({ message: 'Maydonni tanlang' }) }),
+  text: trimmed(1, 500, 'Ibora'),
+  shared: z.boolean().optional(),
+});
+
 /** Doctor's orders: `items` with a quantity (1–50, a course of procedures) or the older `service_ids` (quantity 1). */
 export const orderItemSchema = z.object({
   service_id: uuid,

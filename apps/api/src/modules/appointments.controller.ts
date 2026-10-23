@@ -55,12 +55,14 @@ export class AppointmentsController {
     return { data: a };
   }
 
-  @Roles('manager', 'registrar') @Post()
+  /** Reception books anyone; a doctor books only their own follow-up (the schedule shows it as the doctor's booking). */
+  @Roles('manager', 'registrar', 'doctor') @Post()
   async create(@CurrentCtx() ctx: Ctx, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
     const input = parse(appointmentCreateSchema, body);
+    if (ctx.role === 'doctor' && input.doctor_id !== ctx.doctorId) throw forbidden('Shifokor faqat o‘z qabuliga yozadi');
     const requestKey = key && key.length >= 8 && key.length <= 100 ? key : null;
     return this.db.tx(async (c) => {
-      const r = await createAppointment(c, ctx, input, requestKey);
+      const r = await createAppointment(c, ctx, input, requestKey, { source: ctx.role === 'doctor' ? 'doctor' : 'staff' });
       return { data: r.replayed ? { id: r.id, replayed: true } : { id: r.id } };
     });
   }

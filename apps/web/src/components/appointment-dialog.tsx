@@ -74,6 +74,7 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
             {appt.phone !== undefined && <KeyVal k={t('registrar.phone')} v={formatPhone(appt.phone)} />}
             <KeyVal k={t('registrar.service')} v={appt.service_name} />
             {(appt.source === 'telegram' || appt.patient_confirmed_at) && <KeyVal k={t('registrar.ap.telegram')} v={<span>{appt.source === 'telegram' ? t('registrar.ap.viaBot') : t('registrar.ap.byRegistry')}{appt.patient_confirmed_at ? `, ${t('registrar.ap.confirmed', { at: fmtDateTime(appt.patient_confirmed_at) })}` : ''}</span>} />}
+            {appt.source === 'doctor' && <KeyVal k={t('fu.title')} v={t('registrar.ap.byDoctor')} />}
             <KeyVal k={t('registrar.doctor')} v={`${appt.doctor_name}, ${appt.specialty}`} />
           </div>
           <div className="divide-y divide-slate-100">

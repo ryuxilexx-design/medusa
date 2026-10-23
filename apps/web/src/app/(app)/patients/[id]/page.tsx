@@ -2,7 +2,7 @@
 import { use, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellOff, CalendarPlus, FileText, MessageSquareText, Pencil, Phone, PiggyBank, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
+import { BellOff, CalendarCheck, CalendarPlus, FileText, MessageSquareText, Pencil, Phone, PiggyBank, Printer, Send, ShieldAlert, Wallet, Zap } from 'lucide-react';
 import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
@@ -10,7 +10,7 @@ import { useSession } from '@/lib/session';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Tabs, Td, Textarea, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus, LabStatus, NoteStatus } from '@/components/status';
 import { PatientFormModal } from '@/components/patient-form';
-import { BookingModal } from '@/components/booking';
+import { type BookingInit, BookingModal } from '@/components/booking';
 import { WalkInModal } from '@/components/walk-in';
 import { LabValues } from '@/components/lab-values';
 import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
@@ -31,7 +31,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   const h = useQuery({ queryKey: ['patient', id, 'history'], queryFn: () => api(`/patients/${id}/history`).then((r) => r.data) });
   const [tab, setTab] = useState<Tab>('overview');
   const [edit, setEdit] = useState(false);
-  const [book, setBook] = useState(false);
+  const [book, setBook] = useState<BookingInit | null>(null);
   const [walkIn, setWalkIn] = useState(false);
   const [allergy, setAllergy] = useState(false);
   const [consentKind, setConsentKind] = useState<ConsentKind | null>(null);
@@ -65,8 +65,16 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
                   pt.phone !== undefined && <span key="phone" className="inline-flex items-center gap-1.5 tabular-nums"><Phone className="h-4 w-4 text-slate-500" aria-hidden="true" />{pt.phone ? formatPhone(pt.phone) : '—'}</span>,
                 ].filter(Boolean).map((el, i) => <span key={i} className="inline-flex items-center gap-2 whitespace-nowrap">{i > 0 && <Dot />}{el}</span>)}
               </p>
-              {(pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined) && (
+              {(pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined || pt.follow_up) && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {/* the doctor's recommended follow-up: reception books it from here; once booked the marker turns green */}
+                  {pt.follow_up && !pt.follow_up.booked && (
+                    <span className="inline-flex flex-wrap items-center gap-2" data-testid="follow-up-marker">
+                      <Badge tone="yellow" icon={<CalendarCheck className="h-3.5 w-3.5" />}>{t('registrar.fu.recommended', { date: fmtDate(pt.follow_up.date), doctor: pt.follow_up.doctor_name })}</Badge>
+                      {(canEdit || role === 'doctor') && <Button size="sm" variant="ghost" className="-my-1" onClick={() => setBook({ patient: pt, doctorId: pt.follow_up.doctor_id, date: pt.follow_up.date, followUp: true })}>{t('registrar.fu.book')}</Button>}
+                    </span>
+                  )}
+                  {pt.follow_up?.booked && <Badge tone="green" icon={<CalendarCheck className="h-3.5 w-3.5" />}>{t('registrar.fu.booked')}</Badge>}
                   {pt.balance_due > 0 && <Badge tone="red" icon={<Wallet className="h-3.5 w-3.5" />}>{t('registrar.debt', { sum: formatSom(pt.balance_due) })}</Badge>}
                   {pt.deposit_balance > 0 && <Badge tone="green" icon={<PiggyBank className="h-3.5 w-3.5" />}>{t('cash.depositBalance', { sum: formatSom(pt.deposit_balance) })}</Badge>}
                   {/* which way the patient's reminders go: Telegram, SMS (clinic's Eskiz channel), or nowhere */}
@@ -83,7 +91,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
               {canDeposit(role) && <Button icon={<PiggyBank className="h-4 w-4" />} onClick={() => setDepositing(true)}>{t('cash.depositButton')}</Button>}
               {canEdit && <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>}
               {canEdit && <Button icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>}
-              {canEdit && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook(true)}>{t('registrar.newAppt')}</Button>}
+              {canEdit && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook({ patient: pt })}>{t('registrar.newAppt')}</Button>}
             </div>
           )}
         </div>
@@ -113,7 +121,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
         )}
       </Card>
       <PatientFormModal open={edit} patient={pt} onClose={() => setEdit(false)} />
-      <BookingModal open={book} init={{ patient: pt }} onClose={() => setBook(false)} />
+      <BookingModal open={!!book} init={book ?? { patient: pt }} onClose={() => setBook(null)} />
       {canEdit && <WalkInModal open={walkIn} patient={pt} onClose={() => setWalkIn(false)} />}
       {role === 'doctor' && <AllergyModal open={allergy} onClose={() => setAllergy(false)} patient={pt} />}
       {depositing && <DepositModal patient={pt} onClose={() => setDepositing(false)} />}

@@ -10,7 +10,12 @@ import { PatientFormModal } from './patient-form';
 import { PatientPicker } from './patient-picker';
 import { useT } from '@/lib/i18n';
 
-export type BookingInit = { patient?: { id: string; last_name: string; first_name: string; patient_number: number }; doctorId?: string; date?: string; time?: string };
+export type BookingInit = {
+  patient?: { id: string; last_name: string; first_name: string; patient_number: number }; doctorId?: string; date?: string; time?: string;
+  /** Follow-up from the signed note: the doctor's «qayta ko‘rik» service is preselected when the doctor has one. */
+  followUp?: boolean;
+};
+const FOLLOW_UP_SERVICE = /qayta|takror|повтор/i;
 
 /** «Qabulga yozish» and reschedule. Availability comes from the server; the server re-checks everything on save. */
 export function BookingModal({ open, onClose, init, reschedule }: { open: boolean; onClose: () => void; init?: BookingInit; reschedule?: any }) {
@@ -51,8 +56,12 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   const doctorServices = useMemo(() => (services.data ?? []).filter((s) => doctor?.service_ids?.includes(s.id)), [services.data, doctor]);
   useEffect(() => {
     if (!doctor || reschedule) return;
-    if (!doctorServices.some((s) => s.id === serviceId)) setServiceId(doctorServices.find((s) => s.category === 'consultation')?.id ?? doctorServices[0]?.id ?? '');
-  }, [doctor, doctorServices, serviceId, reschedule]);
+    if (!doctorServices.some((s) => s.id === serviceId)) {
+      const consult = doctorServices.filter((s) => s.category === 'consultation');
+      const preferred = init?.followUp ? consult.find((s) => FOLLOW_UP_SERVICE.test(s.name)) : undefined;
+      setServiceId(preferred?.id ?? consult[0]?.id ?? doctorServices[0]?.id ?? '');
+    }
+  }, [doctor, doctorServices, serviceId, reschedule, init?.followUp]);
   const service = services.data?.find((s) => s.id === serviceId);
   const effDuration = duration === '' ? service?.duration_min : duration;
 
@@ -108,9 +117,10 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
             {formError && <Alert tone="red">{formError}</Alert>}
             <PatientPicker value={patient ?? null} onChange={pickPatient} error={errors.patient_id} locked={!!reschedule || !!init?.patient} onNew={() => setNewPatient(true)} />
             <Field label={t('registrar.doctor')} required error={errors.doctor_id}>{(id) => (
-              <Select id={id} value={doctorId} invalid={!!errors.doctor_id} onChange={(e) => { setDoctorId(e.target.value); setTime(''); clearError('doctor_id'); }}>
+              <Select id={id} value={doctorId} invalid={!!errors.doctor_id} disabled={me.role === 'doctor'} onChange={(e) => { setDoctorId(e.target.value); setTime(''); clearError('doctor_id'); }}>
                 <option value="">{t('registrar.bk.choose')}</option>
-                {doctors.data?.filter((d) => d.service_ids?.length).map((d) => <option key={d.id} value={d.id}>{d.display_name} — {d.specialty}</option>)}
+                {/* a doctor books only their own follow-up (the server refuses anything else) */}
+                {doctors.data?.filter((d) => d.service_ids?.length && (me.role !== 'doctor' || d.id === me.doctor_id)).map((d) => <option key={d.id} value={d.id}>{d.display_name} — {d.specialty}</option>)}
               </Select>
             )}</Field>
             <Field label={t('registrar.service')} required error={errors.service_id}>{(id) => (

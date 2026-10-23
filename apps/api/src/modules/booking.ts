@@ -112,7 +112,8 @@ export async function walkInSlot(q: Q, tenantId: string, doctorId: string, durat
 }
 
 export type CreateOptions = {
-  source?: 'staff' | 'telegram';
+  /** staff = reception, telegram = the patient's bot, doctor = the treating doctor's follow-up from the signed note. */
+  source?: 'staff' | 'telegram' | 'doctor';
   /** Walk-in: the slot that already began is allowed, and the patient at the desk gets no «you are booked» notice. */
   walkIn?: boolean;
 };
@@ -139,9 +140,9 @@ export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { pat
     [ctx.tenantId, input.branch_id, input.patient_id, input.doctor_id, input.service_id, slot.roomId, slot.startsAt, slot.endsAt, input.note ?? null,
       ctx.membershipId || null, requestKey, source])).rows[0];
   await audit(c, ctx, 'appointment.create', 'appointment', row.id,
-    `#${patient.patient_number}: ${slot.service.name}, ${input.date} ${input.start_time}, ${slot.doctor.display_name}${source === 'telegram' ? ' (Telegram)' : walkIn ? ' (navbatsiz)' : ''}`, input.branch_id);
+    `#${patient.patient_number}: ${slot.service.name}, ${input.date} ${input.start_time}, ${slot.doctor.display_name}${source === 'telegram' ? ' (Telegram)' : source === 'doctor' ? ' (qayta qabul, shifokor)' : walkIn ? ' (navbatsiz)' : ''}`, input.branch_id);
   // the patient hears about a booking the clinic made for them (the bot already answered its own booking)
-  if (source === 'staff' && !walkIn) await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'booked', patientId: input.patient_id, appointmentId: row.id, dedupeKey: `booked:${row.id}` });
+  if (source !== 'telegram' && !walkIn) await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'booked', patientId: input.patient_id, appointmentId: row.id, dedupeKey: `booked:${row.id}` });
   return { id: row.id as string, replayed: false };
 }
 

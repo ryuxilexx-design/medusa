@@ -2,6 +2,7 @@ import { Pool, PoolClient, types } from 'pg';
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildSeed, SeedData, DEMO_TIMEZONE_OFFSET_HOURS, SEED_IDS } from '../seed/build';
+import { STARTER_TEMPLATES } from '../seed/templates';
 
 // bigint (int8) money values fit safely into JS numbers (< 2^53 tiyin).
 types.setTypeParser(20, (v) => Number(v));
@@ -13,6 +14,7 @@ types.setTypeParser(1082, (v) => v);
 export { buildSeed };
 export type { SeedData };
 export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS, readSeedSnapshot, SNAPSHOT_DIR } from '../seed/build';
+export { STARTER_TEMPLATES } from '../seed/templates';
 
 /**
  * The app's connection pool. A dropped connection (database restart, admin kill) must never crash the process:
@@ -217,6 +219,28 @@ export async function backfillSeedSnapshots(q: Pick<PoolClient, 'query'>, demoDa
   return n;
 }
 
+/**
+ * Inserts the starter note templates (database/seed/templates.ts) for one clinic. Idempotent: a template the clinic
+ * already has (by starter key) is left as it is — edited or hidden. Proposed orders are matched by the catalogue's
+ * service code; a clinic without that service gets the template without that order. Not part of the seed PRNG.
+ */
+export async function ensureStarterTemplates(q: Pick<PoolClient, 'query'>, tenantId: string): Promise<number> {
+  const codes = [...new Set(STARTER_TEMPLATES.flatMap((t) => t.order_service_codes))];
+  const services = new Map<string, string>((await q.query(`SELECT code, id FROM services WHERE tenant_id = $1 AND code = ANY($2) AND active`, [tenantId, codes])).rows.map((r) => [r.code, r.id]));
+  // only codes present in this database's MKB-10 list: an unknown code could never be signed
+  const known = new Set((await q.query(`SELECT code FROM icd10_codes WHERE code = ANY($1)`, [[...new Set(STARTER_TEMPLATES.flatMap((t) => t.icd_codes))]])).rows.map((r) => r.code));
+  let n = 0;
+  for (const t of STARTER_TEMPLATES) {
+    const r = await q.query(
+      `INSERT INTO note_templates (tenant_id, specialty, name, fields, icd_codes, order_service_ids, created_by, starter_key, sort)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6::uuid[], NULL, $7, $8) ON CONFLICT (tenant_id, starter_key) WHERE starter_key IS NOT NULL DO NOTHING`,
+      [tenantId, t.specialty, t.name, JSON.stringify(t.fields), t.icd_codes.filter((c) => known.has(c)),
+        t.order_service_codes.map((c) => services.get(c)).filter(Boolean), t.key, t.sort]);
+    n += r.rowCount ?? 0;
+  }
+  return n;
+}
+
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */
 export async function assertDatabaseName(q: Pick<PoolClient, 'query'>, expectSuffix: string): Promise<string> {
   const name = (await q.query('SELECT current_database() AS n')).rows[0].n as string;
@@ -264,6 +288,8 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     const keptBotIds = new Set(keptBots.map((b) => b.id));
     await insertRows(client, 'telegram_chats', chats.filter((c) => keptBotIds.has(c.bot_id)));
     await insertRows(client, 'sms_settings', smsSettings.filter((s) => tenantIds.has(s.tenant_id)));
+    // templates and phrases are not part of the seed tables (a static list, no PRNG): the starter set comes back after the wipe
+    for (const t of seed.tenants) await ensureStarterTemplates(client, t.id as string);
     // Data and clock are reset together: the demo starts again at DEMO_DATE + DEMO_TIME.
     await client.query(`INSERT INTO demo_clock (id, demo_anchor, real_anchor, set_reason) VALUES (1, $1, clock_timestamp(), 'reset')
       ON CONFLICT (id) DO UPDATE SET demo_anchor = EXCLUDED.demo_anchor, real_anchor = EXCLUDED.real_anchor, set_reason = 'reset', set_at = clock_timestamp()`,

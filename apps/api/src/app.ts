@@ -4,7 +4,7 @@ import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { randomUUID } from 'crypto';
-import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, ensureDemoClock, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, ensureDemoClock, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { purgeSnapshots } from './cameras/ingest';
 import { config } from './core/config';
 import { syncClock } from './core/clock';
@@ -52,6 +52,11 @@ export async function createApp(): Promise<INestApplication> {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than
     // stamp real visits and payments with demo dates.
     throw new Error('APP_MODE=production, lekin bu bazada demo soati bor (demo bazasi). Haqiqiy klinika uchun alohida, toza baza ishlating.');
+  }
+  // starter note templates for every clinic created before migration 025 (idempotent; a hidden starter stays hidden)
+  for (const t of (await pool.query('SELECT id FROM tenants')).rows) {
+    const n = await ensureStarterTemplates(pool, t.id);
+    if (n) console.log(`${n} ta boshlang‘ich qayd shabloni qo‘shildi (klinika ${t.id})`);
   }
   syncClock((await pool.query('SELECT demo_now() AS n')).rows[0].n);
   // expired sessions and old alert snapshots are removed hourly (they would only make the tables grow)
