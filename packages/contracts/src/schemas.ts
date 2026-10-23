@@ -189,6 +189,11 @@ export const serviceCreateSchema = z.object({
   share_percent: sharePercent.default(0),
   lab_template: labTemplateSchema.nullable().optional(),
   active: z.boolean().default(true),
+  /** Fiscal attributes (ОФД): 17-digit IKPU code, VAT percent (NULL = clinic default 12 %), «без НДС», package code. */
+  ikpu_code: z.string().trim().regex(/^\d{17}$/, 'IKPU kodi 17 ta raqamdan iborat bo‘lsin').nullable().optional(),
+  vat_percent: z.number().int('QQS butun son bo‘lsin').min(0, 'QQS 0–100 % oralig‘ida bo‘lsin').max(100, 'QQS 0–100 % oralig‘ida bo‘lsin').nullable().optional(),
+  vat_exempt: z.boolean().optional(),
+  package_code: z.string().trim().max(40, 'Qadoq kodi 40 belgidan oshmasin').nullable().optional(),
 });
 export const servicePatchSchema = z.object({
   name: trimmed(2, 120, 'Nomi').optional(),
@@ -200,6 +205,19 @@ export const servicePatchSchema = z.object({
   share_percent: sharePercent.optional(),
   lab_template: labTemplateSchema.nullable().optional(),
   active: z.boolean().optional(),
+  /** Fiscal attributes (ОФД): 17-digit IKPU code, VAT percent (NULL = clinic default 12 %), «без НДС», package code. */
+  ikpu_code: z.string().trim().regex(/^\d{17}$/, 'IKPU kodi 17 ta raqamdan iborat bo‘lsin').nullable().optional(),
+  vat_percent: z.number().int('QQS butun son bo‘lsin').min(0, 'QQS 0–100 % oralig‘ida bo‘lsin').max(100, 'QQS 0–100 % oralig‘ida bo‘lsin').nullable().optional(),
+  vat_exempt: z.boolean().optional(),
+  package_code: z.string().trim().max(40, 'Qadoq kodi 40 belgidan oshmasin').nullable().optional(),
+});
+
+/** The cashier records the certified KKM receipt (parallel mode): number required, the rest as printed on the slip. */
+export const fiscalEnterSchema = z.object({
+  receipt_number: z.string().trim().min(1, 'Fiskal chek raqamini kiriting').max(60, 'Chek raqami 60 belgidan oshmasin').regex(/^[0-9A-Za-z/_.:-]+$/, 'Chek raqami: faqat raqam, lotin harflari va - / _ . :'),
+  fiscal_sign: z.string().trim().max(80, 'Fiskal belgi 80 belgidan oshmasin').regex(/^[0-9A-Za-z/_.:-]*$/, 'Fiskal belgi: faqat raqam va lotin harflari').nullable().optional(),
+  qr_url: z.string().trim().max(500, 'Havola 500 belgidan oshmasin').regex(/^https?:\/\/\S+$/, 'Havola http:// yoki https:// bilan boshlansin').nullable().optional(),
+  terminal_id: z.string().trim().max(60, 'Terminal raqami 60 belgidan oshmasin').regex(/^[0-9A-Za-z/_.:-]*$/, 'Terminal raqami: faqat raqam va lotin harflari').nullable().optional(),
 });
 
 export const roomCreateSchema = z.object({

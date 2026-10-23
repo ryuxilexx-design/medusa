@@ -23,6 +23,8 @@ import { AuthController } from './modules/auth.controller';
 import { StaffController } from './modules/staff.controller';
 import { ScheduleExceptionsController } from './modules/schedule-exceptions.controller';
 import { TelegramController } from './telegram/telegram.controller';
+import { SmsController } from './sms/sms.controller';
+import { SmsSender } from './sms/transport';
 import { DocumentsController } from './modules/documents.controller';
 import { CashController } from './modules/cash.controller';
 import { DepositsController } from './modules/deposits.controller';
@@ -37,6 +39,8 @@ import { AiClient } from './ai/ai-client';
 import { Icd10Service } from './ai/icd10';
 import { NewsService } from './ai/news';
 import { NewsWorker } from './ai/news-worker';
+import { FiscalController } from './fiscal/fiscal.controller';
+import { FiscalWorker } from './fiscal/worker';
 
 const http = new Logger('HTTP');
 /** One line per finished request: method, path, status, ms, request id, tenant and role — never a body, a query value or clinical text. */
@@ -54,8 +58,8 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, DocumentsController, CashController, DepositsController, CamerasController, HikController, CameraIsapiController],
-  providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, CashController, DepositsController, CamerasController, HikController, CameraIsapiController],
+  providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

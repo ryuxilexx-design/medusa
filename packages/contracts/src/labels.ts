@@ -34,3 +34,9 @@ export const REFUND_REASON_LABEL: Record<string, string> = {
 };
 export const EXPENSE_CATEGORIES = ['Ijara', 'Maosh', 'Kommunal', 'Reagentlar', 'Tibbiy sarf materiallari', 'Xo‘jalik', 'Ta’mirlash', 'IT xizmatlari', 'Marketing', 'Soliq va to‘lovlar', 'Boshqa'] as const;
 export const EXPENSE_PAID_FROM_LABEL: Record<string, string> = { cash_drawer: 'Kassadan (naqd)', bank: 'Bank hisobidan', card: 'Korporativ karta', other: 'Boshqa' };
+
+/** Fiscal receipt states (fiscal_receipts.status). */
+export const FISCAL_STATUSES = ['pending', 'issued', 'failed', 'skipped'] as const;
+export type FiscalStatus = (typeof FISCAL_STATUSES)[number];
+/** VAT choice in the service form: '' = clinic default (12 %), '0', '12', 'exempt'. */
+export const VAT_OPTIONS = ['', '12', '0', 'exempt'] as const;

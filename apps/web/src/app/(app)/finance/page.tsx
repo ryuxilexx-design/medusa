@@ -14,6 +14,7 @@ import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeade
 import { InvoiceStatus } from '@/components/status';
 import { CsvLink, DebtorsDepositsRow, ExpenseModal, ExpensesTab, FinanceStats, FootRow, PeriodPicker, RefundsTab, ShiftsTab, StatRow } from '@/components/finance-extra';
 import { StatMoney } from '@/components/cash-shift';
+import { FiscalBadge, useFiscalEnabled } from '@/components/fiscal';
 
 type Tab = 'payments' | 'refunds' | 'debts' | 'expenses' | 'shifts';
 const TABS: Tab[] = ['payments', 'refunds', 'debts', 'expenses', 'shifts'];
@@ -33,15 +34,18 @@ function Finance() {
   const [from, setFrom] = useState(sp.get('from') ?? me.today);
   const [to, setTo] = useState(sp.get('to') ?? me.today);
   const [method, setMethod] = useState('');
+  // «chek kiritilmagan to‘lovlar»: payments whose fiscal receipt is still owed (parallel mode)
+  const [fiscalFilter, setFiscalFilter] = useState(sp.get('fiscal') === 'missing' ? 'missing' : '');
+  const fiscal = useFiscalEnabled();
   const [search, setSearch] = useState('');
   const [age, setAge] = useState('');
   const [page, setPage] = useState(1);
   const ds = useDebounced(search.trim(), 300);
-  useEffect(() => { setFrom(sp.get('from') ?? me.today); setTo(sp.get('to') ?? me.today); setTab(tabFromUrl()); }, [sp, me.today]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => setPage(1), [from, to, method, branchId, tab, ds, age]);
+  useEffect(() => { setFrom(sp.get('from') ?? me.today); setTo(sp.get('to') ?? me.today); setTab(tabFromUrl()); setFiscalFilter(sp.get('fiscal') === 'missing' ? 'missing' : ''); }, [sp, me.today]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => setPage(1), [from, to, method, branchId, tab, ds, age, fiscalFilter]);
   // one branch chosen in the top bar (or only one exists): the branch column would repeat it on every row
   const showBranch = !branchId;
-  const filters = { from, to, method, branch_id: branchId };
+  const filters = { from, to, method, branch_id: branchId, fiscal: fiscal ? fiscalFilter : '' };
   // the cashier's key numbers come from the register itself, so it loads on every tab for them
   const pays = useQuery({ queryKey: ['payments', filters, page], queryFn: () => api(`/payments${qs({ ...filters, page, page_size: 20 })}`), enabled: tab === 'payments' || cashier, placeholderData: (p) => p });
   const debts = useQuery({ queryKey: ['invoices', 'debts', branchId, ds, age, page], queryFn: () => api(`/invoices${qs({ debt: 1, branch_id: branchId, search: ds, age, page, page_size: 20 })}`), enabled: tab === 'debts', placeholderData: (p) => p });
@@ -75,6 +79,7 @@ function Finance() {
           <Toolbar actions={<CsvLink href={`/api/v1/payments/export.csv${qs(filters)}`} />}>
             {period}
             <Select aria-label={t('cash.colMethod')} className="w-full sm:w-auto sm:min-w-[11.5rem]" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">{t('cash.allMethods')}</option>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>
+            {fiscal && <Select aria-label={t('cash.fiscal.title')} className="w-full sm:w-auto sm:min-w-[13rem]" value={fiscalFilter} onChange={(e) => setFiscalFilter(e.target.value)}><option value="">{t('cash.fiscal.filterAll')}</option><option value="missing">{t('cash.fiscal.filterMissing')}{pays.data ? ` (${pays.data.meta.fiscal_missing ?? 0})` : ''}</option></Select>}
           </Toolbar>
           {pays.isLoading ? <LoadingRows /> : pays.isError ? <ErrorState error={pays.error} onRetry={() => pays.refetch()} /> : !pays.data.data.length ? <EmptyState compact title={t('cash.noPaymentsPeriod')} /> : (() => {
             // phone: receipt (with the time under it), patient (with invoice and method under it) and the amount — the amount is never off-screen
@@ -88,7 +93,7 @@ function Finance() {
                     <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(p.paid_at)}</Td>
                     <Td className="min-w-[9rem]"><div className="font-medium text-slate-900">{fullName(p)}</div><div className="text-[0.8125rem] text-slate-600">{pid(p.patient_number)}</div><div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden"><Link href={`/print/payment/${p.id}`} target="_blank" className="text-brand-700 hover:underline">{p.receipt_number}</Link> · {fmtDateTime(p.paid_at)}</div><div className="text-[0.8125rem] text-slate-600 md:hidden">№{p.invoice_number} · {t(`payment.${p.method}` as MessageKey)}</div></Td>
                     <Td className="hidden md:table-cell"><Link href={`/cashier/${p.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{p.invoice_number}</Link>{showBranch && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.branch_name}</div>}</Td>
-                    <Td className="hidden md:table-cell"><div className="whitespace-nowrap">{t(`payment.${p.method}` as MessageKey)}</div>{!cashier && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</div>}</Td>
+                    <Td className="hidden md:table-cell"><div className="whitespace-nowrap">{t(`payment.${p.method}` as MessageKey)}</div>{!cashier && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</div>}{fiscal && <div className="mt-1"><FiscalBadge f={p.fiscal} /></div>}</Td>
                     <Td right className="font-medium">{formatSom(p.amount)}</Td>
                   </tr>
                 ))}</tbody>

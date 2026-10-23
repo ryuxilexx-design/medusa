@@ -245,6 +245,9 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     const hasTelegram = (await client.query(`SELECT to_regclass('telegram_bots') IS NOT NULL AS ok`)).rows[0].ok;
     const bots = hasTelegram ? (await client.query('SELECT * FROM telegram_bots')).rows : [];
     const chats = hasTelegram ? (await client.query(`SELECT * FROM telegram_chats`)).rows.map((r) => ({ ...r, state: '{}' })) : [];
+    // the clinic's SMS gateway account (migration 022) survives too; the delivery log starts over
+    const hasSms = (await client.query(`SELECT to_regclass('sms_settings') IS NOT NULL AS ok`)).rows[0].ok;
+    const smsSettings = hasSms ? (await client.query('SELECT * FROM sms_settings')).rows : [];
     const all = ['sessions', ...TABLES_IN_INSERT_ORDER].reverse();
     await client.query(`TRUNCATE ${all.join(', ')} RESTART IDENTITY CASCADE`);
     const counts: Record<string, number> = {};
@@ -260,6 +263,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     await insertRows(client, 'telegram_bots', keptBots);
     const keptBotIds = new Set(keptBots.map((b) => b.id));
     await insertRows(client, 'telegram_chats', chats.filter((c) => keptBotIds.has(c.bot_id)));
+    await insertRows(client, 'sms_settings', smsSettings.filter((s) => tenantIds.has(s.tenant_id)));
     // Data and clock are reset together: the demo starts again at DEMO_DATE + DEMO_TIME.
     await client.query(`INSERT INTO demo_clock (id, demo_anchor, real_anchor, set_reason) VALUES (1, $1, clock_timestamp(), 'reset')
       ON CONFLICT (id) DO UPDATE SET demo_anchor = EXCLUDED.demo_anchor, real_anchor = EXCLUDED.real_anchor, set_reason = 'reset', set_at = clock_timestamp()`,

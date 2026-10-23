@@ -29,7 +29,7 @@ export class DepositsController {
     const rows = await this.db.rows(
       `SELECT d.id, d.kind, d.amount, d.method, d.note, d.actor_name, d.occurred_at, d.branch_id, b.name AS branch_name, d.invoice_id, i.invoice_number, s.number AS shift_number
          FROM patient_deposits d JOIN branches b ON b.id = d.branch_id LEFT JOIN invoices i ON i.id = d.invoice_id LEFT JOIN cash_shifts s ON s.id = d.shift_id
-        WHERE d.patient_id = $1 AND d.tenant_id = $2 AND d.branch_id = ANY($3) ORDER BY d.occurred_at DESC, d.id DESC LIMIT 100`, [id, ctx.tenantId, ctx.branchIds]);
+        WHERE d.patient_id = $1 AND d.tenant_id = $2 ORDER BY d.occurred_at DESC, d.id DESC LIMIT 100`, [id, ctx.tenantId]); // the patient's money: every branch sees the same balance and ledger
     return { data: rows, meta: { balance: await depositBalance(this.db.pool, ctx.tenantId, id) } };
   }
 

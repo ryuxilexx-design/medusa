@@ -4,7 +4,7 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
-## 000000000000000. 0.13: kassa auditi (2026-10-22) — miqdor, qator bo‘yicha qaytarish, depozit, qarzdorlar, eksport
+## 0000000000000000. 0.15: kassa auditi (2026-10-22) — miqdor, qator bo‘yicha qaytarish, depozit, qarzdorlar, eksport
 
 | Nima | Holat | Tekshiruv |
 |---|---|---|
@@ -16,6 +16,20 @@ Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server teks
 | Ro‘yxat chegaralari: `GET /expenses` va `GET /refunds` sahifalanadi (meta.count, total), ombor kartasi oxirgi 100 harakat + `GET /inventory/:id/movements` sahifali | Ishlaydi | API test: page_size=1, movements ≤ 100, `movements_total` |
 
 Cheklovlar: brauzer E2E yo‘q (faqat typecheck va API testlari); depozitdan to‘lov cheki oddiy to‘lov cheki kabi chop etiladi («Depozitdan» usuli bilan); qator bo‘yicha qaytarish faqat bitta qator uchun (bir so‘rovda bir nechta qator — rahbar ketma-ket bajaradi); eski yopilgan smenalar hisobotida depozit qatorlari 0 deb ko‘rsatiladi. Testlar: `billing2.test.mjs` (6 ta).
+## 000000000000000. 0.13: Telegram’siz bemorlarga SMS (Eskiz.uz)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| SMS kanali (migratsiya `022_sms.sql`): `notifications.channel` (telegram / sms, takrorlanish kanal bo‘yicha), `sms_settings` (klinikaning Eskiz hisobi, parol `APP_SECRET_KEY` bilan shifrlangan, API hech qachon qaytarmaydi), `sms_messages` jurnali (tur, raqam, provayder id, holat — **matn saqlanmaydi**). Yozilish tasdig‘i, kun oldingi va 2 soat oldingi eslatma, bekor/ko‘chirish, «natija tayyor» — Telegram ulanmagan, +998 raqami bor bemorga SMS bilan boradi (Telegram ulangan bo‘lsa — faqat Telegram). Matn lotin, 160 belgigacha (GSM-7), klinik ma’lumot yo‘q; sokin soatlar (08–21) va «xabarnoma istamayman» roziligi Telegram bilan bir xil. Eskiz: login → token, 401 da qayta login, 5xx/aloqa xatosi — mavjud backoff bilan qayta urinish, 4xx — `failed`. Yetkazilganlik `status_by_id` orqali 5 daqiqada so‘raladi | Ishlaydi (soxta Eskiz bilan; **haqiqiy Eskiz hisobi bilan sinalmagan**) | API testi `sms.test.mjs` (12 ta): registrator 403, noto‘g‘ri parol 422, parol javobda yo‘q / bazada shifrlangan, SMS vs Telegram kanal tanlovi, rozilik, 401 → qayta login, 503 → qayta urinish, 400 → failed, rejalashtiruvchi, sinov SMS (429 limit), statistika, ikkinchi klinika |
+| Sozlamalar → «SMS»: Eskiz login/parol, jo‘natuvchi nomi (sukut `4546`), yoqish/o‘chirish, «Sinov SMS» (daqiqada bitta), 14 kunlik jadval, oxirgi xato; bemor kartasida eslatma kanali belgisi (Telegram / SMS / yo‘q) | Ishlaydi | Typecheck; brauzer E2E yo‘q |
+
+Cheklovlar: bemorning tili yozilmaydi — SMS doim o‘zbek lotinda (rus matn tayyor, `SMS_T.ru`); Eskiz callback (webhook) yo‘q — holat so‘rab olinadi; balans ko‘rsatilmaydi; demo klinikada SMS sukut bo‘yicha o‘chiq (seed o‘zgarmagan).
+
+## 000000000000000. 0.14: fiskalizatsiya asosi (parallel rejim)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Fiskal chek asosi (migratsiya `023_fiscal.sql`): xizmatda IKPU (17 raqam), QQS (sukut 12 % / 0 % / QQSsiz), qadoq kodi; har to‘lov va qaytarish uchun `fiscal_receipts` qatori (`manual` → kassir KKM chek raqamini kiritadi, `none` → demo klinikalarda «talab qilinmaydi»); kiritilgan chek o‘zgarmaydi; to‘lov qaydi chop etilganda chek № va havola; smena hisoboti va Moliya’da «chek kiritilmagan to‘lovlar» soni va filtri; CSV’da IKPU/QQS/chek ustunlari; Sozlamalar → Klinika’da rejim va IKPU’siz xizmatlar soni; avtomatik provayder uchun outbox-worker (haqiqiy ОФД hali ulanmagan) | Ishlaydi (parallel rejim); demo klinikalarda fiskal maydonlar ko‘rinmaydi | API testi `fiscal.test.mjs` (9 ta): pay/refund qatorlari, raqam kiritish (422, 403, 404, 409, baza trigger’i), none → skipped, CSV ustunlari, smena/moliya soni, xizmat IKPU validatsiyasi, worker (issued/failed/noma’lum provayder); `npm run typecheck`, `next build` |
 
 ## 00000000000000. 0.12: shifokorning dam olish kunlari
 

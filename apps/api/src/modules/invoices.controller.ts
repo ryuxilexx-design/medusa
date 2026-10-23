@@ -12,6 +12,14 @@ import { branchScope } from '../core/scope';
 import { csvDate, csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
 import { invoiceStatus, recalcInvoice } from './billing';
 import { applyDeposit } from './deposits';
+import { effectiveVat, FISCAL_COLS, recordFiscal } from '../fiscal/provider';
+
+/** Fiscal receipt of a payment (alias `pm`) as JSON, NULL when none (legacy rows, before fiscalisation). */
+export const FISCAL_JSON = `(SELECT json_build_object('id', f.id, 'status', f.status, 'provider', f.provider, 'receipt_number', f.receipt_number, 'fiscal_sign', f.fiscal_sign, 'qr_url', f.qr_url, 'terminal_id', f.terminal_id, 'issued_at', f.issued_at, 'entered_by_name', f.entered_by_name, 'error', f.error) FROM fiscal_receipts f WHERE f.payment_id = pm.id)`;
+/** The same for a refund (alias `r`). */
+export const FISCAL_JSON_REFUND = FISCAL_JSON.replace('f.payment_id = pm.id', 'f.refund_id = r.id');
+/** SQL: a payment whose fiscal receipt is still owed (manual or automatic provider, not yet issued). */
+export const FISCAL_MISSING = `EXISTS (SELECT 1 FROM fiscal_receipts f WHERE f.payment_id = pm.id AND f.status IN ('pending','failed'))`;
 
 /** A shift opened before today's local day start (left open overnight) must be closed before it takes money. */
 export const shiftIsStale = (openedAt: Date | string) => new Date(openedAt) < dayStart(today());
@@ -109,11 +117,11 @@ export class InvoicesController {
     const dep = await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE patient_id = $1 AND tenant_id = $2`, [inv.patient_id, ctx.tenantId]);
     (inv as any).deposit_balance = Number(dep?.balance ?? 0);
     const payments = await this.db.rows(
-      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.paid_at, pm.note,
+      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, ${FISCAL_JSON} AS fiscal,
               (pm.amount - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.payment_id = pm.id), 0))::bigint AS refundable
          FROM payments pm WHERE pm.invoice_id = $1 ORDER BY pm.paid_at`, [id]);
     const refunds = await this.db.rows(
-      `SELECT r.id, r.refund_number, r.payment_id, r.amount, r.method, r.reason_code, r.reason, r.approved_by_name, r.refunded_at, r.order_id, o.service_name
+      `SELECT r.id, r.refund_number, r.payment_id, r.amount, r.method, r.reason_code, r.reason, r.approved_by_name, r.refunded_at, r.order_id, o.service_name, ${FISCAL_JSON_REFUND} AS fiscal
          FROM refunds r LEFT JOIN service_orders o ON o.id = r.order_id WHERE r.invoice_id = $1 ORDER BY r.refunded_at`, [id]);
     return { data: { ...inv, items, payments: payments.map((p) => ({ ...p, refundable: Math.min(Number(p.refundable), Number(inv.paid_amount)) })), refunds } };
   }
@@ -166,7 +174,7 @@ export class InvoicesController {
       if (prev) {
         if (prev.request_hash !== hash) throw new AppError(422, 'IDEMPOTENCY_MISMATCH', 'Bu kalit boshqa to‘lov uchun ishlatilgan');
         res.status(200);
-        return { data: { payment: prev, invoice: await this.invoiceState(c, id), replayed: true } };
+        return { data: { payment: prev, invoice: await this.invoiceState(c, id), fiscal: await this.fiscalOf(c, prev.id), replayed: true } };
       }
       if (inv.status === 'void') throw conflict('INVOICE_VOID', 'Bekor qilingan hisobga to‘lov qabul qilinmaydi');
       const due = Number(inv.total) - Number(inv.paid_amount);
@@ -197,9 +205,16 @@ export class InvoicesController {
       await c.query(`UPDATE invoices SET paid_amount = $2, status = $3, version = version + 1, updated_at = demo_now() WHERE id = $1`,
         [id, paid, invoiceStatus({ status: inv.status, total: Number(inv.total), paid, credit: Number(inv.credit_amount), hasItems: true })]);
       await audit(c, ctx, 'payment.create', 'invoice', id, `To‘lov: ${som(input.amount)} so‘m (${PAYMENT_METHOD_LABEL[input.method]}), qayd №${receipt}`, inv.branch_id);
+      // fiscal receipt (ОФД): manual = the cashier enters the KKM number next; none = skipped; a provider error never undoes the sale
+      // a sale covered from the patient's deposit still gets its sale receipt; the money itself arrived earlier (non-cash for the KKM: 'transfer')
+      const fiscal = await recordFiscal(c, { tenantId: ctx.tenantId, branchId: inv.branch_id, kind: 'sale', paymentId: payment.id, invoiceId: id, amount: input.amount, method: input.method === 'deposit' ? 'transfer' : input.method });
       res.status(201);
-      return { data: { payment, invoice: await this.invoiceState(c, id), replayed: false } };
+      return { data: { payment, invoice: await this.invoiceState(c, id), fiscal, replayed: false } };
     });
+  }
+
+  private async fiscalOf(c: Q, paymentId: string) {
+    return (await c.query(`SELECT ${FISCAL_COLS} FROM fiscal_receipts f WHERE f.payment_id = $1`, [paymentId])).rows[0] ?? null;
   }
 
   private async invoiceState(c: Q, id: string) {
@@ -232,6 +247,7 @@ export class PaymentsController {
     if (isDate(q.to)) { params.push(dayStart(addDays(q.to, 1))); where.push(`pm.paid_at < $${params.length}`); }
     if (q.method) { params.push(String(q.method)); where.push(`pm.method = $${params.length}`); }
     if (ctx.role === 'cashier') { params.push(ctx.membershipId); where.push(`pm.cashier_membership_id = $${params.length}`); }
+    if (q.fiscal === 'missing') where.push(FISCAL_MISSING); // «chek kiritilmagan to‘lovlar»
     return { params, where: where.join(' AND ') };
   }
 
@@ -243,11 +259,12 @@ export class PaymentsController {
     const byMethod = await this.db.rows(`SELECT pm.method, count(*)::int AS n, sum(pm.amount)::bigint AS sum FROM payments pm WHERE ${where} GROUP BY 1 ORDER BY 1`, params);
     params.push(pageSize, offset);
     const rows = await this.db.rows(
-      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.paid_at, pm.note, pm.invoice_id, i.invoice_number, b.name AS branch_name,
-              p.id AS patient_id, p.patient_number, p.last_name, p.first_name
+      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, pm.invoice_id, i.invoice_number, b.name AS branch_name,
+              p.id AS patient_id, p.patient_number, p.last_name, p.first_name, ${FISCAL_JSON} AS fiscal
          FROM payments pm JOIN invoices i ON i.id = pm.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = pm.branch_id
         WHERE ${where} ORDER BY pm.paid_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    return { data: rows, meta: { page, page_size: pageSize, total: agg.n, sum: Number(agg.sum), by_method: byMethod } };
+    const missing = q.fiscal === 'missing' ? agg.n : (await this.db.one(`SELECT count(*)::int AS n FROM payments pm WHERE ${where} AND ${FISCAL_MISSING}`, params.slice(0, params.length - 2)))!.n;
+    return { data: rows, meta: { page, page_size: pageSize, total: agg.n, sum: Number(agg.sum), by_method: byMethod, fiscal_missing: missing } };
   }
 
   /** CSV export of the filtered register. Cells starting with = + - @ are neutralised against formula injection. */
@@ -257,11 +274,21 @@ export class PaymentsController {
     const period = csvPeriod(q);
     const { params, where } = this.filters(ctx, q);
     const rows = await this.db.rows(
-      `SELECT pm.receipt_number, pm.paid_at, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, i.invoice_number, pm.method, pm.amount, pm.cashier_name, pm.note
+      `SELECT pm.receipt_number, pm.paid_at, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, i.invoice_number, pm.method, pm.amount, pm.cashier_name, pm.note,
+              (SELECT json_agg(json_build_object('ikpu', s.ikpu_code, 'vat_percent', s.vat_percent, 'vat_exempt', s.vat_exempt) ORDER BY it.position)
+                 FROM invoice_items it LEFT JOIN services s ON s.id = it.service_id WHERE it.invoice_id = i.id) AS lines,
+              ${FISCAL_JSON} AS fiscal
          FROM payments pm JOIN invoices i ON i.id = pm.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = pm.branch_id
         WHERE ${where} ORDER BY pm.paid_at`, params);
-    sendCsv(res, `meduzai-tolovlar-${period.from}-${period.to}.csv`, ['Qayd №', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Usul', 'Summa (so‘m)', 'Kassir', 'Izoh'],
-      rows.map((r) => [r.receipt_number, csvTime(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], csvSom(r.amount), r.cashier_name, r.note]));
+    // one cell per invoice: distinct IKPU codes and VAT rates of its lines («—» = not set, «QQSsiz» = exempt)
+    const uniq = (xs: string[]) => [...new Set(xs)].join(', ');
+    const ikpu = (ls: any[] | null) => uniq((ls ?? []).map((l) => l.ikpu || '—'));
+    const vat = (ls: any[] | null) => uniq((ls ?? []).map((l) => { const v = effectiveVat({ vat_percent: l.vat_percent, vat_exempt: !!l.vat_exempt }); return v == null ? 'QQSsiz' : `${v}%`; }));
+    const FISCAL_LABEL: Record<string, string> = { pending: 'kiritilmagan', issued: 'kiritilgan', failed: 'xato', skipped: 'talab qilinmaydi' };
+    sendCsv(res, `meduzai-tolovlar-${period.from}-${period.to}.csv`,
+      ['Qayd №', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Usul', 'Summa (so‘m)', 'Kassir', 'Izoh', 'IKPU', 'QQS', 'Fiskal chek №', 'Fiskal holati', 'Fiskal belgi', 'Terminal'],
+      rows.map((r) => [r.receipt_number, csvTime(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], csvSom(r.amount), r.cashier_name, r.note,
+        ikpu(r.lines), vat(r.lines), r.fiscal?.receipt_number, r.fiscal ? FISCAL_LABEL[r.fiscal.status] ?? r.fiscal.status : '', r.fiscal?.fiscal_sign, r.fiscal?.terminal_id]));
   }
 
   @Roles('manager', 'cashier') @Get(':id')
@@ -270,7 +297,9 @@ export class PaymentsController {
     const p = await this.db.one(
       `SELECT pm.*, i.invoice_number, i.total, i.paid_amount, (i.total - i.paid_amount) AS due, i.status AS invoice_status, b.name AS branch_name, t.name AS clinic_name,
               p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date,
-              (SELECT json_agg(json_build_object('description', it.description, 'quantity', it.quantity, 'line_total', it.line_total) ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id) AS items
+              (SELECT json_agg(json_build_object('description', it.description, 'quantity', it.quantity, 'line_total', it.line_total, 'ikpu_code', s.ikpu_code, 'vat_percent', s.vat_percent, 'vat_exempt', s.vat_exempt) ORDER BY it.position)
+                 FROM invoice_items it LEFT JOIN services s ON s.id = it.service_id WHERE it.invoice_id = i.id) AS items,
+              ${FISCAL_JSON} AS fiscal
          FROM payments pm JOIN invoices i ON i.id = pm.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = pm.branch_id JOIN tenants t ON t.id = pm.tenant_id
         WHERE pm.id = $1 AND pm.tenant_id = $2 AND pm.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!p) throw notFound('To‘lov');

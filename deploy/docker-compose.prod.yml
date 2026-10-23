@@ -54,6 +54,8 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-https://${DOMAIN}}
       BACKGROUND_WORKERS: ${BACKGROUND_WORKERS:-on}
       AI_MODE: ${AI_MODE:-off}
+      # fiscal receipts: manual = parallel mode (cashier records the KKM receipt number); a real ОФД provider later
+      FISCAL_PROVIDER: ${FISCAL_PROVIDER:-manual}
       AI_CLINICAL_ALLOWED: ${AI_CLINICAL_ALLOWED:-0}
       AI_DAILY_LIMIT_USD: ${AI_DAILY_LIMIT_USD:-5}
       AI_PROVIDER: ${AI_PROVIDER:-anthropic}

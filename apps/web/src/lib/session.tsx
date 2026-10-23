@@ -14,6 +14,8 @@ export interface Me {
   locale: Locale;
   /** 'demo' = role card, 'password' = real staff account */
   auth_kind: 'demo' | 'password'; must_change_password: boolean;
+  /** Fiscal mode of the clinic: 'manual' = KKM receipt number is typed in after each payment, 'none' = no fiscal receipts. */
+  fiscal_provider: string;
   /** browser Date.now() when `now` was received — used to keep the demo clock offset exact even from cache */
   fetched_at: number;
 }

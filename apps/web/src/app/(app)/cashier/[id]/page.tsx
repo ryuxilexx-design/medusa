@@ -14,6 +14,7 @@ import { AppointmentStatus, InvoiceStatus } from '@/components/status';
 import { canTakeMoney, ShiftLoadError, useCurrentShift } from '@/components/cash-shift';
 import { RefundModal } from '@/components/refund-modal';
 import { MoneyInput } from '@/components/money-input';
+import { canEnterFiscal, FiscalBadge, FiscalEnterForm, FiscalEnterModal, useFiscalEnabled } from '@/components/fiscal';
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -24,6 +25,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const [voiding, setVoiding] = useState(false);
   const [refunding, setRefunding] = useState(false);
   const [promising, setPromising] = useState(false);
+  // fiscal receipt entry (parallel mode): which payment / refund the modal is for
+  const [fiscalFor, setFiscalFor] = useState<{ kind: 'payment' | 'refund'; id: string; label: string } | null>(null);
+  const fiscal = useFiscalEnabled();
   if (q.isLoading) return <Card><LoadingRows /></Card>;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   const inv = q.data;
@@ -98,9 +102,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <Card title={t('cash.payments')} padded={false}>
             {!inv.payments.length ? <p className="px-5 py-4 text-[0.9375rem] text-slate-600">{t('cash.noPayments')}</p> : (
               <Table>
-                <thead><tr><Th>{t('cash.colReceipt')}</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
+                <thead><tr><Th>{t('cash.colReceipt')}</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th>{fiscal && <Th>{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{inv.payments.map((p: any) => (
-                  <tr key={p.id}><Td className="tabular-nums"><Link href={`/print/payment/${p.id}`} target="_blank" title={t('cash.internalRecord')} className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-brand-700 hover:underline"><Printer className="h-4 w-4" />{p.receipt_number}</Link></Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(p.paid_at)}</Td><Td>{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</span></Td><Td right className="font-medium">{formatSom(p.amount)}</Td></tr>
+                  <tr key={p.id}><Td className="tabular-nums"><Link href={`/print/payment/${p.id}`} target="_blank" title={t('cash.internalRecord')} className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-brand-700 hover:underline"><Printer className="h-4 w-4" />{p.receipt_number}</Link></Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(p.paid_at)}</Td><Td>{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</span></Td>
+                    {fiscal && <Td><div className="flex flex-wrap items-center gap-2"><FiscalBadge f={p.fiscal} />{canEnterFiscal(me, p.fiscal, 'payment', p.cashier_membership_id) && <Button size="sm" onClick={() => setFiscalFor({ kind: 'payment', id: p.id, label: `T-${p.receipt_number}` })}>{t('cash.fiscal.enter')}</Button>}</div></Td>}
+                    <Td right className="font-medium">{formatSom(p.amount)}</Td></tr>
                 ))}</tbody>
               </Table>
             )}
@@ -108,10 +114,12 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           {inv.refunds?.length > 0 && (
             <Card title={t('cash.refunds')} padded={false}>
               <Table>
-                <thead><tr><Th>№</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th><Th>{t('cash.colReason')}</Th><Th>{t('cash.colApprovedBy')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
+                <thead><tr><Th>№</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th><Th>{t('cash.colReason')}</Th><Th>{t('cash.colApprovedBy')}</Th>{fiscal && <Th>{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{inv.refunds.map((r: any) => (
                   <tr key={r.id}><Td className="tabular-nums">{r.refund_number}</Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}</Td><Td>{t(`payment.${r.method}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}</span></Td>
-                    <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.reason}</span></Td><Td>{r.approved_by_name}</Td><Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td></tr>
+                    <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.reason}</span></Td><Td>{r.approved_by_name}</Td>
+                    {fiscal && <Td><div className="flex flex-wrap items-center gap-2"><FiscalBadge f={r.fiscal} />{canEnterFiscal(me, r.fiscal, 'refund') && <Button size="sm" onClick={() => setFiscalFor({ kind: 'refund', id: r.id, label: `№${r.refund_number}` })}>{t('cash.fiscal.enter')}</Button>}</div></Td>}
+                    <Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td></tr>
                 ))}</tbody>
               </Table>
             </Card>
@@ -122,6 +130,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
       {voiding && <VoidModal inv={inv} onClose={() => setVoiding(false)} />}
       {refunding && <RefundModal inv={inv} onClose={() => setRefunding(false)} />}
       {promising && <PromiseModal inv={inv} onClose={() => setPromising(false)} />}
+      {fiscalFor && <FiscalEnterModal kind={fiscalFor.kind} id={fiscalFor.id} label={fiscalFor.label} onClose={() => setFiscalFor(null)} />}
     </>
   );
 }
@@ -155,6 +164,8 @@ function PaymentForm({ inv }: { inv: any }) {
   const [error, setError] = useState<string | null>(null);
   const [fieldErr, setFieldErr] = useState<string | null>(null);
   const [last, setLast] = useState<any>(null);
+  // the fiscal row of the last payment: «pending» (manual provider) shows the KKM receipt field right here
+  const [lastFiscal, setLastFiscal] = useState<any>(null);
   // Request whose answer was lost (network). Until resolved, only the very same request may be re-sent (same key, same body).
   const [pending, setPending] = useState<any>(null);
   // One idempotency key per intended payment: a retry after a lost response reuses it and cannot create a second payment.
@@ -168,7 +179,7 @@ function PaymentForm({ inv }: { inv: any }) {
     onSettled: () => { inflight.current = false; },
     onSuccess: (r: any) => {
       key.current = newIdempotencyKey();
-      setPending(null); setLast(r.data.payment); setError(null); setFieldErr(null); setNote('');
+      setPending(null); setLast(r.data.payment); setLastFiscal(r.data.fiscal ?? null); setError(null); setFieldErr(null); setNote('');
       ['invoices', 'payments', 'dashboard', 'patient', 'deposits', 'cash-shift'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(r.data.replayed ? t('cash.paymentReplayed', { receipt: r.data.payment.receipt_number }) : t('cash.paymentSaved', { amount: formatSom(r.data.payment.amount) }));
     },
@@ -208,6 +219,12 @@ function PaymentForm({ inv }: { inv: any }) {
       <form onSubmit={submit} className="space-y-4" noValidate>
         {error && <Alert tone={pending ? 'yellow' : 'red'}>{error}</Alert>}
         {last && !pending && <Alert tone="green" title={t('cash.receiptTitle', { receipt: last.receipt_number, amount: formatSom(last.amount) })}><Link href={`/print/payment/${last.id}`} target="_blank" className="font-medium underline">{t('cash.printReceipt')}</Link></Alert>}
+        {last && !pending && lastFiscal && (lastFiscal.status === 'pending' || lastFiscal.status === 'failed') && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <p className="mb-2 text-[0.9375rem] font-semibold text-amber-900">{t('cash.fiscal.afterPayment')}</p>
+            <FiscalEnterForm kind="payment" id={last.id} compact onDone={() => setLastFiscal(null)} />
+          </div>
+        )}
         <Field label={t('cash.amountSomComma')} required error={fieldErr ?? undefined} hint={t('cash.amountHint')}>{(id) => <MoneyInput id={id} value={pending ? String(pending.amount / 100) : amount} disabled={!!pending} onChange={(e) => { setAmount(e.target.value); setFieldErr(null); }} invalid={!!fieldErr} />}</Field>
         {!pending && <div className="grid grid-cols-2 gap-2">
           {[inv.due, Math.floor(inv.due / 2 / 1000000) * 1000000].filter((v, i, a) => v > 0 && a.indexOf(v) === i).map((v) => (

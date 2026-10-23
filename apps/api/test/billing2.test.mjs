@@ -153,6 +153,10 @@ test('depozit: kassir qabul qiladi (smena, kalit); hisobga «deposit» usuli —
   assert.equal(shift1.expected_cash, shift0.expected_cash + half, 'naqd depozit kassaga tushdi');
   assert.equal(shift1.totals.deposit_in.cash.sum, half);
   assert.equal((await manager.get(`/patients/${pid}`)).body.data.deposit_balance, half);
+  // the liability is scoped like every other summary figure: the deposit was taken in central, so Yunusobod shows none of it
+  const yun = branches.find((b) => b.code === 'YUN').id, mrk = branches.find((b) => b.code === 'MRK').id;
+  assert.equal((await manager.get(`/finance/summary?from=${today}&to=${today}&branch_id=${yun}`)).body.data.deposits.balance, 0, 'boshqa filial depozit balansini ko‘rmaydi');
+  assert.equal((await manager.get(`/finance/summary?from=${today}&to=${today}&branch_id=${mrk}`)).body.data.deposits.balance, half);
   assert.equal((await manager.get(`/invoices/${inv.id}`)).body.data.deposit_balance, half);
   const lst = (await cashier.get(`/patients/${pid}/deposits`)).body;
   assert.equal(lst.data.length, 1); assert.equal(lst.meta.balance, half); assert.equal(lst.data[0].kind, 'in');

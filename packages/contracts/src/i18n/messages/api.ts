@@ -21,6 +21,8 @@ export const api = {
   'api.noun.shift': ['Smena', 'Смена'],
   'api.noun.expense': ['Xarajat', 'Расход'],
   'api.noun.payment': ['To‘lov', 'Платёж'],
+  'api.noun.refund': ['Qaytarish', 'Возврат'],
+  'api.noun.clinic': ['Klinika', 'Клиника'],
   'api.noun.ultrasoundOrder': ['UZI buyurtmasi', 'Назначение УЗИ'],
   'api.noun.object': ['Obyekt', 'Объект'],
   'api.noun.voidReason': ['Bekor qilish sababi', 'Причина отмены'],
@@ -184,6 +186,16 @@ export const api = {
   'api.noSecretKey': ['Serverda APP_SECRET_KEY sozlanmagan — token xavfsiz saqlanmaydi. Administratorga murojaat qiling.', 'На сервере не задан APP_SECRET_KEY — токен нельзя сохранить безопасно. Обратитесь к администратору.'],
   'api.tgTokenRejected': ['Telegram bu tokenni qabul qilmadi', 'Telegram не принял этот токен'],
   'api.tgUnreachable': ['Telegram bilan bog‘lanib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.', 'Не удалось связаться с Telegram. Проверьте интернет и повторите.'],
+  // SMS (Eskiz.uz)
+  'api.sms.noSecretKey': ['Serverda APP_SECRET_KEY sozlanmagan — parol xavfsiz saqlanmaydi. Administratorga murojaat qiling.', 'На сервере не задан APP_SECRET_KEY — пароль нельзя сохранить безопасно. Обратитесь к администратору.'],
+  'api.sms.badCredentials': ['Eskiz bu login va parolni qabul qilmadi', 'Eskiz не принял этот логин и пароль'],
+  'api.sms.badCredentialsField': ['Login yoki parol noto‘g‘ri', 'Неверный логин или пароль'],
+  'api.sms.unreachable': ['Eskiz bilan bog‘lanib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.', 'Не удалось связаться с Eskiz. Проверьте интернет и повторите.'],
+  'api.sms.disabled': ['Avval SMS kanalini yoqib, sozlamalarni saqlang.', 'Сначала включите СМС-канал и сохраните настройки.'],
+  'api.sms.testTooSoon': ['Sinov SMS yaqinda yuborildi. Bir daqiqadan keyin qayta urinib ko‘ring.', 'Пробное СМС недавно отправлено. Повторите через минуту.'],
+  'api.sms.needCredentials': ['SMS yoqish uchun Eskiz login va parolini kiriting', 'Чтобы включить СМС, введите логин и пароль Eskiz'],
+  'api.sms.phoneRequired': ['O‘zbekiston raqamini kiriting (+998 …)', 'Введите узбекский номер (+998 …)'],
+  'api.sms.rejectedCredentials': ['Eskiz login yoki parolni qabul qilmadi. Sozlamalarni tekshiring.', 'Eskiz не принял логин или пароль. Проверьте настройки.'],
 
   // «Tezkor savollar» answers (numbers from SQL, sentence from these templates)
   'api.report.payments': ['{date} kuni {n} ta to‘lov qayd etilgan, jami {sum}.', { one: '{date} проведён {n} платёж на сумму {sum}.', few: '{date} проведено {n} платежа на сумму {sum}.', many: '{date} проведено {n} платежей на сумму {sum}.' }],
@@ -351,4 +363,11 @@ export const api = {
   'api.qtyOnlyProcedure': ['«{service}» uchun miqdor faqat 1 bo‘ladi (miqdor muolajalar kursi uchun)', 'Для «{service}» количество только 1 (количество — для курса процедур)'],
   'api.v.qtyRange': ['Miqdor 1–50 oralig‘ida bo‘lsin', 'Количество от 1 до 50'],
   'api.v.max10Orders': ['Ko‘pi bilan 10 ta tekshiruv', 'Не более 10 назначений'],
+  // fiscal receipts (parallel mode with the clinic's KKM)
+  'api.fiscal.otherCashier': ['Boshqa kassirning to‘loviga chek kiritib bo‘lmaydi', 'Нельзя ввести чек по оплате другого кассира'],
+  'api.fiscal.notRequired': ['Bu to‘lov uchun fiskal chek talab qilinmaydi', 'Для этой оплаты фискальный чек не требуется'],
+  'api.fiscal.notConfigured': ['Bu klinikada fiskalizatsiya sozlanmagan', 'В этой клинике фискализация не настроена'],
+  'api.fiscal.alreadyIssued': ['Fiskal chek allaqachon kiritilgan: № {n}', 'Фискальный чек уже введён: № {n}'],
+  'api.fiscal.enterNumber': ['Fiskal chek raqamini kiriting', 'Введите номер фискального чека'],
+  'api.fiscal.ikpu17': ['IKPU kodi 17 ta raqamdan iborat bo‘lsin', 'Код ИКПУ — 17 цифр'],
 } as const satisfies Catalog;

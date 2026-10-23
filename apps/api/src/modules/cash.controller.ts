@@ -14,7 +14,8 @@ import { branchScope } from '../core/scope';
 import { csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
 import { invoiceStatus } from './billing';
 import { range } from './dashboard.controller';
-import { shiftIsStale } from './invoices.controller';
+import { FISCAL_JSON, FISCAL_JSON_REFUND, FISCAL_MISSING, shiftIsStale } from './invoices.controller';
+import { recordFiscal } from '../fiscal/provider';
 
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
 type MethodSum = { n: number; sum: number };
@@ -181,16 +182,18 @@ export class CashController {
   async get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     const s = await this.withTotals(this.db.pool, await this.loadShift(this.db.pool, ctx, id));
     const payments = await this.db.rows(
-      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.paid_at, i.invoice_number, p.last_name, p.first_name, p.patient_number
+      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.paid_at, i.invoice_number, p.last_name, p.first_name, p.patient_number, ${FISCAL_JSON} AS fiscal
          FROM payments pm JOIN invoices i ON i.id = pm.invoice_id JOIN patients p ON p.id = i.patient_id WHERE pm.shift_id = $1 ORDER BY pm.paid_at`, [id]);
     const refunds = await this.db.rows(
-      `SELECT r.id, r.refund_number, r.amount, r.method, r.refunded_at, r.reason_code, r.approved_by_name, i.invoice_number, p.last_name, p.first_name, p.patient_number
+      `SELECT r.id, r.refund_number, r.amount, r.method, r.refunded_at, r.reason_code, r.approved_by_name, i.invoice_number, p.last_name, p.first_name, p.patient_number, ${FISCAL_JSON_REFUND} AS fiscal
          FROM refunds r JOIN invoices i ON i.id = r.invoice_id JOIN patients p ON p.id = i.patient_id WHERE r.shift_id = $1 ORDER BY r.refunded_at`, [id]);
     const expenses = await this.db.rows(`SELECT id, category, amount, occurred_at, note, status, created_by_name FROM expenses WHERE shift_id = $1 ORDER BY occurred_at`, [id]);
     const deposits = await this.db.rows(
       `SELECT d.id, d.kind, d.amount, d.method, d.occurred_at, d.note, d.actor_name, p.last_name, p.first_name, p.patient_number
          FROM patient_deposits d JOIN patients p ON p.id = d.patient_id WHERE d.shift_id = $1 ORDER BY d.occurred_at`, [id]);
-    return { data: { ...s, payments, refunds, expenses, deposits } };
+    // payments of this shift whose fiscal receipt is still owed (parallel mode: KKM number not typed in yet)
+    const fiscalPending = payments.filter((p) => p.fiscal && (p.fiscal.status === 'pending' || p.fiscal.status === 'failed')).length;
+    return { data: { ...s, payments, refunds, expenses, deposits, fiscal_pending: fiscalPending } };
   }
 
   // ---------------------------------------------------------------- refunds
@@ -260,8 +263,9 @@ export class CashController {
         [id, paid, credit, total, input.amount, invoiceStatus({ status: inv.status, total, paid, credit, hasItems }), line ? input.amount : 0]);
       await audit(c, ctx, 'refund.create', 'invoice', id,
         `Qaytarildi: ${som(input.amount)} so‘m (${PAYMENT_METHOD_LABEL[input.method]}), №${number}${line ? `, xizmat: ${line.service_name}` : ''}, sabab: ${REFUND_REASON_LABEL[input.reason_code]}`, inv.branch_id);
+      const fiscal = await recordFiscal(c, { tenantId: ctx.tenantId, branchId: inv.branch_id, kind: 'refund', refundId: refund.id, invoiceId: id, amount: input.amount, method: input.method });
       res.status(201);
-      return { data: { refund, replayed: false } };
+      return { data: { refund, fiscal, replayed: false } };
     });
   }
 
@@ -362,10 +366,13 @@ export class CashController {
     // deposits: a liability, not revenue — money in / paid back in the period, and the outstanding balance of all patients
     const dep = (await this.db.one(`SELECT coalesce(sum(amount) FILTER (WHERE kind = 'in'),0)::bigint AS inflow, coalesce(sum(amount) FILTER (WHERE kind = 'out'),0)::bigint AS outflow,
         coalesce(sum(amount) FILTER (WHERE kind = 'apply'),0)::bigint AS applied FROM patient_deposits WHERE tenant_id = $1 AND branch_id = ANY($2) AND occurred_at >= $3 AND occurred_at < $4`, P))!;
-    const liability = (await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE tenant_id = $1`, [ctx.tenantId]))!;
+    // the outstanding balance counts where the money was taken / applied / paid back (every ledger row has its branch), within the manager's scope
+    const liability = (await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE tenant_id = $1 AND branch_id = ANY($2)`, [P[0], P[1]]))!;
     const gross = pay.reduce((a, b) => a + Number(b.sum), 0), refunds = Number(ref.sum), expenses = exp.reduce((a, b) => a + Number(b.sum), 0);
+    const fiscal = (await this.db.one(`SELECT count(*)::int AS n FROM payments pm WHERE pm.tenant_id = $1 AND pm.branch_id = ANY($2) AND pm.paid_at >= $3 AND pm.paid_at < $4 AND ${FISCAL_MISSING}`, P))!;
     return { data: {
       from: r.from, to: r.to,
+      fiscal: { missing: fiscal.n },
       payments: { total: gross, count: pay.reduce((a, b) => a + b.n, 0), by_method: Object.fromEntries(pay.map((x) => [x.method, Number(x.sum)])) },
       refunds: { total: refunds, count: ref.n },
       net_revenue: gross - refunds,
