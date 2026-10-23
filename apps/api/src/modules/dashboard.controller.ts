@@ -21,6 +21,20 @@ export function range(q: any) {
   return { from, to, start: dayStart(from), end: dayStart(addDays(to, 1)), days };
 }
 
+/**
+ * Cash-basis revenue net of refunds for [$3, $4) in tenant $1 / branches $2 — the one formula the dashboard, the
+ * manager's AI digest and «ask the numbers» share. Columns: revenue (net), payments (count), refunds (sum).
+ */
+export const REVENUE_SQL =
+  `SELECT (coalesce((SELECT sum(amount) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4),0)
+         - coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0))::bigint AS revenue,
+          (SELECT count(*) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4)::int AS payments,
+          coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0)::bigint AS refunds,
+          (SELECT count(*) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4)::int AS refund_count`;
+/** Open debt now (unpaid and partially paid invoices) in tenant $1 / branches $2. */
+export const DEBT_SQL = `SELECT coalesce(sum(total - paid_amount),0)::bigint AS debt, count(*)::int AS invoices FROM invoices
+        WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`;
+
 /** Every number here is computed from the stored records for the same filter; nothing is cached or hardcoded. */
 @Controller()
 export class DashboardController {
@@ -39,14 +53,8 @@ export class DashboardController {
               count(DISTINCT patient_id) FILTER (WHERE status IN ('arrived','in_progress','completed'))::int AS arrived_patients
          FROM appointments WHERE tenant_id = $1 AND branch_id = ANY($2) AND starts_at >= $3 AND starts_at < $4`, P))!;
     // revenue is cash basis and net of refunds made in the same period
-    const rev = (await this.db.one(
-      `SELECT (coalesce((SELECT sum(amount) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4),0)
-             - coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0))::bigint AS revenue,
-              (SELECT count(*) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4)::int AS payments,
-              coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0)::bigint AS refunds`, P))!;
-    const debt = (await this.db.one(
-      `SELECT coalesce(sum(total - paid_amount),0)::bigint AS debt, count(*)::int AS invoices FROM invoices
-        WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`, [ctx.tenantId, branches]))!;
+    const rev = (await this.db.one(REVENUE_SQL, P))!;
+    const debt = (await this.db.one(DEBT_SQL, [ctx.tenantId, branches]))!;
     const daily = await this.db.rows(
       // one indexed range scan per table, grouped by local day (not a subquery per day)
       `WITH pay AS (SELECT (paid_at AT TIME ZONE 'Asia/Tashkent')::date AS day, sum(amount) AS s, count(*) AS n FROM payments
