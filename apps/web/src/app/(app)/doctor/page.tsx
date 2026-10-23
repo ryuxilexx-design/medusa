@@ -19,6 +19,7 @@ import { AllergiesPanel } from '@/components/allergies';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
+import { LabCommentary } from '@/components/lab-commentary';
 import { applyFields, type Choice, FieldApplyList } from '@/components/apply-fields';
 import { QuickPhrases, SaveTemplateModal, TemplateModal, useFieldDefs } from '@/components/note-templates';
 import { BookingModal } from '@/components/booking';
@@ -376,7 +377,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
                     <span className="block text-[0.8125rem] text-slate-600">{t(`service.${o.category}` as MessageKey)} · {fmtTime(o.ordered_at)} · {formatSom(o.price_snapshot * (o.quantity ?? 1))}</span></span>
                   {o.category === 'ultrasound' ? <NoteStatus status={o.report_status} /> : <LabStatus status={o.status} />}
                 </div>
-                {o.category === 'lab' && o.status === 'verified' && o.values && <div className="mt-2"><LabValues values={o.values} compact /><p className="mt-1 text-[0.8125rem] text-slate-600">{t('orders.verifiedBy', { name: o.verified_by_name, at: fmtDateTime(o.verified_at) })}</p></div>}
+                {o.category === 'lab' && o.status === 'verified' && o.values && <div className="mt-2"><LabValues values={o.values} compact /><p className="mt-1 text-[0.8125rem] text-slate-600">{t('orders.verifiedBy', { name: o.verified_by_name, at: fmtDateTime(o.verified_at) })}</p><LabCommentary orderId={o.id} /></div>}
                 {o.category === 'ultrasound' && o.report_status === 'signed' && <p className="mt-1.5 text-[0.9375rem]"><span className="text-slate-600">{t('orders.conclusion')}</span> {o.conclusion}</p>}
               </li>
             ))}
@@ -756,7 +757,7 @@ function HistoryPanel({ patientId, currentEncounter }: { patientId: string; curr
               <li key={l.id} className="rounded-lg border border-slate-200 px-3 py-2">
                 <div className="flex items-center justify-between gap-2 text-[0.8125rem]"><b className="truncate text-slate-900">{l.service_name}</b><LabStatus status={l.status} /></div>
                 <div className="text-[0.8125rem] text-slate-600">{fmtDate(l.ordered_at)}</div>
-                {l.values && <div className="mt-1"><LabValues values={l.values} compact /></div>}
+                {l.values && <div className="mt-1"><LabValues values={l.values} compact />{l.status === 'verified' && <LabCommentary orderId={l.id} />}</div>}
               </li>
             ))}</ul>}
           </section>

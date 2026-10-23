@@ -304,6 +304,8 @@ export const inventoryItemCreateSchema = z.object({
   controlled: z.boolean().default(false),
   drug_id: uuid.nullable().optional(),
   purchase_price: z.number().int('Narx tiyinda butun son bo‘lsin').min(0, 'Narx manfiy bo‘lmasin').max(1_000_000_000_00, 'Narx juda katta').default(0),
+  // migration 037: units in one pack (the reorder suggestion is rounded up to whole packs); null = unknown
+  pack_size: qty.refine((q) => q > 0, 'Miqdor 0 dan katta bo‘lsin').nullable().optional(),
 });
 export const inventoryItemPatchSchema = inventoryItemCreateSchema.omit({ opening_qty: true }).partial();
 export const clinicPatchSchema = z.object({ name: trimmed(2, 120, 'Klinika nomi') });

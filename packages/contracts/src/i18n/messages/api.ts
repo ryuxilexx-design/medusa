@@ -465,6 +465,8 @@ export const api = {
   'api.wh.visitOtherBranch': ['Qabul boshqa filialda', 'Приём в другом филиале'],
   'api.wh.pickVisit': ['Qabulni tanlang', 'Выберите приём'],
   'api.wh.period': ['Davr 1 yildan oshmasin', 'Период не более 1 года'],
+  'api.wh.horizon': ['Davr 7–180 kun bo‘lsin', 'Период — от 7 до 180 дней'],
+  'api.lab.commentaryNotVerified': ['Sharh faqat tasdiqlangan natija uchun', 'Комментарий — только к подтверждённому результату'],
   'api.wh.icdRequired': ['Bemor uchun MKB-10 kodini kiriting', 'Укажите код МКБ-10 для пациента'],
   'api.wh.qtyToIssue': ['Berish uchun miqdor kiriting', 'Укажите количество для выдачи'],
   'api.wh.lineNotFound': ['Qator topilmadi', 'Строка не найдена'],

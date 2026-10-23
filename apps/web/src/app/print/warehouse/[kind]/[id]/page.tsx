@@ -17,6 +17,7 @@ const URL: Record<string, (id: string, q: string) => string> = {
   writeoff: (id) => `/warehouse/writeoffs/${id}`,
   count: (id) => `/warehouse/counts/${id}`,
   controlled: (id, q) => `/warehouse/controlled/${id}${q}`,
+  reorder: (id, q) => `/warehouse/reorder${q}${q ? '&' : '?'}only=order${id === 'all' ? '' : `&branch_id=${id}`}`,
 };
 const cell = 'border border-slate-400 px-1.5 py-1 align-top';
 
@@ -27,12 +28,26 @@ export default function PrintWarehouse({ params }: { params: Promise<{ kind: str
   const t = useT();
   const me = useMeQuery();
   const q = useQuery({ queryKey: ['print', 'warehouse', kind, id, sp.toString()], enabled: !!URL[kind],
-    queryFn: () => api(URL[kind](id, qs({ from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined }))).then((r) => r.data) });
+    queryFn: () => api(URL[kind](id, qs(kind === 'reorder' ? { horizon: sp.get('horizon') ?? undefined } : { from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined }))).then((r) => r.data) });
   if (!URL[kind]) return null;
   if (!q.data) return <PrintState q={q} />;
   const d = q.data;
   const Sign = ({ label, name }: { label: string; name?: string }) => <div className="min-w-[14rem]">{label} <b>{name ?? ''}</b><div className="mt-6 border-t border-slate-400 pt-0.5 text-[0.6875rem] text-slate-600">{t('print.signature')}</div></div>;
   const footer = (signs: { label: string; name?: string }[]) => <div className="flex flex-wrap gap-x-10 gap-y-6 border-t border-slate-300 pt-3 text-xs">{signs.map((s, i) => <Sign key={i} {...s} />)}</div>;
+  if (kind === 'reorder') {
+    const total = d.rows.reduce((s: number, r: any) => s + Number(r.est_cost), 0);
+    return (
+      <PrintDoc title={t('wh.ro.print')} number="" date={me.data?.now ?? d.today} branch={id === 'all' ? '' : d.rows[0]?.branch_name ?? ''} patient={null} responsible={me.data?.name ?? ''} status="" draft
+        info={[[t('wh.ro.printHorizon'), t('wh.ro.horizonDays', { n: d.horizon })], [t('admin.inv.colState'), t('wh.ro.printDraft')], [t('wh.ro.total'), formatSom(total)]]}
+        footer={footer([{ label: t('wh.print.keeperSign'), name: me.data?.name }, { label: t('wh.print.approvedHead') }])}>
+        <table className="w-full border-collapse text-[0.75rem]">
+          <thead><tr><th className={cell}>№</th><th className={`${cell} text-left`}>{t('wh.col.item')}</th><th className={`${cell} text-right`}>{t('wh.ro.col.usable')}</th><th className={`${cell} text-right`}>{t('wh.ro.col.rate')}</th><th className={`${cell} text-right`}>{t('wh.ro.col.daysLeft')}</th><th className={`${cell} text-right`}>{t('wh.ro.col.suggested')}</th><th className={`${cell} text-right`}>{t('wh.col.unitCost')}</th><th className={`${cell} text-right`}>{t('wh.col.sum')}</th></tr></thead>
+          <tbody>{d.rows.map((r: any, i: number) => <tr key={r.item_id}><td className={cell}>{i + 1}</td><td className={cell}>{r.name}{id === 'all' ? ` (${r.branch_name})` : ''}</td><td className={`${cell} text-right`}>{qty(r.usable)} {r.unit}</td><td className={`${cell} text-right`}>{qty(r.daily_rate)}</td><td className={`${cell} text-right`}>{r.days_left ?? '—'}</td>
+            <td className={`${cell} text-right`}><b>{qty(r.suggested)}</b> {r.unit}{r.packs ? ` (${t('wh.ro.packs', { n: r.packs })})` : ''}</td><td className={`${cell} text-right`}>{formatSom(r.purchase_price)}</td><td className={`${cell} text-right`}>{formatSom(r.est_cost)}</td></tr>)}</tbody>
+        </table>
+      </PrintDoc>
+    );
+  }
   if (kind === 'receipt') return (
     <PrintDoc title={t('wh.print.receipt')} number={`K-${d.number}`} date={d.received_at} branch={d.branch_name} patient={null} responsible={d.received_by_name} status=""
       info={[[t('wh.rc.supplier'), d.supplier], [t('wh.rc.invoice'), `${d.invoice_no}, ${fmtDate(d.invoice_date)}`], [t('wh.print.receivedBy'), d.received_by_name], [t('wh.col.sum'), formatSom(d.total)]]}

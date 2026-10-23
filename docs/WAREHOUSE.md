@@ -113,6 +113,20 @@ o‘tkazildi. Invariant (testda tekshiriladi): `opening_qty + Σ kirim − Σ ch
 - Eski `/inventory` API saqlanib qoldi (rahbar + omborchi): «kirim» seriyasiz partiya yaratadi, «chiqim» FEFO bo‘yicha
   bo‘limga beriladi (oluvchi — yozayotgan xodim, bo‘lim — sabab matni); nazoratdagi dori uchun 409.
 
+**Buyurtma taklifi** (`GET /warehouse/reorder?branch_id&horizon&only=order`, `GET /warehouse/reorder.csv`,
+`POST /warehouse/reorder/brief`; omborchi va rahbar, boshqalar 403; migratsiya `037_reorder.sql`). Faqat hisob, AI shart
+emas (`modules/reorder.ts`):
+- *Sarf* = `issue` (va 030 dan oldingi `legacy` chiqimlar) − `return`, bekor qilinganlar, hisobdan chiqarish va
+  inventarizatsiya tuzatishlari kirmaydi; oxirgi 30 kun (bugun bilan) / 30, sarf bo‘lmasa 90 kun / 90.
+- *Isrof (FEFO proyeksiyasi)*: yaroqli partiyalar muddati yaqinidan boshlab shu sur’atda ishlatiladi; muddati 30 kun
+  ichida tugaydigan partiyaning muddatigacha ishlatib bo‘linmaydigan qismi — «ishlatilmay o‘tadi».
+- *Necha kunga yetadi* = ⌊(yaroqli qoldiq − isrof) / kunlik sarf⌋.
+- *Buyurtma* = ⌈kunlik sarf × davr⌉ + minimum − (yaroqli qoldiq − isrof) − yo‘ldagi (hozircha yo‘q), musbat bo‘lsa
+  butun qadoqqa (`inventory_items.pack_size`), noma’lum bo‘lsa butun birlikka yaxlitlanadi. Davr 7–180 kun (standart 30).
+- Holat: tugagan → 14 kundan kam → buyurtma kerak → yetarli → sarf yo‘q. CSV va «Buyurtma so‘rovi» chop etish loyihasi
+  (`/print/warehouse/reorder/<filial|all>?horizon=`) faqat buyurtma qatorlari bilan, **kirim yaratmaydi**. «Qisqa
+  xulosa» — `docs/AI.md` (raqam tekshiruvi bilan).
+
 **Kim nimani ko‘radi.** Omborchi: faqat ombor (bemor ismi va #raqami talabnomada, MKB kodlari — egasining talabi
 bo‘yicha; qayd matni, natijalar, hisob-kitob yo‘q). Rahbar: hammasi, shu jumladan bemor bo‘yicha material qiymati.
 Shifokor: katalog (nom, yaroqli qoldiq), o‘z talabnomalari va o‘z qabulining materiallari; narx ko‘rinmaydi.

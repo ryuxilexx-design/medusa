@@ -12,7 +12,7 @@ import { fromC, insertMove, STOCK_SQL, takeFefo, toC } from './warehouse';
 // stock = Σ batch balances (migration 030); the ledger keeps opening_qty + Σ in − Σ out equal to it
 const QTY = STOCK_SQL('i');
 const MOVE_COLS = 'm.id, m.type, m.kind, m.quantity, m.reason, m.actor_name, m.receiver_name, m.doc_no, m.occurred_at, m.voided_at';
-const ITEM_FIELDS = 'i.category, i.storage, i.controlled, i.drug_id, i.purchase_price';
+const ITEM_FIELDS = 'i.category, i.storage, i.controlled, i.drug_id, i.purchase_price, i.pack_size';
 
 @Controller('inventory')
 export class InventoryController {
@@ -42,9 +42,9 @@ export class InventoryController {
       if ((await c.query(`SELECT 1 FROM inventory_items WHERE tenant_id = $1 AND branch_id = $2 AND lower(name) = lower($3)`, [ctx.tenantId, input.branch_id, input.name])).rowCount)
         throw conflict('DUPLICATE', 'Bu filialda shu nomli material allaqachon bor');
       if (input.drug_id && !(await c.query(`SELECT 1 FROM drugs WHERE id = $1`, [input.drug_id])).rowCount) throw invalid({ drug_id: 'Dori topilmadi' });
-      const id = (await c.query(`INSERT INTO inventory_items (id, tenant_id, branch_id, name, unit, opening_qty, minimum_qty, active, category, storage, controlled, drug_id, purchase_price)
-        VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-        [ctx.tenantId, input.branch_id, input.name, input.unit, input.opening_qty, input.minimum_qty, input.active, input.category, input.storage, input.controlled, input.drug_id ?? null, input.purchase_price])).rows[0].id as string;
+      const id = (await c.query(`INSERT INTO inventory_items (id, tenant_id, branch_id, name, unit, opening_qty, minimum_qty, active, category, storage, controlled, drug_id, purchase_price, pack_size)
+        VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+        [ctx.tenantId, input.branch_id, input.name, input.unit, input.opening_qty, input.minimum_qty, input.active, input.category, input.storage, input.controlled, input.drug_id ?? null, input.purchase_price, input.pack_size ?? null])).rows[0].id as string;
       // the opening balance is one batch without a series (later stock arrives through receipts with series and expiry)
       if (input.opening_qty > 0) await c.query(`INSERT INTO inventory_batches (id, tenant_id, item_id, qty, received_qty, unit_cost, received_at) VALUES (gen_random_uuid(), $1,$2,$3,$3,$4,$5)`,
         [ctx.tenantId, id, fromC(toC(input.opening_qty)), input.purchase_price, now()]);
@@ -89,11 +89,12 @@ export class InventoryController {
       if (input.unit !== undefined && input.unit !== it.unit) changes.push(`birlik: ${input.unit}`);
       if (input.minimum_qty !== undefined && input.minimum_qty !== Number(it.minimum_qty)) changes.push(`minimum: ${input.minimum_qty}`);
       if (input.active !== undefined && input.active !== it.active) changes.push(input.active ? 'faol qilindi' : 'nofaol qilindi');
+      if (input.pack_size !== undefined && (input.pack_size ?? null) !== (it.pack_size == null ? null : Number(it.pack_size))) changes.push(`qadoq: ${input.pack_size ?? '—'}`);
       await c.query(`UPDATE inventory_items SET name = $2, branch_id = $3, unit = COALESCE($4, unit), minimum_qty = COALESCE($5, minimum_qty), active = COALESCE($6, active),
           category = COALESCE($7, category), storage = COALESCE($8, storage), controlled = COALESCE($9, controlled), purchase_price = COALESCE($10, purchase_price),
-          drug_id = CASE WHEN $11 THEN $12::uuid ELSE drug_id END WHERE id = $1`,
+          drug_id = CASE WHEN $11 THEN $12::uuid ELSE drug_id END, pack_size = CASE WHEN $13 THEN $14::numeric ELSE pack_size END WHERE id = $1`,
         [id, name, branchId, input.unit ?? null, input.minimum_qty ?? null, input.active ?? null, input.category ?? null, input.storage ?? null, input.controlled ?? null,
-          input.purchase_price ?? null, input.drug_id !== undefined, input.drug_id ?? null]);
+          input.purchase_price ?? null, input.drug_id !== undefined, input.drug_id ?? null, input.pack_size !== undefined, input.pack_size ?? null]);
       if (changes.length) await audit(c, ctx, 'inventory.update', 'inventory_item', id, `${it.name}: ${changes.join(', ')}`, branchId);
       return { data: { ok: true, changes } };
     });
