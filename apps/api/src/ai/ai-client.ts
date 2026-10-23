@@ -11,17 +11,18 @@ import type { MessageKey } from '@meduza/contracts';
 import { SEED_IDS } from '@meduza/db';
 
 export type AiMode = 'off' | 'sample' | 'live';
-export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary' | 'bot_faq' | 'manager_digest' | 'manager_ask';
+export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary' | 'bot_faq' | 'manager_digest' | 'manager_ask' | 'lab_commentary' | 'warehouse_brief';
 /**
  * Routes that carry no clinical text: PubMed abstracts, and the manager's AI (a fact sheet of SQL-computed numbers with
  * doctor/service/item names — never a patient name or clinical text, see ai/manager-facts.ts). Every other route —
  * including any new one — counts as clinical. bot_faq is NOT public: a patient's free-text question may mention their
  * health, so it follows the clinical rules (Gemini free tier only for the demo tenants; production needs
- * AI_CLINICAL_ALLOWED=1) and the bot falls back to keyword answers.
+ * AI_CLINICAL_ALLOWED=1) and the bot falls back to keyword answers. lab_commentary (lab values of a patient) is clinical.
+ * warehouse_brief carries stock numbers and item names only (ai/warehouse-brief.ts).
  */
-export const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary', 'manager_digest', 'manager_ask']);
-/** Business-data routes (manager): non-clinical, but a real clinic's numbers never go to the Gemini free tier. */
-const MANAGER_ROUTES = new Set<AiRoute>(['manager_digest', 'manager_ask']);
+export const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary', 'manager_digest', 'manager_ask', 'warehouse_brief']);
+/** Business-data routes (manager, storekeeper): non-clinical, but a real clinic's numbers never go to the Gemini free tier. */
+const MANAGER_ROUTES = new Set<AiRoute>(['manager_digest', 'manager_ask', 'warehouse_brief']);
 const SEED_TENANTS = new Set<string>([SEED_IDS.tenant, SEED_IDS.tenant2]);
 /** Why clinical text may not go to the model: the server is a production one without AI_CLINICAL_ALLOWED=1, or the Gemini free tier. */
 export type ClinicalBlock = 'production' | 'free_tier';

@@ -36,12 +36,15 @@ export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: stri
   // ---- existing consumables and reagents: categories, prices, two batches each
   const PRICE_SOM = [1_200, 1_500, 300, 2_200, 2_200, 450_000, 85_000, 260_000, 120_000, 18_000, 900, 600, 4_500, 400, 35_000, 900, 6_000, 9_000, 1_800, 22_000];
   const REAGENT = new Set([5, 6, 7]);
+  // units in one supplier pack (migration 037): the reorder suggestion is rounded up to whole packs; null = unknown
+  const PACK = [100, 50, 200, 100, 100, null, 10, null, null, 10, 50, 50, 50, 100, 12, 100, 25, 10, 50, 10];
   const batches: Row[] = [];
   data.inventory_items.forEach((it, i) => {
     it.category = REAGENT.has(i) ? 'reagent' : 'consumable';
     it.storage = i === 5 || i === 7 ? 'fridge' : 'room';
     it.controlled = false; it.drug_id = null;
     it.purchase_price = (PRICE_SOM[i] ?? 1_000) * SO;
+    it.pack_size = PACK[i] ?? null;
     const net = data.inventory_movements.filter((m) => m.item_id === it.id).reduce((a, m) => a + (m.type === 'in' ? C(m.quantity) : -C(m.quantity)), C(it.opening_qty));
     // the older lot expires first; test strips run out soon, one calibrator lot is already expired
     let older = Math.round((net * 0.35) / 100) * 100;
@@ -64,7 +67,7 @@ export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: stri
   ];
   const medId = (k: number) => sid(`inv:med:${k}`);
   MEDS.forEach((m, k) => data.inventory_items.push({ id: medId(k), tenant_id: T, branch_id: BC, name: m.name, unit: m.unit, opening_qty: 0, minimum_qty: m.min, active: true,
-    category: 'medicine', storage: m.storage, controlled: m.controlled, drug_id: null, purchase_price: m.price * SO }));
+    category: 'medicine', storage: m.storage, controlled: m.controlled, drug_id: null, purchase_price: m.price * SO, pack_size: m.unit === 'ampula' ? 10 : null }));
   const RECEIPTS: { n: number; d: number; supplier: string; inv: string; lines: [number, string, number, number][] }[] = [
     { n: 1, d: -20, supplier: 'Grand Pharm (demo)', inv: 'GP-4471', lines: [[0, 'TR-2601', 300, 20], [1, 'SF-2509', 25, 50], [2, 'LD-2603', 200, 100], [3, 'NC-2512', 60, 40], [5, 'DX-2604', 400, 30]] },
     { n: 2, d: -6, supplier: 'Dori-Darmon (demo)', inv: 'DD-1185', lines: [[1, 'SF-2604', 500, 40], [4, 'IN-2605', 150, 6], [3, 'NC-2606', 330, 30]] },

@@ -42,6 +42,8 @@ outcome — **never the prompt or the answer**), a per-clinic daily budget (`AI_
 | Dictation (STT, not `AiClient`) | doctor | audio to the STT server (`local` on the clinic's machine, or `openai`) | `openai` gated like clinical AI; audio never stored |
 | **Daily digest** (`manager_digest`) | manager | a **fact sheet**: numbers computed by SQL for one Tashkent day and branch scope (net revenue cash basis net of refunds, payments by method, refunds, visits done / no-show / cancelled, new patients, top 5 services by net revenue, visits per doctor, open debts, low-stock / expiring / expired batches, pending warehouse requests, approvals and write-offs, open camera security alerts, unverified lab results, cancelled visits with an open invoice, failed Telegram/SMS notices, missing fiscal receipts), the same weekday a week earlier, and precomputed differences — plus names of **doctors, services**. **No patient name, phone, ID or clinical text.** | non-clinical (`PUBLIC_ROUTES`): works in production without `AI_CLINICAL_ALLOWED`; never to the Gemini free tier for a real clinic (`businessBlock`); budget; regenerate ≤ 5 per clinic per day |
 | **Ask the numbers** (`manager_ask`) | manager | call 1 (plan): the manager's question (through `redact()`), today's date, the manager's branch names/ids and the list of report templates. Call 2 (answer): the question and the **rows of the chosen template** as facts (numbers + names of doctors, services, items, expense categories, branches, ICD-10 *group codes*). | same as the digest; the model never writes SQL |
+| **Lab result commentary** (`lab_commentary`) | doctor who has seen the patient | server-computed facts of one **verified** lab order: parameter code/name/unit, value, reference range, flag, critical mark, the same parameter's previous verified values (value + days before) with change and %, plus **sex and an age band** («40–49»). **No name, patient number, birth date, phone or free text.** | clinical (not in `PUBLIC_ROUTES`): production needs `AI_CLINICAL_ALLOWED=1`, Gemini free tier only for the seed demo clinics on a non-production server, budget; otherwise the template commentary |
+| **Reorder brief** (`warehouse_brief`) | storekeeper, manager | the top ≤ 8 items of the reorder suggestion: names, units and server numbers (usable stock, daily use, days left, suggested quantity, packs, quantity expiring unused). No patient data exists in it. | business (in `PUBLIC_ROUTES`, `businessBlock` like the manager's AI) |
 
 ## The manager's AI in detail (`ai/manager-facts.ts`, `ai/manager-ask.ts`, `modules/ai-manager.controller.ts`)
 
@@ -66,3 +68,34 @@ outcome — **never the prompt or the answer**), a per-clinic daily budget (`AI_
 - **Logs:** `ai_usage` has no text; the audit records `Shablon: <id>` or the refusal reason — never the question.
 
 Tests: `apps/api/test/ai-manager.test.mjs` (fake Claude and Gemini servers — never a real key).
+
+## Lab result commentary («Natija sharhi»: `ai/lab-facts.ts`, `modules/lab-commentary.controller.ts`)
+
+- `POST /orders/:id/commentary`, **doctor only** (lab, registrar, manager, cashier → 403). The order must belong to the
+  clinic (else 404), the doctor must have an appointment with the patient — the same rule as the patient card (else 403),
+  and the result must be verified (else 409 `NOT_VERIFIED`). Never shown to the patient (no bot, no print).
+- **Facts first, from the server:** each value, unit, range and flag (low / high / normal as stored at entry); a
+  **critical** mark from the service template's `crit_low` / `crit_high` or, when absent, the default panic limits in
+  `DEFAULT_CRITICAL` (HGB < 70 / > 200 g/L, WBC < 2 / > 30, PLT < 50 / > 1000, GLU < 2.8 / > 22, creatinine > 350,
+  urea > 35, ALT/AST > 1000, INR > 5, PT > 40 s, TG > 11.3, TSH > 50) — **the clinic's laboratory head must confirm
+  these before real use**; up to 3 previous verified values of the same parameter code for this patient with the change
+  (exact decimal rounding) and % from the latest one.
+- **Critical values are listed by the server first** (translated text, red block), whatever the model writes.
+- **The model only words the facts.** It returns `sentences[{text, fact_keys}]`. A sentence is dropped when it cites an
+  unknown key, states a number that is not one of the cited facts (parameter names, units like «×10⁹/L» and the test
+  name are ignored), or contains a diagnosis / disease / drug / treatment word (uz Latin and Cyrillic, ru list in
+  `FORBIDDEN`). Nothing left → the template commentary (out-of-range values with ranges, then trends).
+- **Modes:** AI off, sample, a production server without `AI_CLINICAL_ALLOWED=1`, the Gemini free tier for a real clinic,
+  a model error or an exhausted budget → the template, labelled «Avtomatik shablon» / «Namunaviy rejim» with the reason.
+- **Stored:** nothing except one `ai_usage` row (tokens, cost) and an audit line «Natija sharhi (AI|shablon)» without
+  values. A live answer is cached in memory per clinic, order and language (verified results never change); only
+  doctors reach it, after the access check.
+
+## Reorder brief («Buyurtma taklifi» → «Qisqa xulosa»: `ai/warehouse-brief.ts`, `modules/reorder.controller.ts`)
+
+The table itself needs no AI (`modules/reorder.ts`, `docs/WAREHOUSE.md`). The brief sends the top items (out of
+stock, < 14 days left, to order, or lots expiring unused) as facts `item.N.*` with the item name as label, and the
+model writes 3–5 bullets («2 hafta ichida tugaydi: …»). The manager's number check (`checkItems`) drops any bullet with
+an unknown key or a number that is not a cited fact; none left → the template brief. Off / sample → the template.
+
+Tests: `apps/api/test/lab-commentary.test.mjs`, `apps/api/test/reorder.test.mjs` (fake Claude server).

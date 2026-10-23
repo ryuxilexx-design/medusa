@@ -13,6 +13,7 @@ import { PatientFormModal } from '@/components/patient-form';
 import { type BookingInit, BookingModal } from '@/components/booking';
 import { WalkInModal } from '@/components/walk-in';
 import { LabValues } from '@/components/lab-values';
+import { LabCommentary } from '@/components/lab-commentary';
 import { ConsentBlock, ConsentModal, ConsentNotice } from '@/components/consent';
 import { useT } from '@/lib/i18n';
 import { canDeposit, DepositCard, DepositModal } from '@/components/deposits';
@@ -237,7 +238,7 @@ function Labs({ labs, diagnostics, role }: { labs: any[]; diagnostics: any[]; ro
             <b>{l.service_name}</b><span className="text-slate-600">{t('registrar.orderedAt', { at: fmtDateTime(l.ordered_at) })}{l.ordered_by ? `, ${l.ordered_by}` : ''}</span>
             <span className="ml-auto"><LabStatus status={l.status} short={role === 'registrar'} /></span>
           </div>
-          {l.values && l.status === 'verified' && <div className="mt-2"><LabValues values={l.values} /><p className="mt-1 text-xs text-slate-600">{t('registrar.verifiedBy', { name: l.verified_by_name, at: fmtDateTime(l.verified_at) })}</p></div>}
+          {l.values && l.status === 'verified' && <div className="mt-2"><LabValues values={l.values} /><p className="mt-1 text-xs text-slate-600">{t('registrar.verifiedBy', { name: l.verified_by_name, at: fmtDateTime(l.verified_at) })}</p>{role === 'doctor' && <LabCommentary orderId={l.id} />}</div>}
         </div>
       ))}
       {diagnostics.map((d) => (

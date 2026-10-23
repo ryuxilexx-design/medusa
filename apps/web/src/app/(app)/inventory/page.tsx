@@ -15,9 +15,10 @@ import { RequestModal } from '@/components/warehouse/request-modal';
 import { RequestsList } from '@/components/warehouse/requests';
 import { CountsTab, CountStartModal, ReceiptModal, ReceiptsTab, useDocBranch, WriteoffModal, WriteoffsTab } from '@/components/warehouse/docs';
 import { ControlledTab, ExpiringTab, FridgeModal, FridgeTab, MovementsTab, ReportsTab } from '@/components/warehouse/ledger';
+import { ReorderTab } from '@/components/warehouse/reorder';
 
 export default function WarehousePage() { return <Suspense><Warehouse /></Suspense>; }
-const TABS = ['stock', 'requests', 'receipts', 'movements', 'writeoffs', 'counts', 'controlled', 'expiring', 'fridge', 'reports'] as const;
+const TABS = ['stock', 'requests', 'receipts', 'movements', 'writeoffs', 'counts', 'controlled', 'expiring', 'reorder', 'fridge', 'reports'] as const;
 type Tab = (typeof TABS)[number];
 type Dialog = null | 'item' | 'receipt' | 'issue' | 'writeoff' | 'count' | 'fridge';
 const isLow = (i: any) => i.active && Number(i.qty) < Number(i.minimum_qty);
@@ -65,6 +66,7 @@ function Warehouse() {
           {tab === 'counts' && <CountsTab />}
           {tab === 'controlled' && <ControlledTab />}
           {tab === 'expiring' && <ExpiringTab onWriteoff={(b) => open('writeoff', b)} />}
+          {tab === 'reorder' && <ReorderTab />}
           {tab === 'fridge' && <FridgeTab />}
           {tab === 'reports' && <ReportsTab />}
         </div>
@@ -218,6 +220,7 @@ function ItemModal({ item, onClose, onCreated }: { item: any | null; onClose: ()
   const [storage, setStorage] = useState<string>(item?.storage ?? 'room');
   const [controlled, setControlled] = useState<boolean>(item?.controlled ?? false);
   const [price, setPrice] = useState(item ? String(Number(item.purchase_price) / 100) : '');
+  const [pack, setPack] = useState(item?.pack_size != null ? String(Number(item.pack_size)) : '');
   const [err, setErr] = useState<Record<string, string>>({});
   const [tried, setTried] = useState(false);
   const num = (s: string) => Number(s.replace(',', '.'));
@@ -231,11 +234,12 @@ function ItemModal({ item, onClose, onCreated }: { item: any | null; onClose: ()
     minimum_qty: show && !okNum(minimum) ? t('admin.inv.errNumber') : undefined,
     opening_qty: !item && show && !okNum(opening) ? t('admin.inv.errNumber') : undefined,
     purchase_price: priceT == null ? t('wh.err.cost') : undefined,
+    pack_size: pack.trim() && !(num(pack) > 0) ? t('admin.inv.errNumber') : undefined,
   };
   const invalid = Object.values(local).some(Boolean);
   const m = useMutation({
     mutationFn: () => {
-      const body: any = { name: name.trim(), unit: unit.trim(), branch_id: branchId, minimum_qty: num(minimum), active, category, storage, controlled, purchase_price: priceT ?? 0 };
+      const body: any = { name: name.trim(), unit: unit.trim(), branch_id: branchId, minimum_qty: num(minimum), active, category, storage, controlled, purchase_price: priceT ?? 0, pack_size: pack.trim() ? num(pack) : null };
       return item ? api(`/inventory/${item.id}`, { method: 'PATCH', body }) : api('/inventory', { method: 'POST', body: { ...body, opening_qty: num(opening) } });
     },
     onSuccess: (r: any) => {
@@ -248,7 +252,7 @@ function ItemModal({ item, onClose, onCreated }: { item: any | null; onClose: ()
   const e = (k: keyof typeof local) => err[k] ?? local[k];
   const save = () => { setTried(true); if (!invalid) m.mutate(); };
   const dirty = item ? name !== item.name || unit !== item.unit || branchId !== item.branch_id || num(minimum) !== Number(item.minimum_qty) || active !== item.active
-    || category !== item.category || storage !== item.storage || controlled !== item.controlled || priceT !== Number(item.purchase_price) : !!(name || unit);
+    || category !== item.category || storage !== item.storage || controlled !== item.controlled || priceT !== Number(item.purchase_price) || (pack.trim() ? num(pack) : null) !== (item.pack_size == null ? null : Number(item.pack_size)) : !!(name || unit);
   const branches = item && !me.branches.some((b) => b.id === item.branch_id) ? [...me.branches, { id: item.branch_id, name: item.branch_name, code: '' }] : me.branches;
   return (
     <Modal open onClose={onClose} dirty={dirty} width="max-w-2xl" title={item ? t('admin.inv.editTitle', { name: item.name }) : t('admin.inv.addTitle')}
@@ -264,6 +268,7 @@ function ItemModal({ item, onClose, onCreated }: { item: any | null; onClose: ()
           </Select>)}</Field>
         <Field label={t('admin.inv.minQty')} required error={e('minimum_qty')}>{(i) => <Input id={i} inputMode="decimal" value={minimum} invalid={!!e('minimum_qty')} onChange={(ev) => setMinimum(ev.target.value)} />}</Field>
         <Field label={t('wh.item.price')} error={e('purchase_price')}>{(i) => <MoneyInput id={i} value={price} invalid={!!e('purchase_price')} onChange={(ev) => setPrice(ev.target.value)} />}</Field>
+        <Field label={t('wh.item.packSize')} error={e('pack_size')}>{(i) => <Input id={i} inputMode="decimal" value={pack} invalid={!!e('pack_size')} onChange={(ev) => setPack(ev.target.value)} />}</Field>
         {!item && <Field label={t('admin.inv.openingQty')} required error={e('opening_qty')}>{(i) => <Input id={i} inputMode="decimal" value={opening} invalid={!!e('opening_qty')} onChange={(ev) => setOpening(ev.target.value)} />}</Field>}
         <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-medium text-slate-900 sm:col-span-2"><input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={controlled} onChange={(ev) => setControlled(ev.target.checked)} />{t('wh.item.controlledCheck')}</label>
         {item && <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-medium text-slate-900 sm:col-span-2"><input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={active} onChange={(ev) => setActive(ev.target.checked)} />{t('admin.inv.activeCheck')}</label>}
