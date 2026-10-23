@@ -13,3 +13,4 @@ backups/
 # production server secrets and backups
 deploy/.env
 deploy/backups/
+.claude/worktrees/
