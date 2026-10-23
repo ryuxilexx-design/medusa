@@ -1,0 +1,418 @@
+inn;inn_ru;atc;forms;allergy_classes;prescription_only
+Amoxicillin;Амоксициллин;J01CA04;tab|caps|susp;penicillins;1
+Amoxicillin and clavulanic acid;Амоксициллин + клавулановая кислота;J01CR02;tab|susp|inj;penicillins;1
+Ampicillin;Ампициллин;J01CA01;tab|inj;penicillins;1
+Ampicillin and sulbactam;Ампициллин + сульбактам;J01CR01;inj;penicillins;1
+Benzylpenicillin;Бензилпенициллин;J01CE01;inj;penicillins;1
+Benzathine benzylpenicillin;Бензатина бензилпенициллин;J01CE08;inj;penicillins;1
+Phenoxymethylpenicillin;Феноксиметилпенициллин;J01CE02;tab;penicillins;1
+Oxacillin;Оксациллин;J01CF04;tab|inj;penicillins;1
+Piperacillin and tazobactam;Пиперациллин + тазобактам;J01CR05;inj;penicillins;1
+Cefalexin;Цефалексин;J01DB01;caps|susp;cephalosporins;1
+Cefazolin;Цефазолин;J01DB04;inj;cephalosporins;1
+Cefuroxime;Цефуроксим;J01DC02;tab|inj;cephalosporins;1
+Cefaclor;Цефаклор;J01DC04;caps|susp;cephalosporins;1
+Ceftriaxone;Цефтриаксон;J01DD04;inj;cephalosporins;1
+Cefotaxime;Цефотаксим;J01DD01;inj;cephalosporins;1
+Ceftazidime;Цефтазидим;J01DD02;inj;cephalosporins;1
+Cefoperazone and sulbactam;Цефоперазон + сульбактам;J01DD62;inj;cephalosporins;1
+Cefixime;Цефиксим;J01DD08;caps|tab|susp;cephalosporins;1
+Cefpodoxime;Цефподоксим;J01DD13;tab|susp;cephalosporins;1
+Cefditoren;Цефдиторен;J01DD16;tab;cephalosporins;1
+Cefepime;Цефепим;J01DE01;inj;cephalosporins;1
+Meropenem;Меропенем;J01DH02;inj;carbapenems;1
+Imipenem and cilastatin;Имипенем + циластатин;J01DH51;inj;carbapenems;1
+Ertapenem;Эртапенем;J01DH03;inj;carbapenems;1
+Aztreonam;Азтреонам;J01DF01;inj;monobactams;1
+Azithromycin;Азитромицин;J01FA10;tab|caps|susp|inj;macrolides;1
+Clarithromycin;Кларитромицин;J01FA09;tab|susp;macrolides;1
+Erythromycin;Эритромицин;J01FA01;tab|ointment;macrolides;1
+Josamycin;Джозамицин;J01FA07;tab;macrolides;1
+Roxithromycin;Рокситромицин;J01FA06;tab;macrolides;1
+Spiramycin;Спирамицин;J01FA02;tab;macrolides;1
+Clindamycin;Клиндамицин;J01FF01;caps|inj|cream;lincosamides;1
+Lincomycin;Линкомицин;J01FF02;caps|inj;lincosamides;1
+Doxycycline;Доксициклин;J01AA02;caps|tab;tetracyclines;1
+Tetracycline;Тетрациклин;J01AA07;tab|ointment;tetracyclines;1
+Ciprofloxacin;Ципрофлоксацин;J01MA02;tab|inj|drops_eye|drops_ear;fluoroquinolones;1
+Levofloxacin;Левофлоксацин;J01MA12;tab|inj|drops_eye;fluoroquinolones;1
+Ofloxacin;Офлоксацин;J01MA01;tab|drops_eye|ointment;fluoroquinolones;1
+Moxifloxacin;Моксифлоксацин;J01MA14;tab|inj|drops_eye;fluoroquinolones;1
+Norfloxacin;Норфлоксацин;J01MA06;tab;fluoroquinolones;1
+Gentamicin;Гентамицин;J01GB03;inj|cream|drops_eye;aminoglycosides;1
+Amikacin;Амикацин;J01GB06;inj;aminoglycosides;1
+Tobramycin;Тобрамицин;J01GB01;inj|drops_eye;aminoglycosides;1
+Vancomycin;Ванкомицин;J01XA01;inj;glycopeptides;1
+Sulfamethoxazole and trimethoprim;Ко-тримоксазол;J01EE01;tab|susp;sulfonamides;1
+Nitrofurantoin;Нитрофурантоин;J01XE01;tab|caps;nitrofurans;1
+Furazidin;Фуразидин;J01XE03;tab|caps;nitrofurans;1
+Fosfomycin;Фосфомицин;J01XX01;gran;;1
+Linezolid;Линезолид;J01XX08;tab|inj;;1
+Chloramphenicol;Хлорамфеникол;J01BA01;tab|drops_eye|ointment;;1
+Metronidazole;Метронидазол;P01AB01;tab|inj|gel|pess;nitroimidazoles;1
+Tinidazole;Тинидазол;P01AB02;tab;nitroimidazoles;1
+Ornidazole;Орнидазол;P01AB03;tab|inj;nitroimidazoles;1
+Nifuroxazide;Нифуроксазид;A07AX03;caps|susp;nitrofurans;0
+Nifuratel;Нифурател;G01AX05;tab|pess;nitrofurans;1
+Nitrofural;Нитрофурал;D08AF01;sol_ext|tab;nitrofurans;0
+Rifampicin;Рифампицин;J04AB02;caps;;1
+Isoniazid;Изониазид;J04AC01;tab;;1
+Rifaximin;Рифаксимин;A07AA11;tab;;1
+Fluconazole;Флуконазол;J02AC01;caps|inj;;1
+Itraconazole;Итраконазол;J02AC02;caps;;1
+Terbinafine;Тербинафин;D01BA02;tab|cream|spray;;1
+Griseofulvin;Гризеофульвин;D01BA01;tab;;1
+Clotrimazole;Клотримазол;D01AC01;cream|pess|sol_ext;;0
+Ketoconazole;Кетоконазол;D01AC08;cream|shampoo;;0
+Miconazole;Миконазол;D01AC02;cream|gel|pess;;0
+Econazole;Эконазол;D01AC03;cream|pess;;0
+Sertaconazole;Сертаконазол;D01AC14;cream;;0
+Naftifine;Нафтифин;D01AE22;cream|sol_ext;;0
+Nystatin;Нистатин;A07AA02;tab|ointment|pess;;0
+Natamycin;Натамицин;A07AA03;tab|cream|pess;;0
+Aciclovir;Ацикловир;J05AB01;tab|cream|inj|ointment;;1
+Valaciclovir;Валацикловир;J05AB11;tab;;1
+Famciclovir;Фамцикловир;J05AB09;tab;;1
+Oseltamivir;Осельтамивир;J05AH02;caps|susp;;1
+Rimantadine;Римантадин;J05AC02;tab;;0
+Umifenovir;Умифеновир;J05AX13;caps|tab;;0
+Tenofovir disoproxil;Тенофовир дизопроксил;J05AF07;tab;;1
+Entecavir;Энтекавир;J05AF10;tab;;1
+Sofosbuvir and velpatasvir;Софосбувир + велпатасвир;J05AP55;tab;;1
+Albendazole;Альбендазол;P02CA03;tab|susp;;1
+Mebendazole;Мебендазол;P02CA01;tab;;0
+Pyrantel;Пирантел;P02CC01;tab|susp;;0
+Ivermectin;Ивермектин;P02CF01;tab;;1
+Hydroxychloroquine;Гидроксихлорохин;P01BA02;tab;;1
+Permethrin;Перметрин;P03AC04;cream|sol_ext;;0
+Benzyl benzoate;Бензилбензоат;P03AX01;ointment|sol_ext;;0
+Ibuprofen;Ибупрофен;M01AE01;tab|caps|susp|gel;nsaids;0
+Diclofenac;Диклофенак;M01AB05;tab|inj|gel|supp;nsaids;1
+Aceclofenac;Ацеклофенак;M01AB16;tab;nsaids;1
+Indometacin;Индометацин;M01AB01;tab|supp|ointment;nsaids;1
+Ketorolac;Кеторолак;M01AB15;tab|inj;nsaids;1
+Ketoprofen;Кетопрофен;M01AE03;tab|caps|inj|gel;nsaids;1
+Dexketoprofen;Декскетопрофен;M01AE17;tab|inj;nsaids;1
+Naproxen;Напроксен;M01AE02;tab;nsaids;0
+Nimesulide;Нимесулид;M01AX17;tab|gran;nsaids;1
+Meloxicam;Мелоксикам;M01AC06;tab|inj;nsaids;1
+Piroxicam;Пироксикам;M01AC01;caps|gel;nsaids;1
+Lornoxicam;Лорноксикам;M01AC05;tab|inj;nsaids;1
+Celecoxib;Целекоксиб;M01AH01;caps;nsaids;1
+Etoricoxib;Эторикоксиб;M01AH05;tab;nsaids;1
+Acetylsalicylic acid;Ацетилсалициловая кислота;B01AC06;tab;nsaids;0
+Metamizole sodium;Метамизол натрия;N02BB02;tab|inj;pyrazolones;0
+Paracetamol;Парацетамол;N02BE01;tab|susp|syrup|supp|inj;;0
+Tramadol;Трамадол;N02AX02;caps|inj;opioids;1
+Morphine;Морфин;N02AA01;inj|tab;opioids;1
+Fentanyl;Фентанил;N02AB03;patch|inj;opioids;1
+Naloxone;Налоксон;V03AB15;inj;;1
+Sumatriptan;Суматриптан;N02CC01;tab;;1
+Drotaverine;Дротаверин;A03AD02;tab|inj;;0
+Papaverine;Папаверин;A03AD01;tab|inj|supp;;1
+Hyoscine butylbromide;Гиосцина бутилбромид;A03BB01;tab|supp;;0
+Mebeverine;Мебеверин;A03AA04;caps;;1
+Trimebutine;Тримебутин;A03AA05;tab;;1
+Otilonium bromide;Отилония бромид;A03AB06;tab;;1
+Simeticone;Симетикон;A03AX13;caps|susp;;0
+Pregabalin;Прегабалин;N03AX16;caps;;1
+Gabapentin;Габапентин;N03AX12;caps;;1
+Tolperisone;Толперизон;M03BX04;tab|inj;;1
+Tizanidine;Тизанидин;M03BX02;tab;;1
+Allopurinol;Аллопуринол;M04AA01;tab;;1
+Febuxostat;Фебуксостат;M04AA03;tab;;1
+Colchicine;Колхицин;M04AC01;tab;;1
+Methotrexate;Метотрексат;L04AX03;tab|inj;;1
+Azathioprine;Азатиоприн;L04AX01;tab;;1
+Leflunomide;Лефлуномид;L04AA13;tab;;1
+Sulfasalazine;Сульфасалазин;A07EC01;tab;sulfonamides;1
+Mesalazine;Месалазин;A07EC02;tab|supp;;1
+Glucosamine;Глюкозамин;M01AX05;tab|caps|powder;;0
+Chondroitin sulfate;Хондроитина сульфат;M01AX25;caps|inj;;0
+Alendronic acid;Алендроновая кислота;M05BA04;tab;;1
+Amlodipine;Амлодипин;C08CA01;tab;;1
+Nifedipine;Нифедипин;C08CA05;tab;;1
+Felodipine;Фелодипин;C08CA02;tab;;1
+Lercanidipine;Лерканидипин;C08CA13;tab;;1
+Verapamil;Верапамил;C08DA01;tab|inj;;1
+Diltiazem;Дилтиазем;C08DB01;tab|caps;;1
+Enalapril;Эналаприл;C09AA02;tab;ace_inhibitors;1
+Lisinopril;Лизиноприл;C09AA03;tab;ace_inhibitors;1
+Captopril;Каптоприл;C09AA01;tab;ace_inhibitors;1
+Ramipril;Рамиприл;C09AA05;tab|caps;ace_inhibitors;1
+Perindopril;Периндоприл;C09AA04;tab;ace_inhibitors;1
+Fosinopril;Фозиноприл;C09AA09;tab;ace_inhibitors;1
+Zofenopril;Зофеноприл;C09AA15;tab;ace_inhibitors;1
+Losartan;Лозартан;C09CA01;tab;arbs;1
+Valsartan;Валсартан;C09CA03;tab;arbs;1
+Irbesartan;Ирбесартан;C09CA04;tab;arbs;1
+Candesartan;Кандесартан;C09CA06;tab;arbs;1
+Telmisartan;Телмисартан;C09CA07;tab;arbs;1
+Olmesartan medoxomil;Олмесартана медоксомил;C09CA08;tab;arbs;1
+Sacubitril and valsartan;Сакубитрил + валсартан;C09DX04;tab;arbs;1
+Bisoprolol;Бисопролол;C07AB07;tab;;1
+Metoprolol;Метопролол;C07AB02;tab;;1
+Nebivolol;Небиволол;C07AB12;tab;;1
+Atenolol;Атенолол;C07AB03;tab;;1
+Carvedilol;Карведилол;C07AG02;tab;;1
+Propranolol;Пропранолол;C07AA05;tab;;1
+Hydrochlorothiazide;Гидрохлоротиазид;C03AA03;tab;thiazides;1
+Indapamide;Индапамид;C03BA11;tab;thiazides;1
+Furosemide;Фуросемид;C03CA01;tab|inj;;1
+Torasemide;Торасемид;C03CA04;tab;;1
+Spironolactone;Спиронолактон;C03DA01;tab|caps;;1
+Eplerenone;Эплеренон;C03DA04;tab;;1
+Moxonidine;Моксонидин;C02AC05;tab;;1
+Clonidine;Клонидин;C02AC01;tab;;1
+Methyldopa;Метилдопа;C02AB01;tab;;1
+Doxazosin;Доксазозин;C02CA04;tab;;1
+Atorvastatin;Аторвастатин;C10AA05;tab;statins;1
+Rosuvastatin;Розувастатин;C10AA07;tab;statins;1
+Simvastatin;Симвастатин;C10AA01;tab;statins;1
+Pravastatin;Правастатин;C10AA03;tab;statins;1
+Fenofibrate;Фенофибрат;C10AB05;caps|tab;;1
+Ezetimibe;Эзетимиб;C10AX09;tab;;1
+Omega-3-acid ethyl esters;Омега-3 кислот этиловые эфиры;C10AX06;caps;;0
+Clopidogrel;Клопидогрел;B01AC04;tab;;1
+Ticagrelor;Тикагрелор;B01AC24;tab;;1
+Warfarin;Варфарин;B01AA03;tab;;1
+Rivaroxaban;Ривароксабан;B01AF01;tab;;1
+Apixaban;Апиксабан;B01AF02;tab;;1
+Dabigatran etexilate;Дабигатрана этексилат;B01AE07;caps;;1
+Heparin;Гепарин;B01AB01;inj|gel;heparins;1
+Enoxaparin sodium;Эноксапарин натрия;B01AB05;inj;heparins;1
+Nadroparin calcium;Надропарин кальция;B01AB06;inj;heparins;1
+Digoxin;Дигоксин;C01AA05;tab|inj;;1
+Amiodarone;Амиодарон;C01BD01;tab|inj;;1
+Isosorbide mononitrate;Изосорбида мононитрат;C01DA14;tab;;1
+Isosorbide dinitrate;Изосорбида динитрат;C01DA08;tab|spray_oral;;1
+Glyceryl trinitrate;Нитроглицерин;C01DA02;tab|spray_oral;;1
+Trimetazidine;Триметазидин;C01EB15;tab;;1
+Ivabradine;Ивабрадин;C01EB17;tab;;1
+Meldonium;Мельдоний;C01EB22;caps|inj;;1
+Pentoxifylline;Пентоксифиллин;C04AD03;tab|inj;;1
+Nicergoline;Ницерголин;C04AE02;tab;;1
+Calcium dobesilate;Кальция добезилат;C05BX01;caps;;1
+Troxerutin;Троксерутин;C05CA04;caps|gel;;0
+Diosmin and hesperidin;Диосмин + гесперидин;C05CA53;tab;;0
+Epinephrine;Эпинефрин;C01CA24;inj;;1
+Atropine;Атропин;A03BA01;inj|drops_eye;;1
+Metformin;Метформин;A10BA02;tab;;1
+Gliclazide;Гликлазид;A10BB09;tab;sulfonylureas;1
+Glimepiride;Глимепирид;A10BB12;tab;sulfonylureas;1
+Glibenclamide;Глибенкламид;A10BB01;tab;sulfonylureas;1
+Sitagliptin;Ситаглиптин;A10BH01;tab;;1
+Vildagliptin;Вилдаглиптин;A10BH02;tab;;1
+Empagliflozin;Эмпаглифлозин;A10BK03;tab;;1
+Dapagliflozin;Дапаглифлозин;A10BK01;tab;;1
+Pioglitazone;Пиоглитазон;A10BG03;tab;;1
+Insulin (human);Инсулин человеческий;A10AB01;inj;;1
+Insulin isophane (human);Инсулин-изофан человеческий;A10AC01;inj;;1
+Insulin glargine;Инсулин гларгин;A10AE04;inj;;1
+Insulin detemir;Инсулин детемир;A10AE05;inj;;1
+Insulin aspart;Инсулин аспарт;A10AB05;inj;;1
+Insulin lispro;Инсулин лизпро;A10AB04;inj;;1
+Liraglutide;Лираглутид;A10BJ02;inj;;1
+Semaglutide;Семаглутид;A10BJ06;inj|tab;;1
+Levothyroxine sodium;Левотироксин натрия;H03AA01;tab;;1
+Thiamazole;Тиамазол;H03BB02;tab;;1
+Potassium iodide;Калия йодид;;tab;;0
+Prednisolone;Преднизолон;H02AB06;tab|inj;corticosteroids;1
+Methylprednisolone;Метилпреднизолон;H02AB04;tab|inj;corticosteroids;1
+Dexamethasone;Дексаметазон;H02AB02;tab|inj|drops_eye;corticosteroids;1
+Hydrocortisone;Гидрокортизон;H02AB09;tab|inj|cream|ointment;corticosteroids;1
+Triamcinolone;Триамцинолон;H02AB08;inj|ointment;corticosteroids;1
+Betamethasone;Бетаметазон;D07AC01;cream|ointment|inj;corticosteroids;1
+Mometasone;Мометазон;R01AD09;spray_nasal|cream|ointment;corticosteroids;1
+Clobetasol;Клобетазол;D07AD01;cream|ointment;corticosteroids;1
+Fluticasone;Флутиказон;R03BA05;inhaler|spray_nasal;corticosteroids;1
+Budesonide;Будесонид;R03BA02;inhaler|neb|spray_nasal;corticosteroids;1
+Beclometasone;Беклометазон;R03BA01;inhaler|spray_nasal;corticosteroids;1
+Cabergoline;Каберголин;G02CB03;tab;;1
+Bromocriptine;Бромокриптин;G02CB01;tab;;1
+Progesterone;Прогестерон;G03DA04;caps|gel;;1
+Dydrogesterone;Дидрогестерон;G03DB01;tab;;1
+Estradiol;Эстрадиол;G03CA03;tab|gel;;1
+Desogestrel and ethinylestradiol;Дезогестрел + этинилэстрадиол;G03AA09;tab;;1
+Drospirenone and ethinylestradiol;Дроспиренон + этинилэстрадиол;G03AA12;tab;;1
+Levonorgestrel;Левоноргестрел;G03AD01;tab;;1
+Clomifene;Кломифен;G03GB02;tab;;1
+Oxytocin;Окситоцин;H01BB02;inj;;1
+Misoprostol;Мизопростол;G02AD06;tab;;1
+Methylergometrine;Метилэргометрин;G02AB01;inj|tab;;1
+Tamsulosin;Тамсулозин;G04CA02;caps;;1
+Alfuzosin;Альфузозин;G04CA01;tab;;1
+Finasteride;Финастерид;G04CB01;tab;;1
+Dutasteride;Дутастерид;G04CB02;caps;;1
+Sildenafil;Силденафил;G04BE03;tab;;1
+Tadalafil;Тадалафил;G04BE08;tab;;1
+Solifenacin;Солифенацин;G04BD08;tab;;1
+Oxybutynin;Оксибутинин;G04BD04;tab;;1
+Omeprazole;Омепразол;A02BC01;caps|inj;;0
+Pantoprazole;Пантопразол;A02BC02;tab|inj;;1
+Esomeprazole;Эзомепразол;A02BC05;tab|caps|inj;;1
+Lansoprazole;Лансопразол;A02BC03;caps;;1
+Rabeprazole;Рабепразол;A02BC04;tab;;1
+Famotidine;Фамотидин;A02BA03;tab|inj;;0
+Aluminium hydroxide and magnesium hydroxide;Алюминия гидроксид + магния гидроксид;A02AD01;susp|tab;;0
+Bismuth subcitrate potassium;Висмута трикалия дицитрат;A02BX05;tab;;0
+Sucralfate;Сукральфат;A02BX02;tab|susp;;1
+Domperidone;Домперидон;A03FA03;tab|susp;;1
+Metoclopramide;Метоклопрамид;A03FA01;tab|inj;;1
+Itopride;Итоприд;A03FA07;tab;;1
+Ondansetron;Ондансетрон;A04AA01;tab|inj;;1
+Loperamide;Лоперамид;A07DA03;caps;;0
+Diosmectite;Диосмектит;A07BC05;powder;;0
+Activated charcoal;Активированный уголь;A07BA01;tab;;0
+Oral rehydration salts;Соли для пероральной регидратации;;powder;;0
+Saccharomyces boulardii;Сахаромицеты буларди;A07FA02;caps|powder;;0
+Lactulose;Лактулоза;A06AD11;syrup;;0
+Macrogol;Макрогол;A06AD15;powder;;0
+Bisacodyl;Бисакодил;A06AB02;tab|supp;;0
+Sodium picosulfate;Натрия пикосульфат;A06AB08;drops_oral;;0
+Pancreatin;Панкреатин;A09AA02;caps|tab;;0
+Ursodeoxycholic acid;Урсодезоксихолевая кислота;A05AA02;caps;;1
+Ademetionine;Адеметионин;A16AA02;tab|inj;;1
+Thioctic acid;Тиоктовая кислота;A16AX01;tab|inj;;1
+Salbutamol;Сальбутамол;R03AC02;inhaler|neb|tab;;1
+Formoterol;Формотерол;R03AC13;inhaler;;1
+Salmeterol and fluticasone;Салметерол + флутиказон;R03AK06;inhaler;corticosteroids;1
+Budesonide and formoterol;Будесонид + формотерол;R03AK07;inhaler;corticosteroids;1
+Tiotropium bromide;Тиотропия бромид;R03BB04;inhaler;;1
+Ipratropium bromide;Ипратропия бромид;R03BB01;inhaler|neb;;1
+Fenoterol and ipratropium bromide;Фенотерол + ипратропия бромид;R03AL01;inhaler|neb;;1
+Montelukast;Монтелукаст;R03DC03;tab;;1
+Theophylline;Теофиллин;R03DA04;tab;;1
+Aminophylline;Аминофиллин;R03DA05;inj|tab;;1
+Ambroxol;Амброксол;R05CB06;tab|syrup|neb;;0
+Acetylcysteine;Ацетилцистеин;R05CB01;tab|powder|inj;;0
+Carbocisteine;Карбоцистеин;R05CB03;caps|syrup;;0
+Bromhexine;Бромгексин;R05CB02;tab|syrup;;0
+Butamirate;Бутамират;R05DB13;syrup|tab;;0
+Dextromethorphan;Декстрометорфан;R05DA09;syrup;;0
+Guaifenesin;Гвайфенезин;R05CA03;syrup;;0
+Xylometazoline;Ксилометазолин;R01AA07;drops_nasal|spray_nasal;;0
+Oxymetazoline;Оксиметазолин;R01AA05;drops_nasal|spray_nasal;;0
+Naphazoline;Нафазолин;R01AA08;drops_nasal;;0
+Azelastine;Азеластин;R01AC03;spray_nasal|drops_eye;;1
+Cromoglicic acid;Кромоглициевая кислота;R01AC01;spray_nasal|drops_eye;;0
+Loratadine;Лоратадин;R06AX13;tab|syrup;;0
+Desloratadine;Дезлоратадин;R06AX27;tab|syrup;;0
+Cetirizine;Цетиризин;R06AE07;tab|drops_oral;;0
+Levocetirizine;Левоцетиризин;R06AE09;tab;;0
+Fexofenadine;Фексофенадин;R06AX26;tab;;0
+Ebastine;Эбастин;R06AX22;tab;;0
+Rupatadine;Рупатадин;R06AX28;tab;;0
+Ketotifen;Кетотифен;R06AX17;tab|drops_eye;;0
+Chloropyramine;Хлоропирамин;R06AC03;tab|inj;;1
+Clemastine;Клемастин;R06AA04;tab|inj;;1
+Diphenhydramine;Дифенгидрамин;R06AA02;tab|inj;;1
+Promethazine;Прометазин;R06AD02;tab|inj;;1
+Amitriptyline;Амитриптилин;N06AA09;tab;;1
+Sertraline;Сертралин;N06AB06;tab;;1
+Escitalopram;Эсциталопрам;N06AB10;tab;;1
+Fluoxetine;Флуоксетин;N06AB03;caps;;1
+Paroxetine;Пароксетин;N06AB05;tab;;1
+Fluvoxamine;Флувоксамин;N06AB08;tab;;1
+Venlafaxine;Венлафаксин;N06AX16;tab|caps;;1
+Duloxetine;Дулоксетин;N06AX21;caps;;1
+Mirtazapine;Миртазапин;N06AX11;tab;;1
+Agomelatine;Агомелатин;N06AX22;tab;;1
+Trazodone;Тразодон;N06AX05;tab;;1
+Diazepam;Диазепам;N05BA01;tab|inj;;1
+Alprazolam;Алпразолам;N05BA12;tab;;1
+Lorazepam;Лоразепам;N05BA06;tab;;1
+Clonazepam;Клоназепам;N03AE01;tab;;1
+Hydroxyzine;Гидроксизин;N05BB01;tab;;1
+Etifoxine;Этифоксин;N05BX03;caps;;1
+Zolpidem;Золпидем;N05CF02;tab;;1
+Melatonin;Мелатонин;N05CH01;tab;;0
+Quetiapine;Кветиапин;N05AH04;tab;;1
+Olanzapine;Оланзапин;N05AH03;tab;;1
+Risperidone;Рисперидон;N05AX08;tab;;1
+Aripiprazole;Арипипразол;N05AX12;tab;;1
+Haloperidol;Галоперидол;N05AD01;tab|inj;;1
+Sulpiride;Сульпирид;N05AL01;caps|tab;;1
+Carbamazepine;Карбамазепин;N03AF01;tab;aromatic_anticonvulsants;1
+Oxcarbazepine;Окскарбазепин;N03AF02;tab;aromatic_anticonvulsants;1
+Phenytoin;Фенитоин;N03AB02;tab;aromatic_anticonvulsants;1
+Phenobarbital;Фенобарбитал;N03AA02;tab;aromatic_anticonvulsants;1
+Lamotrigine;Ламотриджин;N03AX09;tab;aromatic_anticonvulsants;1
+Valproic acid;Вальпроевая кислота;N03AG01;tab|syrup|inj;;1
+Levetiracetam;Леветирацетам;N03AX14;tab|inj;;1
+Topiramate;Топирамат;N03AX11;tab;;1
+Piracetam;Пирацетам;N06BX03;tab|caps|inj;;1
+Citicoline;Цитиколин;N06BX06;inj|sol_oral;;1
+Vinpocetine;Винпоцетин;N06BX18;tab|inj;;1
+Ginkgo biloba;Гинкго билоба;N06DX02;tab;;0
+Donepezil;Донепезил;N06DA02;tab;;1
+Memantine;Мемантин;N06DX01;tab;;1
+Cinnarizine;Циннаризин;N07CA02;tab;;1
+Betahistine;Бетагистин;N07CA01;tab;;1
+Levodopa and carbidopa;Леводопа + карбидопа;N04BA02;tab;;1
+Pramipexole;Прамипексол;N04BC05;tab;;1
+Neostigmine;Неостигмин;N07AA01;inj|tab;;1
+Lidocaine;Лидокаин;N01BB02;inj|spray_oral|gel;local_anesthetics_amide;1
+Lidocaine and prilocaine;Лидокаин + прилокаин;N01BB20;cream;local_anesthetics_amide;1
+Articaine and epinephrine;Артикаин + эпинефрин;N01BB58;inj;local_anesthetics_amide;1
+Bupivacaine;Бупивакаин;N01BB01;inj;local_anesthetics_amide;1
+Mepivacaine;Мепивакаин;N01BB03;inj;local_anesthetics_amide;1
+Ropivacaine;Ропивакаин;N01BB09;inj;local_anesthetics_amide;1
+Procaine;Прокаин;N01BA02;inj;local_anesthetics_ester;1
+Benzocaine;Бензокаин;N01BA05;gel|lozenge;local_anesthetics_ester;0
+Tetracaine;Тетракаин;S01HA03;drops_eye;local_anesthetics_ester;1
+Oxybuprocaine;Оксибупрокаин;S01HA02;drops_eye;local_anesthetics_ester;1
+Proxymetacaine;Проксиметакаин;S01HA04;drops_eye;local_anesthetics_ester;1
+Propofol;Пропофол;N01AX10;inj;;1
+Iohexol;Йогексол;V08AB02;inj;iodinated_contrast;1
+Iopromide;Йопромид;V08AB05;inj;iodinated_contrast;1
+Iopamidol;Йопамидол;V08AB04;inj;iodinated_contrast;1
+Iodixanol;Йодиксанол;V08AB09;inj;iodinated_contrast;1
+Gadobutrol;Гадобутрол;V08CA09;inj;;1
+Timolol;Тимолол;S01ED01;drops_eye;;1
+Latanoprost;Латанопрост;S01EE01;drops_eye;;1
+Dorzolamide;Дорзоламид;S01EC03;drops_eye;;1
+Acetazolamide;Ацетазоламид;S01EC01;tab;;1
+Tropicamide;Тропикамид;S01FA06;drops_eye;;1
+Hypromellose;Гипромеллоза;S01KA02;drops_eye;;0
+Olopatadine;Олопатадин;S01GX09;drops_eye;;0
+Tobramycin and dexamethasone;Тобрамицин + дексаметазон;S01CA01;drops_eye;aminoglycosides|corticosteroids;1
+Phenazone and lidocaine;Феназон + лидокаин;S02DA30;drops_ear;local_anesthetics_amide;0
+Fusidic acid;Фузидовая кислота;D06AX01;cream|ointment;;1
+Mupirocin;Мупироцин;D06AX09;ointment;;1
+Silver sulfadiazine;Сульфадиазин серебра;D06BA01;cream;sulfonamides;1
+Adapalene;Адапален;D10AD03;gel;;1
+Benzoyl peroxide;Бензоила пероксид;D10AE01;gel;;0
+Azelaic acid;Азелаиновая кислота;D10AX03;cream|gel;;0
+Isotretinoin;Изотретиноин;D10BA01;caps;;1
+Calcipotriol;Кальципотриол;D05AX02;ointment;;1
+Pimecrolimus;Пимекролимус;D11AH02;cream;;1
+Tacrolimus;Такролимус;D11AH01;ointment;;1
+Dexpanthenol;Декспантенол;D03AX03;cream|ointment|spray;;0
+Salicylic acid;Салициловая кислота;D01AE12;ointment|sol_ext;;0
+Chlorhexidine;Хлоргексидин;D08AC02;sol_ext|pess|lozenge;;0
+Povidone-iodine;Повидон-йод;D08AG02;sol_ext|pess|ointment;;0
+Hydrogen peroxide;Водорода пероксид;D08AX01;sol_ext;;0
+Hexetidine;Гексетидин;A01AB12;spray_oral|sol_ext;;0
+Colecalciferol;Колекальциферол;A11CC05;drops_oral|tab|caps;;0
+Alfacalcidol;Альфакальцидол;A11CC03;caps;;1
+Calcitriol;Кальцитриол;A11CC04;caps;;1
+Retinol;Ретинол;A11CA01;caps;;0
+Tocopherol;Токоферол;A11HA03;caps;;0
+Ascorbic acid;Аскорбиновая кислота;A11GA01;tab|inj;;0
+Thiamine;Тиамин;A11DA01;inj|tab;;1
+Pyridoxine;Пиридоксин;A11HA02;inj|tab;;1
+Cyanocobalamin;Цианокобаламин;B03BA01;inj|tab;;1
+Folic acid;Фолиевая кислота;B03BB01;tab;;0
+Ferrous sulfate;Железа сульфат;B03AA07;tab;;0
+Iron(III) hydroxide polymaltose;Железа (III) гидроксид полимальтозат;B03AB05;tab|syrup|drops_oral;;0
+Iron sucrose;Железа (III) гидроксид сахарозный комплекс;B03AC02;inj;;1
+Calcium carbonate;Кальция карбонат;A12AA04;tab;;0
+Potassium chloride;Калия хлорид;A12BA01;tab|inj;;1
+Magnesium sulfate;Магния сульфат;B05XA05;inj;;1
+Zinc sulfate;Цинка сульфат;A12CB01;tab;;0
+Sodium chloride;Натрия хлорид;B05XA03;inj;;1
+Glucose;Декстроза;B05BA03;inj;;1
+Tranexamic acid;Транексамовая кислота;B02AA02;tab|inj;;1
+Etamsylate;Этамзилат;B02BX01;tab|inj;;1
+Phytomenadione;Фитоменадион;B02BA01;inj|tab;;1

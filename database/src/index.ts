@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { buildSeed, SeedData, DEMO_TIMEZONE_OFFSET_HOURS, SEED_IDS } from '../seed/build';
 import { STARTER_TEMPLATES } from '../seed/templates';
+import { ensureStarterDrugs } from './drugs';
 
 // bigint (int8) money values fit safely into JS numbers (< 2^53 tiyin).
 types.setTypeParser(20, (v) => Number(v));
@@ -15,6 +16,7 @@ export { buildSeed };
 export type { SeedData };
 export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS, readSeedSnapshot, SNAPSHOT_DIR } from '../seed/build';
 export { STARTER_TEMPLATES } from '../seed/templates';
+export { ensureStarterDrugs, parseDrugsCsv, upsertDrugs, STARTER_DRUGS_CSV } from './drugs';
 
 /**
  * The app's connection pool. A dropped connection (database restart, admin kill) must never crash the process:
@@ -58,6 +60,16 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
         await client.query('ROLLBACK');
         throw e;
       }
+    }
+    // the starter drug list (migration 028) is data, not schema: loaded once while the table is empty
+    await client.query('BEGIN');
+    try {
+      const n = await ensureStarterDrugs(client);
+      await client.query('COMMIT');
+      if (n) log(`dori ro‘yxati yuklandi: ${n} ta (boshlang‘ich, klinik tekshiruv talab etiladi)`);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
     }
   } finally {
     await client.query('SELECT pg_advisory_unlock(74001)').catch(() => undefined);

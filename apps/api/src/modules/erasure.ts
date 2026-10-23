@@ -131,11 +131,17 @@ export async function patientExport(q: Q, ctx: Ctx, patientId: string) {
       WHERE f.patient_id = $1 AND e.tenant_id = $2 ORDER BY e.occurred_at`);
   const notices = await rows(
     `SELECT n.kind, n.channel, n.status, n.created_at, n.sent_at FROM notifications n WHERE n.patient_id = $1 AND n.tenant_id = $2 ORDER BY n.created_at`);
+  // structured allergy list (migration 028), withdrawn rows included: what was recorded, by whom and when
+  const allergies = await rows(
+    `SELECT a.class_code, c.name_uz AS class_name, d.inn AS drug_inn, a.free_text, a.reaction, a.severity, a.source, a.recorded_by_name, a.recorded_at,
+            a.confirmed_at, a.withdrawn_at, a.withdraw_reason
+       FROM patient_allergies a LEFT JOIN allergy_classes c ON c.code = a.class_code LEFT JOIN drugs d ON d.id = a.drug_id
+      WHERE a.patient_id = $1 AND a.tenant_id = $2 ORDER BY a.recorded_at`);
   return {
     format: 'med.uz.ai/patient-export', version: 1,
     purpose: 'Bemorning so‘rovi bo‘yicha (O‘RQ-547, shaxsga doir ma’lumotlar subyektining o‘z ma’lumotlarini olish huquqi)',
     generated_at: now(), clinic: clinic?.name ?? null, exported_by: { name: ctx.name, role: ctx.role },
-    patient, consents, appointments, clinical_notes: notes, intake_forms: intake, documents, lab_results: labResults, diagnostic_reports: diagnostics,
+    patient, consents, allergies, appointments, clinical_notes: notes, intake_forms: intake, documents, lab_results: labResults, diagnostic_reports: diagnostics,
     invoices, deposits, camera_events: cameraEvents, notices,
   };
 }

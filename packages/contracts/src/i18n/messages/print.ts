@@ -39,6 +39,9 @@ export const print = {
   'print.doc.rest': ['{from} – {until} ({n} kun) uyda davolanish tavsiya etiladi.', { one: 'С {from} по {until} ({n} день) рекомендовано лечение дома.', few: 'С {from} по {until} ({n} дня) рекомендовано лечение дома.', many: 'С {from} по {until} ({n} дней) рекомендовано лечение дома.' }],
   'print.doc.notSickLeave': ['Bu ma’lumotnoma mehnatga layoqatsizlik varaqasi emas.', 'Справка не является листком нетрудоспособности.'],
   'print.doc.rxGeneral': ['Umumiy tavsiya', 'Общие рекомендации'],
+  'print.doc.dmed': ['DMED e-retsept kerak', 'Нужен электронный рецепт DMED'],
+  'print.doc.dmedNote': ['* — retsept bo‘yicha beriladigan dori: dorixonada DMED elektron retsepti kerak.', '* — рецептурный препарат: в аптеке нужен электронный рецепт DMED.'],
+  'print.doc.allergyOverride': ['Allergiya ogohlantirishiga qaramay buyurildi. Sabab: {reason}', 'Назначено несмотря на предупреждение об аллергии. Причина: {reason}'],
   'print.doc.rxDisclaimer': ['Klinikaning ichki dori tavsiyasi. Davlat elektron retsepti (DMED) emas.', 'Внутренняя рекомендация клиники по препаратам. Не является государственным электронным рецептом (DMED).'],
 
   // visit note

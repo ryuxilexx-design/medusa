@@ -14,6 +14,7 @@ import { IntakePanel } from '@/components/intake-panel';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { NewsCard } from '@/components/news-card';
 import { DocumentsCard } from '@/components/documents-card';
+import { AllergiesPanel } from '@/components/allergies';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
@@ -284,7 +285,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
         )}
         <div className="space-y-4 p-5">
           {signed && <p className="text-[0.8125rem] text-slate-600">{t('note.signedBy', { name: enc.data.note.signed_by_name, at: fmtDateTime(enc.data.note.signed_at) })}</p>}
-          <IntakePanel appointmentId={appointmentId} onUseComplaints={signed ? undefined : (text) => {
+          <IntakePanel appointmentId={appointmentId} recordAllergyFor={enc.data.patient?.id} onUseComplaints={signed ? undefined : (text) => {
             setForm((f) => ({ ...f!, complaints: f!.complaints.trim() ? `${f!.complaints.trim()}\n${text}` : text }));
             setErrors((x) => ({ ...x, complaints: '' }));
             toast.info(t('note.intakeAdded'));
@@ -340,6 +341,8 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
           </ul>
         )}
       </Card>
+
+      {enc.data.patient?.id && <Card><AllergiesPanel patientId={enc.data.patient.id} legacyNote={enc.data.patient.allergy_note} /></Card>}
 
       <DocumentsCard encounterId={encounterId} note={{ diagnosis: form.diagnosis, icd10: form.icd10, signed }}
         allergy={{ state: enc.data.patient?.allergy_state ?? null, note: enc.data.patient?.allergy_note ?? null, intake: intake.data?.allergies ?? null }} />

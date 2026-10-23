@@ -10,6 +10,12 @@ Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server teks
 |---|---|---|
 | Migratsiya `029_dhp.sql`: `patients.pinfl` (14 raqam, klinika ichida noyob) va `id_document`; `dhp_settings` (rejim off/export/live, manzil, token shifrlangan); `dhp_outbox` (FHIR Bundle, pending/ready/sent/failed/skipped, urinishlar, backoff). Qayd imzosi, tahlil tasdig‘i, retsept (va bekor qilinishi), qo‘shimcha yozuv — o‘sha tranzaksiyada navbatga, faqat rejim yoqilgan bo‘lsa. FHIR R4 mapperlar (`dhp/fhir.ts`, zod), worker (eksport → ready; jonli → POST, 2xx/401/4xx/5xx), API (sozlama, navbat, NDJSON eksport ≤31 kun, retry), Sozlamalar → «DMED», bemor formasida JShShIR | Ishlaydi (soxta FHIR server bilan; **haqiqiy DMED/UZINFOCOM bilan sinalmagan**; IG R5 da — mapper R4, `docs/DMED_INTEGRATION.md`) | API testi `dhp.test.mjs` (10 ta): mapperlar, PINFL validatsiya/noyoblik/boshqa klinika, off → navbat yo‘q, sozlama 403/422 va token qaytmasligi, export rejimi qatorlari va klinik matn yo‘qligi, NDJSON (403, 422, audit, ikkinchi klinika bo‘sh), jonli 200/503/401/400 va retry, anonimlashtirish; `npm run typecheck`. Brauzer tekshiruvi qilinmagan |
 
+## Dori ro‘yxati va allergiya tekshiruvi (migratsiya 028, `docs/DRUGS.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Dori tavsiyasida dori ro‘yxatdan tanlanadi (XPN, ruscha nomi, ATX, shakllar; ~417 ta boshlang‘ich dori, **klinik tekshiruv talab etiladi**), erkin matn ham qoladi; tuzilgan allergiyalar (sinf / dori / matn, reaksiya, og‘irligi; registrator faqat «bemor aytdi» matni, shifokor tasdiqlaydi; Telegram so‘rovnomasidan bir bosishda); har bir dori allergiyaga va qisman o‘zaro reaksiyaga tekshiriladi — og‘ir allergiyada sababsiz 409, sabab hujjatda va audit’da; bir XPN ikki marta 422; retsept bo‘yicha dorilar bosma nusxada «DMED e-retsept kerak» | Ishlaydi | API test `drugs.test.mjs` (10 ta): qidiruv, rollar, klinika ajratilishi, append-only trigger, penitsillin → amoksitsillin / seftriakson, og‘ir → 409 / sabab bilan 201 + audit, takror XPN, DMED belgisi. Skrinshot 1366×768 va 390 px, uz + ru (test bazasida) |
+
 ## 00000000000000000. 0.16: shifokor kamroq yozadi — shablonlar, tez iboralar, qayta qabul
 
 | Nima | Holat | Tekshiruv |

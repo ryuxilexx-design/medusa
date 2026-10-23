@@ -49,10 +49,12 @@ export default function PrintDocument({ params }: { params: Promise<{ id: string
         <table className="print-avoid-break mb-3 w-full border-collapse text-[0.8125rem]">
           <thead><tr className="border-b border-slate-400 text-left"><th className="py-1 pr-2">№</th><th className="py-1 pr-2">{t('docs.drug')}</th><th className="py-1 pr-2">{t('docs.dose')}</th><th className="py-1 pr-2">{t('docs.frequency')}</th><th className="py-1 pr-2">{t('docs.duration')}</th><th className="py-1">{t('docs.instructions')}</th></tr></thead>
           <tbody>{(b.items as any[]).map((it, i) => (
-            <tr key={i} className="border-b border-slate-200 align-top"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2"><b>{it.name}</b>{it.form ? `, ${it.form}` : ''}</td><td className="py-1 pr-2">{it.dose}</td><td className="py-1 pr-2">{it.frequency}</td><td className="py-1 pr-2">{it.duration}</td><td className="py-1">{it.instructions ?? ''}</td></tr>
+            <tr key={i} className="border-b border-slate-200 align-top"><td className="py-1 pr-2">{i + 1}</td><td className="py-1 pr-2"><b>{it.name}</b>{it.prescription_only ? <b title={t('print.doc.dmed')}>*</b> : null}{it.form ? `, ${it.form}` : ''}</td><td className="py-1 pr-2">{it.dose}</td><td className="py-1 pr-2">{it.frequency}</td><td className="py-1 pr-2">{it.duration}</td><td className="py-1">{it.instructions ?? ''}</td></tr>
           ))}</tbody>
         </table>
         {b.notes && <Block title={t('print.doc.rxGeneral')}>{b.notes}</Block>}
+        {(b.items as any[]).some((it) => it.prescription_only) && <p className="mb-2 text-xs font-semibold text-slate-800" data-testid="rx-dmed">{t('print.doc.dmedNote')}</p>}
+        {b.allergy_check?.override_reason && <p className="mb-2 rounded border border-red-500 px-2 py-1 text-xs text-red-800">{t('print.doc.allergyOverride', { reason: b.allergy_check.override_reason })}</p>}
         <p className="mt-4 text-xs text-slate-600">{t('print.doc.rxDisclaimer')}</p>
       </>}
     </PrintDoc>
