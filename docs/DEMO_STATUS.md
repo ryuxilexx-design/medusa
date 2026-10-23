@@ -4,6 +4,12 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 000000000000000. 0.13: fiskalizatsiya asosi (parallel rejim)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Fiskal chek asosi (migratsiya `023_fiscal.sql`): xizmatda IKPU (17 raqam), QQS (sukut 12 % / 0 % / QQSsiz), qadoq kodi; har to‘lov va qaytarish uchun `fiscal_receipts` qatori (`manual` → kassir KKM chek raqamini kiritadi, `none` → demo klinikalarda «talab qilinmaydi»); kiritilgan chek o‘zgarmaydi; to‘lov qaydi chop etilganda chek № va havola; smena hisoboti va Moliya’da «chek kiritilmagan to‘lovlar» soni va filtri; CSV’da IKPU/QQS/chek ustunlari; Sozlamalar → Klinika’da rejim va IKPU’siz xizmatlar soni; avtomatik provayder uchun outbox-worker (haqiqiy ОФД hali ulanmagan) | Ishlaydi (parallel rejim); demo klinikalarda fiskal maydonlar ko‘rinmaydi | API testi `fiscal.test.mjs` (9 ta): pay/refund qatorlari, raqam kiritish (422, 403, 404, 409, baza trigger’i), none → skipped, CSV ustunlari, smena/moliya soni, xizmat IKPU validatsiyasi, worker (issued/failed/noma’lum provayder); `npm run typecheck`, `next build` |
+
 ## 00000000000000. 0.12: shifokorning dam olish kunlari
 
 Haftalik jadval ustiga istisno kunlar qo‘shildi (`schedule_exceptions`, migratsiya 018): shifokorning dam olish kuni yoki ta’tili, butun klinika yoki bitta filial uchun bayram, bir kunlik maxsus ish vaqti. Rahbar ularni xodim kartasida («Dam olish kunlari») va sozlamalarda («Bayram kunlari») kiritadi va o‘chiradi; davr bir nechta kun bo‘lsa, har kun alohida yozuv. Bu kunlarda registrator ham, Telegram bot ham yozolmaydi (409 `DOCTOR_UNAVAILABLE`, bo‘sh vaqt ro‘yxati bo‘sh, botning sana tugmalarida kun chiqmaydi); maxsus ish vaqti haftalik soat o‘rnini bosadi. Istisno kiritilganda shu kunlardagi rejalashtirilgan qabullar **bekor qilinmaydi** — javobda va ekranda ro‘yxat (bemor, vaqt, jadvalga havola) chiqadi, registrator ko‘chiradi. Jadval panjarasida shunday kun kulrang ustun va sabab bilan ko‘rinadi. Testlar: `schedule-exceptions.test.mjs` (6 ta). Cheklov: bayram kunlari qo‘lda kiritiladi (rasmiy taqvim import qilinmaydi); brauzer E2E yo‘q.

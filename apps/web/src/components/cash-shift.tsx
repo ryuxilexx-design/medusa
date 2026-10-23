@@ -16,6 +16,8 @@ export type Shift = {
   /** Opened before today (left open overnight): the server takes no payment until it is closed. Only on /cash-shifts/current. */
   stale?: boolean;
   totals: { payments: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; refunds: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; cash_expenses: { n: number; sum: number }; cash_in: number; cash_out: number };
+  /** Payments of the shift whose fiscal (KKM) receipt is not recorded yet. Only on /cash-shifts/:id. */
+  fiscal_pending?: number;
 };
 
 /** Who may run a drawer and take money: the cashier and the manager (the server allows the same two roles). */
@@ -157,6 +159,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
           <dt className="font-semibold">{t('cash.expectedCashShort')}</dt><dd className="text-right font-semibold tabular-nums">{formatSom(shift.expected_cash)}</dd>
         </dl>
         <p className="text-[0.8125rem] text-slate-600">{t('cash.nonCashLine', { card: formatSom(tot.payments.card.sum), transfer: formatSom(tot.payments.transfer.sum) })}</p>
+        {!!shift.fiscal_pending && <Alert tone="yellow" title={t('cash.fiscal.shiftPending', { n: shift.fiscal_pending })}>{t('cash.fiscal.shiftPendingHint')}</Alert>}
         <Field label={t('cash.countedCash')} required error={errors.counted_cash ?? (counted && tiyin == null ? t('cash.enterAmountNumber') : undefined)}>
           {(id) => <MoneyInput id={id} className="w-56" value={counted} onChange={(e) => { setCounted(e.target.value); setErrors({}); }} invalid={!!errors.counted_cash} autoFocus />}
         </Field>

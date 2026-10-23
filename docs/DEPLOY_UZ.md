@@ -154,7 +154,33 @@ Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta i
 - Har hafta: `backups/restore-test.log` da oxirgi qator `OK restore-test` bo‘lsin; disk joyi `df -h`.
 - Sertifikat Caddy tomonidan avtomatik yangilanadi; `docker compose logs caddy` da xato bo‘lmasin.
 
-## 7. Xavfsizlik eslatmalari
+## 7. Fiskalizatsiya (onlayn-KKM / ОФД)
+
+O‘zbekistonda bemorning har bir to‘lovi onlayn yoki virtual kassa apparati orqali o‘tishi, chekda har bir xizmat
+uchun IKPU kodi, QQS belgisi (tibbiy klinikalar 2025-yil apreldan QQS to‘lovchi) va QR kod bo‘lishi shart.
+Med.uz.ai hozircha ОФД provayderiga ulanmagan, shuning uchun birinchi klinika **parallel rejimda** ishlaydi:
+
+- Klinika o‘zining sertifikatlangan KKM’ini saqlab qoladi va chekni unda chiqaradi.
+- Kassir to‘lovni Med.uz.ai’da qayd etadi; to‘lovdan keyin «Fiskal chek raqami» maydoni chiqadi — KKM chekidagi
+  raqam (ixtiyoriy: fiskal belgi, tekshirish havolasi, terminal raqami) kiritiladi. Kiritilgan chek o‘zgarmaydi
+  (baza trigger’i), hisobda va chop etiladigan to‘lov qaydida ko‘rinadi; kiritilmagan bo‘lsa varaq «ichki qayd»
+  bo‘lib qoladi.
+- Smena hisobotida va Moliya sahifasida «fiskal chek kiritilmagan to‘lovlar» soni ko‘rinadi; rahbar ro‘yxatni
+  `Moliya → To‘lovlar → Chek kiritilmagan to‘lovlar` filtri bilan ochadi. CSV eksportda IKPU, QQS, chek № va holat
+  ustunlari bor.
+- Sozlamalar → Xizmatlar: har bir xizmatga IKPU kodi (17 raqam, soliq qo‘mitasi katalogidan), QQS (sukut 12 %,
+  0 % yoki QQSsiz) va qadoq kodi kiritiladi. Sozlamalar → Klinika kartasi rejimni va IKPU’siz xizmatlar sonini
+  ko‘rsatadi — chek chiqarishdan oldin katalog to‘liq to‘ldirilsin.
+
+Texnik tomoni: `FISCAL_PROVIDER` muhit o‘zgaruvchisi — `manual` (production’da sukut, parallel rejim) yoki `none`
+(demo; fiskal chek yozilmaydi). Bitta klinika uchun `tenants.fiscal_provider` ustuni muhit qiymatidan ustun.
+Har to‘lov va qaytarish uchun `fiscal_receipts` jadvalida bitta qator (pending → issued/failed, yoki skipped).
+Haqiqiy ОФД provayderi (`apps/api/src/fiscal/provider.ts` dagi `FiscalProvider` interfeysi) keyinroq sxemani
+o‘zgartirmasdan qo‘shiladi: uning nomi `FISCAL_PROVIDER` ga yoziladi, `fiscal/worker.ts` navbatdagi `pending`
+qatorlarni o‘zi qayta uradi (`FISCAL_RETRY_SECONDS`, sukut 60). Provayder xatosi savdoni to‘xtatmaydi — qator
+`failed` bo‘lib, xato matni saqlanadi va kassir raqamni qo‘lda kiritishi mumkin.
+
+## 8. Xavfsizlik eslatmalari
 
 - `deploy/.env` va `deploy/backups/` hech qachon git’ga tushmaydi (`.gitignore` da).
 - Bazaga tashqaridan ulanish yo‘q. Hisobot uchun faqat o‘qish huquqli rol kerak bo‘lsa — SSH tunnel orqali.

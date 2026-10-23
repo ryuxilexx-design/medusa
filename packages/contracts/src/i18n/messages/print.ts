@@ -135,4 +135,17 @@ export const print = {
   'print.appt.comeEarly': ['Qabuldan 10 daqiqa oldin keling.', 'Приходите за 10 минут до приёма.'],
   'print.appt.ticket': ['Kichik talon', 'Малый талон'],
   'print.appt.a5': ['Varaq', 'Лист'],
+
+  // payment slip with a recorded fiscal receipt
+  'print.pay.fiscalTitle': ['To‘lov qaydi — fiskal chek № {n}', 'Запись об оплате — фискальный чек № {n}'],
+  'print.pay.fiscalNumber': ['Fiskal chek №:', 'Фискальный чек №:'],
+  'print.pay.fiscalSign': ['Fiskal belgi:', 'Фискальный признак:'],
+  'print.pay.fiscalTerminal': ['Terminal:', 'Терминал:'],
+  'print.pay.fiscalQr': ['Chekni tekshirish:', 'Проверка чека:'],
+  'print.pay.fiscalIssued': ['Fiskal chek berilgan', 'Фискальный чек выдан'],
+  'print.pay.fiscalDisclaimer': ['Fiskal chek klinikaning onlayn-KKM’i orqali berilgan (raqami yuqorida). Bu varaq uning ichki nusxasi.', 'Фискальный чек выдан через онлайн-ККМ клиники (номер выше). Этот лист — его внутренняя копия.'],
+  'print.pay.fiscalPending': ['Fiskal chek klinikaning KKM’ida chiqariladi; raqami hali kiritilmagan.', 'Фискальный чек выдаётся на ККМ клиники; номер ещё не введён.'],
+  'print.shift.fiscalPending': ['Fiskal chek kiritilmagan to‘lovlar: {n}', { one: 'Оплат без фискального чека: {n}', few: 'Оплат без фискального чека: {n}', many: 'Оплат без фискального чека: {n}' }],
+  'print.shift.fiscalCol': ['Fiskal chek', 'Фискальный чек'],
+  'print.shift.fiscalNo': ['yo‘q', 'нет'],
 } as const satisfies Catalog;

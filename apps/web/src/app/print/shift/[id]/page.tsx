@@ -25,6 +25,7 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
   const demoNow = me.data ? new Date(Date.parse(me.data.now) + (Date.now() - me.data.fetched_at)) : new Date(s.opened_at);
   const closed = s.status === 'closed';
   const demo = me.data?.demo !== false; // as PrintDoc: until /me answers, assume demo
+  const fiscal = me.data ? me.data.fiscal_provider !== 'none' : false; // parallel mode: show which payments still lack the KKM receipt
   const row = (k: string, v: string, strong = false) => <tr className={strong ? 'border-t border-slate-400 font-semibold' : ''}><td className="py-0.5 pr-4">{k}</td><td className="whitespace-nowrap py-0.5 text-right tabular-nums">{v}</td></tr>;
   return (
     <div className="min-h-screen bg-slate-200 py-6 print:bg-white print:py-0">
@@ -54,6 +55,7 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
               {closed && row(t('print.shift.counted'), formatSom(s.counted_cash))}
               {closed && row(t('print.shift.difference'), `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`, true)}
             </tbody></table>
+            {fiscal && <p className={`mt-1 text-xs ${s.fiscal_pending ? 'font-semibold text-red-700' : 'text-slate-600'}`}>{t('print.shift.fiscalPending', { n: s.fiscal_pending ?? 0 })}</p>}
             {closed && s.close_note && <p className="mt-1 text-xs">{t('print.shift.note', { text: s.close_note })}</p>}
           </section>
           <section><h2 className="mb-1 text-xs font-bold text-slate-600">{t('print.shift.allPayments')}</h2>
@@ -66,8 +68,10 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
         </div>
         <h2 className="mt-6 text-xs font-bold text-slate-600">{t('print.shift.payments', { n: s.payments.length })}</h2>
         <table className="mt-1 w-full border-collapse text-[0.75rem]">
-          <thead><tr className="border-b border-slate-400 text-left"><th className="py-0.5">{t('print.shift.time')}</th><th>{t('print.shift.receipt')}</th><th>{t('print.shift.invoice')}</th><th>{t('print.shift.patient')}</th><th>{t('print.shift.method')}</th><th className="text-right">{t('print.shift.amount')}</th></tr></thead>
-          <tbody>{s.payments.map((p: any) => <tr key={p.id} className="border-b border-slate-100 tabular-nums"><td className="py-0.5">{fmtTime(p.paid_at)}</td><td>{p.receipt_number}</td><td>№{p.invoice_number}</td><td>{fullName(p)} {pid(p.patient_number)}</td><td>{pm(p.method)}</td><td className="whitespace-nowrap text-right tabular-nums">{formatSom(p.amount)}</td></tr>)}</tbody>
+          <thead><tr className="border-b border-slate-400 text-left"><th className="py-0.5">{t('print.shift.time')}</th><th>{t('print.shift.receipt')}</th><th>{t('print.shift.invoice')}</th><th>{t('print.shift.patient')}</th><th>{t('print.shift.method')}</th>{fiscal && <th>{t('print.shift.fiscalCol')}</th>}<th className="text-right">{t('print.shift.amount')}</th></tr></thead>
+          <tbody>{s.payments.map((p: any) => <tr key={p.id} className="border-b border-slate-100 tabular-nums"><td className="py-0.5">{fmtTime(p.paid_at)}</td><td>{p.receipt_number}</td><td>№{p.invoice_number}</td><td>{fullName(p)} {pid(p.patient_number)}</td><td>{pm(p.method)}</td>
+            {fiscal && <td>{p.fiscal?.status === 'issued' ? p.fiscal.receipt_number : p.fiscal && p.fiscal.status !== 'skipped' ? <span className="font-semibold text-red-700">{t('print.shift.fiscalNo')}</span> : '—'}</td>}
+            <td className="whitespace-nowrap text-right tabular-nums">{formatSom(p.amount)}</td></tr>)}</tbody>
         </table>
         {s.refunds.length > 0 && <>
           <h2 className="mt-4 text-xs font-bold text-slate-600">{t('print.shift.refunds', { n: s.refunds.length })}</h2>

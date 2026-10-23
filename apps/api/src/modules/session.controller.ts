@@ -5,6 +5,7 @@ import { isLocale, loginSchema, preferencesSchema } from '@meduza/contracts';
 import { AiClient } from '../ai/ai-client';
 import { reasonText } from './ai.controller';
 import { assertDatabaseName, RealTenantsPresentError, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
+import { fiscalProviderName } from '../fiscal/provider';
 import { Db } from '../core/db';
 import { config } from '../core/config';
 import { AllowDuringPasswordChange, Ctx, CurrentCtx, LANG_COOKIE, Public, Roles, SESSION_COOKIE } from '../core/context';
@@ -80,6 +81,8 @@ export class SessionController {
         doctor_id: ctx.doctorId, doctor_specialty: ctx.doctorSpecialty, branches, auth_kind: ctx.authKind, must_change_password: ctx.mustChangePassword,
         today: today(), now: now().toISOString(), demo: config.demoEnabled, clock_reason: (await this.db.one(`SELECT set_reason FROM demo_clock WHERE id = 1`))?.set_reason ?? null, ai_mode: this.ai.clinicalMode(ctx.tenantId), ai_off_reason: reasonText(ctx, this.ai.clinicalOffReason(ctx.tenantId)),
         locale: ctx.locale, text_size: ctx.textSize,
+        // fiscal mode of the clinic: the cashier screens show the KKM receipt field only when a receipt is owed (not «none»)
+        fiscal_provider: await fiscalProviderName(this.db.pool, ctx.tenantId),
       },
     };
   }

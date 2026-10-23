@@ -36,6 +36,8 @@ import { AiClient } from './ai/ai-client';
 import { Icd10Service } from './ai/icd10';
 import { NewsService } from './ai/news';
 import { NewsWorker } from './ai/news-worker';
+import { FiscalController } from './fiscal/fiscal.controller';
+import { FiscalWorker } from './fiscal/worker';
 
 const http = new Logger('HTTP');
 /** One line per finished request: method, path, status, ms, request id, tenant and role — never a body, a query value or clinical text. */
@@ -53,8 +55,8 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, DocumentsController, CashController, CamerasController, HikController, CameraIsapiController],
-  providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, DocumentsController, CashController, CamerasController, HikController, CameraIsapiController, FiscalController],
+  providers: [Db, BotEngine, BotRegistry, Notifier, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, FiscalWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

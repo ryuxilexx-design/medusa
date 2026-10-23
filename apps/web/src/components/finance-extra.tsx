@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Banknote, DoorOpen, Printer, Scale, Undo2, Wallet } from 'lucide-react';
+import { Ban, Banknote, DoorOpen, Printer, ReceiptText, Scale, Undo2, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, EXPENSE_PAID_FROM_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
@@ -12,6 +12,7 @@ import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkBut
 import { DateRange } from '@/components/date-range';
 import { CloseShiftModal, expenseCategoryLabel, StatMoney, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
+import { useFiscalEnabled } from '@/components/fiscal';
 
 type T = ReturnType<typeof useT>;
 
@@ -55,7 +56,7 @@ export function FootRow({ cells }: { cells: { span?: number; value?: React.React
   );
 }
 
-type Summary = { payments: { total: number; count: number }; refunds: { total: number; count: number }; net_revenue: number; expenses: { total: number }; net_result: number };
+type Summary = { payments: { total: number; count: number }; refunds: { total: number; count: number }; net_revenue: number; expenses: { total: number }; net_result: number; fiscal?: { missing: number } };
 
 /** Manager: cash-basis result for the period. Net revenue = payments − refunds; net result = net revenue − expenses. */
 export function FinanceStats({ from, to, branchId }: { from: string; to: string; branchId: string }) {
@@ -63,12 +64,14 @@ export function FinanceStats({ from, to, branchId }: { from: string; to: string;
   const q = useQuery({ queryKey: ['finance-summary', from, to, branchId], queryFn: () => api<{ data: Summary }>(`/finance/summary${qs({ from, to, branch_id: branchId })}`).then((r) => r.data) });
   const s = q.data;
   const loading = !s;
+  const fiscal = useFiscalEnabled();
   return (
     <StatRow label={t('cash.financeResult')}>
       <StatCard icon={<Banknote />} label={t('cash.netRevenue')} loading={loading} value={s && <StatMoney tiyin={s.net_revenue} />} sub={s && t('cash.nPayments', { n: s.payments.count })} />
       <StatCard icon={<Undo2 />} label={t('cash.refunds')} loading={loading} tone={s?.refunds.total ? 'danger' : 'default'} value={s && <StatMoney tiyin={s.refunds.total} minus />} sub={t('cash.refundsSub')} />
       <StatCard icon={<Wallet />} label={t('cash.expenses')} loading={loading} value={s && <StatMoney tiyin={s.expenses.total} minus />} sub={t('cash.expensesSub')} />
       <StatCard icon={<Scale />} label={t('cash.netResult')} loading={loading} tone={s && s.net_result < 0 ? 'danger' : 'success'} value={s && <StatMoney tiyin={s.net_result} />} sub={t('cash.netResultSub')} />
+      {fiscal && <StatCard icon={<ReceiptText />} label={t('cash.fiscal.missingCount')} loading={loading} tone={s?.fiscal?.missing ? 'danger' : 'default'} value={s && <span className="tabular-nums">{s.fiscal?.missing ?? 0}</span>} sub={t('cash.fiscal.missingSub')} href={`/finance?tab=payments&fiscal=missing&from=${from}&to=${to}`} />}
     </StatRow>
   );
 }
