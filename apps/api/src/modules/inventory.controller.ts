@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common
 import { inventoryItemCreateSchema, inventoryItemPatchSchema, inventoryMovementSchema } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { conflict, invalid, notFound } from '../core/errors';
+import { conflict, forbidden, invalid, notFound } from '../core/errors';
 import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { localToUtc, now, today } from '../core/clock';
@@ -79,7 +79,11 @@ export class InventoryController {
       if (input.drug_id && !(await c.query(`SELECT 1 FROM drugs WHERE id = $1`, [input.drug_id])).rowCount) throw invalid({ drug_id: 'Dori topilmadi' });
       if (input.category !== undefined && input.category !== it.category) changes.push(`turi: ${input.category}`);
       if (input.storage !== undefined && input.storage !== it.storage) changes.push(`saqlash: ${input.storage}`);
-      if (input.controlled !== undefined && input.controlled !== it.controlled) changes.push(input.controlled ? 'nazoratga olindi' : 'nazoratdan chiqarildi');
+      if (input.controlled !== undefined && input.controlled !== it.controlled) {
+        // the special regime is the manager's decision: a storekeeper must not lift it (and skip the second signature)
+        if (ctx.role !== 'manager') throw forbidden('Nazorat rejimini faqat rahbar o‘zgartiradi');
+        changes.push(input.controlled ? 'nazoratga olindi' : 'nazoratdan chiqarildi');
+      }
       if (input.purchase_price !== undefined && input.purchase_price !== Number(it.purchase_price)) changes.push(`narx: ${input.purchase_price}`);
       if (input.drug_id !== undefined && input.drug_id !== it.drug_id) changes.push('dori bog‘landi');
       if (input.unit !== undefined && input.unit !== it.unit) changes.push(`birlik: ${input.unit}`);

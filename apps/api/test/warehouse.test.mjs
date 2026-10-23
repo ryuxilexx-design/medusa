@@ -232,6 +232,12 @@ test('nazoratdagi dori: rahbar tasdig‘i + omborchi berishi (ikki imzo), to‘g
   const base = { branch_id: BC, purpose: 'patient', department: 'Muolaja xonasi', encounter_id: openEnc, icd_codes: ['M54.5'], lines: [{ item_id: item.tramadol, qty: 1 }] };
   assert.equal((await keeper.post('/warehouse/issues', { ...base, receiver_membership_id: M.doctor(0) })).status, 409);
   assert.equal((await keeper.post(`/inventory/${item.tramadol}/movements`, { type: 'out', quantity: 1, reason: 'Tezkor chiqim' })).status, 409);
+  // the storekeeper cannot lift the special regime to skip the second signature
+  assert.equal((await keeper.patch(`/inventory/${item.tramadol}`, { controlled: false })).status, 403, 'nazoratni faqat rahbar o‘zgartiradi');
+  // a manager who asks for a controlled drug cannot approve their own request
+  const mine = await manager.post('/warehouse/requests', { ...base, purpose: 'department', encounter_id: undefined, icd_codes: undefined });
+  assert.equal(mine.status, 201, mine.text);
+  assert.equal((await manager.post(`/warehouse/requests/${mine.body.data.id}/approve`)).status, 409, 'o‘zi so‘raganini o‘zi tasdiqlamaydi');
   const r = await doctor.post('/warehouse/requests', base);
   assert.equal(r.status, 201); assert.equal(r.body.data.needs_approval, true);
   const id = r.body.data.id;

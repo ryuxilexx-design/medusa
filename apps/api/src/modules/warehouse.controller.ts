@@ -328,6 +328,8 @@ export class WarehouseController {
       const r = await this.loadRequest(c, ctx, id, true);
       if (!r.needs_approval) throw conflict('NO_APPROVAL_NEEDED', 'Bu talabnoma tasdiq talab qilmaydi');
       if (r.status !== 'submitted' || r.approved_at) throw staleState();
+      // two different people: whoever asked for a controlled drug cannot also approve it
+      if (r.requester_membership_id === ctx.membershipId) throw conflict('SECOND_SIGNATURE', 'Ikkinchi imzo boshqa xodimdan bo‘lsin');
       await c.query(`UPDATE inventory_requests SET approved_by = $2, approved_by_name = $3, approved_at = $4 WHERE id = $1`, [id, ctx.membershipId, ctx.name, now()]);
       await audit(c, ctx, 'warehouse.request_approve', 'inventory_request', id, `Talabnoma T-${r.number} tasdiqlandi (nazoratdagi dori)`, r.branch_id);
       return { data: { ok: true } };
@@ -700,6 +702,8 @@ export class WarehouseController {
       const cnt = (await c.query(`SELECT * FROM inventory_counts WHERE id = $1 AND tenant_id = $2 AND branch_id = ANY($3) FOR UPDATE`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
       if (!cnt) throw notFound('Inventarizatsiya');
       if (cnt.status !== 'submitted') throw staleState();
+      // the person who counted cannot approve their own differences (same rule as write-off acts)
+      if (cnt.started_by === ctx.membershipId) throw conflict('SECOND_SIGNATURE', 'Ikkinchi imzo boshqa xodimdan bo‘lsin');
       const docNo = `${DOC_PREFIX.count}-${cnt.number}`;
       let adjusted = 0;
       if (input.approve) {
