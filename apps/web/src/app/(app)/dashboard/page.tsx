@@ -2,15 +2,16 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Banknote, BarChart3, Boxes, CalendarCheck2, Cctv, CheckCircle2, ChevronRight, FlaskConical, ShieldAlert, MessageSquareText, Table2, UserCheck, Wallet } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { AlertTriangle, Banknote, BarChart3, Boxes, CalendarCheck2, Cctv, CheckCircle2, ChevronRight, FlaskConical, ShieldAlert, Table2, UserCheck, Wallet } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtTime, formatSom, fullName, longDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, ErrorState, Money, PageHeader, Skeleton, SlidingPill, StatCard } from '@/components/ui';
+import { Button, Card, cx, ErrorState, Money, PageHeader, Skeleton, SlidingPill, StatCard } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
+import { AskNumbers, DayDigest } from '@/components/manager-ai';
 
 type T = ReturnType<typeof useT>;
 type Period = 'today' | '7d' | '30d' | 'custom';
@@ -47,6 +48,7 @@ export default function DashboardPage() {
       {period === 'custom' && <div className="-mt-1 mb-5 flex justify-end"><DateRange from={from} to={to} onFrom={setFrom} onTo={setTo} /></div>}
       {q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : (
         <div className="space-y-5">
+          <DayDigest />
           {/* phone: one tile per row, so labels and amounts are never cut */}
           <div className="grid grid-cols-2 gap-3 sm:gap-5 xl:grid-cols-4">
             <StatCard loading={!d} icon={<CalendarCheck2 />} label={t('clinical.dash.appointments')} value={d?.kpi.appointments}
@@ -92,7 +94,7 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <AnalyticsAssistant />
+          <AskNumbers />
         </div>
       )}
     </>
@@ -222,26 +224,5 @@ function Utilization({ rows, wide }: { rows: any[]; wide?: boolean }) {
         </Link></li>
       ))}
     </ul>
-  );
-}
-
-function AnalyticsAssistant() {
-  const { branchId } = useSession();
-  const t = useT();
-  const m = useMutation({ mutationFn: (question: string) => api('/ai/report-explanation', { method: 'POST', body: { question, branch_id: branchId || null } }).then((r) => r.data) });
-  const Q: [string, MessageKey][] = [['revenue_today', 'clinical.dash.qRevenueToday'], ['top_services', 'clinical.dash.qTopServices'], ['debts', 'clinical.dash.qDebts']];
-  return (
-    <Card title={<span className="flex items-center gap-2"><MessageSquareText className="h-5 w-5 text-brand-600" />{t('clinical.dash.quickQuestions')}</span>} actions={<Badge>{t('clinical.dash.notAiBadge')}</Badge>}>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        {Q.map(([k, l]) => <Button key={k} className="!justify-start !whitespace-normal text-left" loading={m.isPending && m.variables === k} onClick={() => m.mutate(k)}>{t(l)}</Button>)}
-      </div>
-      {m.isError && <p className="mt-3 text-sm text-red-700" role="alert">{(m.error as Error).message}</p>}
-      {m.data && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[0.9375rem] text-slate-900">
-          <p>{m.data.text}</p>
-          <Link href={m.data.link} className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:underline"><BarChart3 className="h-4 w-4" />{t('clinical.dash.openSource')}</Link>
-        </div>
-      )}
-    </Card>
   );
 }

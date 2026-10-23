@@ -20,6 +20,7 @@ import { InventoryController } from './modules/inventory.controller';
 import { WarehouseController } from './modules/warehouse.controller';
 import { DiagnosticsController } from './modules/diagnostics.controller';
 import { AiController } from './modules/ai.controller';
+import { ManagerAiController } from './modules/ai-manager.controller';
 import { DictationController } from './modules/dictation.controller';
 import { SttClient } from './ai/stt';
 import { AuthController } from './modules/auth.controller';
@@ -64,7 +65,7 @@ function requestLog(req: any, res: any) {
 
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
-    LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, DiagnosticsController, AiController,
+    LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, DiagnosticsController, AiController, ManagerAiController,
     AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController],
   providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
 })

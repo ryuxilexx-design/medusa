@@ -4,6 +4,15 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Rahbar uchun AI: «Kun xulosasi» va «AI’dan so‘rash» (migratsiya 034, `docs/AI.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| «Kun xulosasi» (bosh sahifa tepasida, rahbar): kechagi kun (filial tanlovi bo‘yicha) 3–6 «nima bo‘ldi» bandi + ≤ 3 «e’tibor bering». Model faqat SQL hisoblagan raqamlar va shifokor/xizmat nomlarini oladi — **bemor ismi va klinik matn yo‘q**; har banddagi raqam keltirilgan faktga teng bo‘lmasa band tashlanadi. Kesh (`ai_digests`), «Qayta yaratish» kuniga 5 marta. AI o‘chiq / namunaviy rejimda — xuddi shu faktlardan shablon xulosa, belgisi bilan | Ishlaydi (**soxta Claude/Gemini serverlari bilan; haqiqiy model bilan sinalmagan**) | API test `ai-manager.test.mjs` (11 ta): faktlar = SQL, AI’ga ketgan matnda bemor ismi/telefoni/klinik qayd yo‘q, to‘qilgan raqam va noma’lum fakt tashlanadi, kesh — ikkinchi chaqiruv yo‘q, limit 429, filial 403, rollar 403, namunaviy/o‘chiq rejim, Gemini bepul tarifi faqat seed klinikada. Skrinshot 1366×768 va 390 px, uz + ru (soxta model bilan) |
+| «AI’dan so‘rash»: erkin savol → model 11 ta tayyor hisobot shablonidan birini tanlaydi (SQL yozmaydi), server parametrlarni tekshiradi (≤ 1 yil, filial qamrovda, limit ≤ 20) va bajaradi; javob matni + jadval. Tayyor savol tugmalari AI’siz ham ishlaydi | Ishlaydi (soxta model bilan) | API test: shablon tanlandi va bajarildi (qatorlar = SQL), ro‘yxatda yo‘q shablon / chegaradan tashqari parametr rad, mos kelmaydigan savol — «so‘ray olmayman» + ro‘yxat, javobdagi to‘qilgan raqam tashlanadi, `ai_usage` va audit’da savol matni yo‘q; 11 shablonning hammasi bajariladi |
+
+Cheklovlar: xulosa tili — rahbarning interfeys tili (har til alohida keshlanadi); «hozirgi holat» faktlari (qarz, ombor, kamera) xulosa tuzilgan paytdagi qiymat; erkin savol faqat jonli AI’da; brauzer E2E yo‘q.
+
 ## Ombor: omborchi roli, partiyalar, talabnomalar, nazoratdagi dorilar (migratsiya 030, `docs/WAREHOUSE.md`)
 
 | Nima | Holat | Tekshiruv |

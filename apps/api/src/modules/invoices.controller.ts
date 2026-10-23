@@ -30,7 +30,7 @@ const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ')
 export const SERVICES_SQL = `(SELECT string_agg(it.description || CASE WHEN it.quantity > 1 THEN ' × ' || it.quantity ELSE '' END, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id)`;
 /** Debt age in whole days since the invoice was created (demo clock). */
 const AGE_DAYS = `floor(EXTRACT(EPOCH FROM ((SELECT demo_now()) - i.created_at)) / 86400)`;
-const AGE_BUCKETS: Record<string, string> = { '0-7': `${AGE_DAYS} <= 7`, '8-30': `${AGE_DAYS} BETWEEN 8 AND 30`, '31+': `${AGE_DAYS} >= 31` };
+export const AGE_BUCKETS: Record<string, string> = { '0-7': `${AGE_DAYS} <= 7`, '8-30': `${AGE_DAYS} BETWEEN 8 AND 30`, '31+': `${AGE_DAYS} >= 31` };
 
 async function lockInvoice(q: Q, ctx: Ctx, id: string) {
   if (!isUuid(id)) throw notFound('Hisob');

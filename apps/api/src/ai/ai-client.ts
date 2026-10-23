@@ -11,9 +11,15 @@ import type { MessageKey } from '@meduza/contracts';
 import { SEED_IDS } from '@meduza/db';
 
 export type AiMode = 'off' | 'sample' | 'live';
-export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary';
-/** Routes that carry only public text (PubMed abstracts). Every other route — including any new one — counts as clinical. */
-const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary']);
+export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary' | 'manager_digest' | 'manager_ask';
+/**
+ * Routes that carry no clinical text: PubMed abstracts, and the manager's AI (a fact sheet of SQL-computed numbers with
+ * doctor/service/item names — never a patient name or clinical text, see ai/manager-facts.ts). Every other route —
+ * including any new one — counts as clinical.
+ */
+export const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary', 'manager_digest', 'manager_ask']);
+/** Business-data routes (manager): non-clinical, but a real clinic's numbers never go to the Gemini free tier. */
+const MANAGER_ROUTES = new Set<AiRoute>(['manager_digest', 'manager_ask']);
 const SEED_TENANTS = new Set<string>([SEED_IDS.tenant, SEED_IDS.tenant2]);
 /** Why clinical text may not go to the model: the server is a production one without AI_CLINICAL_ALLOWED=1, or the Gemini free tier. */
 export type ClinicalBlock = 'production' | 'free_tier';
@@ -113,6 +119,22 @@ export class AiClient {
     return m === 'live' && !this.clinicalAllowed(tenantId) ? 'off' : m;
   }
 
+  /**
+   * The manager's AI carries no clinical text, so the production switch does not apply — but a real clinic's revenue
+   * and staff names still never go to the Gemini free tier (Google may use those prompts). Seed demo tenants on a
+   * non-production deployment may use it.
+   */
+  businessBlock(tenantId: string | null): 'free_tier' | null {
+    if (config.ai.provider !== 'gemini' || config.ai.geminiPaid) return null;
+    return config.mode !== 'production' && !!tenantId && SEED_TENANTS.has(tenantId) ? null : 'free_tier';
+  }
+
+  /** The mode the manager's digest and «ask the numbers» see: live only when this clinic's business numbers may go out. */
+  managerMode(tenantId: string | null): AiMode {
+    const m = this.mode();
+    return m === 'live' && this.businessBlock(tenantId) ? 'off' : m;
+  }
+
   /** Why clinical AI is off for this tenant, as a message key for the doctor's screen (translated by the caller). */
   clinicalOffReason(tenantId: string | null): MessageKey | null {
     if (this.clinicalMode(tenantId) !== 'off') return null;
@@ -133,6 +155,7 @@ export class AiClient {
   async json<T>(c: JsonCall<T>): Promise<{ value: T; model: string }> {
     if (this.mode() !== 'live') throw coded(503, 'AI_OFF', 'api.ai.off');
     if (!PUBLIC_ROUTES.has(c.route)) { const block = this.clinicalBlock(c.tenantId); if (block) throw clinicalBlockError(block); }
+    if (MANAGER_ROUTES.has(c.route) && this.businessBlock(c.tenantId)) throw clinicalBlockError('free_tier');
     await this.assertBudget(c.tenantId);
     const started = Date.now();
     const meter: Meter = { model: config.ai.model, input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
