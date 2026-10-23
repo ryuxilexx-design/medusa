@@ -9,6 +9,7 @@ import { Ctx } from '../core/context';
 import { audit } from '../core/audit';
 import { AppError, coded } from '../core/errors';
 import { now } from '../core/clock';
+import { stripDhpForPatient } from '../dhp/outbox';
 
 /** Display name of an anonymised card: «Anonim bemor #1001» (last_name + first_name as everywhere else). */
 export const ANON_LAST_NAME = 'Anonim bemor';
@@ -25,7 +26,7 @@ export async function patientCard(q: Q, ctx: Ctx, patientId: string) {
   const finance = ctx.role === 'manager' || ctx.role === 'registrar';
   const patient = (await q.query(
     `SELECT p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note,
-            p.created_at, p.source, p.anonymised_at${ctx.role === 'manager' ? ', p.erasure_reason' : ''}${doctor ? ', p.allergy_state, p.allergy_note' : ''}
+            p.pinfl, p.id_document, p.created_at, p.source, p.anonymised_at${ctx.role === 'manager' ? ', p.erasure_reason' : ''}${doctor ? ', p.allergy_state, p.allergy_note' : ''}
        FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [patientId, ctx.tenantId])).rows[0];
   const consents = (await q.query(
     `SELECT ${CONSENT_COLS} FROM patient_consents c WHERE c.patient_id = $1 AND c.tenant_id = $2 ORDER BY c.recorded_at, c.seq`, [patientId, ctx.tenantId])).rows
@@ -84,7 +85,7 @@ export async function patientExport(q: Q, ctx: Ctx, patientId: string) {
   const rows = async (sql: string, params: unknown[] = [patientId, T]) => (await q.query(sql, params)).rows;
   const patient = (await rows(
     `SELECT id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note,
-            allergy_state, allergy_note, source, created_at, updated_at, anonymised_at, erasure_reason FROM patients WHERE id = $1 AND tenant_id = $2`))[0];
+            pinfl, id_document, allergy_state, allergy_note, source, created_at, updated_at, anonymised_at, erasure_reason FROM patients WHERE id = $1 AND tenant_id = $2`))[0];
   const clinic = (await rows(`SELECT name FROM tenants WHERE id = $1`, [T]))[0];
   const consents = await rows(`SELECT ${CONSENT_COLS} FROM patient_consents c WHERE c.patient_id = $1 AND c.tenant_id = $2 ORDER BY c.recorded_at, c.seq`);
   const appointments = await rows(
@@ -178,9 +179,10 @@ export async function anonymisePatient(c: Q, ctx: Ctx, patientId: string, input:
   await c.query(`UPDATE notifications SET status = 'skipped', error = 'bemor anonimlashtirildi' WHERE tenant_id = $1 AND patient_id = $2 AND status = 'pending'`, [ctx.tenantId, patientId]);
   await c.query(
     `UPDATE patients SET last_name = $3, first_name = '#' || patient_number, middle_name = NULL, birth_date = $4, sex = 'unspecified',
-            phone = NULL, contact_name = NULL, contact_phone = NULL, address = NULL, note = NULL,
+            phone = NULL, contact_name = NULL, contact_phone = NULL, address = NULL, note = NULL, pinfl = NULL, id_document = NULL,
             anonymised_at = $5, erasure_reason = $6, updated_at = $5
       WHERE id = $1 AND tenant_id = $2`, [patientId, ctx.tenantId, ANON_LAST_NAME, ANON_BIRTH_DATE, at, input.reason]);
+  await stripDhpForPatient(c, ctx.tenantId, patientId); // queued platform bundles lose the identity too
   await audit(c, ctx, 'patient.anonymise', 'patient', patientId, `Bemor #${p.patient_number} anonimlashtirildi (O‘RQ-547 so‘rovi); sabab: ${input.reason.slice(0, 120)}`);
   return { id: patientId, patient_number: p.patient_number, anonymised_at: at };
 }

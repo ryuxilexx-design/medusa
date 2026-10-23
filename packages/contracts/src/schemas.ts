@@ -42,6 +42,20 @@ export const patientBaseSchema = z.object({
   note: optionalText(500),
   allergy_state: z.enum(['known', 'denied', 'unknown']).default('unknown'),
   allergy_note: optionalText(300),
+  /** PINFL (JShShIR): the national 14-digit personal number the Digital Health Platform matches patients on. */
+  pinfl: z.string().max(40).optional().nullable().transform((s, ctx) => {
+    const v = (s ?? '').replace(/[\s-]/g, '');
+    if (v === '') return null;
+    if (!/^\d{14}$/.test(v)) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'JShShIR (PINFL) 14 ta raqamdan iborat bo‘lsin' }); return z.NEVER; }
+    return v;
+  }),
+  /** Passport or ID card series + number (AA1234567). */
+  id_document: z.string().max(40).optional().nullable().transform((s, ctx) => {
+    const v = (s ?? '').replace(/[\s-]/g, '').toUpperCase();
+    if (v === '') return null;
+    if (!/^[A-Z]{2}\d{7}$/.test(v)) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Pasport yoki ID-karta: 2 ta lotin harf va 7 ta raqam (AA1234567)' }); return z.NEVER; }
+    return v;
+  }),
 });
 // ---------- patient consent (ZRU-547) ----------
 // 'biometric' = face recognition by the clinic's camera (written consent only; the face stays in the camera, never in Med.uz.ai)

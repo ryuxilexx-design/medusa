@@ -9,6 +9,7 @@ import { now } from '../core/clock';
 import { completeInTx } from './appointments.controller';
 import { createBilledOrder } from './billing';
 import { Icd10Service } from '../ai/icd10';
+import { enqueueDhp } from '../dhp/outbox';
 
 // the names are `api.noun.*` entries, so «{field} to‘ldirilishi shart» is answered in the doctor's language
 const FIELD_LABEL: Record<string, string> = { complaints: 'Shikoyatlar', examination: 'Ko‘rik', diagnosis: 'Tashxis / xulosa', recommendations: 'Tavsiyalar' };
@@ -73,6 +74,7 @@ export class EncountersController {
         [ctx.tenantId, id, e.note_id, ctx.doctorId, ctx.membershipId, ctx.name, input.text, input.reason, t])).rows[0];
       // no clinical text and no reason in the audit trail — only that an addendum was signed
       await audit(c, ctx, 'clinical_note.addendum', 'encounter', id, 'Tasdiqlangan qaydga qo‘shimcha yozuv qo‘shildi', e.branch_id);
+      await enqueueDhp(c, ctx.tenantId, 'addendum', row.id);
       return { data: row };
     });
   }
@@ -116,6 +118,8 @@ export class EncountersController {
       await audit(c, ctx, 'clinical_note.sign', 'encounter', id, `Klinik qayd tasdiqlandi${codes.length ? ` (MKB-10: ${codes.join(', ')})` : ''}`, e.branch_id);
       const appt = (await c.query(`SELECT status FROM appointments WHERE id = $1`, [e.appointment_id])).rows[0];
       if (appt.status === 'in_progress') await completeInTx(c, ctx, e.appointment_id);
+      // Digital Health Platform: Encounter + Condition(ICD-10) bundle, in this transaction (nothing when the mode is off)
+      await enqueueDhp(c, ctx.tenantId, 'encounter', id);
       return { data: { ok: true, signed_at: t } };
     });
   }

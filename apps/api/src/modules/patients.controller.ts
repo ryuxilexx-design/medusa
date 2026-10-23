@@ -2,7 +2,7 @@ import { GUARDIAN_CARD_SQL, NOTICE_CHANNEL_SQL } from '../telegram/outbox';
 import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientAnonymiseSchema, patientCreateSchema, patientUpdateSchema, searchTranslit } from '@meduza/contracts';
+import { translate, BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, consentRecordSchema, patientAnonymiseSchema, patientCreateSchema, patientUpdateSchema, searchTranslit } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { AppError, coded, forbidden, notFound } from '../core/errors';
@@ -13,7 +13,7 @@ import { config } from '../core/config';
 import { consentHistory, latestConsents, recordConsent } from './consent';
 import { anonymisePatient, patientCard, patientExport, takeExportSlot } from './erasure';
 
-const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.created_at, p.updated_at, p.source, p.anonymised_at,
+const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.pinfl, p.id_document, p.created_at, p.updated_at, p.source, p.anonymised_at,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
            WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked,
   ${NOTICE_CHANNEL_SQL} AS notice_channel`;
@@ -50,6 +50,16 @@ export async function followUp(q: Q, tenantId: string, patientId: string, onlyDo
     `SELECT a.id, a.starts_at FROM appointments a WHERE a.patient_id = $1 AND a.doctor_id = $2 AND a.starts_at > $3 AND a.id <> $4 AND a.status NOT IN ('cancelled', 'no_show')
       ORDER BY a.starts_at LIMIT 1`, [patientId, n.doctor_id, n.signed_at, n.appointment_id])).rows[0]; // the visit itself may still be running when the note is signed
   return { date: n.date, doctor_id: n.doctor_id, doctor_name: n.doctor_name, encounter_id: n.encounter_id, booked: !!booked, appointment_id: booked?.id ?? null, starts_at: booked?.starts_at ?? null };
+}
+
+/** PINFL is unique per clinic (partial unique index, migration 029): a friendly 409 naming the other card. */
+async function assertPinflFree(q: Q, tenantId: string, pinfl: string | null | undefined, selfId: string | null) {
+  if (!pinfl) return;
+  const other = (await q.query(`SELECT patient_number FROM patients WHERE tenant_id = $1 AND pinfl = $2 AND ($3::uuid IS NULL OR id <> $3)`, [tenantId, pinfl, selfId])).rows[0];
+  if (other) {
+    const msg = translate('uz', 'api.dhp.pinflTaken', { n: other.patient_number });
+    throw new AppError(409, 'PINFL_TAKEN', msg, { pinfl: msg });
+  }
 }
 
 @Controller('patients')
@@ -133,12 +143,13 @@ export class PatientsController {
       if (dups.length && !input.confirm_duplicate) {
         throw new AppError(409, 'DUPLICATE_WARNING', 'O‘xshash bemor topildi. Mavjud profilni oching yoki yangi bemor yaratishni tasdiqlang.', undefined, { candidates: dups });
       }
+      await assertPinflFree(c, ctx.tenantId, input.pinfl, null);
       const seq = (await c.query(`UPDATE tenants SET patient_seq = patient_seq + 1 WHERE id = $1 RETURNING patient_seq`, [ctx.tenantId])).rows[0].patient_seq;
       const row = (await c.query(
-        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note, allergy_state, allergy_note)
-         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, patient_number`,
+        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note, allergy_state, allergy_note, pinfl, id_document)
+         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, patient_number`,
         [ctx.tenantId, seq, input.last_name, input.first_name, input.middle_name, input.birth_date, input.sex, input.phone, input.contact_name, input.contact_phone,
-          input.address, input.note, input.allergy_state, input.allergy_note])).rows[0];
+          input.address, input.note, input.allergy_state, input.allergy_note, input.pinfl ?? null, input.id_document ?? null])).rows[0];
       await audit(c, ctx, 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi${dups.length ? ' (dublikat ogohlantirishi tasdiqlangan)' : ''}`);
       const consent = input.consent;
       if (consent?.data_processing) await recordConsent(c, ctx, row.id, { kind: 'data_processing', granted: true, method: consent.method, textVersion: CONSENT_TEXT_VERSION });
@@ -192,7 +203,7 @@ export class PatientsController {
     await assertPatientAccess(this.db.pool, ctx, id);
     const input = parse(patientUpdateSchema, body) as Record<string, any>;
     // doctors may only update the allergy status; registrars/managers only demographic data
-    const allowed = ctx.role === 'doctor' ? ['allergy_state', 'allergy_note'] : ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'phone', 'contact_name', 'contact_phone', 'address', 'note'];
+    const allowed = ctx.role === 'doctor' ? ['allergy_state', 'allergy_note'] : ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'phone', 'contact_name', 'contact_phone', 'address', 'note', 'pinfl', 'id_document'];
     const keys = Object.keys(input).filter((k) => allowed.includes(k) && (body as any)?.[k] !== undefined);
     if (!keys.length) return { data: { ok: true } };
     if (input.birth_date && input.birth_date > today()) throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { birth_date: 'Tug‘ilgan sana kelajakda bo‘lishi mumkin emas' });
@@ -200,6 +211,7 @@ export class PatientsController {
       // an anonymised card has no identity to edit (the DB trigger refuses too); the doctor's allergy note is medical record and stays editable
       const cur = (await c.query(`SELECT anonymised_at FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
       if (cur?.anonymised_at && ctx.role !== 'doctor') throw coded(409, 'PATIENT_ANONYMISED', 'api.erasure.anonymised');
+      if (keys.includes('pinfl')) await assertPinflFree(c, ctx.tenantId, input.pinfl, id);
       const sets = keys.map((k, i) => `${k} = $${i + 3}`);
       await c.query(`UPDATE patients SET ${sets.join(', ')}, updated_at = demo_now() WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId, ...keys.map((k) => input[k])]);
       await audit(c, ctx, ctx.role === 'doctor' ? 'patient.allergy_update' : 'patient.update', 'patient', id, `O‘zgargan maydonlar: ${keys.join(', ')}`);

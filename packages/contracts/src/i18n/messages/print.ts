@@ -157,6 +157,8 @@ export const print = {
   'print.card.phone': ['Telefon', 'Телефон'],
   'print.card.contact': ['Yaqin kishi', 'Контактное лицо'],
   'print.card.address': ['Manzil', 'Адрес'],
+  'print.card.pinfl': ['JShShIR (PINFL)', 'ПИНФЛ'],
+  'print.card.idDocument': ['Pasport / ID-karta', 'Паспорт / ID-карта'],
   'print.card.note': ['Izoh', 'Примечание'],
   'print.card.registered': ['Ro‘yxatga olingan', 'Зарегистрирован'],
   'print.card.allergy': ['Allergiya', 'Аллергия'],

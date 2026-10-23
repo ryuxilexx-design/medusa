@@ -7,6 +7,7 @@ import { isUuid, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { addDays, localDate, localTime } from '../core/clock';
 import { Icd10Service } from '../ai/icd10';
+import { enqueueDhp } from '../dhp/outbox';
 
 const DOC_COLS = `d.id, d.kind, d.number, d.body, d.status, d.issued_at, d.issued_by_name, d.void_reason, d.voided_at, d.voided_by_name, d.encounter_id, d.patient_id`;
 
@@ -61,6 +62,8 @@ export class DocumentsController {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, number, issued_at`,
         [ctx.tenantId, e.branch_id, e.id, e.patient_id, e.doctor_id, input.kind, number, JSON.stringify({ ...doc, meta }), ctx.membershipId || null, ctx.name])).rows[0];
       await audit(c, ctx, 'document.issue', 'document', row.id, `${DOCUMENT_KIND_LABEL[input.kind]} №${number} berildi`, e.branch_id);
+      // e-prescription to the Digital Health Platform (MedicationRequest per drug); nothing when the mode is off
+      if (input.kind === 'prescription') await enqueueDhp(c, ctx.tenantId, 'prescription', row.id);
       return { data: row };
     });
   }
@@ -93,6 +96,8 @@ export class DocumentsController {
       if (d.doctor_id !== ctx.doctorId) throw forbidden('Bu hujjat sizga tegishli emas');
       if (d.status === 'void') throw conflict('ALREADY_VOID', 'Hujjat allaqachon bekor qilingan');
       await c.query(`UPDATE medical_documents SET status = 'void', void_reason = $2, voided_at = demo_now(), voided_by_name = $3 WHERE id = $1`, [id, reason, ctx.name]);
+      // a voided prescription goes to the platform again as version 2 with status «cancelled»
+      if (d.kind === 'prescription') await enqueueDhp(c, ctx.tenantId, 'prescription', id, 2);
       await audit(c, ctx, 'document.void', 'document', id, `${DOCUMENT_KIND_LABEL[d.kind as 'referral']} №${d.number} bekor qilindi`, d.branch_id);
       return { data: { ok: true } };
     });

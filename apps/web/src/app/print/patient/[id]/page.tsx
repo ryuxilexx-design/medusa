@@ -35,6 +35,8 @@ export default function PrintPatientCard({ params }: { params: Promise<{ id: str
           {!anonymised && row(t('registrar.birthDate'), `${fmtDate(p.birth_date)} (${ageFrom(p.birth_date, me.data.today)})`)}
           {row(t('print.card.phone'), p.phone ? formatPhone(p.phone) : null)}
           {row(t('print.card.contact'), p.contact_name ? `${p.contact_name}${p.contact_phone ? ', ' + formatPhone(p.contact_phone) : ''}` : null)}
+          {row(t('print.card.pinfl'), p.pinfl)}
+          {p.id_document && row(t('print.card.idDocument'), p.id_document)}
           {row(t('print.card.address'), p.address)}
           {row(t('print.card.note'), p.note)}
           {row(t('print.card.registered'), fmtDate(p.created_at))}

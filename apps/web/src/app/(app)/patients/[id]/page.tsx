@@ -147,6 +147,7 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
   // ID, birth date and phone are in the header: here only what the header does not show
   const facts = [
     pt.contact_name !== undefined && { k: t('registrar.contact'), v: pt.contact_name ? `${pt.contact_name}${pt.contact_phone ? ', ' + formatPhone(pt.contact_phone) : ''}` : '—' },
+    pt.pinfl !== undefined && { k: t('registrar.form.pinfl'), v: pt.pinfl || '—' },
     pt.address !== undefined && { k: t('registrar.address'), v: pt.address || '—' },
     pt.note !== undefined && { k: t('registrar.note'), v: pt.note || '—' },
   ].filter(Boolean) as { k: string; v: string }[];

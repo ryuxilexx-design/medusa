@@ -74,6 +74,11 @@ export const registrar = {
   'registrar.form.contactHint': ['Bola uchun yoki alohida aloqa kerak bo‘lsa', 'Для ребёнка или если нужен отдельный контакт'],
   'registrar.form.contactPhone': ['Vakil telefoni', 'Телефон контактного лица'],
   'registrar.form.address': ['Manzil', 'Адрес'],
+  'registrar.form.pinfl': ['JShShIR (PINFL)', 'ПИНФЛ'],
+  'registrar.form.pinflHint': ['14 ta raqam — pasport yoki ID-kartada', '14 цифр — в паспорте или ID-карте'],
+  'registrar.form.pinflFormat': ['JShShIR 14 ta raqamdan iborat bo‘lsin', 'ПИНФЛ должен состоять из 14 цифр'],
+  'registrar.form.idDocument': ['Pasport / ID-karta', 'Паспорт / ID-карта'],
+  'registrar.form.idDocumentFormat': ['2 ta harf va 7 ta raqam (AA1234567)', '2 буквы и 7 цифр'],
   'registrar.form.noteHint': ['Ma’muriy izoh. Klinik xulosani bu yerga yozmang.', 'Административный комментарий. Не пишите сюда клиническое заключение.'],
   // patient profile
   'registrar.tab.overview': ['Umumiy', 'Общее'],
