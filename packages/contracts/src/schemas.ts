@@ -69,6 +69,12 @@ export const patientCreateSchema = patientBaseSchema.extend({
   }).optional().nullable(),
 });
 export const patientUpdateSchema = patientBaseSchema.partial();
+/** Erasure request (ZRU-547): the manager anonymises the card; the reason is kept as evidence of the request. */
+export const patientAnonymiseSchema = z.object({
+  reason: z.string({ errorMap: () => ({ message: 'So‘rov sababini yozing' }) }).trim().min(3, 'So‘rov sababini yozing (kamida 3 belgi)').max(500, 'Juda uzun (500 belgigacha)'),
+  method: staffConsentMethod.default('signed_paper'),
+});
+export type PatientAnonymiseInput = z.infer<typeof patientAnonymiseSchema>;
 export type PatientInput = z.infer<typeof patientCreateSchema>;
 
 export const appointmentCreateSchema = z.object({

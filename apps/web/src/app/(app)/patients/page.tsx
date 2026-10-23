@@ -9,7 +9,7 @@ import { ageFrom, fmtDate, fmtDateTime, formatPhone, fullName, pid } from '@/lib
 import { useDebounced } from '@/lib/hooks';
 import { takePatientSearch, usePatientSearchListener } from '@/lib/patient-search';
 import { useSession } from '@/lib/session';
-import { Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th, Toolbar } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th, Toolbar } from '@/components/ui';
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal, BookingInit } from '@/components/booking';
 import { useT } from '@/lib/i18n';
@@ -78,6 +78,7 @@ function Patients() {
                     <Td className="hidden whitespace-nowrap tabular-nums text-slate-600 md:table-cell">{pid(p.patient_number)}</Td>
                     <Td>
                       <Link href={`/patients/${p.id}`} className="rounded font-semibold text-slate-900 underline-offset-2 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [overflow-wrap:anywhere]">{fullName(p, true)}</Link>
+                      {p.anonymised_at && <Badge className="ml-2">{t('registrar.anonymised')}</Badge>}
                       {/* phone: the hidden columns in one short line under the name (a phone number never breaks in the middle) */}
                       <div className="mt-0.5 text-[0.8125rem] tabular-nums text-slate-600 md:hidden">{pid(p.patient_number)} · {ageFrom(p.birth_date, me.today)}{!minimal && p.phone ? <> · <span className="whitespace-nowrap">{formatPhone(p.phone)}</span></> : ''}</div>
                     </Td>

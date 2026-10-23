@@ -36,7 +36,8 @@ function meta(t: ReturnType<typeof useT>, r: ConsentRow) {
 }
 
 /** Full-width amber band on the patient card while there is no valid consent to data processing: one calm line + actions. */
-export function ConsentNotice({ patientId, consents, role, onRecord }: { patientId: string; consents?: Consents; role: string; onRecord: () => void }) {
+/** `locked` = an anonymised card (ZRU-547 erasure): consents are shown as evidence, nothing new is recorded. */
+export function ConsentNotice({ patientId, consents, role, onRecord, locked }: { patientId: string; consents?: Consents; role: string; onRecord: () => void; locked?: boolean }) {
   const t = useT();
   if (!consents || consents.data_processing?.granted) return null;
   const withdrawn = consents.data_processing?.granted === false;
@@ -49,14 +50,14 @@ export function ConsentNotice({ patientId, consents, role, onRecord }: { patient
       </p>
       <div className="flex flex-wrap gap-2">
         <LinkButton size="sm" href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.printShort')}</LinkButton>
-        {canRecordConsent(role) && <Button size="sm" variant="primary" icon={<FileSignature className="h-4 w-4" />} onClick={onRecord}>{t('consent.record')}</Button>}
+        {canRecordConsent(role) && !locked && <Button size="sm" variant="primary" icon={<FileSignature className="h-4 w-4" />} onClick={onRecord}>{t('consent.record')}</Button>}
       </div>
     </div>
   );
 }
 
 /** Consent block of the patient card: status of both kinds (word + icon + colour), who recorded it, history, quiet actions. */
-export function ConsentBlock({ patientId, patientNumber, patientName, consents, role, onRecord }: { patientId: string; patientNumber: number; patientName?: string; consents: Consents; role: string; onRecord: (kind: Kind) => void }) {
+export function ConsentBlock({ patientId, patientNumber, patientName, consents, role, onRecord, locked }: { patientId: string; patientNumber: number; patientName?: string; consents: Consents; role: string; onRecord: (kind: Kind) => void; locked?: boolean }) {
   const t = useT();
   const [photo, setPhoto] = useState<FaceSubject | null>(null);
   const h = useQuery({ queryKey: ['patient', patientId, 'consents'], queryFn: () => api<{ data: ConsentRow[] }>(`/patients/${patientId}/consents`).then((r) => r.data), enabled: canRecordConsent(role) });
@@ -67,7 +68,7 @@ export function ConsentBlock({ patientId, patientNumber, patientName, consents, 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <h3 id="consent-h" className="text-[0.9375rem] font-bold text-slate-900">{t('consent.block.title')}</h3>
         <div className="-mr-2 flex flex-wrap items-center gap-1">
-          {canRecordConsent(role) && <Button size="sm" variant="ghost" className={quiet} icon={<FileSignature className="h-4 w-4" />} aria-label={t('consent.record')} onClick={() => onRecord(consents.data_processing?.granted ? 'notifications' : 'data_processing')}>{t('consent.recordShort')}</Button>}
+          {canRecordConsent(role) && !locked && <Button size="sm" variant="ghost" className={quiet} icon={<FileSignature className="h-4 w-4" />} aria-label={t('consent.record')} onClick={() => onRecord(consents.data_processing?.granted ? 'notifications' : 'data_processing')}>{t('consent.recordShort')}</Button>}
           <LinkButton size="sm" variant="ghost" className={quiet} href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.printShort')}</LinkButton>
         </div>
       </div>
