@@ -63,6 +63,16 @@ export const config = {
     /** Only for tests/proxies; empty = the provider's own API. Per provider, so a key never goes to the other one's proxy. */
     baseUrl: (aiProvider === 'gemini' ? process.env.GEMINI_BASE_URL : process.env.AI_BASE_URL) || '',
   },
+  fiscal: {
+    /**
+     * Deployment default for fiscal receipts (a clinic may override it in tenants.fiscal_provider):
+     * manual = parallel mode, the cashier records the certified KKM receipt number; none = no fiscalisation (demo).
+     * A real ОФД provider is added as another name without schema changes.
+     */
+    provider: process.env.FISCAL_PROVIDER || (mode === 'production' ? 'manual' : 'none'),
+    /** How often the outbox worker retries pending rows of automatic providers (seconds). */
+    retrySeconds: Number(process.env.FISCAL_RETRY_SECONDS || 60),
+  },
   news: {
     /** Daily specialty news for doctors (PubMed + AI summary). off = no fetching. */
     enabled: process.env.NEWS_ENABLED !== 'off',

@@ -21,6 +21,8 @@ export const api = {
   'api.noun.shift': ['Smena', 'Смена'],
   'api.noun.expense': ['Xarajat', 'Расход'],
   'api.noun.payment': ['To‘lov', 'Платёж'],
+  'api.noun.refund': ['Qaytarish', 'Возврат'],
+  'api.noun.clinic': ['Klinika', 'Клиника'],
   'api.noun.ultrasoundOrder': ['UZI buyurtmasi', 'Назначение УЗИ'],
   'api.noun.object': ['Obyekt', 'Объект'],
   'api.noun.voidReason': ['Bekor qilish sababi', 'Причина отмены'],
@@ -351,4 +353,11 @@ export const api = {
   'api.isapi.faceQuality': ['Kamera rasmda yuzni aniqlay olmadi ({why}). Yuz to‘g‘ridan, yaxshi yorug‘likda, 20–300 KB JPEG bo‘lsin.', 'Камера не нашла лицо на фото ({why}). Лицо анфас, при хорошем освещении, JPEG 20–300 КБ.'],
   'api.isapi.unsupported': ['Bu kamera proshivkasi ISAPI orqali yuz yuklashni qo‘llamaydi ({why}). Yuzni kameraning veb-sahifasida qo‘shing (ID No. = {code}).', 'Прошивка этой камеры не поддерживает загрузку лиц через ISAPI ({why}). Добавьте лицо на веб-странице камеры (ID No. = {code}).'],
   'api.isapi.cameraError': ['Kamera bilan aloqa xatosi: {why}', 'Ошибка связи с камерой: {why}'],
+  // fiscal receipts (parallel mode with the clinic's KKM)
+  'api.fiscal.otherCashier': ['Boshqa kassirning to‘loviga chek kiritib bo‘lmaydi', 'Нельзя ввести чек по оплате другого кассира'],
+  'api.fiscal.notRequired': ['Bu to‘lov uchun fiskal chek talab qilinmaydi', 'Для этой оплаты фискальный чек не требуется'],
+  'api.fiscal.notConfigured': ['Bu klinikada fiskalizatsiya sozlanmagan', 'В этой клинике фискализация не настроена'],
+  'api.fiscal.alreadyIssued': ['Fiskal chek allaqachon kiritilgan: № {n}', 'Фискальный чек уже введён: № {n}'],
+  'api.fiscal.enterNumber': ['Fiskal chek raqamini kiriting', 'Введите номер фискального чека'],
+  'api.fiscal.ikpu17': ['IKPU kodi 17 ta raqamdan iborat bo‘lsin', 'Код ИКПУ — 17 цифр'],
 } as const satisfies Catalog;

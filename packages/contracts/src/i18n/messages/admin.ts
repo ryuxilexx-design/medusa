@@ -474,4 +474,26 @@ export const admin = {
   'admin.off.openDay': ['Jadval', 'Расписание'],
   'admin.off.endAfterStart': ['Tugash boshlanishdan keyin', 'Окончание должно быть позже начала'],
   'admin.off.hoursBoth': ['Ish vaqtining boshi va oxirini kiriting', 'Укажите начало и конец работы'],
+
+  // settings → services: fiscal attributes (IKPU, VAT)
+  'settings.services.ikpu': ['IKPU kodi', 'Код ИКПУ'],
+  'settings.services.ikpuHint': ['17 raqam — soliq qo‘mitasining IKPU katalogidan', '17 цифр — из каталога ИКПУ налогового комитета'],
+  'settings.services.badIkpu': ['IKPU kodi 17 ta raqamdan iborat bo‘lsin', 'Код ИКПУ — 17 цифр'],
+  'settings.services.vat': ['QQS', 'НДС'],
+  'settings.services.vatDefault': ['Sukut bo‘yicha (12%)', 'По умолчанию (12%)'],
+  'settings.services.vat12': ['12%', '12%'],
+  'settings.services.vat0': ['0%', '0%'],
+  'settings.services.vatExempt': ['QQSsiz', 'Без НДС'],
+  'settings.services.packageCode': ['Qadoq kodi', 'Код упаковки'],
+  'settings.services.colIkpu': ['IKPU', 'ИКПУ'],
+  'settings.services.noIkpu': ['IKPU yo‘q', 'Нет ИКПУ'],
+  // settings → clinic: fiscal mode card
+  'admin.set.fiscal': ['Fiskalizatsiya (onlayn-KKM)', 'Фискализация (онлайн-ККМ)'],
+  'admin.set.fiscalManual': ['Parallel rejim: chekni klinikaning KKM’i chiqaradi, kassir raqamini Med.uz.ai’ga kiritadi.', 'Параллельный режим: чек печатает ККМ клиники, кассир вводит его номер в Med.uz.ai.'],
+  'admin.set.fiscalNone': ['Sozlanmagan: fiskal chek yozilmaydi.', 'Не настроено: фискальный чек не формируется.'],
+  'admin.set.fiscalAuto': ['Provayder: {name}', 'Провайдер: {name}'],
+  'admin.set.fiscalNotConfigured': ['Sozlanmagan', 'Не настроено'],
+  'admin.set.fiscalParallel': ['Parallel rejim', 'Параллельный режим'],
+  'admin.set.fiscalNoIkpu': ['IKPU kodi kiritilmagan xizmatlar: {n}', { one: 'Услуг без кода ИКПУ: {n}', few: 'Услуг без кода ИКПУ: {n}', many: 'Услуг без кода ИКПУ: {n}' }],
+  'admin.set.fiscalAllIkpu': ['Barcha faol xizmatlarda IKPU kodi bor', 'У всех активных услуг есть код ИКПУ'],
 } as const satisfies Catalog;

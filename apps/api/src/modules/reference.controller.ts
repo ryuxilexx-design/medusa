@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { branchCreateSchema, branchPatchSchema, clinicPatchSchema, roomCreateSchema, roomPatchSchema, serviceCreateSchema, servicePatchSchema } from '@meduza/contracts';
 import { PoolClient } from 'pg';
+import { config } from '../core/config';
 import { Db } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
 import { notFound, invalid, conflict } from '../core/errors';
@@ -160,6 +161,7 @@ export class ReferenceController {
     if (q.active !== 'all') where += ' AND s.active';
     const rows = await this.db.rows(
       `SELECT s.id, s.code, s.name, s.category, s.duration_min, ${ctx.role === 'manager' ? 's.share_percent' : 'NULL::numeric AS share_percent'}, s.active, s.lab_template,
+              s.ikpu_code, s.vat_percent, s.vat_exempt, s.package_code,
               ${PRICE_SQL.replace('$BRANCH', '$2::uuid')} AS price,
               ${PRICE_SQL.replace('$BRANCH', 'NULL')} AS general_price,
               EXISTS (SELECT 1 FROM service_orders o WHERE o.service_id = s.id) AS used
@@ -180,9 +182,10 @@ export class ReferenceController {
       let n = 1; while (taken.has(`${prefix}${String(n).padStart(2, '0')}`)) n++;
       const code = `${prefix}${String(n).padStart(2, '0')}`;
       const id = (await c.query(
-        `INSERT INTO services (id, tenant_id, code, name, category, duration_min, share_percent, lab_template, active, created_at, updated_at)
-         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8, demo_now(), demo_now()) RETURNING id`,
-        [ctx.tenantId, code, input.name, input.category, input.duration_min, input.share_percent, input.lab_template?.length ? JSON.stringify(input.lab_template) : null, input.active])).rows[0].id as string;
+        `INSERT INTO services (id, tenant_id, code, name, category, duration_min, share_percent, lab_template, active, ikpu_code, vat_percent, vat_exempt, package_code, created_at, updated_at)
+         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, demo_now(), demo_now()) RETURNING id`,
+        [ctx.tenantId, code, input.name, input.category, input.duration_min, input.share_percent, input.lab_template?.length ? JSON.stringify(input.lab_template) : null, input.active,
+          input.ikpu_code ?? null, input.vat_percent ?? null, input.vat_exempt ?? false, input.package_code || null])).rows[0].id as string;
       await c.query(`INSERT INTO service_prices (tenant_id, service_id, branch_id, amount, valid_from) VALUES ($1,$2,NULL,$3, demo_now())`, [ctx.tenantId, id, input.price]);
       await audit(c, ctx, 'service.create', 'service', id, `Xizmat qo‘shildi: ${code} «${input.name}», ${som(input.price)} so‘m`);
       return { data: { id, code } };
@@ -211,9 +214,17 @@ export class ReferenceController {
       if (input.share_percent !== undefined && input.share_percent !== Number(s.share_percent)) changes.push(`ulush: ${Number(s.share_percent)}% → ${input.share_percent}%`);
       if (input.lab_template !== undefined && JSON.stringify(template) !== JSON.stringify(s.lab_template)) changes.push('natija shakli');
       if (input.active !== undefined && input.active !== s.active) changes.push(input.active ? 'faol qilindi' : 'nofaol qilindi');
+      // fiscal attributes: absent = unchanged, null = cleared
+      const ikpu = input.ikpu_code === undefined ? s.ikpu_code : input.ikpu_code;
+      const vatPercent = input.vat_percent === undefined ? s.vat_percent : input.vat_percent;
+      const vatExempt = input.vat_exempt === undefined ? s.vat_exempt : input.vat_exempt;
+      const pkg = input.package_code === undefined ? s.package_code : input.package_code || null;
+      if (ikpu !== s.ikpu_code) changes.push(`IKPU: ${ikpu ?? '—'}`);
+      if (vatPercent !== s.vat_percent || vatExempt !== s.vat_exempt) changes.push(`QQS: ${vatExempt ? 'QQSsiz' : vatPercent == null ? 'sukut (12%)' : vatPercent + '%'}`);
+      if (pkg !== s.package_code) changes.push(`qadoq kodi: ${pkg ?? '—'}`);
       await c.query(`UPDATE services SET name = COALESCE($2, name), category = $3, duration_min = COALESCE($4, duration_min), share_percent = COALESCE($5, share_percent),
-                       lab_template = $6, active = COALESCE($7, active), updated_at = demo_now() WHERE id = $1`,
-        [id, input.name ?? null, category, input.duration_min ?? null, input.share_percent ?? null, template ? JSON.stringify(template) : null, input.active ?? null]);
+                       lab_template = $6, active = COALESCE($7, active), ikpu_code = $8, vat_percent = $9, vat_exempt = $10, package_code = $11, updated_at = demo_now() WHERE id = $1`,
+        [id, input.name ?? null, category, input.duration_min ?? null, input.share_percent ?? null, template ? JSON.stringify(template) : null, input.active ?? null, ikpu, vatPercent, vatExempt, pkg]);
       if (input.price !== undefined) {
         let branchName: string | null = null;
         if (input.branch_id) branchName = (await this.activeBranch(c, ctx, input.branch_id)).name;
@@ -231,8 +242,11 @@ export class ReferenceController {
 
   @Get('settings')
   async settings(@CurrentCtx() ctx: Ctx) {
-    const t = await this.db.one(`SELECT id, name FROM tenants WHERE id = $1`, [ctx.tenantId]);
-    return { data: t };
+    const t = await this.db.one(`SELECT id, name, fiscal_provider FROM tenants WHERE id = $1`, [ctx.tenantId]);
+    if (!t) throw notFound('Klinika');
+    // fiscal mode (ОФД): the clinic's own provider or the deployment default; how many active services still lack an IKPU code
+    const noIkpu = (await this.db.one(`SELECT count(*)::int AS n FROM services WHERE tenant_id = $1 AND active AND ikpu_code IS NULL`, [ctx.tenantId]))!.n;
+    return { data: { id: t.id, name: t.name, fiscal: { provider: t.fiscal_provider || config.fiscal.provider, deployment_default: config.fiscal.provider, services_without_ikpu: noIkpu } } };
   }
 
   @Roles('manager') @Patch('settings/clinic')

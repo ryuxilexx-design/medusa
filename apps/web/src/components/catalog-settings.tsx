@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, MinusCircle, Pencil, Plus, Search } from 'lucide-react';
-import { SERVICE_CATEGORIES, type MessageKey } from '@meduza/contracts';
+import { SERVICE_CATEGORIES, VAT_OPTIONS, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { formatPhone, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useT } from '@/lib/i18n';
+import { useSession } from '@/lib/session';
 import { MoneyInput } from '@/components/money-input';
 import { DaysOff } from '@/components/days-off';
-import { Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Toolbar, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 /**
  * The clinic's catalogue, managed by the manager without a developer: services with prices, rooms and branches.
@@ -51,6 +52,7 @@ export function ClinicSettings() {
             <div><Button type="submit" variant="primary" disabled={!name.trim() || name === s.data?.name} loading={m.isPending}>{t('common.save')}</Button></div>
           </form>
         </Card>
+        <FiscalCard fiscal={s.data.fiscal} />
         <Card title={t('admin.set.branches')} padded={false} actions={<Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setBranch('new')}>{t('settings.branches.add')}</Button>}>
           {b.isLoading ? <LoadingRows rows={2} /> : b.isError ? <ErrorState error={b.error} onRetry={() => b.refetch()} /> : (
             <ul className="divide-y divide-slate-100">{b.data!.map((x) => (
@@ -85,6 +87,25 @@ export function ClinicSettings() {
       {branch && <BranchModal b={branch === 'new' ? null : branch} onClose={() => setBranch(null)} />}
       {room && <RoomModal r={room === 'new' ? null : room} branches={activeBranches} onClose={() => setRoom(null)} />}
     </div>
+  );
+}
+
+/** Fiscal mode (ОФД) of the clinic — read-only here: the provider is set per deployment / clinic by the operator. */
+function FiscalCard({ fiscal }: { fiscal: { provider: string; services_without_ikpu: number } }) {
+  const t = useT();
+  const { me } = useSession();
+  const mode = fiscal.provider === 'manual' ? t('admin.set.fiscalParallel') : fiscal.provider === 'none' ? t('admin.set.fiscalNotConfigured') : t('admin.set.fiscalAuto', { name: fiscal.provider });
+  return (
+    <Card title={t('admin.set.fiscal')}>
+      <div className="space-y-3">
+        <KeyVal k={t('admin.set.fiscal')} v={<Badge tone={fiscal.provider === 'none' ? 'yellow' : 'green'}>{mode}</Badge>} />
+        <p className="text-[0.9375rem] text-slate-700">{fiscal.provider === 'manual' ? t('admin.set.fiscalManual') : fiscal.provider === 'none' ? t('admin.set.fiscalNone') : t('admin.set.fiscalAuto', { name: fiscal.provider })}</p>
+        {/* IKPU codes matter for the receipt: a real clinic sees which services still lack one; the demo (none) has nothing to fiscalise */}
+        {(fiscal.provider !== 'none' || !me.demo) && (fiscal.services_without_ikpu > 0
+          ? <Alert tone="yellow">{t('admin.set.fiscalNoIkpu', { n: fiscal.services_without_ikpu })}</Alert>
+          : <p className="text-[0.8125rem] text-slate-600">{t('admin.set.fiscalAllIkpu')}</p>)}
+      </div>
+    </Card>
   );
 }
 
@@ -197,6 +218,7 @@ export function ServicesSettings() {
           <thead><tr>
             <Th className="hidden sm:table-cell">{t('admin.set.colCode')}</Th><Th>{t('admin.set.colService')}</Th><Th className="hidden lg:table-cell">{t('admin.set.colType')}</Th>
             <Th right>{t('admin.set.colPrice')}</Th><Th right className="hidden md:table-cell">{t('admin.set.colDuration')}</Th><Th right className="hidden lg:table-cell">{t('admin.set.colShare')}</Th>
+            <Th className="hidden xl:table-cell">{t('settings.services.colIkpu')}</Th>
             <Th className="hidden sm:table-cell">{t('admin.set.colStatus')}</Th><Th right><span className="sr-only">{t('admin.set.colActions')}</span></Th>
           </tr></thead>
           <tbody>{rows.map((s) => (
@@ -208,6 +230,7 @@ export function ServicesSettings() {
               <Td right className="font-medium text-slate-900">{formatSom(s.price)}</Td>
               <Td right className="hidden text-slate-700 md:table-cell">{t('admin.set.minutes', { n: s.duration_min })}</Td>
               <Td right className="hidden text-slate-700 lg:table-cell">{s.share_percent == null ? '—' : `${Number(s.share_percent)}%`}</Td>
+              <Td className="hidden whitespace-nowrap tabular-nums text-slate-700 xl:table-cell">{s.ikpu_code ?? <span className="text-slate-500">—</span>}<span className="block text-[0.8125rem] text-slate-600">{s.vat_exempt ? t('settings.services.vatExempt') : `${t('settings.services.vat')} ${s.vat_percent ?? 12}%`}</span></Td>
               <Td className="hidden sm:table-cell">{s.active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.set.active')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.set.inactive')}</Badge>}</Td>
               <Td right><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setEdit(s); }} aria-label={`${t('admin.set.edit')}: ${s.name}`}><span className="hidden md:inline">{t('admin.set.edit')}</span></Button></Td>
             </tr>
@@ -236,6 +259,10 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
   const [dur, setDur] = useState(String(s?.duration_min ?? 30));
   const [share, setShare] = useState(String(s?.share_percent == null ? 0 : Number(s.share_percent)));
   const [active, setActive] = useState<boolean>(s?.active ?? true);
+  // fiscal attributes: IKPU (17 digits, may be empty until the clinic fills its catalogue) and the VAT choice
+  const [ikpu, setIkpu] = useState<string>(s?.ikpu_code ?? '');
+  const [vat, setVat] = useState<string>(s?.vat_exempt ? 'exempt' : s?.vat_percent == null ? '' : String(s.vat_percent));
+  const [pkg, setPkg] = useState<string>(s?.package_code ?? '');
   const { err, onError } = useFieldErrors();
   const [tried, setTried] = useState(false);
   const p = parseSomToTiyin(price);
@@ -247,11 +274,13 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
     price: (show || price) && p == null ? t('admin.set.badAmount') : undefined,
     duration_min: show && (!Number.isInteger(d) || d < 5 || d > 240) ? t('admin.set.badDuration') : undefined,
     share_percent: show && (!(sh >= 0 && sh <= 100) || share.trim() === '') ? t('settings.services.badShare') : undefined,
+    ikpu_code: ikpu.trim() && !/^\d{17}$/.test(ikpu.trim()) ? t('settings.services.badIkpu') : undefined,
   };
-  const invalid = !!(local.name || local.price || local.duration_min || local.share_percent);
+  const invalid = !!(local.name || local.price || local.duration_min || local.share_percent || local.ikpu_code);
+  const fiscalBody = { ikpu_code: ikpu.trim() || null, vat_exempt: vat === 'exempt', vat_percent: vat === '' || vat === 'exempt' ? null : Number(vat), package_code: pkg.trim() || null };
   const m = useMutation({
     mutationFn: () => {
-      const body: any = { name: name.trim(), category, duration_min: d, share_percent: sh, active };
+      const body: any = { name: name.trim(), category, duration_min: d, share_percent: sh, active, ...fiscalBody };
       if (!s) return api('/services', { method: 'POST', body: { ...body, price: p } });
       // the price goes to the chosen branch only; the other fields are general
       if (p !== Number(s.price) || priceBranch) { body.price = p; if (priceBranch) body.branch_id = priceBranch; }
@@ -267,8 +296,10 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
   const save = () => { setTried(true); if (!invalid) m.mutate(); };
   const dirty = s
     ? name !== s.name || category !== s.category || p !== Number(s.price) || d !== s.duration_min || sh !== Number(s.share_percent ?? 0) || active !== s.active || !!priceBranch
+      || fiscalBody.ikpu_code !== (s.ikpu_code ?? null) || fiscalBody.vat_exempt !== !!s.vat_exempt || fiscalBody.vat_percent !== (s.vat_percent ?? null) || fiscalBody.package_code !== (s.package_code ?? null)
     : !!(name || price);
   const e = (k: keyof typeof local) => err[k] ?? local[k];
+  const vatLabel = (v: string) => v === '' ? t('settings.services.vatDefault') : v === 'exempt' ? t('settings.services.vatExempt') : v === '12' ? t('settings.services.vat12') : t('settings.services.vat0');
   return (
     <Modal open onClose={onClose} dirty={dirty} title={s ? t('admin.set.serviceTitle', { code: s.code }) : t('settings.services.addTitle')}
       footer={<><ModalCancel /><Button variant="primary" disabled={s ? !dirty : false} loading={m.isPending} onClick={save}>{t('common.save')}</Button></>}>
@@ -287,6 +318,9 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
             </Select>)}</Field>
         ) : <div className="hidden sm:block" />}
         <Field label={t('settings.services.share')} required error={e('share_percent')}>{(id) => <Input id={id} type="number" inputMode="decimal" min={0} max={100} step={0.5} value={share} invalid={!!e('share_percent')} onChange={(e) => setShare(e.target.value)} />}</Field>
+        <Field label={t('settings.services.ikpu')} hint={t('settings.services.ikpuHint')} error={e('ikpu_code')}>{(id) => <Input id={id} inputMode="numeric" maxLength={17} value={ikpu} invalid={!!e('ikpu_code')} onChange={(e) => setIkpu(e.target.value.replace(/\D/g, ''))} className="tabular-nums" />}</Field>
+        <Field label={t('settings.services.vat')} error={err.vat_percent}>{(id) => <Select id={id} value={vat} onChange={(e) => setVat(e.target.value)}>{VAT_OPTIONS.map((v) => <option key={v} value={v}>{vatLabel(v)}</option>)}</Select>}</Field>
+        <Field label={t('settings.services.packageCode')} error={err.package_code}>{(id) => <Input id={id} maxLength={40} value={pkg} onChange={(e) => setPkg(e.target.value)} />}</Field>
         <ActiveCheck checked={active} onChange={setActive} label={t('admin.set.activeCheck')} />
       </div>
     </Modal>
