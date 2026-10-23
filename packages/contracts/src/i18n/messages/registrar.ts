@@ -273,4 +273,8 @@ export const registrar = {
   'registrar.birthDate': ['Tug‘ilgan sana', 'Дата рождения'],
   'registrar.anonymised': ['Anonimlashtirilgan', 'Анонимизирована'],
   'registrar.anonymisedAt': ['Anonimlashtirilgan: {date}', 'Анонимизирована: {date}'],
+  'registrar.ap.byDoctor': ['Shifokor qayta qabulga yozgan', 'Врач записал на повторный приём'],
+  'registrar.fu.recommended': ['Qayta qabul tavsiya etilgan: {date}, {doctor}', 'Рекомендован повторный приём: {date}, {doctor}'],
+  'registrar.fu.booked': ['Qayta qabul band qilingan', 'Повторный приём записан'],
+  'registrar.fu.book': ['Band qilish', 'Записать'],
 } as const satisfies Catalog;
