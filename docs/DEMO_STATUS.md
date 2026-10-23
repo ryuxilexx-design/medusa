@@ -4,6 +4,12 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## 000000000000000000. 0.17: shifokor qaydni aytib beradi (ovozli diktovka)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Ovozli diktovka (`ai/stt.ts`, `POST /dictation`, migratsiya `027_dictation.sql`): har maydonda «Aytib yozish» va «Butun qaydni aytib berish», taymer, 3 daqiqa, bekor qilish, nutq tili uz/ru; matn kursor joyiga yoki oxiriga; butun qayd AI qayd loyihasi orqali 5 bo‘limga (barcha AI qoidalari), «Qoldirish / Almashtirish / Qo‘shish». Provayder: `local` (klinika serveridagi faster-whisper, ovoz chiqmaydi) yoki `openai` (production’da `AI_CLINICAL_ALLOWED=1` bilan). Ovoz diskka/bazaga yozilmaydi; `ai_usage` da soniya, matnsiz; shifokorga soatiga 30 ta. Demo va Railway’da sukut `STT_PROVIDER=off` — tugmalar yashirin, panelda sabab | Ishlaydi (soxta STT server bilan; **haqiqiy faster-whisper va mikrofon bilan sinalmagan**; o‘zbekcha aniqlik modelga bog‘liq — `docs/VOICE_SCRIBE.md`) | API test `dictation.test.mjs` (8 ta): rollar 403, boshqa shifokor 403, 404, 413/415/422, off 503, production + openai rad / local ishlaydi, `ai_usage` matnsiz, 429, `structure=1` loyiha va `draft_error`; typecheck. Brauzer E2E va skrinshot yo‘q |
+
 ## 00000000000000000. 0.16: shifokor kamroq yozadi — shablonlar, tez iboralar, qayta qabul
 
 | Nima | Holat | Tekshiruv |

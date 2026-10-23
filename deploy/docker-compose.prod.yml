@@ -1,6 +1,7 @@
 # Med.uz.ai production stack for one server in Uzbekistan (patient data and backups stay in the country).
 #   cd deploy && cp .env.production.example .env && nano .env      # fill every value
 #   docker compose -f docker-compose.prod.yml up -d --build
+# Doctor dictation on this server (optional): docker compose -f docker-compose.prod.yml --profile stt up -d (docs/VOICE_SCRIBE.md)
 # Then create the clinic: docker compose -f docker-compose.prod.yml exec app node database/dist/src/cli.js create-clinic --help
 # Runbook: docs/DEPLOY_UZ.md
 name: meduzai
@@ -65,6 +66,16 @@ services:
       GEMINI_PAID: ${GEMINI_PAID:-0}
       NEWS_ENABLED: ${NEWS_ENABLED:-on}
       NCBI_API_KEY: ${NCBI_API_KEY:-}
+      # doctor dictation: local = the `stt` service below (audio never leaves this server); openai = cloud, needs AI_CLINICAL_ALLOWED=1
+      STT_PROVIDER: ${STT_PROVIDER:-off}
+      STT_BASE_URL: ${STT_BASE_URL:-http://stt:8000}
+      STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-large-v3}
+      STT_MODEL_UZ: ${STT_MODEL_UZ:-}
+      STT_MODEL_RU: ${STT_MODEL_RU:-}
+      STT_API_KEY: ${STT_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STT_TIMEOUT_MS: ${STT_TIMEOUT_MS:-120000}
+      STT_RATE_PER_HOUR: ${STT_RATE_PER_HOUR:-30}
       API_INTERNAL_URL: http://127.0.0.1:4000
       # Caddy → Next.js → API: the client IP is two proxies away
       TRUST_PROXY_HOPS: "2"
@@ -89,6 +100,32 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks: [web]
+
+  stt:
+    # Optional speech-to-text for doctor dictation (profile «stt»): faster-whisper behind an OpenAI-compatible
+    # POST /v1/audio/transcriptions. CPU only, int8. Audio arrives from the app in memory and is not stored;
+    # the models live in the stt_models volume. No published port: only the app reaches it (http://stt:8000).
+    # `web` gives it internet for the one-time model download; set STT_OFFLINE=1 after the models are in place.
+    profiles: ["stt"]
+    image: ghcr.io/speaches-ai/speaches:0.8.3-cpu
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
+    environment:
+      WHISPER__INFERENCE_DEVICE: cpu
+      WHISPER__COMPUTE_TYPE: int8
+      WHISPER__CPU_THREADS: ${STT_CPU_THREADS:-4}
+      STT_MODEL_TTL: "-1"
+      HF_HUB_OFFLINE: ${STT_OFFLINE:-0}
+      # speaches logs requests, not audio; keep its log level at info (no request bodies)
+      LOG_LEVEL: info
+    volumes:
+      - stt_models:/home/ubuntu/.cache/huggingface/hub
+    deploy:
+      resources:
+        limits: { memory: "${STT_MEMORY:-6g}" }
+    networks: [internal, web]
 
   backup:
     # daily pg_dump at BACKUP_HOUR (Tashkent time), 14 daily + 8 weekly copies, weekly restore test
@@ -117,6 +154,7 @@ services:
 
 volumes:
   pgdata:
+  stt_models:
   caddy_data:
   caddy_config:
 

@@ -17,6 +17,7 @@ Hamma narsa bitta serverda, Docker Compose bilan ishlaydi:
 | `db` | PostgreSQL 16. Tashqariga port ochilmaydi — faqat ichki tarmoq. |
 | `app` | Med.uz.ai (veb + API bitta konteynerda), `APP_MODE=production`, migratsiyalar ishga tushganda qo‘llanadi. |
 | `caddy` | HTTPS (Let’s Encrypt sertifikati avtomatik), xavfsizlik sarlavhalari, HTTP → HTTPS. |
+| `stt` (ixtiyoriy, profil `stt`) | Shifokor diktovkasi uchun nutqni aniqlash (faster-whisper, CPU). Ovoz serverdan chiqmaydi — `docs/VOICE_SCRIBE.md`. |
 | `backup` | Har kuni shifrlangan zaxira nusxa (pg_dump + GPG AES-256), 14 kunlik + 8 haftalik, har yakshanba tiklash sinovi. |
 
 Fayllar: `Dockerfile`, `deploy/docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/backup/*.sh`,
@@ -153,6 +154,36 @@ Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta i
   parol hech qachon jurnalga tushmaydi. Xato bo‘yicha qidirish: `docker compose logs app | grep <request_id>`.
 - Har hafta: `backups/restore-test.log` da oxirgi qator `OK restore-test` bo‘lsin; disk joyi `df -h`.
 - Sertifikat Caddy tomonidan avtomatik yangilanadi; `docker compose logs caddy` da xato bo‘lmasin.
+
+## 6b. Shifokor ovozli diktovkasi (ixtiyoriy)
+
+Nutqni aniqlash shu serverning o‘zida — bemor ovozi O‘zbekistondagi serverdan chiqmaydi (`AI_CLINICAL_ALLOWED` shart emas).
+Qanday ishlashi, aniqlik va maxfiylik: `docs/VOICE_SCRIBE.md`.
+
+**Apparat.** Faqat CPU yetadi: qisqa yozuvlar (1–2 daqiqa) uchun kamida **4 vCPU va +4–6 GB RAM** (medium
+int8 ≈ 2–3 GB, large-v3 int8 ≈ 3–4 GB; `STT_MEMORY` chegarasi sukut 6 GB). Kutiladigan vaqt (baho, o‘z yozuvlaringizda
+o‘lchang): 1 daqiqalik yozuv — medium int8 ≈ 10–30 s, large-v3 int8 ≈ 30–60 s; 3 daqiqalik — 2–3 baravar ko‘p.
+Shifokorlar ko‘p bo‘lsa yoki kutish uzun bo‘lsa — NVIDIA GPU (8 GB VRAM yetadi) bilan bir necha soniya; buning uchun
+image’ni `…-cuda` variantiga va `WHISPER__INFERENCE_DEVICE=cuda` ga almashtiring (GPU server bilan alohida kelishiladi).
+
+```bash
+cd /opt/meduzai
+# deploy/.env: STT_PROVIDER=local, STT_MODEL_UZ=<o‘zbekcha CT2 model>, STT_MODEL=Systran/faster-whisper-large-v3
+docker compose -f deploy/docker-compose.prod.yml --profile stt up -d stt
+# modellarni bir marta yuklab olish (speaches 0.8: model aniq yuklanadi; app konteyneridan, ichki tarmoq orqali)
+docker compose -f deploy/docker-compose.prod.yml exec app node -e "for (const m of ['Systran/faster-whisper-large-v3', process.env.STT_MODEL_UZ].filter(Boolean)) fetch('http://stt:8000/v1/models/' + m, { method: 'POST' }).then((r) => console.log(m, r.status))"
+docker compose -f deploy/docker-compose.prod.yml exec app node -e "fetch('http://stt:8000/v1/models').then((r) => r.json()).then((j) => console.log(j.data.map((x) => x.id)))"
+# yuklab bo‘lingach: deploy/.env da STT_OFFLINE=1, so‘ng
+docker compose -f deploy/docker-compose.prod.yml --profile stt up -d stt app
+```
+
+Tekshirish: shifokor sahifasida «Aytib yozish» tugmalari paydo bo‘ladi (`STT_PROVIDER=off` da ular yo‘q, panelda
+«Ovozli yozish: serverda ulanmagan»). `ai_usage` da `route = 'dictation'` qatorlari (soniya, matnsiz). Mahalliy server
+javob bermasa — 502 «Nutq serveriga ulanib bo‘lmadi»; sekin bo‘lsa `STT_TIMEOUT_MS` ni oshiring yoki kichikroq
+model tanlang. Yangilashda `stt` image teg’i qo‘lda (sinab) o‘zgartiriladi — `latest` ishlatilmaydi.
+
+Bulutli variant (`STT_PROVIDER=openai`) faqat `AI_CLINICAL_ALLOWED=1` bilan va rozilik/shartnoma AI’ga uzatishni
+qamrab olgach — aks holda server klinik ovozni rad etadi (503 `STT_DISABLED_PRODUCTION`).
 
 ## 6a. SMS eslatmalar (Eskiz.uz)
 

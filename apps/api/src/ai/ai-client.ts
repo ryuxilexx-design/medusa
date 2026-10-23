@@ -121,7 +121,7 @@ export class AiClient {
   }
 
   /** Today's spend of a clinic (Tashkent day) against AI_DAILY_LIMIT_USD; news (no tenant) is not capped per clinic. */
-  private async assertBudget(tenantId: string | null) {
+  async assertBudget(tenantId: string | null) {
     if (!tenantId || !(config.ai.dailyLimitUsd > 0)) return;
     const r = await this.db.one<{ spent: string }>(
       `SELECT coalesce(sum(cost_usd), 0)::text AS spent FROM ai_usage

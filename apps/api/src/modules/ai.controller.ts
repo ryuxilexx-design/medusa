@@ -51,20 +51,43 @@ const normalize = (s: string) => s.toLowerCase().replace(/[‘’ʻʼ'`]/g, '').
 const noteZ = z.object({ complaints: z.string(), anamnesis: z.string(), examination: z.string(), diagnosis: z.string(), recommendations: z.string() });
 let lastNewsRefresh = 0;
 
+/** The patient of an encounter the doctor is treating (for de-identification). Anything else → 404/403. */
+export async function patientOf(db: Db, ctx: Ctx, encounterId?: string): Promise<PatientIdentity | null> {
+  if (!encounterId) return null;
+  const e = await db.one(
+    `SELECT e.doctor_id, p.last_name, p.first_name, p.middle_name, p.birth_date, p.patient_number, p.phone
+       FROM encounters e JOIN patients p ON p.id = e.patient_id WHERE e.id = $1 AND e.tenant_id = $2`, [encounterId, ctx.tenantId]);
+  if (!e) throw notFound('Qabul yozuvi');
+  if (e.doctor_id !== ctx.doctorId) throw forbidden('Klinik yozuvni faqat davolovchi shifokor ko‘radi');
+  return e;
+}
+
+/**
+ * The note draft (AI-01) for a text: every AI guard applies (clinical mode, sample-only text, production switch,
+ * free tier, budget), the text is de-identified before it leaves the server, nothing is saved. Also used by dictation.
+ */
+export async function draftNote(db: Db, ai: AiClient, ctx: Ctx, text: string, encounterId?: string) {
+  const m = ai.clinicalMode(ctx.tenantId);
+  if (m === 'off') throw ai.mode() === 'live' ? ai.clinicalError(ctx.tenantId) : coded(503, 'AI_OFF', 'api.ai.assistantOff');
+  if (m === 'sample') {
+    if (normalize(text) !== normalize(SAMPLE_NOTE_TEXT)) throw coded(422, 'AI_SAMPLE_ONLY', 'api.ai.sampleOnly');
+    await audit(db.pool, ctx, 'ai.note_draft', 'ai', null, 'Namunaviy AI natijasi ko‘rsatildi');
+    return { mode: 'sample' as const, draft: SAMPLE_RESULT };
+  }
+  const patient = await patientOf(db, ctx, encounterId);
+  const { value, model } = await ai.json({
+    route: 'note_draft', system: `${NOTE_SYSTEM}\n${answerLanguage(ctx.locale)} Bo‘sh bo‘lim uchun baribir aynan "Kiritilmagan" deb yoz.`, user: redact(text, patient), schema: NOTE_SCHEMA, validate: noteZ,
+    effort: 'low', maxTokens: 4000, tenantId: ctx.tenantId, membershipId: ctx.membershipId,
+  });
+  await audit(db.pool, ctx, 'ai.note_draft', 'ai', null, `AI loyihasi yaratildi (${model})`);
+  return { mode: 'live' as const, draft: value as z.infer<typeof noteZ> };
+}
+
 @Controller()
 export class AiController {
   constructor(private db: Db, private ai: AiClient, private icd: Icd10Service, private news: NewsService) {}
 
-  /** The patient of an encounter the doctor is treating (for de-identification). Anything else → 404/403. */
-  private async patientOf(ctx: Ctx, encounterId?: string): Promise<PatientIdentity | null> {
-    if (!encounterId) return null;
-    const e = await this.db.one(
-      `SELECT e.doctor_id, p.last_name, p.first_name, p.middle_name, p.birth_date, p.patient_number, p.phone
-         FROM encounters e JOIN patients p ON p.id = e.patient_id WHERE e.id = $1 AND e.tenant_id = $2`, [encounterId, ctx.tenantId]);
-    if (!e) throw notFound('Qabul yozuvi');
-    if (e.doctor_id !== ctx.doctorId) throw forbidden('Klinik yozuvni faqat davolovchi shifokor ko‘radi');
-    return e;
-  }
+  private patientOf(ctx: Ctx, encounterId?: string) { return patientOf(this.db, ctx, encounterId); }
 
   @Get('ai/status')
   status(@CurrentCtx() ctx: Ctx) {
@@ -78,20 +101,7 @@ export class AiController {
   @Roles('doctor') @Post('ai/note-draft') @HttpCode(200)
   async noteDraft(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const { text, encounter_id } = parse(aiNoteDraftSchema, body);
-    const m = this.ai.clinicalMode(ctx.tenantId);
-    if (m === 'off') throw this.ai.mode() === 'live' ? this.ai.clinicalError(ctx.tenantId) : coded(503, 'AI_OFF', 'api.ai.assistantOff');
-    if (m === 'sample') {
-      if (normalize(text) !== normalize(SAMPLE_NOTE_TEXT)) throw coded(422, 'AI_SAMPLE_ONLY', 'api.ai.sampleOnly');
-      await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, 'Namunaviy AI natijasi ko‘rsatildi');
-      return { data: { mode: 'sample', draft: SAMPLE_RESULT } };
-    }
-    const patient = await this.patientOf(ctx, encounter_id);
-    const { value, model } = await this.ai.json({
-      route: 'note_draft', system: `${NOTE_SYSTEM}\n${answerLanguage(ctx.locale)} Bo‘sh bo‘lim uchun baribir aynan "Kiritilmagan" deb yoz.`, user: redact(text, patient), schema: NOTE_SCHEMA, validate: noteZ,
-      effort: 'low', maxTokens: 4000, tenantId: ctx.tenantId, membershipId: ctx.membershipId,
-    });
-    await audit(this.db.pool, ctx, 'ai.note_draft', 'ai', null, `AI loyihasi yaratildi (${model})`);
-    return { data: { mode: 'live', draft: value } };
+    return { data: await draftNote(this.db, this.ai, ctx, text, encounter_id) };
   }
 
   // ---------- ICD-10 (MKB-10) ----------
