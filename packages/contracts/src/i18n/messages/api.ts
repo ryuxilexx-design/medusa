@@ -355,6 +355,7 @@ export const api = {
   'api.isapi.cameraError': ['Kamera bilan aloqa xatosi: {why}', 'Ошибка связи с камерой: {why}'],
   'api.insufficientDeposit': ['Bemor depozitida yetarli mablag‘ yo‘q (bor: {amount} so‘m)', 'На депозите пациента недостаточно средств (есть: {amount} сум)'],
   'api.keyUsedOther': ['Bu kalit boshqa amal uchun ishlatilgan', 'Этот ключ уже использован для другой операции'],
+  'api.depositBranch': ['Bu bemorning depoziti sizning filialingizda olinmagan', 'Депозит этого пациента принят не в вашем филиале'],
   'api.shiftOtherBranchShort': ['Smenangiz boshqa filialda ochilgan.', 'Ваша смена открыта в другом филиале.'],
   'api.notADebt': ['Bu hisobda qarz yo‘q', 'По этому счёту долга нет'],
   'api.promisePast': ['Va’da sanasi o‘tgan kun bo‘lmasin', 'Дата обещания не может быть в прошлом'],

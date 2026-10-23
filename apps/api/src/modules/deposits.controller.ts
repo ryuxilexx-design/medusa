@@ -76,8 +76,14 @@ export class DepositsController {
         res.status(200);
         return { data: { deposit: prev, balance: await depositBalance(c, ctx.tenantId, id), replayed: true } };
       }
+      await assertPatientAccess(c, ctx, id); // the same scope rule as list/create: the patient must be reachable by this manager
       await applyDeposit(c, ctx, id, input.amount); // locks the patient, checks the balance
-      let shiftId: string | null = null, branchId = ctx.branchIds[0];
+      // a non-cash refund goes back where the deposit was taken: the branch of the patient's latest deposit in the manager's scope
+      const origin = (await c.query(
+        `SELECT branch_id FROM patient_deposits WHERE tenant_id = $1 AND patient_id = $2 AND kind = 'in' AND branch_id = ANY($3::uuid[]) ORDER BY occurred_at DESC LIMIT 1`,
+        [ctx.tenantId, id, ctx.branchIds])).rows[0];
+      if (!origin) throw conflict('DEPOSIT_BRANCH', 'Bu bemorning depoziti sizning filialingizda olinmagan');
+      let shiftId: string | null = null, branchId: string = origin.branch_id;
       if (input.method === 'cash') {
         if (!input.shift_id) throw invalid({ shift_id: 'Naqd pul qaysi kassadan berilishini tanlang (ochiq smena)' });
         // cash leaving the drawer: an exclusive lock, so two outflows cannot both pass the «enough cash» check
