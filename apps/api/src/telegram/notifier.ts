@@ -5,7 +5,7 @@ import { Db } from '../core/db';
 import { decryptSecret } from '../core/secrets';
 import { addDays, localDate, localTime, localToUtc, now, syncClock } from '../core/clock';
 import { BotEngine, cardFor } from './engine';
-import { LINKED_CHATS_SQL, NOTICE_CHANNEL_SQL, NOTICES_ALLOWED_SQL, SMS_PHONE_SQL } from './outbox';
+import { chatsSqlFor, NOTICE_CHANNEL_SQL, NOTICES_ALLOWED_SQL, SMS_PHONE_SQL } from './outbox';
 import { humanDate, Lang, T } from './texts';
 import { HttpTransport, OutMessage, SimTransport, TelegramError, Transport } from './transport';
 import { SmsSender } from '../sms/transport';
@@ -115,7 +115,7 @@ export class Notifier {
           }
           return true;
         }
-        const chats = (await c.query(`SELECT x.*, b.token_enc FROM patients p, LATERAL (${LINKED_CHATS_SQL}) x JOIN telegram_bots b ON b.id = x.bot_id WHERE p.id = $1`, [n.patient_id])).rows;
+        const chats = (await c.query(`SELECT x.*, b.token_enc FROM patients p, LATERAL (${chatsSqlFor(n.kind)}) x JOIN telegram_bots b ON b.id = x.bot_id WHERE p.id = $1`, [n.patient_id])).rows;
         if (!chats.length) { await finish('skipped', 'bog‘langan chat yo‘q'); return true; }
         let retryError: string | null = null, delivered = 0;
         for (const ch of chats) {

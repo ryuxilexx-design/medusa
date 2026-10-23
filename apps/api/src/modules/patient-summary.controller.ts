@@ -9,7 +9,7 @@ import { audit } from '../core/audit';
 import { localDate } from '../core/clock';
 import { AiClient } from '../ai/ai-client';
 import { draftReason, draftSummary, drugStems, NoteSource, prescriptionFromNote, restDaysFromNote, RxItem, stripCodes } from '../ai/patient-summary';
-import { enqueueNoticeChannel, LINKED_CHATS_SQL, noticeChannel } from '../telegram/outbox';
+import { enqueueNoticeChannel, CLINICAL_CHATS_SQL, noticeChannel } from '../telegram/outbox';
 import { reasonText } from './ai.controller';
 
 const LANG_UZ: Record<SummaryLanguage, string> = { uz: 'o‘zbek (lotin)', 'uz-Cyrl': 'o‘zbek (kirill)', ru: 'rus' };
@@ -74,7 +74,7 @@ export class PatientSummaryController {
       const e = await visit(c, ctx, id, true);
       if (e.note_status !== 'signed') throw coded(409, 'NOTE_NOT_SIGNED', 'api.ps.notSigned');
       const version = (await c.query(`SELECT coalesce(max(version), 0) + 1 AS v FROM patient_summaries WHERE encounter_id = $1`, [id])).rows[0].v;
-      if (input.send && !(await noticeChannel(c, ctx.tenantId, e.patient_id))) throw coded(409, 'NO_CHANNEL', 'api.ps.noChannel');
+      if (input.send && !(await noticeChannel(c, ctx.tenantId, e.patient_id, 'patient_summary'))) throw coded(409, 'NO_CHANNEL', 'api.ps.noChannel');
       const row = (await c.query(
         `INSERT INTO patient_summaries (tenant_id, encounter_id, note_id, patient_id, doctor_id, branch_id, version, language, text, draft_source, approved_by, approved_by_name, send_requested)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, version, language, text, approved_by_name, approved_at, send_requested`,
@@ -98,8 +98,8 @@ export class PatientSummaryController {
          FROM patient_summaries s
          LEFT JOIN LATERAL (SELECT channel, status, sent_at FROM notifications x WHERE x.summary_id = s.id ORDER BY x.created_at DESC LIMIT 1) n ON true
         WHERE s.encounter_id = $1 AND s.tenant_id = $2 ORDER BY s.version DESC LIMIT 50`, [id, ctx.tenantId]);
-    const chatLang = (await this.db.one(`SELECT x.lang FROM patients p, LATERAL (${LINKED_CHATS_SQL}) x WHERE p.id = $1 LIMIT 1`, [e.patient_id]))?.lang;
-    return { data: rows, meta: { channel: await noticeChannel(this.db.pool, ctx.tenantId, e.patient_id), note_signed: e.note_status === 'signed',
+    const chatLang = (await this.db.one(`SELECT x.lang FROM patients p, LATERAL (${CLINICAL_CHATS_SQL}) x WHERE p.id = $1 LIMIT 1`, [e.patient_id]))?.lang;
+    return { data: rows, meta: { channel: await noticeChannel(this.db.pool, ctx.tenantId, e.patient_id, 'patient_summary'), note_signed: e.note_status === 'signed',
       default_language: isLocale(chatLang) ? chatLang : ctx.locale } };
   }
 

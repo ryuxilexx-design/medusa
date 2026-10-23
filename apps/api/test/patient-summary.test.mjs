@@ -305,3 +305,29 @@ test('SMS: faqat «Xulosangiz tayyor, klinikadan oling» — matn yo‘q; bemorg
     await pool.query(`UPDATE sms_settings SET enabled = false WHERE tenant_id = $1`, [SEED_IDS.tenant]);
   }
 });
+
+test('xulosa matni: telefoni yo‘q kattaning qarindoshi chatiga bormaydi (eslatmalar boradi); voyaga yetmagan bolaning vasiysiga boradi', async () => {
+  await pool.query(`UPDATE sms_settings SET enabled = false WHERE tenant_id = $1`, [SEED_IDS.tenant]);
+  const pB = (await doctor.get(`/encounters/${encB}`)).body.data.patient.id;
+  const { noticeChannel } = require('../dist/telegram/outbox.js');
+  const text = 'Sizda nima aniqlandi\nBosh og‘rig‘i.\n\nNima qilish kerak\n1. Dam oling.';
+  try {
+    // an adult family card: no own phone, the relative's number linked in Telegram
+    await pool.query(`UPDATE patients SET phone = NULL, contact_phone = $2, birth_date = '1950-03-01' WHERE id = $1`, [pB, PHONE_GUARD]);
+    assert.equal(await noticeChannel(pool, SEED_IDS.tenant, pB), 'telegram', 'eslatmalar oila kartasiga boradi');
+    assert.equal(await noticeChannel(pool, SEED_IDS.tenant, pB, 'patient_summary'), null, 'klinik matn kattaning qarindoshiga bormaydi');
+    const no = await doctor.post(`/encounters/${encB}/patient-summaries`, { language: 'uz', text, draft_source: 'template', send: true, confirm_send: true });
+    assert.equal(no.status, 409, no.text); assert.equal(no.body.error.code, 'NO_CHANNEL');
+    // a child's card: the guardian's chat gets it
+    const kid = new Date(today + 'T00:00:00Z'); kid.setUTCFullYear(kid.getUTCFullYear() - 8);
+    await pool.query(`UPDATE patients SET birth_date = $2 WHERE id = $1`, [pB, kid.toISOString().slice(0, 10)]);
+    const before = (await out(chatGuard)).length;
+    const r = await doctor.post(`/encounters/${encB}/patient-summaries`, { language: 'uz', text, draft_source: 'template', send: true, confirm_send: true });
+    assert.equal(r.status, 201, r.text); assert.equal(r.body.data.channel, 'telegram');
+    await notifier.deliverDue();
+    const g = await out(chatGuard);
+    assert.equal(g.length, before + 1); assert.match(g.at(-1), /Dam oling/);
+  } finally {
+    await pool.query(`UPDATE patients SET phone = $2, contact_phone = NULL WHERE id = $1`, [pB, PHONE_B]);
+  }
+});
