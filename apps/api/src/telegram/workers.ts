@@ -6,6 +6,7 @@ import { config } from '../core/config';
 import { BotEngine, TgUpdate } from './engine';
 import { BotRegistry, BotRow, Notifier } from './notifier';
 import { TelegramError } from './transport';
+import { SmsSender } from '../sms/transport';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -57,8 +58,8 @@ export class TelegramWorkers implements OnApplicationBootstrap, OnModuleDestroy 
   private log = new Logger('TelegramWorkers');
   private timers: NodeJS.Timeout[] = [];
   private pollers = new Map<string, Poller>();
-  private busy = { plan: false, deliver: false, sync: false, purge: false };
-  constructor(private db: Db, private bots: BotRegistry, private engine: BotEngine, private notifier: Notifier) {}
+  private busy = { plan: false, deliver: false, sync: false, purge: false, smsStatus: false };
+  constructor(private db: Db, private bots: BotRegistry, private engine: BotEngine, private notifier: Notifier, private sms: SmsSender) {}
 
   onApplicationBootstrap() {
     if (!config.telegram.workers) return;
@@ -75,6 +76,7 @@ export class TelegramWorkers implements OnApplicationBootstrap, OnModuleDestroy 
     every(5_000, 'deliver', () => this.notifier.deliverDue());
     every(30_000, 'sync', () => this.syncPollers());
     every(24 * 3600_000, 'purge', () => this.purgeUpdates());
+    every(5 * 60_000, 'smsStatus', () => this.sms.refreshStatuses());
   }
 
   /** Processed update ids only guard against Telegram re-delivery (minutes): rows older than a week are dropped daily. */

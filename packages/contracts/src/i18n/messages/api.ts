@@ -184,6 +184,16 @@ export const api = {
   'api.noSecretKey': ['Serverda APP_SECRET_KEY sozlanmagan — token xavfsiz saqlanmaydi. Administratorga murojaat qiling.', 'На сервере не задан APP_SECRET_KEY — токен нельзя сохранить безопасно. Обратитесь к администратору.'],
   'api.tgTokenRejected': ['Telegram bu tokenni qabul qilmadi', 'Telegram не принял этот токен'],
   'api.tgUnreachable': ['Telegram bilan bog‘lanib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.', 'Не удалось связаться с Telegram. Проверьте интернет и повторите.'],
+  // SMS (Eskiz.uz)
+  'api.sms.noSecretKey': ['Serverda APP_SECRET_KEY sozlanmagan — parol xavfsiz saqlanmaydi. Administratorga murojaat qiling.', 'На сервере не задан APP_SECRET_KEY — пароль нельзя сохранить безопасно. Обратитесь к администратору.'],
+  'api.sms.badCredentials': ['Eskiz bu login va parolni qabul qilmadi', 'Eskiz не принял этот логин и пароль'],
+  'api.sms.badCredentialsField': ['Login yoki parol noto‘g‘ri', 'Неверный логин или пароль'],
+  'api.sms.unreachable': ['Eskiz bilan bog‘lanib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.', 'Не удалось связаться с Eskiz. Проверьте интернет и повторите.'],
+  'api.sms.disabled': ['Avval SMS kanalini yoqib, sozlamalarni saqlang.', 'Сначала включите СМС-канал и сохраните настройки.'],
+  'api.sms.testTooSoon': ['Sinov SMS yaqinda yuborildi. Bir daqiqadan keyin qayta urinib ko‘ring.', 'Пробное СМС недавно отправлено. Повторите через минуту.'],
+  'api.sms.needCredentials': ['SMS yoqish uchun Eskiz login va parolini kiriting', 'Чтобы включить СМС, введите логин и пароль Eskiz'],
+  'api.sms.phoneRequired': ['O‘zbekiston raqamini kiriting (+998 …)', 'Введите узбекский номер (+998 …)'],
+  'api.sms.rejectedCredentials': ['Eskiz login yoki parolni qabul qilmadi. Sozlamalarni tekshiring.', 'Eskiz не принял логин или пароль. Проверьте настройки.'],
 
   // «Tezkor savollar» answers (numbers from SQL, sentence from these templates)
   'api.report.payments': ['{date} kuni {n} ta to‘lov qayd etilgan, jami {sum}.', { one: '{date} проведён {n} платёж на сумму {sum}.', few: '{date} проведено {n} платежа на сумму {sum}.', many: '{date} проведено {n} платежей на сумму {sum}.' }],
