@@ -12,7 +12,7 @@ type Usage = {
   by_route: { route: string; calls: number; ok: number; failed: number; input_tokens: number; output_tokens: number; cache_read_tokens: number; cost_usd: number; avg_latency_ms: number | null }[];
   today: { calls: number; cost_usd: number }; icd10: { n: number; official: number };
 };
-const ROUTE: Record<string, MessageKey> = { note_draft: 'admin.ai.routeNote', icd10_suggest: 'admin.ai.routeIcd', news_summary: 'admin.ai.routeNews' };
+const ROUTE: Record<string, MessageKey> = { note_draft: 'admin.ai.routeNote', icd10_suggest: 'admin.ai.routeIcd', news_summary: 'admin.ai.routeNews', bot_faq: 'admin.ai.routeBotFaq' };
 const usd = (n: number) => `$${n < 0.01 && n > 0 ? n.toFixed(4) : n.toFixed(2)}`;
 const PROVIDER = { anthropic: { name: 'Claude (Anthropic)', key: 'ANTHROPIC_API_KEY', console: 'Anthropic Console' }, gemini: { name: 'Gemini (Google)', key: 'GEMINI_API_KEY', console: 'Google AI Studio' } } as const;
 const MODE: Record<Usage['mode'], [MessageKey, 'teal' | 'yellow' | 'gray']> = { live: ['admin.ai.modeLive', 'teal'], sample: ['admin.ai.modeSample', 'yellow'], off: ['admin.ai.modeOff', 'gray'] };

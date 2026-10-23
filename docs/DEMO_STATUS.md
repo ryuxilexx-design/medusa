@@ -4,6 +4,12 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Telegram bot klinika haqidagi savollarga javob beradi (migratsiya 035, `docs/AI.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Menyuda bemor erkin savol yozsa («Konsultatsiya qancha?», «Manzilingiz?», «Yakshanba ishlaysizmi?») bot klinikaning o‘z ma’lumotidan javob beradi: filiallar (manzil, telefon), yaqin 14 kunlik ish vaqti (shifokorlar jadvali + dam olish/bayram kunlari), xizmatlar narxi (filial narxi bilan) va davomiyligi, shifokorlar va ish kunlari, to‘lov usullari, botda yozilish/bekor qilish, rahbar yozgan «Qo‘shimcha ma’lumot» (≤ 2000 belgi). AI (`bot_faq`) faqat yashirilgan savol matnini oladi — bemor kartasi va qabullari hech qachon. Tibbiy savol (dori, doza, belgi, tashxis) — modelsiz qat’iy javob «shifokorga yoziling» + «Qabulga yozilish». Javobdagi har bir son (narx, vaqt, telefon, sana) bilimda bo‘lmasa — «Buni registratordan so‘rang: <telefon>». Har javob ostida «📞 Registrator bilan bog‘lanish». Chat tilida (uz / кирилл / ru). Chatga soatiga 20 ta savol; kunlik AI byudjeti umumiy. AI o‘chiq / namunaviy / xato / byudjet tugagan / rahbar o‘chirgan — kalit so‘zlar bo‘yicha javob (narx, manzil, ish vaqti, shifokorlar, telefon, to‘lov) o‘sha bilimdan. Sozlamalar → Telegram: «AI javoblari» (demo’da yoqilgan, production’da rahbar yoqmaguncha o‘chiq), «Qo‘shimcha ma’lumot», bugun / 7 kun hisoblari (AI, kalit so‘z, registratorga, tibbiy, cheklov) — savol matni saqlanmaydi | Ishlaydi (**namunaviy rejimda** — kalit so‘z javobi; production Gemini bepul tarifida ham faqat kalit so‘z) | API test `bot-faq.test.mjs` (10 ta, soxta Claude + simulyator): narx/manzil/soat bazadagi raqamlar bilan, to‘qilgan narx va telefon → registrator, tibbiy savol modelga ketmaydi, qabullari bor bemor chatidan modelga ism/telefon/karta raqami ketmaydi, rus tili, soatlik cheklov, o‘chirilgan AI → kalit so‘z, byudjet, `ai_usage`’da matn yo‘q, ikki klinika izolyatsiyasi, faqat rahbar sozlaydi. Brauzer skrinshoti olinmagan |
+
 ## Ombor: omborchi roli, partiyalar, talabnomalar, nazoratdagi dorilar (migratsiya 030, `docs/WAREHOUSE.md`)
 
 | Nima | Holat | Tekshiruv |

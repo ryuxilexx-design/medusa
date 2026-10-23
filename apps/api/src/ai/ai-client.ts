@@ -11,9 +11,10 @@ import type { MessageKey } from '@meduza/contracts';
 import { SEED_IDS } from '@meduza/db';
 
 export type AiMode = 'off' | 'sample' | 'live';
-export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary';
-/** Routes that carry only public text (PubMed abstracts). Every other route — including any new one — counts as clinical. */
-const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary']);
+export type AiRoute = 'note_draft' | 'icd10_suggest' | 'news_summary' | 'bot_faq';
+/** Routes that carry only public text: PubMed abstracts, and the bot's clinic FAQ (the clinic's own price list/hours plus a
+ * redacted question already screened for medical content — telegram/faq.ts). Every other route counts as clinical. */
+const PUBLIC_ROUTES = new Set<AiRoute>(['news_summary', 'bot_faq']);
 const SEED_TENANTS = new Set<string>([SEED_IDS.tenant, SEED_IDS.tenant2]);
 /** Why clinical text may not go to the model: the server is a production one without AI_CLINICAL_ALLOWED=1, or the Gemini free tier. */
 export type ClinicalBlock = 'production' | 'free_tier';

@@ -7,6 +7,7 @@ import { fmtDateTime, formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, Card, cx, Field, Input, LoadingRows, ErrorState, useToast } from '@/components/ui';
+import { TelegramFaq } from '@/components/telegram-faq';
 
 type Status = {
   bot: { username: string; status: 'active' | 'disabled'; last_error: string | null; last_error_at: string | null; updated_at: string } | null;
@@ -87,6 +88,8 @@ export function TelegramSettings() {
             )}
           </div>
         </Card>
+
+        <TelegramFaq />
 
         <Card title={t('admin.tg.last7')} padded={false}>
           <dl className="divide-y divide-slate-100">

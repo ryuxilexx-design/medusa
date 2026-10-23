@@ -17,6 +17,7 @@ import { recordConsent } from '../modules/consent';
 import { BOT_CONSENT_VERSION, Card, humanDate, Lang, shortDate, T } from './texts';
 import { InlineButton, OutMessage, ReplyMarkup, TelegramError, Transport } from './transport';
 import { OWN_CARD_SQL } from './outbox';
+import { BotFaq } from './faq';
 
 export type Bot = { id: string; tenant_id: string; kind: 'telegram' | 'simulator' };
 type State = { step?: string; v?: number; opts?: string[]; d?: Record<string, any> };
@@ -43,6 +44,8 @@ const capitalize = (s: string) => s.trim().replace(/\s+/g, ' ').replace(/(^|[\s-
 class Turn {
   out: OutMessage[] = [];
   toast: string | null = null;
+  /** A free-text question to answer after COMMIT: the model call never runs inside the chat's locked transaction. */
+  faq: string | null = null;
   constructor(public c: PoolClient, public chat: Chat, public bot: Bot, public clinic: string, public branchIds: string[]) {}
   get t() { return T[this.chat.lang]; }
   get lang() { return this.chat.lang; }
@@ -70,7 +73,7 @@ const RATE_WINDOW_MS = 60_000, RATE_MAX = 30; // per chat; a public bot must not
 export class BotEngine {
   private log = new Logger('TelegramBot');
   private rate = new Map<string, number[]>();
-  constructor(private db: Db) {}
+  constructor(private db: Db, private faq: BotFaq) {}
 
   /** Sliding-window limit per chat (in memory). Over the limit, updates are dropped silently. */
   private allowed(botId: string, chatId: number) {
@@ -118,7 +121,20 @@ export class BotEngine {
     }
     const done = turn as Turn | null;
     if (u.callback_query) await transport.call('answerCallbackQuery', { callback_query_id: u.callback_query.id, text: done?.toast ?? undefined, _chat_id: chatInfo.id }).catch(() => undefined);
+    if (done?.faq) await this.answerQuestion(bot, transport, done, done.faq);
     if (done) await this.deliver(bot, transport, done.out);
+  }
+
+  /** Clinic question (faq.ts) — after COMMIT, from the bot's tenant only; nothing about this person goes in. */
+  private async answerQuestion(bot: Bot, transport: Transport, t: Turn, question: string) {
+    await transport.call('sendChatAction', { chat_id: t.chat.chat_id, action: 'typing' }).catch(() => undefined);
+    try {
+      const replies = await this.faq.answer(bot.tenant_id, `${bot.id}:${t.chat.chat_id}`, t.lang, question);
+      for (const r of replies) t.send(r.text, r.reply_markup);
+    } catch (e) {
+      this.log.error(`faq (bot ${bot.id}): ${(e as Error)?.stack || e}`);
+      t.send(t.t.unknown, this.menuKb(t.lang));
+    }
   }
 
   /** Sends messages; a 403 (user blocked the bot) marks the chat so no more notices are queued for it. */
@@ -179,7 +195,8 @@ export class BotEngine {
       return this.intakeAnswer(t, text);
     }
     if (step && step !== 'menu') return t.send(t.t.useButtons);
-    return t.send(t.t.unknown, this.menuKb(t.lang));
+    if (!text || text.startsWith('/')) return t.send(t.t.unknown, this.menuKb(t.lang));
+    t.faq = text; // a question about the clinic: answered after this transaction commits
   }
 
   private async onContact(t: Turn, contact: { phone_number: string; user_id?: number }, from?: TgUser) {
@@ -214,6 +231,12 @@ export class BotEngine {
       return this.showMenu(t);
     }
     if (data.startsWith('a:')) return this.onAppointmentAction(t, data);
+    // buttons under a clinic answer (faq.ts): not bound to a state version
+    if (data === 'faq:book') return this.startBooking(t);
+    if (data === 'faq:prices' || data === 'faq:reg') {
+      for (const r of await this.faq.buttonAnswer(t.c, t.chat.tenant_id, t.lang, data === 'faq:prices' ? 'prices' : 'reg')) t.send(r.text, r.reply_markup);
+      return;
+    }
     const [v, key] = [data.slice(0, data.indexOf(':')), data.slice(data.indexOf(':') + 1)];
     if (Number(v) !== t.chat.state.v) { t.toast = t.t.stale; return; }
     const st = t.chat.state, d = { ...(st.d ?? {}) };

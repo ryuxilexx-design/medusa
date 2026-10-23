@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { randomInt } from 'crypto';
 import { z } from 'zod';
 import { Db } from '../core/db';
@@ -11,6 +11,8 @@ import { encryptSecret, secretsConfigured } from '../core/secrets';
 import { BotEngine, TgUpdate } from './engine';
 import { BotRegistry, Notifier } from './notifier';
 import { HttpTransport, TelegramError } from './transport';
+import { BotFaq, FAQ_EXTRA_MAX } from './faq';
+import { AiClient } from '../ai/ai-client';
 
 const connectSchema = z.object({ token: z.string().trim().regex(/^\d{5,15}:[A-Za-z0-9_-]{30,64}$/, 'Token formati noto‘g‘ri (BotFather bergan «123456:ABC…» ko‘rinishida)') });
 const simSendSchema = z.object({
@@ -21,12 +23,17 @@ const simSendSchema = z.object({
   contact_phone: z.string().max(32).optional(),
 }).refine((d) => [d.text, d.callback_data, d.contact_phone].filter((x) => x !== undefined).length === 1, { message: 'Bitta amal yuboring' });
 
-const demoOnly = () => { if (!config.demoEnabled) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi'); };
+const faqSchema = z.object({
+  ai_enabled: z.boolean(),
+  extra_text: z.string().max(FAQ_EXTRA_MAX, `${FAQ_EXTRA_MAX} belgidan oshmasin`).transform((x) => x.replace(/\r\n/g, '\n').trim()),
+});
+
+const demoOnly =() => { if (!config.demoEnabled) throw new AppError(404, 'NOT_FOUND', 'Manzil topilmadi'); };
 let simUpdateSeq = Date.now() * 10;
 
 @Controller()
 export class TelegramController {
-  constructor(private db: Db, private bots: BotRegistry, private engine: BotEngine, private notifier: Notifier) {}
+  constructor(private db: Db, private bots: BotRegistry, private engine: BotEngine, private notifier: Notifier, private faq: BotFaq, private ai: AiClient) {}
 
   /** Bot settings and delivery stats for the manager. The token is never returned. */
   @Roles('manager') @Get('telegram')
@@ -40,6 +47,32 @@ export class TelegramController {
               (SELECT count(*)::int FROM appointments WHERE tenant_id = $1 AND source = 'telegram' AND created_at >= demo_now() - interval '7 days') AS bookings_7d,
               (SELECT count(*)::int FROM appointments WHERE tenant_id = $1 AND patient_confirmed_at >= demo_now() - interval '7 days') AS confirmed_7d`, [ctx.tenantId]);
     return { data: { bot: bot ?? null, stats, secrets_configured: secretsConfigured(), simulator_available: config.demoEnabled, workers: config.telegram.workers } };
+  }
+
+  /** Question answering: the AI switch, the manager's extra text and daily counters (counts only — no question is stored). */
+  @Roles('manager') @Get('telegram/faq')
+  async faqStatus(@CurrentCtx() ctx: Ctx) {
+    const s = await this.faq.settings(this.db.pool, ctx.tenantId);
+    const sum = `coalesce(sum(ai_answered),0)::int AS ai_answered, coalesce(sum(keyword_answered),0)::int AS keyword_answered,
+                 coalesce(sum(fallbacks),0)::int AS fallbacks, coalesce(sum(medical),0)::int AS medical, coalesce(sum(limited),0)::int AS limited`;
+    const day = `(demo_now() AT TIME ZONE 'Asia/Tashkent')::date`;
+    const today = await this.db.one(`SELECT ${sum} FROM telegram_faq_stats WHERE tenant_id = $1 AND day = ${day}`, [ctx.tenantId]);
+    const week = await this.db.one(`SELECT ${sum} FROM telegram_faq_stats WHERE tenant_id = $1 AND day > ${day} - 7 AND day <= ${day}`, [ctx.tenantId]);
+    return { data: { ai_enabled: s.ai_enabled, ai_default: BotFaq.aiDefault(), extra_text: s.extra_text, extra_max: FAQ_EXTRA_MAX, ai_mode: this.ai.mode(), today, last7: week } };
+  }
+
+  @Roles('manager') @Put('telegram/faq')
+  async faqSave(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+    const input = parse(faqSchema, body);
+    await this.db.tx(async (c) => {
+      await c.query(
+        `INSERT INTO telegram_faq_settings (tenant_id, ai_enabled, extra_text, updated_by, updated_at) VALUES ($1,$2,$3,$4, demo_now())
+         ON CONFLICT (tenant_id) DO UPDATE SET ai_enabled = EXCLUDED.ai_enabled, extra_text = EXCLUDED.extra_text, updated_by = EXCLUDED.updated_by, updated_at = demo_now()`,
+        [ctx.tenantId, input.ai_enabled, input.extra_text, ctx.membershipId || null]);
+      // the clinic's text itself is not copied into the audit log
+      await audit(c, ctx, 'telegram.faq', 'telegram_bot', null, `Bot savol-javob sozlamalari: AI ${input.ai_enabled ? 'yoqildi' : 'o‘chirildi'}, qo‘shimcha ma’lumot ${input.extra_text.length} belgi`);
+    });
+    return { data: { ok: true } };
   }
 
   /** Connects the clinic's own bot: the token is checked with Telegram (getMe), then stored encrypted. */
