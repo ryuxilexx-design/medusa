@@ -11,12 +11,13 @@ import { Db } from '../core/db';
 import { config } from '../core/config';
 import { decryptSecret } from '../core/secrets';
 import { bundleHasPinfl, FhirBundle } from './fhir';
+import { endpointOk } from './dhp.controller';
 
 export const DHP_MAX_ATTEMPTS = 8;
 /** 1, 2, 4 … minutes, at most 6 hours between tries. */
 export const dhpBackoffSeconds = (attempts: number) => Math.min(60 * 2 ** Math.max(0, attempts - 1), 6 * 3600);
 
-export type DhpFetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ status: number; text(): Promise<string> }>;
+export type DhpFetch = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal; redirect?: 'manual' }) => Promise<{ status: number; text(): Promise<string> }>;
 
 /** The platform's own short explanation (OperationOutcome.issue[0].diagnostics), never more than 200 characters. */
 function outcomeText(body: string) {
@@ -54,6 +55,7 @@ export async function runDhpWorker(pool: Pool, opts: { fetchImpl?: DhpFetch; lim
       const bundle = row.fhir as FhirBundle | null;
       if (!bundle) await fail('FHIR to‘plami yo‘q', null, false);
       else if (!bundleHasPinfl(bundle)) await fail('Bemorning JShShIR (PINFL) raqami kiritilmagan', null, false);
+      else if (!endpointOk(row.endpoint)) await fail('Platforma manzili ruxsat etilganlar ro‘yxatida emas', null, false);
       else {
         let status = 0; let body = ''; let netError = '';
         try {
@@ -62,7 +64,7 @@ export async function runDhpWorker(pool: Pool, opts: { fetchImpl?: DhpFetch; lim
           const timer = setTimeout(() => ctrl.abort(), opts.timeoutMs ?? config.dhp.timeoutMs);
           try {
             const res = await doFetch(row.endpoint, {
-              method: 'POST', signal: ctrl.signal, body: JSON.stringify(bundle),
+              method: 'POST', signal: ctrl.signal, body: JSON.stringify(bundle), redirect: 'manual', // a 3xx is a failure, never followed with the token
               headers: { 'content-type': 'application/fhir+json; charset=utf-8', accept: 'application/fhir+json', authorization: `Bearer ${token}` },
             });
             status = res.status; body = await res.text().catch(() => '');

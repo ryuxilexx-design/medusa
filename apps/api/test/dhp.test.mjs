@@ -53,6 +53,8 @@ before(async () => {
   pool = app.get(require('../dist/core/db.js').Db).pool;
   await startFake();
   manager = await as(M.manager);
+  // a demo reset keeps the clinic's DMED settings (like SMS): start every run from «off»
+  await pool.query(`DELETE FROM dhp_settings`);
   assert.equal((await manager.post('/demo/reset')).status, 200);
   registrar = await as(M.registrar); doctor = await as(M.doctor(0)); lab = await as(M.lab); t2manager = await as(M.tenant2Manager);
   today = (await doctor.get('/me')).body.data.today;
@@ -170,10 +172,18 @@ test('sozlamalar: faqat rahbar; token qaytarilmaydi va shifrlangan; jonli rejim 
   assert.equal(noTok.status, 422); assert.ok(noTok.body.error.fields.token);
   const badUrl = await manager.put('/dhp/settings', { endpoint: 'http://dhp.example.uz/fhir' });
   assert.equal(badUrl.status, 422); assert.ok(badUrl.body.error.fields.endpoint);
+  // https, but not a platform host: refused (the clinical outbox and its token only go to *.dhp.uz)
+  const foreign = await manager.put('/dhp/settings', { endpoint: 'https://evil.example.com/fhir' });
+  assert.equal(foreign.status, 422, foreign.text);
+  assert.equal((await manager.put('/dhp/settings', { endpoint: 'https://playground.dhp.uz/fhir' })).status, 200);
   const r = await manager.put('/dhp/settings', { mode: 'export', endpoint: fakeUrl, token: TOKEN });
   assert.equal(r.status, 200, r.text);
   assert.equal(r.body.data.mode, 'export'); assert.equal(r.body.data.has_token, true);
   assert.ok(!r.text.includes(TOKEN), 'token javobda yo‘q');
+  // changing the address without a new token drops the stored one
+  const moved = await manager.put('/dhp/settings', { endpoint: 'https://fhir.dhp.uz' });
+  assert.equal(moved.status, 200, moved.text); assert.equal(moved.body.data.has_token, false, 'yangi manzil eski tokenni olmaydi');
+  assert.equal((await manager.put('/dhp/settings', { endpoint: fakeUrl, token: TOKEN })).status, 200);
   assert.ok(!(await manager.get('/dhp/settings')).text.includes(TOKEN));
   const row = (await pool.query(`SELECT token_enc FROM dhp_settings WHERE tenant_id = $1`, [SEED_IDS.tenant])).rows[0];
   assert.match(row.token_enc, /^v1\./); assert.ok(!row.token_enc.includes(TOKEN));

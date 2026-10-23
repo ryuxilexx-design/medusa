@@ -24,12 +24,19 @@ const settingsSchema = z.object({
 });
 
 /** https only; plain http only to this machine outside production (tests and a local proxy). */
-function endpointOk(u: string) {
+/**
+ * The platform's own hosts only (dhp.uz and its subdomains, plus DHP_ALLOWED_HOSTS): a manager must not be able to point
+ * the clinical outbox — with the token — at any other server. Plain http only for a local fake server outside production.
+ */
+export function endpointOk(u: string) {
   try {
     const url = new URL(u);
     if (url.username || url.password) return false;
-    if (url.protocol === 'https:') return true;
-    return url.protocol === 'http:' && config.mode !== 'production' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (url.protocol === 'http:') return config.mode !== 'production' && ['127.0.0.1', 'localhost', '[::1]'].includes(host);
+    if (url.protocol !== 'https:') return false;
+    const extra = (process.env.DHP_ALLOWED_HOSTS ?? '').split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+    return host === 'dhp.uz' || host.endsWith('.dhp.uz') || extra.includes(host);
   } catch { return false; }
 }
 
@@ -80,10 +87,12 @@ export class DhpController {
       const prev = (await c.query(`SELECT mode, endpoint, token_enc FROM dhp_settings WHERE tenant_id = $1 FOR UPDATE`, [ctx.tenantId])).rows[0];
       const mode = input.mode ?? prev.mode;
       const endpoint = input.endpoint !== undefined ? input.endpoint : prev.endpoint;
-      const tokenEnc = input.token !== undefined ? encryptSecret(input.token) : input.clear_token ? null : prev.token_enc;
+      // a new address never inherits the old token: the token goes only where the manager typed it together with the address
+      const endpointChanged = input.endpoint !== undefined && input.endpoint !== prev.endpoint;
+      const tokenEnc = input.token !== undefined ? encryptSecret(input.token) : (input.clear_token || endpointChanged) ? null : prev.token_enc;
       if (mode === 'live' && !endpoint) throw invalid({ endpoint: uz('api.dhp.liveNeedsEndpoint') });
       if (mode === 'live' && !tokenEnc) throw invalid({ token: uz('api.dhp.liveNeedsToken') });
-      const tokenChanged = input.token !== undefined || (!!input.clear_token && !!prev.token_enc);
+      const tokenChanged = input.token !== undefined || ((!!input.clear_token || endpointChanged) && !!prev.token_enc);
       await c.query(
         `UPDATE dhp_settings SET mode = $2, endpoint = $3, token_enc = $4, updated_at = demo_now(),
                 last_error = CASE WHEN $5 OR $3 IS DISTINCT FROM endpoint THEN NULL ELSE last_error END,
