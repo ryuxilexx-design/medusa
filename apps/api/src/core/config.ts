@@ -73,7 +73,7 @@ export const config = {
      */
     provider: sttProvider,
     /** local: e.g. http://stt:8000 (compose) or http://127.0.0.1:8000; openai: empty = https://api.openai.com. */
-    baseUrl: (process.env.STT_BASE_URL || (sttProvider === 'openai' ? 'https://api.openai.com' : '')).replace(/\/+$/, ''),
+    baseUrl: (process.env.STT_BASE_URL || (sttProvider === 'openai' ? 'https://api.openai.com' : sttProvider === 'local' ? 'http://stt:8000' : '')).replace(/\/+$/, ''),
     model: process.env.STT_MODEL || (sttProvider === 'openai' ? 'whisper-1' : 'Systran/faster-whisper-large-v3'),
     /**
      * Per-language model (empty = STT_MODEL). Stock Whisper is good at Russian but weak at Uzbek, so a local server
@@ -82,7 +82,8 @@ export const config = {
     modelUz: process.env.STT_MODEL_UZ || '',
     modelRu: process.env.STT_MODEL_RU || '',
     /** Optional for local (a server behind a key); required for openai (STT_API_KEY or OPENAI_API_KEY). */
-    apiKey: process.env.STT_API_KEY || (sttProvider === 'openai' ? process.env.OPENAI_API_KEY || '' : ''),
+    // the OpenAI key goes only to OpenAI's own host, never to a custom STT_BASE_URL
+    apiKey: process.env.STT_API_KEY || (sttProvider === 'openai' && /^https:\/\/api\.openai\.com(\/|$)/.test(process.env.STT_BASE_URL || 'https://api.openai.com') ? process.env.OPENAI_API_KEY || '' : ''),
     /** A CPU-only server needs up to ~1 minute for a 3-minute recording with large-v3. */
     timeoutMs: Number(process.env.STT_TIMEOUT_MS || 120000),
     /** Dictations per doctor per hour. */

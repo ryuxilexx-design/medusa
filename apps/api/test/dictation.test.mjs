@@ -256,3 +256,9 @@ test('tezlik chegarasi: bir soatda 30 ta diktovkadan keyin 429 STT_RATE; bir soa
   await pool.query(`UPDATE ai_usage SET created_at = created_at - interval '61 minutes' WHERE route = 'dictation'`);
   assert.equal((await doctor.dictate({ field: 'complaints', encounter_id: encounter.encounter.id })).status, 200);
 });
+
+test('«local» faqat ichki manzilda local: ochiq internet manzili bulut deb hisoblanadi', async () => {
+  const { isInternalHost } = require('../dist/ai/stt.js');
+  for (const u of ['http://stt:8000', 'http://127.0.0.1:8000', 'http://10.0.0.5:8000', 'http://192.168.1.20', 'http://172.20.0.3:8000', 'http://whisper.local']) assert.equal(isInternalHost(u), true, u);
+  for (const u of ['https://api.openai.com', 'http://8.8.8.8', 'https://stt.example.com', 'http://172.40.0.1', 'not a url']) assert.equal(isInternalHost(u), false, u);
+});

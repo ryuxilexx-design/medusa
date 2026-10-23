@@ -87,6 +87,18 @@ export type Transcribe = {
   tenantId: string; membershipId: string;
 };
 
+/** A host on the clinic's own network: a compose service name (no dot), localhost, a private or link-local IPv4, *.local / *.internal. */
+export function isInternalHost(url: string): boolean {
+  let h: string;
+  try { h = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, ''); } catch { return false; }
+  if (!h.includes('.') && !h.includes(':')) return true; // docker service name, e.g. «stt»
+  if (h === 'localhost' || h === '::1' || h.endsWith('.local') || h.endsWith('.internal')) return true;
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+  if (!m) return false;
+  const [a, b] = [Number(m[1]), Number(m[2])];
+  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
 @Injectable()
 export class SttClient {
   private log = new Logger('STT');
@@ -95,7 +107,8 @@ export class SttClient {
   /** What is configured: the clinic's own server, the cloud, or nothing usable (no address / no key). */
   private configured(): SttMode {
     const s = config.stt;
-    if (s.provider === 'local') return s.baseUrl ? 'local' : 'off';
+    // «local» must really be local: a public host is the cloud, whatever the provider name says
+    if (s.provider === 'local') return !s.baseUrl ? 'off' : isInternalHost(s.baseUrl) ? 'local' : 'cloud';
     if (s.provider === 'openai') return s.apiKey ? 'cloud' : 'off';
     return 'off';
   }

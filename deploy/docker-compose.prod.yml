@@ -68,7 +68,7 @@ services:
       NCBI_API_KEY: ${NCBI_API_KEY:-}
       # doctor dictation: local = the `stt` service below (audio never leaves this server); openai = cloud, needs AI_CLINICAL_ALLOWED=1
       STT_PROVIDER: ${STT_PROVIDER:-off}
-      STT_BASE_URL: ${STT_BASE_URL:-http://stt:8000}
+      STT_BASE_URL: ${STT_BASE_URL:-}  # empty: local → http://stt:8000, openai → https://api.openai.com (config.ts)
       STT_MODEL: ${STT_MODEL:-Systran/faster-whisper-large-v3}
       STT_MODEL_UZ: ${STT_MODEL_UZ:-}
       STT_MODEL_RU: ${STT_MODEL_RU:-}
