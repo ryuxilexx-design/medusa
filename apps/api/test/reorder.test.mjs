@@ -212,3 +212,9 @@ test('AI xulosa: faktdagi raqamlar o‘tadi, to‘qilgani tashlanadi; namunaviy/
     assert.ok(ac.PUBLIC_ROUTES.has('warehouse_brief'), 'biznes marshrut (klinik emas)');
   } finally { Object.assign(config.ai, saved); claude.answer = null; }
 });
+
+test('AI xulosa yo‘riqnomasi faktda yo‘q raqam so‘ramaydi («2 hafta» kabi) — aks holda tekshiruv har safar bandni tashlaydi', () => {
+  const { BRIEF_SYSTEM } = require('../dist/ai/warehouse-brief.js');
+  const quoted = [...BRIEF_SYSTEM.matchAll(/«([^»]*)»/g)].map((m) => m[1]).join(' ');
+  assert.ok(!/\d/.test(quoted), quoted);
+});

@@ -41,7 +41,7 @@ export function briefPayload(rows: ReorderRow[], facts: Facts) {
 }
 
 export const BRIEF_SYSTEM = `Sen klinika omborchisi va rahbari uchun «Buyurtma taklifi» bo‘yicha 3–5 bandli qisqa xulosa yozasan. Senga faqat server hisoblagan faktlar beriladi: item.N.* — N-material (label — nomi): usable — yaroqli qoldiq, daily_rate — kunlik o‘rtacha sarf, days_left — necha kunga yetadi, suggested — buyurtma qilinadigan miqdor, packs — qadoqlar soni, expiring_unusable — 30 kun ichida ishlatilmay muddati o‘tadigan miqdor, out_of_stock=1 — tugagan; horizon.days — necha kunlik zaxira rejalashtirilgan.
-Avval eng shoshilinchlari: tugaganlar, 2 hafta ichida tugaydiganlar («2 hafta ichida tugaydi: …»), keyin muddati o‘tib ketadiganlar, keyin buyurtma.
+Avval eng shoshilinchlari: tugaganlar, tez tugaydiganlar («Tez orada tugaydi: Nom (days_left kun), …» — «hafta» deb yozma, faqat days_left qiymatini yoz), keyin muddati o‘tib ketadiganlar, keyin buyurtma.
 Har band bitta qisqa gap. Raqamlar: faqat faktlardagi qiymatlarni o‘zgartirmasdan yoz, o‘zing hisoblama; faktda yo‘q raqam (sana, narx) yozma. Har bandda ishlatgan faktlar kalitlarini fact_keys ga aynan yoz. Bemorlar va davolash haqida yozma.`;
 
 const n = (v: string | number) => String(Number(v));
