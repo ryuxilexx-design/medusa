@@ -298,6 +298,12 @@ export const inventoryItemCreateSchema = z.object({
   minimum_qty: qty.default(0),
   opening_qty: qty.default(0),
   active: z.boolean().default(true),
+  // warehouse (migration 030)
+  category: z.enum(['medicine', 'consumable', 'reagent', 'instrument', 'other']).default('consumable'),
+  storage: z.enum(['room', 'fridge', 'freezer']).default('room'),
+  controlled: z.boolean().default(false),
+  drug_id: uuid.nullable().optional(),
+  purchase_price: z.number().int('Narx tiyinda butun son bo‘lsin').min(0, 'Narx manfiy bo‘lmasin').max(1_000_000_000_00, 'Narx juda katta').default(0),
 });
 export const inventoryItemPatchSchema = inventoryItemCreateSchema.omit({ opening_qty: true }).partial();
 export const clinicPatchSchema = z.object({ name: trimmed(2, 120, 'Klinika nomi') });
@@ -308,6 +314,70 @@ export const inventoryMovementSchema = z.object({
     .refine((q) => Math.abs(q * 1000 - Math.round(q * 1000)) < 1e-6, 'Ko‘pi bilan 3 ta kasr xona'),
   reason: trimmed(3, 200, 'Sabab'),
   date: isoDate.optional(),
+});
+
+// ---------- Warehouse (migration 030, docs/WAREHOUSE.md) ----------
+/** A positive quantity with at most two decimals (the ledger stores numeric(12,2)). */
+const whQty = z.number({ invalid_type_error: 'Miqdorni kiriting' }).positive('Miqdor 0 dan katta bo‘lsin').max(1_000_000, 'Miqdor juda katta')
+  .refine((q) => Math.abs(q * 100 - Math.round(q * 100)) < 1e-6, 'Ko‘pi bilan 2 ta kasr xona');
+export const WAREHOUSE_PURPOSES = ['patient', 'procedure', 'department'] as const;
+export type WarehousePurpose = (typeof WAREHOUSE_PURPOSES)[number];
+
+export const whReceiptSchema = z.object({
+  branch_id: uuid,
+  supplier: trimmed(2, 120, 'Yetkazib beruvchi'),
+  invoice_no: trimmed(1, 40, 'Nakladnaya raqami'),
+  invoice_date: isoDate,
+  note: optionalText(300),
+  lines: z.array(z.object({
+    item_id: uuid,
+    batch_no: trimmed(1, 40, 'Seriya'),
+    expiry_date: isoDate.nullable().optional(),
+    qty: whQty,
+    unit_cost: z.number({ invalid_type_error: 'Narxni kiriting' }).int('Narx tiyinda butun son bo‘lsin').min(0, 'Narx manfiy bo‘lmasin').max(1_000_000_000_00, 'Narx juda katta'),
+  })).min(1, 'Kamida bitta qator kiriting').max(100, 'Qatorlar 100 tadan oshmasin'),
+});
+
+/** Who gets the items and what for. A patient purpose names the visit; a procedure purpose names the service order. */
+const purposeFields = {
+  purpose: z.enum(WAREHOUSE_PURPOSES, { errorMap: () => ({ message: 'Maqsadni tanlang' }) }),
+  department: trimmed(2, 80, 'Bo‘lim / xona'),
+  encounter_id: uuid.nullable().optional(),
+  order_id: uuid.nullable().optional(),
+  /** Used only when the visit has no ICD-10 code yet (the codes of a signed or saved note always win). */
+  icd_codes: z.array(z.string().regex(/^[A-Z][0-9]{2}(\.[0-9A-Z]{1,2})?$/, 'Noto‘g‘ri MKB-10 kodi')).max(5).default([]),
+  note: optionalText(300),
+};
+const lines = z.array(z.object({ item_id: uuid, qty: whQty })).min(1, 'Kamida bitta qator kiriting').max(50, 'Qatorlar 50 tadan oshmasin')
+  .refine((l) => new Set(l.map((x) => x.item_id)).size === l.length, 'Bir material ikki marta yozilgan');
+export const whRequestSchema = z.object({ branch_id: uuid, ...purposeFields, lines, draft: z.boolean().default(false) });
+/** Direct issue by the storekeeper (emergency): the same mandatory purpose, plus the person who took the items. */
+export const whDirectIssueSchema = z.object({ branch_id: uuid, ...purposeFields, lines, receiver_membership_id: uuid });
+export const whIssueSchema = z.object({
+  /** Quantities to issue now per request line (partial issue allowed); omitted = everything still open. */
+  lines: z.array(z.object({ line_id: uuid, qty: z.number().min(0, 'Miqdor manfiy bo‘lmasin').max(1_000_000, 'Miqdor juda katta') })).max(50).optional(),
+});
+export const whRejectSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
+export const whReturnSchema = z.object({ qty: whQty, reason: trimmed(3, 200, 'Sabab') });
+export const whVoidSchema = z.object({ reason: trimmed(5, 300, 'Sabab') });
+export const whWriteoffSchema = z.object({
+  branch_id: uuid,
+  reason: z.enum(['expired', 'damaged', 'lost', 'other'], { errorMap: () => ({ message: 'Sababni tanlang' }) }),
+  note: trimmed(3, 300, 'Izoh'),
+  commission: z.array(trimmed(3, 120, 'Komissiya a’zosi')).min(3, 'Komissiyada kamida 3 kishi bo‘lsin').max(5, 'Komissiya 5 kishidan oshmasin'),
+  lines: z.array(z.object({ batch_id: uuid, qty: whQty })).min(1, 'Kamida bitta qator kiriting').max(100, 'Qatorlar 100 tadan oshmasin')
+    .refine((l) => new Set(l.map((x) => x.batch_id)).size === l.length, 'Bir partiya ikki marta yozilgan'),
+});
+export const whDecisionSchema = z.object({ approve: z.boolean(), note: optionalText(300) });
+export const whCountStartSchema = z.object({ branch_id: uuid, scope: z.enum(['all', 'controlled']).default('all'), commission: z.array(trimmed(3, 120, 'Komissiya a’zosi')).max(5).default([]) });
+export const whCountLinesSchema = z.object({
+  lines: z.array(z.object({ line_id: uuid, counted_qty: z.number().min(0, 'Miqdor manfiy bo‘lmasin').max(1_000_000, 'Miqdor juda katta').nullable(), reason: optionalText(200) })).min(1).max(1000),
+});
+export const whFridgeSchema = z.object({
+  branch_id: uuid,
+  fridge: trimmed(1, 60, 'Muzlatkich'),
+  temperature: z.number({ invalid_type_error: 'Haroratni kiriting' }).min(-40, 'Harorat −40…+40 °C oralig‘ida').max(40, 'Harorat −40…+40 °C oralig‘ida'),
+  note: optionalText(200),
 });
 
 export const uziReportSchema = z.object({
@@ -378,7 +448,7 @@ export const staffDoctorSchema = z.object({
 
 export const staffCreateSchema = z.object({
   full_name: trimmed(3, 120, 'F.I.Sh.'),
-  role: z.enum(['manager', 'registrar', 'doctor', 'cashier', 'lab'], { errorMap: () => ({ message: 'Rolni tanlang' }) }),
+  role: z.enum(['manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper'], { errorMap: () => ({ message: 'Rolni tanlang' }) }),
   title: optionalText(80),
   login: loginField,
   branch_ids: z.array(uuid).min(1, 'Kamida bitta filialni tanlang'),
@@ -387,7 +457,7 @@ export const staffCreateSchema = z.object({
 
 export const staffUpdateSchema = z.object({
   full_name: trimmed(3, 120, 'F.I.Sh.').optional(),
-  role: z.enum(['manager', 'registrar', 'cashier', 'lab']).optional(), // doctor role is fixed at creation (linked doctor record)
+  role: z.enum(['manager', 'registrar', 'cashier', 'lab', 'storekeeper']).optional(), // doctor role is fixed at creation (linked doctor record)
   title: optionalText(80),
   login: loginField.optional(),
   branch_ids: z.array(uuid).min(1, 'Kamida bitta filialni tanlang').optional(),

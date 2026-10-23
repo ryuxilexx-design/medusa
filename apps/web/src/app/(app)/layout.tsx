@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Banknote, Boxes, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, Newspaper, ScanLine, Search, Settings,
+  BarChart3, Banknote, Boxes, PackageOpen, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, Newspaper, ScanLine, Search, Settings,
   Stethoscope, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
@@ -34,6 +34,7 @@ const MENU: Item[] = [
   entry('/diagnostics', 'nav.diagnostics', ScanLine, 'work'),
   entry('/news', 'nav.news', Newspaper, 'work'),
   entry('/cashier', 'nav.cashier', Wallet, 'work'),
+  entry('/materials', 'nav.materials', PackageOpen, 'work'),
   entry('/finance', 'nav.finance', Banknote, 'manage'),
   entry('/staff', 'nav.staff', UsersRound, 'manage'),
   entry('/inventory', 'nav.inventory', Boxes, 'manage'),
@@ -43,12 +44,13 @@ const MENU: Item[] = [
 ];
 const LABEL_OVERRIDE: Partial<Record<Role, Record<string, MessageKey>>> = {
   cashier: { '/finance': 'nav.myPayments' },
+  storekeeper: { '/inventory': 'nav.warehouse' },
   doctor: { '/reports': 'nav.myActivity', '/schedule': 'nav.mySchedule', '/patients': 'nav.myPatients' },
 };
 // the phone tab bar has room for one short word under each icon («Umumiy ko‘rinish» does not fit)
 const TAB_SHORT: Partial<Record<MessageKey, MessageKey>> = {
   'nav.dashboard': 'nav.tab.dashboard', 'nav.schedule': 'nav.tab.schedule', 'nav.doctor': 'nav.tab.doctor',
-  'nav.myPatients': 'nav.tab.myPatients', 'nav.mySchedule': 'nav.tab.mySchedule', 'nav.myPayments': 'nav.tab.myPayments',
+  'nav.myPatients': 'nav.tab.myPatients', 'nav.materials': 'nav.tab.materials', 'nav.warehouse': 'nav.tab.warehouse', 'nav.mySchedule': 'nav.tab.mySchedule', 'nav.myPayments': 'nav.tab.myPayments',
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {

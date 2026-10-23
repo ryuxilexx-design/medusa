@@ -15,7 +15,7 @@ const PAGE_CSS: Record<PaperSize, string> = {
   ticket: '@media print { @page { size: 58mm auto; margin: 3mm; } }',
 };
 
-export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, paper = 'A4', toolbar, children }: {
+export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, paper = 'A4', toolbar, info, children }: {
   title: string; number: string; date: string | Date; branch?: string; patient: any; responsible: string; status: string; draft?: boolean; children: React.ReactNode;
   /** Label of the fourth patient-box cell (default «Holat:»). */
   statusLabel?: string;
@@ -24,6 +24,8 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
   paper?: PaperSize;
   /** Extra controls in the on-screen toolbar (never printed), e.g. the paper switch. */
   toolbar?: React.ReactNode;
+  /** A document that is not about one patient (warehouse acts): these label/value cells replace the patient box. */
+  info?: [string, React.ReactNode][];
 }) {
   const me = useMeQuery();
   const t = useT();
@@ -74,12 +76,16 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
             <h1 className="text-xl font-bold">{title}</h1>
             {draft && <span className="rounded border-[3px] border-amber-500 px-3 py-1 text-xl font-black text-amber-700">{t('print.draft')}</span>}
           </div>
-          <section className="print-avoid-break mt-3 grid grid-cols-2 gap-x-6 rounded border border-slate-300 p-3 text-[0.8125rem]">
+          {info ? (
+            <section className="print-avoid-break mt-3 grid grid-cols-2 gap-x-6 gap-y-0.5 rounded border border-slate-300 p-3 text-[0.8125rem]">
+              {info.map(([k, v]) => <div key={k}><span className="text-slate-600">{k}</span> <b>{v}</b></div>)}
+            </section>
+          ) : <section className="print-avoid-break mt-3 grid grid-cols-2 gap-x-6 rounded border border-slate-300 p-3 text-[0.8125rem]">
             <div><span className="text-slate-600">{t('print.patient')}</span> <b>{fullName(patient, true)}</b></div>
             <div><span className="text-slate-600">{t('print.patientId')}</span> <b>{pid(patient?.patient_number)}</b></div>
             <div><span className="text-slate-600">{t('print.birthDate')}</span> {fmtDate(patient?.birth_date)}</div>
             <div><span className="text-slate-600">{statusLabel ?? t('print.status')}</span> <b>{status}</b></div>
-          </section>
+          </section>}
           <div className="mt-4">{children}</div>
           {footer ? <footer className="print-avoid-break mt-8">{footer}{demo && <p className="mt-3 text-right text-xs text-slate-600">{t('print.demoFooter')}</p>}</footer> : (
             <footer className="print-avoid-break mt-10 flex items-end justify-between border-t border-slate-300 pt-3 text-xs text-slate-600">

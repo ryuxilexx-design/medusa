@@ -86,4 +86,4 @@ export function useLogout() {
   };
 }
 
-export const HOME_BY_ROLE: Record<Role, string> = { manager: '/dashboard', registrar: '/schedule', doctor: '/doctor', cashier: '/cashier', lab: '/lab' };
+export const HOME_BY_ROLE: Record<Role, string> = { manager: '/dashboard', registrar: '/schedule', doctor: '/doctor', cashier: '/cashier', lab: '/lab', storekeeper: '/inventory' };

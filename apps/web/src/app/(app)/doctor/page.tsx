@@ -14,6 +14,7 @@ import { IntakePanel } from '@/components/intake-panel';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { NewsCard } from '@/components/news-card';
 import { DocumentsCard } from '@/components/documents-card';
+import { EncounterMaterials } from '@/components/warehouse/encounter-materials';
 import { AllergiesPanel } from '@/components/allergies';
 import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
@@ -382,6 +383,8 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
           </ul>
         )}
       </Card>
+
+      <EncounterMaterials encounterId={encounterId} icdDraft={form.icd10.map((x) => x.code)} />
 
       {enc.data.patient?.id && <Card><AllergiesPanel patientId={enc.data.patient.id} legacyNote={enc.data.patient.allergy_note} /></Card>}
 

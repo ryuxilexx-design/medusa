@@ -4,6 +4,12 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Ombor: omborchi roli, partiyalar, talabnomalar, nazoratdagi dorilar (migratsiya 030, `docs/WAREHOUSE.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| Yangi rol **Omborchi** (`storekeeper`, demo kartasi «Omborchi» — Sherzod Qodirov): faqat «Ombor» bo‘limi; bemor kartasi, qabul, kassa, klinik qayd — 403. Partiyalar (seriya, muddat, narx), kirim hujjati, FEFO bo‘yicha berish (muddati o‘tgan partiya hech qachon), shifokor/laboratoriya talabnomasi (qoralama → yuborilgan → qisman / to‘liq berilgan, rad, bekor), shoshilinch to‘g‘ridan-to‘g‘ri berish; **har chiqimda kim oldi va nima uchun** (bemor qabuli + MKB-10, muolaja buyurtmasi yoki bo‘lim) — bazada CHECK; qaytarish o‘sha partiyaga; hisobdan chiqarish akti (komissiya ≥ 3, tuzgan odam tasdiqlamaydi); nazoratdagi dori (tramadol): rahbar tasdig‘i + omborchi berishi, jurnal va chop etish; daftar append-only, faqat bir marta bekor qilish; inventarizatsiya (butun yoki oylik nazoratdagi) → tuzatish harakatlari; muzlatkich harorati jurnali; sarf hisobotlari (shifokor, bemor, tashxis, muolaja, bo‘lim, material), CSV ≤ 1 yil; shifokor qabulida «Materiallar» kartasi va «Material so‘rash», «Talabnomalarim». Bemorga material uchun hisob avtomatik qo‘yilmaydi | Ishlaydi (**farmatsevt va yurist ko‘rib chiqishi kerak**: `docs/WAREHOUSE.md` §4) | API test `warehouse.test.mjs` (14 ta): rol matritsasi, boshqa klinika 404, filial 403, kirim, FEFO va muddati o‘tgan partiya, majburiy maydonlar (API va trigger), talabnoma va qisman berish, qaytarish, akt va ikkinchi imzo, nazoratdagi dori va append-only, poyga (oxirgi dona), inventarizatsiya, hisobot = daftar, CSV chegarasi, harorat, audit. Brauzer: `e2e/warehouse.mjs` (16 tekshiruv), skrinshotlar 1366×768 va 390 px, uz + ru |
+
 ## 000000000000000000. 0.17: DMED / Raqamli sog‘liqni saqlash platformasiga tayyor qatlam (PQ-170)
 
 | Nima | Holat | Tekshiruv |
@@ -367,7 +373,7 @@ Sinov paytida topilgan va tuzatilgan xatolar:
 | M-10 Kassa | Ishlaydi | 0.6: smena va qaytarish; chegirma oqimi soddalashtirilgan (1.3) |
 | M-11 Moliya | Ishlaydi | 0.6: xarajat kiritish/bekor qilish, smenalar, qaytarishlar, sof natija |
 | M-12 Xodimlar, ulush | Ishlaydi (P1) | 0.2: xodim qo‘shish/tahrirlash/parol tiklash/faolsizlantirish. 0.2: haftalik jadvalni tahrirlash. Bir martalik istisnolar (ta’til), payroll — Rejada |
-| M-13 Ombor | Ishlaydi (P1): tovar qo‘shish/tahrirlash, kirim/chiqim | Avtomatik yechish, partiya — Rejada |
+| M-13 Ombor | Ishlaydi: omborchi roli, partiyalar (FEFO, muddat), kirim, talabnoma, qaytarish, hisobdan chiqarish, nazoratdagi dorilar jurnali, inventarizatsiya, harorat, sarf hisobotlari (`docs/WAREHOUSE.md`) | Xizmatga material normasi va bemor hisobiga avtomatik qo‘shish, filiallar orasida ko‘chirish, oylik inventarizatsiya eslatmasi — Rejada |
 | M-14 Sozlamalar | Ishlaydi: klinika nomi, filiallar, xonalar, xizmatlar (narx, filial narxi, ulush) — rahbar o‘zi kiritadi | Logotip, shablon maydonlari, modul ko‘rinishi, laboratoriya natija shaklini formada tahrirlash — Rejada |
 | AI-01 qaydni tartiblash | Namunaviy AI | `AI_MODE=sample` (standart): faqat demo matni. `live` rejim kodda bor, **haqiqiy kalit bilan sinalmagan** |
 | AI-02 rahbar savollari | Ishlaydi (AI emas) | SQL natijasidan shablon; ekranda «bu AI emas» deb yozilgan |

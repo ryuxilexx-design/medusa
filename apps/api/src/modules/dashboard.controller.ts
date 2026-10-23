@@ -71,9 +71,8 @@ export class DashboardController {
       `SELECT count(*) FILTER (WHERE status = 'draft_result')::int AS draft, count(*) FILTER (WHERE status IN ('ordered','sample_collected'))::int AS waiting
          FROM service_orders WHERE tenant_id = $1 AND branch_id = ANY($2) AND category = 'lab'`, [ctx.tenantId, branches]))!;
     const lowStock = await this.db.rows(
-      `SELECT i.id, i.name, i.unit, i.minimum_qty, i.opening_qty + coalesce(sum(CASE WHEN m.type = 'in' THEN m.quantity ELSE -m.quantity END),0) AS qty
-         FROM inventory_items i LEFT JOIN inventory_movements m ON m.item_id = i.id WHERE i.tenant_id = $1 AND i.branch_id = ANY($2)
-        GROUP BY i.id HAVING i.opening_qty + coalesce(sum(CASE WHEN m.type = 'in' THEN m.quantity ELSE -m.quantity END),0) < i.minimum_qty ORDER BY i.name`, [ctx.tenantId, branches]);
+      `SELECT * FROM (SELECT i.id, i.name, i.unit, i.minimum_qty, coalesce((SELECT sum(b.qty) FROM inventory_batches b WHERE b.item_id = i.id),0) AS qty
+         FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active) x WHERE qty < minimum_qty ORDER BY name LIMIT 100`, [ctx.tenantId, branches]);
     const cancelledWithPayments = (await this.db.one(
       `SELECT count(DISTINCT a.id)::int AS n FROM appointments a JOIN invoices i ON i.appointment_id = a.id
         WHERE a.tenant_id = $1 AND a.branch_id = ANY($2) AND a.status = 'cancelled' AND i.status <> 'void' AND (i.paid_amount > 0 OR i.status = 'unpaid')

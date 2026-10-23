@@ -16,7 +16,8 @@ export const SECTION_ROLES = {
   '/cashier': ['cashier', 'manager', 'registrar'],
   '/finance': ['manager', 'cashier'],
   '/staff': ['manager'],
-  '/inventory': ['manager'],
+  '/inventory': ['manager', 'storekeeper'],
+  '/materials': ['doctor', 'lab'],
   '/cameras': ['manager'],
   '/reports': ['manager', 'doctor'],
   '/settings': ['manager'],
@@ -37,6 +38,7 @@ const DETAIL_ROLES: Record<string, Role[]> = {
   '/print/consent/': ['manager', 'registrar', 'doctor', 'cashier', 'lab'],
   '/print/patient/': ['manager', 'registrar', 'doctor'],
   '/print/appointment/': ['manager', 'registrar'],
+  '/print/warehouse/': ['storekeeper', 'manager'],
 };
 
 /** May this role open this path? Unknown paths are allowed (Next shows its own 404). */

@@ -100,6 +100,12 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 
 ### 8. Kengayish (8:00–9:00) · Oyna 1
 - **Ombor** → «Kam qolganlar» (4 ta; dashboard ogohlantirishi bilan bir xil).
+- **Ombor (omborchi)** (1,5 daqiqa; boshqa profilda «Omborchi» kartasi — menyuda faqat «Ombor»):
+  1. **Talabnomalar** → shifokorning bugungi talabnomasi (Lidokain, Natriy xlorid; bemor va MKB-10 kodi bilan) → **Berish**. «Qaysi partiyadan berildi» — eng erta muddatli partiya avtomatik (FEFO).
+  2. **Muddati o‘tayotganlar** → «Bioximiya kalibratori» partiyasi muddati o‘tgan (qizil) — u hech kimga berilmaydi; «Glyukoza test-polosalari» 20 kun qoldi.
+  3. **Nazoratdagi dorilar** → Tramadol jurnali: kirim, chiqim, qoldiq, bemor #raqami, ikki imzo (omborchi + rahbar), qaytarilgan ampula → **Chop etish**.
+  4. Oyna 1 (Rahbar) → **Ombor → Hisobdan chiqarish** → Akt №1 (komissiya 3 kishi, omborchi tuzgan) → **Tasdiqlash**. **Hisobotlar** → «Tashxis (MKB-10)» bo‘yicha: qaysi kasallikka qancha material ketgani.
+  Ayting: «Har bir chiqimda kim olgani va nima uchun — bemor, qabul, tashxis yoki muolaja — majburiy. Yozuv o‘chirilmaydi, faqat sabab bilan bekor qilinadi.»
 - **Xodimlar** → *Akmal Rasulov* → ish jadvali, bugungi qabullar, hisoblangan ulush. **Jadvalni tahrirlash** → kun, filial, xona, ish vaqti va tanaffus; kelgusi qabulga to‘g‘ri keladigan kunni o‘chirsangiz, tizim o‘sha qabullarni ro‘yxat qilib ko‘rsatadi (saqlamasdan **Bekor qilish**).
 - **Sozlamalar** → **Xizmatlar** → narxni o‘zgartirish mumkin (eski hisoblar o‘zgarmaydi) → **Audit jurnali**: namoyishdagi barcha amallar.
 
