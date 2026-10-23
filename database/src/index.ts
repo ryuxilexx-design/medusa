@@ -272,6 +272,9 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     // the clinic's SMS gateway account (migration 022) survives too; the delivery log starts over
     const hasSms = (await client.query(`SELECT to_regclass('sms_settings') IS NOT NULL AS ok`)).rows[0].ok;
     const smsSettings = hasSms ? (await client.query('SELECT * FROM sms_settings')).rows : [];
+    // and the DMED connection settings (migration 029); the outbox starts over
+    const hasDhp = (await client.query(`SELECT to_regclass('dhp_settings') IS NOT NULL AS ok`)).rows[0].ok;
+    const dhpSettings = hasDhp ? (await client.query('SELECT * FROM dhp_settings')).rows : [];
     const all = ['sessions', ...TABLES_IN_INSERT_ORDER].reverse();
     await client.query(`TRUNCATE ${all.join(', ')} RESTART IDENTITY CASCADE`);
     const counts: Record<string, number> = {};
@@ -288,6 +291,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     const keptBotIds = new Set(keptBots.map((b) => b.id));
     await insertRows(client, 'telegram_chats', chats.filter((c) => keptBotIds.has(c.bot_id)));
     await insertRows(client, 'sms_settings', smsSettings.filter((s) => tenantIds.has(s.tenant_id)));
+    await insertRows(client, 'dhp_settings', dhpSettings.filter((s) => tenantIds.has(s.tenant_id)));
     // templates and phrases are not part of the seed tables (a static list, no PRNG): the starter set comes back after the wipe
     for (const t of seed.tenants) await ensureStarterTemplates(client, t.id as string);
     // Data and clock are reset together: the demo starts again at DEMO_DATE + DEMO_TIME.
