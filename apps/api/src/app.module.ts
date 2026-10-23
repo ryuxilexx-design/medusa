@@ -26,7 +26,6 @@ import { TelegramController } from './telegram/telegram.controller';
 import { SmsController } from './sms/sms.controller';
 import { SmsSender } from './sms/transport';
 import { DocumentsController } from './modules/documents.controller';
-import { AllergiesController, DrugsController } from './modules/drugs.controller';
 import { CashController } from './modules/cash.controller';
 import { DepositsController } from './modules/deposits.controller';
 import { NoteTemplatesController, QuickPhrasesController } from './modules/templates.controller';
@@ -43,6 +42,7 @@ import { NewsService } from './ai/news';
 import { NewsWorker } from './ai/news-worker';
 import { FiscalController } from './fiscal/fiscal.controller';
 import { FiscalWorker } from './fiscal/worker';
+import { AllergiesController, DrugsController } from './modules/drugs.controller';
 import { DhpController } from './dhp/dhp.controller';
 import { DhpWorker } from './dhp/worker';
 
@@ -62,7 +62,7 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, DiagnosticsController, AiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController], DrugsController, AllergiesController, CameraIsapiController],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, FiscalController, DocumentsController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController],
   providers: [Db, BotEngine, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
 })
 export class AppModule implements NestModule {
