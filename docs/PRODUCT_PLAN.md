@@ -29,10 +29,13 @@ Natija: API testlari 157/157, E2E 152 ✓ (13 suite), typecheck toza; lokal demo
   jo‘natuvchi nomini operatorlarda ro‘yxatdan o‘tkazish.
 - DMED: shifokor hisoblari (hozir), keyin token orqali integratsiya; e-retsept; PQ-170 bo‘yicha DHP/FHIR almashinuv
   2027-04-01 gacha.
-- Shaxsiy ma’lumotlar: bazani reestrga olish (VM-71), rozilik matni (yurist), bemorni anonimlashtirish/eksport.
+- Shaxsiy ma’lumotlar: bazani reestrga olish (VM-71), rozilik matni (yurist). **Bajarildi:** bemor kartasi chopi, to‘liq ma’lumot eksporti (rahbar, muhrlangan fayl), anonimlashtirish (qaytarib bo‘lmaydi, tibbiy yozuvlar saqlanadi).
 - Qarz/oldindan to‘lov, xizmat miqdori, qator bo‘yicha qaytarish, eksportlar (CSV/XLSX), ESF (yuridik shaxslar).
 
 ## 3-bosqich — «shifokor faqat tasdiqlaydi» (4–6 hafta)
+
+**Bajarildi (2026-10-23):** 12 ta boshlang‘ich qayd shabloni (mutaxassislik bo‘yicha, shifokor tekshiruvidan o‘tmagan), tez iboralar, shablondan buyurtma *taklifi*, qayta qabulni imzodan bir bosishda band qilish. Qoldi: ovozdan matn, dori lug‘ati + allergiya tekshiruvi, avto-kodlash.
+
 
 Ovozdan matn (o‘zbek/rus), mutaxassislik shablonlari va tez iboralar, yuqori ishonchli avto-kodlash (bir bosish),
 tashxisdan buyurtma to‘plami taklifi, imzodan hujjat va qayta qabul avto-to‘ldirish, dori lug‘ati + allergiya
