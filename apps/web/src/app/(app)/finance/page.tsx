@@ -1,6 +1,5 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Banknote, CreditCard, Landmark, PiggyBank, Plus, Search, Wallet } from 'lucide-react';
@@ -10,7 +9,7 @@ import { fmtDate, fmtDateTime, formatSom, fullName, pid } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, StatCard, Table, Tabs, Td, Th, Toolbar } from '@/components/ui';
+import { Button, Card, cx, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Select, StatCard, Table, Tabs, Td, TextLink, Th, Toolbar } from '@/components/ui';
 import { InvoiceStatus } from '@/components/status';
 import { CsvLink, DebtorsDepositsRow, ExpenseModal, ExpensesTab, FinanceStats, FootRow, PeriodPicker, RefundsTab, ShiftsTab, StatRow } from '@/components/finance-extra';
 import { StatMoney } from '@/components/cash-shift';
@@ -78,7 +77,7 @@ function Finance() {
         {tab === 'payments' && <>
           <Toolbar actions={<CsvLink href={`/api/v1/payments/export.csv${qs(filters)}`} />}>
             {period}
-            <Select aria-label={t('cash.colMethod')} className="w-full sm:w-auto sm:min-w-[11.5rem]" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">{t('cash.allMethods')}</option>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>
+            <Select aria-label={t('cash.colMethod')} className="w-full sm:w-auto" value={method} onChange={(e) => setMethod(e.target.value)}><option value="">{t('cash.allMethods')}</option>{Object.keys(PAYMENT_METHOD_LABEL).map((k) => <option key={k} value={k}>{t(`payment.${k}` as MessageKey)}</option>)}</Select>
             {fiscal && <Select aria-label={t('cash.fiscal.title')} className="w-full sm:w-auto sm:min-w-[13rem]" value={fiscalFilter} onChange={(e) => setFiscalFilter(e.target.value)}><option value="">{t('cash.fiscal.filterAll')}</option><option value="missing">{t('cash.fiscal.filterMissing')}{pays.data ? ` (${pays.data.meta.fiscal_missing ?? 0})` : ''}</option></Select>}
           </Toolbar>
           {pays.isLoading ? <LoadingRows /> : pays.isError ? <ErrorState error={pays.error} onRetry={() => pays.refetch()} /> : !pays.data.data.length ? <EmptyState compact title={t('cash.noPaymentsPeriod')} /> : (() => {
@@ -89,11 +88,11 @@ function Finance() {
                 <thead><tr><Th className="hidden sm:table-cell">{t('cash.colReceipt')}</Th><Th className="hidden sm:table-cell">{t('cash.colTime')}</Th><Th>{t('cash.colPatient')}</Th><Th className="hidden md:table-cell">{t('cash.colInvoice')}</Th><Th className="hidden md:table-cell">{t('cash.colMethod')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{pays.data.data.map((p: any) => (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <Td className="hidden tabular-nums sm:table-cell"><Link href={`/print/payment/${p.id}`} target="_blank" className="text-brand-700 hover:underline">{p.receipt_number}</Link></Td>
+                    <Td className="hidden tabular-nums sm:table-cell"><TextLink href={`/print/payment/${p.id}`} target="_blank">{p.receipt_number}</TextLink></Td>
                     <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(p.paid_at)}</Td>
-                    <Td className="min-w-[9rem]"><div className="font-medium text-slate-900">{fullName(p)}</div><div className="text-[0.8125rem] text-slate-600">{pid(p.patient_number)}</div><div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden"><Link href={`/print/payment/${p.id}`} target="_blank" className="text-brand-700 hover:underline">{p.receipt_number}</Link> · {fmtDateTime(p.paid_at)}</div><div className="text-[0.8125rem] text-slate-600 md:hidden">№{p.invoice_number} · {t(`payment.${p.method}` as MessageKey)}</div></Td>
-                    <Td className="hidden md:table-cell"><Link href={`/cashier/${p.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{p.invoice_number}</Link>{showBranch && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.branch_name}</div>}</Td>
-                    <Td className="hidden md:table-cell"><div className="whitespace-nowrap">{t(`payment.${p.method}` as MessageKey)}</div>{!cashier && <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</div>}{fiscal && <div className="mt-1"><FiscalBadge f={p.fiscal} /></div>}</Td>
+                    <Td className="min-w-[9rem]"><div className="font-medium text-slate-900">{fullName(p)}</div><div className="text-small text-slate-600">{pid(p.patient_number)}</div><div className="text-small tabular-nums text-slate-600 sm:hidden"><TextLink href={`/print/payment/${p.id}`} target="_blank">{p.receipt_number}</TextLink> · {fmtDateTime(p.paid_at)}</div><div className="text-small text-slate-600 md:hidden">№{p.invoice_number} · {t(`payment.${p.method}` as MessageKey)}</div></Td>
+                    <Td className="hidden md:table-cell"><TextLink href={`/cashier/${p.invoice_id}`} className="whitespace-nowrap">№{p.invoice_number}</TextLink>{showBranch && <div className="whitespace-nowrap text-small text-slate-600">{p.branch_name}</div>}</Td>
+                    <Td className="hidden md:table-cell"><div className="whitespace-nowrap">{t(`payment.${p.method}` as MessageKey)}</div>{!cashier && <div className="whitespace-nowrap text-small text-slate-600">{p.cashier_name}</div>}{fiscal && <div className="mt-1"><FiscalBadge f={p.fiscal} /></div>}</Td>
                     <Td right className="font-medium">{formatSom(p.amount)}</Td>
                   </tr>
                 ))}</tbody>
@@ -104,7 +103,7 @@ function Finance() {
                       <td className="hidden border-b border-slate-100 sm:table-cell" />
                       <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2">{t(`payment.${m.method}` as MessageKey)} <span className="text-slate-600">({t('cash.nPayments', { n: m.n })})</span></td>
                       {gap.slice(2).map((g, i) => <td key={i} className={cx('border-b border-slate-100', g.className)} />)}
-                      <td className="whitespace-nowrap border-b border-slate-100 px-3 py-2 text-right tabular-nums">{formatSom(Number(m.sum))}</td>
+                      <td className="whitespace-nowrap border-b border-slate-100 py-2 pl-3 pr-5 text-right tabular-nums">{formatSom(Number(m.sum))}</td>
                     </tr>
                   ))}
                   <FootRow cells={[{ className: 'hidden sm:table-cell' }, { className: 'hidden sm:table-cell' }, { left: true, value: t('cash.footPayments', { n: pays.data.meta.total }) }, ...gap.slice(2), { value: formatSom(pays.data.meta.sum) }]} />
@@ -125,11 +124,11 @@ function Finance() {
               <thead><tr><Th>{t('cash.colPatient')}</Th><Th className="hidden sm:table-cell">{t('cash.colInvoice')}</Th><Th right className="hidden lg:table-cell">{t('cash.colAge')}</Th><Th right className="hidden sm:table-cell">{t('cash.colTotal')}</Th><Th right className="hidden sm:table-cell">{t('cash.colPaid')}</Th><Th right>{t('cash.colDue')}</Th><Th className="hidden md:table-cell">{t('cash.colPromise')}</Th></tr></thead>
               <tbody>{debts.data.data.map((i: any) => (
                 <tr key={i.id} className="hover:bg-slate-50">
-                  <Td className="min-w-[8rem]"><div className="font-medium text-slate-900">{fullName(i)}</div><div className="text-[0.8125rem] text-slate-600">{pid(i.patient_number)}</div><div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden"><Link href={`/cashier/${i.id}`} className="text-brand-700 hover:underline">№{i.invoice_number}</Link> · {fmtDate(i.created_at)}</div></Td>
-                  <Td className="hidden sm:table-cell"><Link href={`/cashier/${i.id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{i.invoice_number}</Link><div className="whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{fmtDate(i.created_at)}{showBranch && `, ${i.branch_name}`}</div></Td>
+                  <Td className="min-w-[8rem]"><div className="font-medium text-slate-900">{fullName(i)}</div><div className="text-small text-slate-600">{pid(i.patient_number)}</div><div className="text-small tabular-nums text-slate-600 sm:hidden"><TextLink href={`/cashier/${i.id}`}>№{i.invoice_number}</TextLink> · {fmtDate(i.created_at)}</div></Td>
+                  <Td className="hidden sm:table-cell"><TextLink href={`/cashier/${i.id}`} className="whitespace-nowrap">№{i.invoice_number}</TextLink><div className="whitespace-nowrap text-small tabular-nums text-slate-600">{fmtDate(i.created_at)}{showBranch && `, ${i.branch_name}`}</div></Td>
                   <Td right className={cx('hidden tabular-nums lg:table-cell', i.age_days > 30 ? 'font-semibold text-red-700' : i.age_days > 7 ? 'text-amber-700' : '')}>{t('cash.nDays', { n: i.age_days })}</Td>
                   <Td right className="hidden sm:table-cell">{formatSom(i.total)}</Td><Td right className="hidden sm:table-cell">{formatSom(i.paid_amount)}</Td><Td right className="font-semibold text-red-700">{formatSom(i.due)}</Td>
-                  <Td className="hidden md:table-cell">{i.promise_date ? <><span className="whitespace-nowrap tabular-nums">{fmtDate(i.promise_date)}</span>{i.promise_note && <div className="text-[0.8125rem] text-slate-600">{i.promise_note}</div>}</> : <span className="text-slate-600">—</span>}</Td>
+                  <Td className="hidden md:table-cell">{i.promise_date ? <><span className="whitespace-nowrap tabular-nums">{fmtDate(i.promise_date)}</span>{i.promise_note && <div className="text-small text-slate-600">{i.promise_note}</div>}</> : <span className="text-slate-600">—</span>}</Td>
                 </tr>
               ))}</tbody>
               <tfoot><FootRow cells={[{ left: true, value: t('cash.totalInvoices', { n: debts.data.meta.total }) }, { className: 'hidden sm:table-cell' }, { className: 'hidden lg:table-cell' }, { className: 'hidden sm:table-cell', value: formatSom(debts.data.meta.sums.total) }, { className: 'hidden sm:table-cell', value: formatSom(debts.data.meta.sums.paid) }, { className: 'text-red-700', value: formatSom(debts.data.meta.sums.due) }, { className: 'hidden md:table-cell' }]} /></tfoot>

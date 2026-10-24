@@ -7,7 +7,7 @@ import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contra
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Select, Table, Tabs, Td, Textarea, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Select, Table, Tabs, Td, Textarea, TextLink, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus, LabStatus, NoteStatus } from '@/components/status';
 import { PatientFormModal } from '@/components/patient-form';
 import { type BookingInit, BookingModal } from '@/components/booking';
@@ -62,7 +62,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
             <div className="min-w-0">
               <h1 className="text-xl font-bold leading-tight text-slate-900 [overflow-wrap:anywhere] sm:text-2xl">{fullName(pt, true)}</h1>
               {/* each fact carries its own separator, so a wrapped line never ends with a dangling dot */}
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-slate-700">
+              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-slate-700">
                 {[
                   <span key="id" className="font-semibold tabular-nums text-slate-900">{pid(pt.patient_number)}</span>,
                   !anonymised && <span key="birth" className="tabular-nums">{fmtDate(pt.birth_date)} ({ageFrom(pt.birth_date, me.today)})</span>,
@@ -87,7 +87,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
                   {pt.telegram_linked && <Badge tone="blue" icon={<Send className="h-3.5 w-3.5" />}>{t('registrar.telegramLinked')}</Badge>}
                   {pt.notice_channel === 'sms' && <Badge tone="blue" icon={<MessageSquareText className="h-3.5 w-3.5" />}>{t('registrar.noticeSms')}</Badge>}
                   {pt.notice_channel === null && !pt.telegram_linked && <Badge icon={<BellOff className="h-3.5 w-3.5" />}>{t('registrar.noticeNone')}</Badge>}
-                  {pt.source === 'telegram' && <span className="text-[0.8125rem] text-slate-600">{t('registrar.telegramCard')}</span>}
+                  {pt.source === 'telegram' && <span className="text-small text-slate-600">{t('registrar.telegramCard')}</span>}
                 </div>
               )}
             </div>
@@ -103,7 +103,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
         </div>
         {role === 'doctor' && (
           // a known allergy must never be missed: the same full-width red band as in the doctor workspace
-          <div role={pt.allergy_state === 'known' ? 'alert' : undefined} className={cx('flex flex-wrap items-center gap-2 px-4 py-2.5 text-[0.9375rem]',
+          <div role={pt.allergy_state === 'known' ? 'alert' : undefined} className={cx('flex flex-wrap items-center gap-2 px-4 py-2.5 text-body',
             pt.allergy_state === 'known' ? 'bg-red-700 font-bold text-white' : pt.allergy_state === 'denied' ? 'border-t border-slate-100 bg-slate-50 text-slate-800' : 'border-t border-amber-200 bg-amber-50 font-medium text-amber-900')}>
             <ShieldAlert className="h-5 w-5 shrink-0" />
             <span>{t('registrar.allergy', { state: t(`allergy.${pt.allergy_state}` as MessageKey) })}{pt.allergy_note ? `: ${pt.allergy_note}` : ''}</span>
@@ -157,7 +157,7 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
       <div className="space-y-5">
         <section>
-          <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.basicInfo')}</h3>
+          <h3 className="mb-2 text-body font-bold text-slate-900">{t('registrar.basicInfo')}</h3>
           {facts.length ? (
             <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200 px-3">
               {facts.map((f) => <div key={f.k} className="flex justify-between gap-3 py-2 text-sm"><dt className="shrink-0 text-slate-600">{f.k}</dt><dd className="min-w-0 break-words text-right font-medium text-slate-900">{f.v}</dd></div>)}
@@ -170,7 +170,7 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
         {['manager', 'registrar', 'doctor'].includes(role) && <PatientRights patient={pt} role={role} />}
       </div>
       <div className="min-w-0">
-        <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.timeline')}</h3>
+        <h3 className="mb-2 text-body font-bold text-slate-900">{t('registrar.timeline')}</h3>
         {!events.length ? <EmptyState compact title={t('registrar.noEvents')} /> : (
           <ol className="divide-y divide-slate-100 rounded-lg border border-slate-200">
             {events.slice(0, 30).map((e, i) => {
@@ -179,12 +179,12 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
                 <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5', e.href && 'hover:bg-slate-50')}>
                   <div className="min-w-[12rem] flex-1">
                     <p className="text-sm font-medium text-slate-900">{e.text}</p>
-                    <p className="mt-0.5 text-[0.8125rem] tabular-nums text-slate-600">{e.kind} · {fmtDateTime(e.at)}</p>
+                    <p className="mt-0.5 text-small tabular-nums text-slate-600">{e.kind} · {fmtDateTime(e.at)}</p>
                   </div>
                   <span className="shrink-0">{e.badge}</span>
                 </div>
               );
-              return <li key={i}>{e.href ? <Link href={e.href} className="block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{body}</Link> : body}</li>;
+              return <li key={i}>{e.href ? <Link href={e.href} className="block focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-focus">{body}</Link> : body}</li>;
             })}
           </ol>
         )}
@@ -231,11 +231,11 @@ function Labs({ labs, diagnostics, role }: { labs: any[]; diagnostics: any[]; ro
   if (!labs.length && !diagnostics.length) return <EmptyState title={t('registrar.noLabs')} />;
   return (
     <div className="space-y-3">
-      {role === 'manager' && labs.length > 0 && <p className="text-[0.8125rem] text-slate-600">{t('registrar.managerStatusOnly')}</p>}
+      {role === 'manager' && labs.length > 0 && <p className="text-small text-slate-600">{t('registrar.managerStatusOnly')}</p>}
       {labs.map((l) => (
         <div key={l.id} className="rounded-md border border-slate-200 p-3">
           <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 text-sm">
-            <div className="min-w-0 flex-1 basis-[12rem]"><b className="[overflow-wrap:anywhere]">{l.service_name}</b><span className="block text-[0.8125rem] text-slate-600">{t('registrar.orderedAt', { at: fmtDateTime(l.ordered_at) })}{l.ordered_by ? `, ${l.ordered_by}` : ''}</span></div>
+            <div className="min-w-0 flex-1 basis-[12rem]"><b className="[overflow-wrap:anywhere]">{l.service_name}</b><span className="block text-small text-slate-600">{t('registrar.orderedAt', { at: fmtDateTime(l.ordered_at) })}{l.ordered_by ? `, ${l.ordered_by}` : ''}</span></div>
             <span className="shrink-0"><LabStatus status={l.status} short={role === 'registrar'} /></span>
           </div>
           {l.values && l.status === 'verified' && <div className="mt-2"><div className="sm:hidden"><LabValues values={l.values} compact /></div><div className="hidden overflow-x-auto sm:block"><LabValues values={l.values} /></div><p className="mt-1 text-xs text-slate-600">{t('registrar.verifiedBy', { name: l.verified_by_name, at: fmtDateTime(l.verified_at) })}</p>{role === 'doctor' && <LabCommentary orderId={l.id} />}</div>}
@@ -244,7 +244,7 @@ function Labs({ labs, diagnostics, role }: { labs: any[]; diagnostics: any[]; ro
       {diagnostics.map((d) => (
         <div key={d.id} className="rounded-md border border-slate-200 p-3 text-sm">
           <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
-            <div className="min-w-0 flex-1 basis-[12rem]"><b className="[overflow-wrap:anywhere]">{d.service_name}</b><span className="block text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(d.ordered_at)}</span></div>
+            <div className="min-w-0 flex-1 basis-[12rem]"><b className="[overflow-wrap:anywhere]">{d.service_name}</b><span className="block text-small tabular-nums text-slate-600">{fmtDateTime(d.ordered_at)}</span></div>
             <span className="shrink-0"><NoteStatus status={d.report_status} /></span>
           </div>
           {d.report_status === 'signed' && <p className="mt-1"><span className="text-slate-600">{t('registrar.conclusion')}</span> {d.conclusion}</p>}
@@ -262,7 +262,7 @@ function Invoices({ invoices }: { invoices: any[] }) {
       <thead><tr><Th>{t('registrar.invoice')}</Th><Th>{t('registrar.status')}</Th><Th>{t('registrar.date')}</Th><Th>{t('registrar.services')}</Th><Th right>{t('registrar.total')}</Th><Th right className="hidden 2xl:table-cell">{t('registrar.paid')}</Th><Th right>{t('registrar.balance')}</Th></tr></thead>
       <tbody>{invoices.map((i) => (
         <tr key={i.id} className="hover:bg-slate-50">
-          <Td className="whitespace-nowrap"><Link href={`/cashier/${i.id}`} className="rounded font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">№{i.invoice_number}</Link></Td>
+          <Td className="whitespace-nowrap"><TextLink href={`/cashier/${i.id}`}>№{i.invoice_number}</TextLink></Td>
           <Td><InvoiceStatus status={i.status} /></Td>
           <Td className="whitespace-nowrap">{fmtDate(i.created_at)}</Td><Td className="min-w-[12rem]">{i.services}</Td>
           <Td right>{formatSom(i.total)}</Td><Td right className="hidden 2xl:table-cell">{formatSom(i.paid_amount)}</Td><Td right className={i.status !== 'void' && i.total - i.paid_amount > 0 ? 'font-medium text-red-700' : ''}>{i.status === 'void' ? '—' : formatSom(i.total - i.paid_amount)}</Td>
@@ -284,7 +284,7 @@ function Docs({ h, role }: { h: any; role: string }) {
     <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
       {docs.sort((a, b) => +new Date(b.date) - +new Date(a.date)).map((d) => (
         <li key={d.href} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-          <FileText className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 basis-[10rem] [overflow-wrap:anywhere]">{d.title}<span className="block text-[0.8125rem] tabular-nums text-slate-600">{fmtDate(d.date)}</span></span>
+          <FileText className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 basis-[10rem] [overflow-wrap:anywhere]">{d.title}<span className="block text-small tabular-nums text-slate-600">{fmtDate(d.date)}</span></span>
           <LinkButton size="sm" variant="ghost" className="ml-auto" href={d.href} target={d.href.startsWith('/print') ? '_blank' : undefined}>{t('registrar.open')}</LinkButton>
         </li>
       ))}

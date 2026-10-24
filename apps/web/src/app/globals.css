@@ -119,6 +119,12 @@ body {
 .card-flush:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
 .card-flush > :first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
 .card-flush > :last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+/* date fields: less side padding and a tight calendar icon, so «24.10.2026» never runs under the icon in a phone's
+   half-width column (the picker also opens from anywhere in the field, ui.tsx Input) */
+input[type='date'] { padding-inline: 0.625rem 0.375rem; }
+input[type='date']::-webkit-calendar-picker-indicator { margin-inline-start: 0.125rem; padding: 0.125rem; }
+/* a break in the schedule grid (and its legend swatch): grey/white stripes */
+.hatch { background: repeating-linear-gradient(45deg, rgb(241 245 249), rgb(241 245 249) 4px, #fff 4px, #fff 8px); }
 /* a horizontally scrolling strip (Tabs) shows a soft fade on the side that has more */
 .fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem); mask-image: linear-gradient(to right, transparent, #000 2.5rem); }
 .fade-r { -webkit-mask-image: linear-gradient(to left, transparent, #000 2.5rem); mask-image: linear-gradient(to left, transparent, #000 2.5rem); }

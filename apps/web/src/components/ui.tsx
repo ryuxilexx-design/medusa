@@ -48,7 +48,7 @@ export const Button = forwardRef<HTMLButtonElement, BtnProps>(function Button({ 
   // Liquid Glass: the primary action is tinted glass, the others neutral capsules (docs/UI_GUIDE.md)
   return (
     <button ref={ref} disabled={disabled || loading} aria-busy={loading || undefined}
-      className={cx(BTN_BASE, 'disabled:cursor-not-allowed', variant !== 'primary' && 'disabled:opacity-60 aria-busy:opacity-100', BTN_SIZE[size], BTN_VARIANT[variant], className)} {...rest}>
+      className={cx(BTN_BASE, 'disabled:cursor-not-allowed', variant !== 'primary' && 'disabled:!text-slate-500', BTN_SIZE[size], BTN_VARIANT[variant], className)} {...rest}>
       {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : icon}
       {children}
     </button>
@@ -75,7 +75,7 @@ type TextLinkProps = { children: React.ReactNode; className?: string; icon?: Rea
 export function TextLink(props: TextLinkProps) {
   const { children, className, icon, tone = 'brand' } = props;
   const cls = cx('relative inline-flex items-center gap-1.5 rounded font-semibold underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-60',
-    'after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[""]', FOCUS_RING,
+    'after:absolute after:inset-x-0 after:-inset-y-2.5 after:content-[""]', FOCUS_RING,
     tone === 'danger' ? 'text-red-700' : tone === 'muted' ? 'text-slate-700 hover:text-slate-900' : tone === 'ink' ? 'text-slate-900 hover:text-brand-700' : 'text-brand-700 hover:text-brand-800', className);
   if (props.href !== undefined) return <Link href={props.href} target={props.target} rel={props.target ? 'noopener' : undefined} className={cls}>{icon}{children}</Link>;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -126,10 +126,16 @@ type FieldSize = 'md' | 'sm';
 const FIELD_H: Record<FieldSize, string> = { md: 'h-control', sm: 'h-control-sm' };
 // native date/time pickers follow the person's interface language where the browser supports it
 const DATE_TYPES = new Set(['date', 'time', 'datetime-local', 'month', 'week']);
-export const Input = forwardRef<HTMLInputElement, Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> & { invalid?: boolean; size?: FieldSize }>(function Input({ className, invalid, size = 'md', ...p }, ref) {
+export const Input = forwardRef<HTMLInputElement, Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'> & { invalid?: boolean; size?: FieldSize }>(function Input({ className, invalid, size = 'md', onClick, ...p }, ref) {
   const f = useContext(FieldCtx);
   const { locale } = useI18n();
-  return <input ref={ref} lang={p.type && DATE_TYPES.has(p.type) ? LOCALE_TAG[locale] : undefined} className={cx(inputBase, W(className), FIELD_H[size], invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} aria-describedby={f.describedBy} {...p} />;
+  const picker = !!p.type && DATE_TYPES.has(p.type);
+  // a date/time field opens its picker from anywhere in the field, not only from the small calendar icon
+  const open = (e: React.MouseEvent<HTMLInputElement>) => {
+    onClick?.(e);
+    if (picker && !e.defaultPrevented && !p.readOnly && !p.disabled) { try { e.currentTarget.showPicker?.(); } catch { /* not allowed here: typing still works */ } }
+  };
+  return <input ref={ref} lang={picker ? LOCALE_TAG[locale] : undefined} onClick={open} className={cx(inputBase, W(className), FIELD_H[size], invalid ? 'border-red-600' : 'border-slate-300', className)} aria-invalid={invalid || undefined} aria-describedby={f.describedBy} {...p} />;
 });
 export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement> & { invalid?: boolean }>(function Textarea({ className, invalid, ...p }, ref) {
   const f = useContext(FieldCtx);
@@ -187,7 +193,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
       <div className="min-w-0"><h1 className="text-title font-bold tracking-tight text-slate-900">{title}</h1>{subtitle && <p className="mt-1 text-body text-slate-600">{subtitle}</p>}</div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -222,9 +228,10 @@ export function StatCard({ icon, label, value, sub, href, loading, tone = 'defau
 /** Filter bar at the top of a card: filters on the left, secondary actions (export…) on the right, one row when it fits. */
 export function Toolbar({ children, actions, className }: { children?: React.ReactNode; actions?: React.ReactNode; className?: string }) {
   return (
-    <div className={cx('flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-slate-100 px-5 py-3 first:rounded-t-[inherit]', className)}>
+    <div className={cx('flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-slate-100 px-5 py-3 first:rounded-t-[inherit]', className)}>
       <div className="flex min-w-0 flex-1 basis-full flex-wrap items-center gap-2 sm:basis-0">{children}</div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {/* when the filters wrap onto a second row, the actions stay on the first one (top right), not between the rows */}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2 self-start">{actions}</div>}
     </div>
   );
 }
@@ -359,7 +366,7 @@ export function Segmented<T extends string>({ value, onChange, options, label, s
             data-active={on} data-value={o.value} tabIndex={o.value === focusable ? 0 : -1} disabled={o.disabled} title={o.title} aria-label={o.ariaLabel} lang={o.lang} id={o.id} aria-controls={o.controls}
             onClick={() => { if (!on) onChange(o.value); }}
             className={cx('press relative z-raised inline-flex h-full min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-[""] disabled:cursor-not-allowed disabled:opacity-50',
-              FOCUS_RING_INSET, size === 'md' ? 'px-4 text-body' : 'px-3 text-sm', stretch && 'flex-1', on ? 'text-brand-800' : 'text-slate-700 hover:bg-white/50 hover:text-slate-900')}>
+              FOCUS_RING_INSET, size === 'md' ? 'px-3 text-body sm:px-4' : 'px-3 text-sm', stretch && 'flex-1', on ? 'text-brand-800' : 'text-slate-700 hover:bg-white/50 hover:text-slate-900')}>
             {o.icon}{o.label}
           </button>
         );
@@ -418,7 +425,8 @@ export function useModalClose() { return useContext(ModalCloseCtx); }
 export function ModalCancel({ children, ...rest }: Omit<BtnBase, 'onClick'> & { size?: 'sm' | 'compact' | 'md' }) {
   const t = useT();
   const close = useModalClose();
-  return <Button {...rest} data-cancel onClick={close}>{children ?? t('common.cancel')}</Button>;
+  // on a phone it sits under the full-width primary action as a text button, so the footer reads as one choice
+  return <Button {...rest} className={cx('max-sm:!border-transparent max-sm:!bg-transparent max-sm:!shadow-none max-sm:![backdrop-filter:none]', rest.className)} data-cancel onClick={close}>{children ?? t('common.cancel')}</Button>;
 }
 const TEXT_CONTROL = 'textarea:not([disabled]):not([readonly]),input:not([disabled]):not([readonly]):not([type=checkbox]):not([type=radio]):not([type=hidden]),select:not([disabled])';
 export function Modal({ open, onClose, title, children, footer, width = 'max-w-lg', dirty = false }: {
@@ -478,8 +486,9 @@ export function Modal({ open, onClose, title, children, footer, width = 'max-w-l
         )}
         <ModalCloseCtx.Provider value={tryClose}>
           <div data-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-          {/* on a phone the buttons share the row's width instead of wrapping onto two rows */}
-          {footer && <div data-modal-footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 rounded-b-panel border-t border-slate-100 bg-slate-50/70 px-5 py-3 [&>*]:flex-1 sm:[&>*]:flex-none">{footer}</div>}
+          {/* phone: the primary action on top at full width, «Bekor qilish» under it as a quiet text button (ModalCancel);
+              from sm up one row, right-aligned */}
+          {footer && <div data-modal-footer className="flex shrink-0 flex-col-reverse gap-1 rounded-b-panel border-t border-slate-100 bg-slate-50/70 px-5 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:gap-2 [&>*]:w-full sm:[&>*]:w-auto">{footer}</div>}
         </ModalCloseCtx.Provider>
       </div>
     </div>,

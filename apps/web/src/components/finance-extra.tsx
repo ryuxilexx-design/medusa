@@ -1,6 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Banknote, DoorOpen, Download, HandCoins, PiggyBank, Printer, ReceiptText, Scale, Undo2, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, EXPENSE_PAID_FROM_LABEL, type MessageKey } from '@meduza/contracts';
@@ -8,7 +7,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Select, SlidingPill, StatCard, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, buttonClass, cx, EmptyState, ErrorState, Field, FOCUS_RING, Input, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Segmented, Select, StatCard, Table, Td, TextLink, Th, useToast } from '@/components/ui';
 import { DateRange } from '@/components/date-range';
 import { CloseShiftModal, expenseCategoryLabel, StatMoney, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
@@ -16,40 +15,30 @@ import { useFiscalEnabled } from '@/components/fiscal';
 
 type T = ReturnType<typeof useT>;
 
-/** 2–4 key numbers in one row (one column on a phone, two on a tablet). */
+/** 2–4 key numbers in one row (one column under 360 px, two on a phone/tablet). */
 export function StatRow({ children, label, cols = 4 }: { children: React.ReactNode; label?: string; cols?: 2 | 4 }) {
-  return <div className={cx('mb-5 grid grid-cols-2 gap-3 sm:gap-4', cols === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-2')} role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
+  return <div className={cx('mb-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4', cols === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-2')} role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
 }
 
-/** A plain download link (the browser saves the file), dressed as the other glass capsules. */
-export function CsvLink({ href, label }: { href: string; label?: string }) {
+/** A plain download link (the browser saves the file) with the secondary Button look, the height of the row's fields. */
+export function CsvLink({ href, label, className }: { href: string; label?: string; className?: string }) {
   const t = useT();
   const title = label ?? t('cash.csvExport', { format: 'CSV' });
-  return <a href={href} download aria-label={title} title={title} className="glass-btn inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-full border-2 border-transparent px-5 text-[0.9375rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><Download className="h-4 w-4" />CSV</a>;
+  return <a href={href} download aria-label={title} title={title} className={buttonClass('secondary', 'md', cx('!px-4', className))}><Download className="h-4 w-4" />CSV</a>;
 }
 
-/** Period: two date fields + «Bugun / 7 kun / 30 kun» in one segmented control, all 44 px high. */
+/** Period: two date fields + «Bugun / 7 kun / 30 kun» (a segmented control; none chosen for another range), one control height. */
 export function PeriodPicker({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
   const t = useT();
   const { me } = useSession();
   const presets = [['cash.today', 0], ['cash.days7', 6], ['cash.days30', 29]] as const;
-  const presetGroup = useRef<HTMLDivElement>(null);
+  const chosen = presets.find(([, d]) => to === me.today && from === addDays(me.today, -d));
   return (
-    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-1.5">
       <DateRange from={from} to={to} onFrom={(v) => onChange(v, to)} onTo={(v) => onChange(from, v)} />
-      {/* the same capsule as the Tabs: inside a white card the segmented control is a soft pill, the chosen day white */}
-      <div ref={presetGroup} className="relative grid h-11 w-full grid-cols-3 gap-0.5 rounded-full bg-slate-100 p-1 sm:inline-grid sm:w-auto" role="group" aria-label={t('cash.period')}>
-        <SlidingPill container={presetGroup} active={`${from}-${to}`} className="rounded-full bg-white shadow-[0_2px_8px_rgba(15,23,42,0.12)]" />
-        {presets.map(([label, d]) => {
-          const on = to === me.today && from === addDays(me.today, -d);
-          return (
-            <button key={label} type="button" aria-pressed={on} data-active={on} onClick={() => onChange(addDays(me.today, -d), me.today)}
-              className={cx('relative z-[1] whitespace-nowrap rounded-full px-3.5 text-[0.9375rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', on ? 'text-brand-800' : 'text-slate-700 hover:text-slate-900')}>
-              {t(label)}
-            </button>
-          );
-        })}
-      </div>
+      <Segmented label={t('cash.period')} value={chosen ? String(chosen[1]) : ''} className="w-full sm:w-auto" stretch
+        onChange={(v) => onChange(addDays(me.today, -Number(v)), me.today)}
+        options={presets.map(([label, d]) => ({ value: String(d), label: t(label) }))} />
     </div>
   );
 }
@@ -58,7 +47,7 @@ export function PeriodPicker({ from, to, onChange }: { from: string; to: string;
 export function FootRow({ cells }: { cells: { span?: number; value?: React.ReactNode; left?: boolean; className?: string }[] }) {
   return (
     <tr className="bg-slate-50 font-semibold text-slate-900">
-      {cells.map((c, i) => <td key={i} colSpan={c.span} className={cx('border-b border-slate-100 px-3 py-3 whitespace-nowrap', c.left ? 'text-left' : 'text-right tabular-nums', c.className)}>{c.value}</td>)}
+      {cells.map((c, i) => <td key={i} colSpan={c.span} className={cx('border-b border-slate-100 px-3 py-3 whitespace-nowrap first:pl-5 last:pr-5', c.left ? 'text-left' : 'text-right tabular-nums', c.className)}>{c.value}</td>)}
     </tr>
   );
 }
@@ -92,7 +81,7 @@ export function DebtorsDepositsRow({ from, to, branchId, onDebtors }: { from: st
   const d = sum.data?.deposits;
   return (
     <StatRow cols={2} label={t('cash.debtors')}>
-      <button type="button" onClick={onDebtors} className="text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 rounded-[22px]">
+      <button type="button" onClick={onDebtors} className={cx('rounded-surface text-left', FOCUS_RING)}>
         <StatCard icon={<HandCoins />} label={t('cash.debtors')} loading={!debt.data} tone={debt.data?.sums.due ? 'danger' : 'default'} value={debt.data && <StatMoney tiyin={debt.data.sums.due} />}
           sub={a && t('cash.debtorsSub', { a: formatSom(a['0-7'].sum, false), b: formatSom(a['8-30'].sum, false), c: formatSom(a['31+'].sum, false) })} />
       </button>
@@ -112,11 +101,11 @@ export function RefundsTab({ from, to, branchId, showBranch, page, onPage }: { f
       <thead><tr><Th>{t('cash.colTime')}</Th><Th>{t('cash.colPatient')}</Th><Th>{t('cash.colInvoice')}</Th><Th>{t('cash.colMethodDrawer')}</Th><Th>{t('cash.colReason')}</Th><Th>{t('cash.colApprovedBy')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
       <tbody>{q.data.data.map((r: any) => (
         <tr key={r.id} className="hover:bg-slate-50">
-          <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}<div className="text-[0.8125rem] text-slate-600">№{r.refund_number}</div></Td>
-          <Td><div className="whitespace-nowrap font-medium text-slate-900">{fullName(r)}</div><div className="text-[0.8125rem] text-slate-600">{pid(r.patient_number)}</div></Td>
-          <Td><Link href={`/cashier/${r.invoice_id}`} className="whitespace-nowrap text-brand-700 hover:underline">№{r.invoice_number}</Link><div className="text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}{showBranch && ` · ${r.branch_name}`}</div></Td>
-          <Td>{t(`payment.${r.method}` as MessageKey)}{r.shift_number ? <div className="whitespace-nowrap text-[0.8125rem] text-slate-600">{t('cash.shiftRef', { n: r.shift_number, cashier: r.shift_cashier })}</div> : null}</Td>
-          <Td className="min-w-[12rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<div className="text-[0.8125rem] text-slate-600">{r.reason}</div></Td>
+          <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}<div className="text-small text-slate-600">№{r.refund_number}</div></Td>
+          <Td><div className="whitespace-nowrap font-medium text-slate-900">{fullName(r)}</div><div className="text-small text-slate-600">{pid(r.patient_number)}</div></Td>
+          <Td><TextLink href={`/cashier/${r.invoice_id}`} className="whitespace-nowrap">№{r.invoice_number}</TextLink><div className="text-small text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}{showBranch && ` · ${r.branch_name}`}</div></Td>
+          <Td>{t(`payment.${r.method}` as MessageKey)}{r.shift_number ? <div className="whitespace-nowrap text-small text-slate-600">{t('cash.shiftRef', { n: r.shift_number, cashier: r.shift_cashier })}</div> : null}</Td>
+          <Td className="min-w-[12rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<div className="text-small text-slate-600">{r.reason}</div></Td>
           <Td className="whitespace-nowrap">{r.approved_by_name}</Td>
           <Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td>
         </tr>
@@ -143,9 +132,9 @@ export function ShiftsTab({ from, to, branchId }: { from: string; to: string; br
         <tbody>{q.data!.map((s) => (
           <tr key={s.id} className="group hover:bg-slate-50">
             <Td className="hidden tabular-nums sm:table-cell">{s.number}</Td>
-            <Td className="min-w-[8rem]"><div className="font-medium text-slate-900">{s.cashier_name}</div><div className="text-[0.8125rem] text-slate-600">{s.branch_name}</div>
-              <div className="mt-1 text-[0.8125rem] tabular-nums text-slate-600 md:hidden">{fmtDateTime(s.opened_at)}{s.status === 'open' ? <> · <span className="font-semibold text-emerald-800">{t('cash.shiftOpenBadge')}</span></> : null}</div></Td>
-            <Td className="hidden whitespace-nowrap tabular-nums md:table-cell"><div>{fmtDateTime(s.opened_at)}</div><div className="text-[0.8125rem] text-slate-600">{s.status === 'open' ? <Badge tone="green" icon={<DoorOpen className="h-3.5 w-3.5" />}>{t('cash.shiftOpenBadge')}</Badge> : fmtDateTime((s as any).closed_at)}</div></Td>
+            <Td className="min-w-[8rem]"><div className="font-medium text-slate-900">{s.cashier_name}</div><div className="text-small text-slate-600">{s.branch_name}</div>
+              <div className="mt-1 text-small tabular-nums text-slate-600 md:hidden">{fmtDateTime(s.opened_at)}{s.status === 'open' ? <> · <span className="font-semibold text-emerald-800">{t('cash.shiftOpenBadge')}</span></> : null}</div></Td>
+            <Td className="hidden whitespace-nowrap tabular-nums md:table-cell"><div>{fmtDateTime(s.opened_at)}</div><div className="text-small text-slate-600">{s.status === 'open' ? <Badge tone="green" icon={<DoorOpen className="h-3.5 w-3.5" />}>{t('cash.shiftOpenBadge')}</Badge> : fmtDateTime((s as any).closed_at)}</div></Td>
             <Td right className="hidden lg:table-cell">{formatSom(s.totals.payments.cash.sum)}</Td><Td right>{formatSom(s.expected_cash)}</Td>
             <Td right className="hidden 2xl:table-cell">{s.counted_cash == null ? '—' : formatSom(s.counted_cash)}</Td>
             <Td right className={cx('hidden font-medium sm:table-cell', s.difference ? (s.difference > 0 ? 'text-amber-700' : 'text-red-700') : 'text-slate-600')}>{s.difference == null ? '—' : `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`}</Td>
@@ -174,7 +163,7 @@ export function ExpensesTab({ from, to, branchId, showBranch, page, onPage }: { 
       <thead><tr><Th className="hidden sm:table-cell">{t('cash.colDate')}</Th><Th>{t('cash.category')}</Th><Th className="hidden md:table-cell">{t('cash.note')}</Th><Th className="hidden lg:table-cell">{t('cash.colSource')}</Th><Th right>{t('cash.colSum')}</Th><Th className="right-0 z-10" /></tr></thead>
       <tbody>{q.data.data.map((e: any) => (
         <tr key={e.id} className={cx('group hover:bg-slate-50', e.status === 'void' && 'text-slate-600')}>
-          <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDate(e.occurred_at)}</Td><Td><Badge>{expenseCategoryLabel(t, e.category)}</Badge><div className="mt-1 text-[0.8125rem] text-slate-600"><span className="tabular-nums sm:hidden">{fmtDate(e.occurred_at)}{showBranch && ' · '}</span>{showBranch && e.branch_name}</div>{e.note && <div className="mt-1 text-[0.8125rem] text-slate-700 md:hidden">{e.note}</div>}</Td>
+          <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDate(e.occurred_at)}</Td><Td><Badge>{expenseCategoryLabel(t, e.category)}</Badge><div className="mt-1 text-small text-slate-600"><span className="tabular-nums sm:hidden">{fmtDate(e.occurred_at)}{showBranch && ' · '}</span>{showBranch && e.branch_name}</div>{e.note && <div className="mt-1 text-small text-slate-700 md:hidden">{e.note}</div>}</Td>
           <Td className="hidden min-w-[10rem] md:table-cell">{e.note}</Td><Td className="hidden min-w-[9rem] lg:table-cell">{expenseStatusCell(e, t)}</Td>
           <Td right className={e.status === 'void' ? 'line-through' : 'font-medium'}>{formatSom(e.amount)}</Td>
           <Td right className="sm:sticky sm:right-0 sm:bg-white sm:group-hover:bg-slate-50"><ExpenseRowActions e={e} /></Td>
@@ -199,7 +188,7 @@ export function ExpenseRowActions({ e }: { e: any }) {
   });
   if (e.status !== 'active') return null;
   // a closed shift's cash expense cannot change: say so in the row instead of a tooltip on a disabled button
-  if (e.shift_status === 'closed') return <span className="whitespace-nowrap text-[0.8125rem] text-slate-600">{t('cash.expenseLockedShort')}</span>;
+  if (e.shift_status === 'closed') return <span className="whitespace-nowrap text-small text-slate-600">{t('cash.expenseLockedShort')}</span>;
   return (
     <>
       <Button size="sm" variant="ghost" className="!text-slate-700 hover:!bg-red-50 hover:!text-red-700" icon={<Ban className="h-4 w-4" />} title={t('cash.cancelExpense')} aria-label={t('cash.cancelExpense')} onClick={() => setOpen(true)}><span className="hidden 2xl:inline">{t('cash.cancelExpense')}</span></Button>
@@ -260,8 +249,8 @@ export function ExpenseModal({ onClose }: { onClose: () => void }) {
 }
 
 export const expenseStatusCell = (e: any, t: T) => e.status === 'void'
-  ? <div><Badge icon={<Ban className="h-3.5 w-3.5" />}>{t('cash.expenseCancelled')}</Badge>{e.void_reason && <div className="mt-1 text-[0.8125rem] text-slate-600">{e.void_reason}</div>}</div>
-  : <span className="text-[0.8125rem] text-slate-600">{[
+  ? <div><Badge icon={<Ban className="h-3.5 w-3.5" />}>{t('cash.expenseCancelled')}</Badge>{e.void_reason && <div className="mt-1 text-small text-slate-600">{e.void_reason}</div>}</div>
+  : <span className="text-small text-slate-600">{[
       EXPENSE_PAID_FROM_LABEL[e.paid_from] ? t(`cash.paidFrom.${e.paid_from}` as MessageKey) : '',
       e.shift_number ? t('cash.shiftNo', { n: e.shift_number }) : '',
       e.created_by_name ?? '',

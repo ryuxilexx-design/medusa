@@ -8,7 +8,7 @@ import { ageFrom, fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Card, cx, EmptyState, ErrorState, Field, LinkButton, LoadingRows, Modal, PageHeader, Tabs, Textarea, useToast } from '@/components/ui';
+import { Alert, Button, Card, cx, EmptyState, ErrorState, Field, FOCUS_RING_INSET, LinkButton, LoadingRows, Modal, PageHeader, Tabs, Textarea, useToast } from '@/components/ui';
 import { NoteStatus } from '@/components/status';
 
 export default function DiagnosticsPage() { return <Suspense><Diagnostics /></Suspense>; }
@@ -52,11 +52,11 @@ function Diagnostics() {
             {!shown.length ? <EmptyState compact title={t('clinical.uzi.tabEmpty')} /> : (
               <ul className="divide-y divide-slate-100">{shown.map((o) => (
                 <li key={o.id}><button onClick={() => pick(o.id)} aria-current={sel === o.id || undefined}
-                  className={cx('flex w-full items-start gap-3 px-4 py-3 text-left sm:px-5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', sel === o.id && 'bg-brand-50 shadow-[inset_4px_0_0_#2d64bd] hover:bg-brand-50')}>
+                  data-no-press className={cx('flex w-full items-start gap-3 px-4 py-3 text-left sm:px-5', FOCUS_RING_INSET, sel === o.id ? 'bg-brand-50 shadow-selected' : 'hover:bg-slate-50')}>
                   <span className="min-w-0 flex-1">
-                    <span className="line-clamp-2 text-[0.9375rem] font-semibold leading-snug text-slate-900">{o.service_name}</span>
-                    <span className="mt-0.5 block text-[0.8125rem] leading-snug text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> <span className="whitespace-nowrap tabular-nums">{pid(o.patient_number)}</span></span>
-                    <span className="block text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(o.ordered_at)}</span>
+                    <span className="line-clamp-2 text-body font-semibold leading-snug text-slate-900">{o.service_name}</span>
+                    <span className="mt-0.5 block text-small leading-snug text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> <span className="whitespace-nowrap tabular-nums">{pid(o.patient_number)}</span></span>
+                    <span className="block text-small tabular-nums text-slate-600">{fmtDateTime(o.ordered_at)}</span>
                   </span>
                   <span className="shrink-0"><NoteStatus status={o.report_status} /></span>
                 </button></li>
@@ -97,7 +97,7 @@ function Report({ id }: { id: string }) {
       <div className="space-y-4 p-5">
         <div>
           <p className="text-base font-bold text-slate-900">{fullName(d)} <span className="font-normal text-slate-600">{pid(d.patient_number)}</span></p>
-          <p className="text-[0.9375rem] text-slate-600">{ageFrom(d.birth_date, me.today)} · {fmtDate(d.birth_date)}</p>
+          <p className="text-body text-slate-600">{ageFrom(d.birth_date, me.today)} · {fmtDate(d.birth_date)}</p>
           <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-0.5 text-sm sm:grid-cols-2">
             <div><dt className="inline text-slate-600">{t('clinical.f.orderedBy')}</dt> <dd className="inline text-slate-900">{d.ordered_by ?? '—'}</dd></div>
             <div><dt className="inline text-slate-600">{t('clinical.f.specialist')}</dt> <dd className="inline text-slate-900">{d.performer_name ?? '—'}</dd></div>
@@ -106,8 +106,8 @@ function Report({ id }: { id: string }) {
         </div>
         {!d.can_edit && !signed && <Alert tone="blue">{t('clinical.uzi.notSigned')}</Alert>}
         {signed && !d.can_edit && <>
-          <section><h3 className="text-sm font-semibold text-slate-800">{t('clinical.uzi.description')}</h3><p className="mt-1 whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-slate-900">{d.description || '—'}</p></section>
-          <section><h3 className="text-sm font-semibold text-slate-800">{t('clinical.uzi.conclusion')}</h3><p className="mt-1 whitespace-pre-wrap text-[0.9375rem] font-medium leading-relaxed text-slate-900">{d.conclusion || '—'}</p></section>
+          <section><h3 className="text-sm font-semibold text-slate-800">{t('clinical.uzi.description')}</h3><p className="mt-1 whitespace-pre-wrap text-body leading-relaxed text-slate-900">{d.description || '—'}</p></section>
+          <section><h3 className="text-sm font-semibold text-slate-800">{t('clinical.uzi.conclusion')}</h3><p className="mt-1 whitespace-pre-wrap text-body font-medium leading-relaxed text-slate-900">{d.conclusion || '—'}</p></section>
         </>}
         {d.can_edit && <>
           <Field label={t('clinical.uzi.description')} required error={err.description}>{(id) => <Textarea id={id} rows={6} value={desc} onChange={(e) => setDesc(e.target.value)} />}</Field>
@@ -117,7 +117,7 @@ function Report({ id }: { id: string }) {
       {/* the two decisions stay visible at the bottom of the report, even when the text is long */}
       {d.can_edit && (
         <div className="sticky bottom-[var(--tabbar)] flex flex-wrap items-center gap-x-4 gap-y-2 rounded-b-[inherit] border-t border-slate-200 bg-white px-5 py-3 lg:bottom-0">
-          <span id="sign-why" className="w-full text-[0.8125rem] text-slate-600 sm:w-auto sm:flex-1">{incomplete ? t('clinical.uzi.fillBoth') : ''}</span>
+          <span id="sign-why" className="w-full text-small text-slate-600 sm:w-auto sm:flex-1">{incomplete ? t('clinical.uzi.fillBoth') : ''}</span>
           <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
             <Button className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" icon={<Save className="hidden h-5 w-5 sm:block" />} disabled={!dirty} loading={save.isPending} onClick={() => save.mutate()}>{t('clinical.uzi.saveDraft')}</Button>
             <Button variant="primary" className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" icon={<CheckCircle2 className="hidden h-5 w-5 sm:block" />} disabled={incomplete} aria-describedby={incomplete ? 'sign-why' : undefined} onClick={() => setConfirm(true)}>{t('clinical.uzi.sign')}</Button>

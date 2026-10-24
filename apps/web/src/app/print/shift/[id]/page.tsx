@@ -1,13 +1,13 @@
 'use client';
 import { Fragment, use } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Printer } from 'lucide-react';
+import { Loader2, Printer, X } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api } from '@/lib/api';
 import { fmtDateTime, fmtTime, formatSom, fullName, pid } from '@/lib/format';
 import { useMeQuery } from '@/lib/session';
 import { BrandMark, BrandWordmark } from '@/components/logo';
-import { ErrorState } from '@/components/ui';
+import { Button, ErrorState } from '@/components/ui';
 import { expenseCategoryLabel } from '@/components/cash-shift';
 import { useT } from '@/lib/i18n';
 
@@ -18,7 +18,7 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
   const t = useT();
   const q = useQuery({ queryKey: ['cash-shift', id], queryFn: () => api(`/cash-shifts/${id}`).then((r) => r.data) });
   if (q.isLoading) return <div className="flex h-screen items-center justify-center text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /></div>;
-  if (q.isError) return <div className="mx-auto mt-20 max-w-md rounded-lg border bg-white"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div>;
+  if (q.isError) return <div className="surface mx-auto mt-20 max-w-md"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div>;
   const s = q.data, tot = s.totals;
   const pm = (m: string) => t(`payment.${m}` as MessageKey);
   // business time is the demo clock (server "now" + time elapsed since /me was fetched), never the browser date
@@ -29,9 +29,10 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
   const row = (k: string, v: string, strong = false) => <tr className={strong ? 'border-t border-slate-400 font-semibold' : ''}><td className="py-0.5 pr-4">{k}</td><td className="whitespace-nowrap py-0.5 text-right tabular-nums">{v}</td></tr>;
   return (
     <div className="min-h-screen bg-slate-200 py-6 print:bg-white print:py-0">
-      <div className="no-print mx-auto mb-3 flex max-w-[210mm] justify-between">
-        <button onClick={() => window.close()} className="min-h-10 text-sm font-semibold text-slate-700 hover:underline">{t('print.close')}</button>
-        <button onClick={() => window.print()} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-[0.9375rem] font-semibold text-white shadow hover:bg-brand-700"><Printer className="h-5 w-5" />{t('print.print')}</button>
+      {/* the same toolbar as every other print page (components/print-doc.tsx) */}
+      <div className="no-print mx-auto mb-3 flex max-w-[210mm] flex-wrap items-center justify-between gap-3 px-4 print:hidden">
+        <Button variant="ghost" icon={<X className="h-5 w-5" />} onClick={() => window.close()}>{t('print.close')}</Button>
+        <Button variant="primary" className="ml-auto" icon={<Printer className="h-5 w-5 shrink-0" />} onClick={() => window.print()}>{t('print.print')}</Button>
       </div>
       <article className="relative mx-auto max-w-[210mm] overflow-hidden bg-white p-[14mm] text-[0.8125rem] leading-relaxed text-slate-900 shadow-lg print:max-w-none print:p-0 print:shadow-none">
         {demo && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">

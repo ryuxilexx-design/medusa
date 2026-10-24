@@ -50,7 +50,7 @@ function Patients() {
             <Input className="pl-9 pr-12" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
             {search && (
               <button type="button" onClick={() => setSearch('')} aria-label={t('registrar.clear')} title={t('registrar.clear')}
-                className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-[0.625rem] text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-focus">
+                className="absolute right-0.5 top-1/2 flex h-control-sm w-control-sm -translate-y-1/2 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-focus">
                 <X className="h-5 w-5" />
               </button>
             )}

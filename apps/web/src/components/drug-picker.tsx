@@ -47,18 +47,18 @@ export function DrugCombobox({ value, drugId, onText, onPick, invalid, ariaLabel
   }
   return (
     <div className="relative" ref={box}>
-      <Input aria-label={ariaLabel} className={cx('h-10 text-sm', drugId && 'border-brand-300 bg-brand-50/40')} value={value} invalid={invalid} placeholder={placeholder}
+      <Input aria-label={ariaLabel} size="sm" className={cx('text-sm', drugId && 'border-brand-300 bg-brand-50/40')} value={value} invalid={invalid} placeholder={placeholder}
         onChange={(e) => { onText(e.target.value); setOpen(true); setActive(-1); }} onFocus={() => setOpen(true)} onKeyDown={onKey}
         role="combobox" aria-expanded={show} aria-controls={listId} aria-autocomplete="list" aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined} autoComplete="off" />
       {show && (
-        <ul role="listbox" id={listId} className="absolute left-0 z-30 mt-1 max-h-72 w-[min(26rem,calc(100vw-3rem))] overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+        <ul role="listbox" id={listId} className="absolute left-0 z-dropdown mt-1 max-h-72 w-[min(26rem,calc(100vw-3rem))] overflow-y-auto rounded-field border border-slate-200 bg-white py-1 text-sm shadow-popover">
           {search.isLoading && <li className="px-3 py-2 text-slate-600">{t('common.searching')}</li>}
           {search.data?.length === 0 && <li className="px-3 py-2 text-slate-600">{t('rx.notInList')}</li>}
           {rows.map((d, i) => (
             <li key={d.id}>
               <button type="button" role="option" id={`${listId}-${i}`} tabIndex={-1} aria-selected={i === active} onClick={() => pick(d)} onMouseEnter={() => setActive(i)}
                 ref={(el) => { if (i === active) el?.scrollIntoView({ block: 'nearest' }); }}
-                className={cx('flex min-h-11 w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-slate-50', i === active && 'bg-brand-50')}>
+                className={cx('flex min-h-control w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-slate-50', i === active && 'bg-brand-50')}>
                 <span className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
                   <b className="text-slate-900">{drugName(d, locale)}</b>
                   {d.atc && <span className="text-small tabular-nums text-slate-600">{d.atc}</span>}

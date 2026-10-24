@@ -41,7 +41,7 @@ try {
   await clickText(d, 'Bekor qilish', 'li button');
   await waitText(d, 'ni bekor qilish');
   await setInput(d, '[role=dialog] input', 'Doza qayta ko‘rib chiqildi');
-  await clickText(d, 'Bekor qilish', '[role=dialog] .justify-end button');
+  await clickText(d, 'Bekor qilish', '[role=dialog] [data-modal-footer] button');
   await waitText(d, 'Hujjat bekor qilindi');
   await settle(d);
   check(await d.evaluate(() => document.body.innerText.includes('Bekor qilingan: Doza qayta ko‘rib chiqildi')), 'Bekor qilindi, sababi ko‘rinadi');

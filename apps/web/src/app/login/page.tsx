@@ -55,7 +55,7 @@ export default function LoginPage() {
       <title>{`${t('login.pageTitle')} — Med.uz.ai`}</title>
       {/* one centred glass card: one way in at a time (demo roles or login + password), nothing competing beside it */}
       <div className="mx-auto w-full max-w-[34rem] px-3 pb-10 pt-4 sm:px-4 sm:pt-[6vh]">
-        <div className="glass p-4 sm:p-7 sm:!rounded-[2.5rem]">
+        <div className="glass p-4 sm:p-7 sm:!rounded-panel">
           <div className="flex flex-wrap items-center justify-between gap-3"><BrandLockup size="lg" /><LanguagePicker /></div>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">{t('login.heading')}</h1>
           <p className="mt-1 text-body text-slate-800">{t('login.tagline')}{demoMode && <> · <span className="font-semibold text-amber-900">{t('common.demoEnv')}</span></>}</p>
@@ -165,7 +165,7 @@ function StaffLogin() {
             </Select>}
           </Field>
         )}
-        <Button type="submit" variant="primary" className="min-h-12 w-full text-base" loading={busy}>{t('login.enter')}</Button>
+        <Button type="submit" variant="primary" className="w-full" loading={busy}>{t('login.enter')}</Button>
         <p className="text-small text-slate-600">{t('login.staffHint')} {t('login.forgot')}</p>
       </div>
     </form>

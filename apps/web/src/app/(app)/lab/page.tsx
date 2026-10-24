@@ -10,7 +10,7 @@ import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Card, cx, EmptyState, ErrorState, Input, LinkButton, LoadingRows, PageHeader, Pagination, Select, Tabs, Textarea, Toolbar, useToast } from '@/components/ui';
+import { Alert, Button, Card, cx, EmptyState, ErrorState, FOCUS_RING_INSET, Input, LinkButton, LoadingRows, PageHeader, Pagination, Select, Tabs, Textarea, Toolbar, useToast } from '@/components/ui';
 import { LabStatus } from '@/components/status';
 import { LabValues, refText } from '@/components/lab-values';
 
@@ -66,14 +66,14 @@ function Lab() {
                   <li key={o.id}>
                     {/* test and time on the first line; patient (and the status, unless a status tab already says it) on the second */}
                     <button onClick={() => pick(o.id)} aria-current={selected === o.id || undefined}
-                      className={cx('block w-full border-l-4 px-4 py-2.5 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', selected === o.id ? 'border-brand-600 bg-brand-50' : 'border-transparent hover:bg-slate-50')}>
+                      data-no-press className={cx('block w-full px-5 py-2.5 text-left', FOCUS_RING_INSET, selected === o.id ? 'bg-brand-50 shadow-selected' : 'hover:bg-slate-50')}>
                       {/* the test and the patient are read whole (two lines at most); time and status keep the right edge */}
                       <span className="flex items-start gap-3">
-                        <span className="line-clamp-2 min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug text-slate-900">{o.service_name}</span>
-                        <span className="shrink-0 pt-0.5 text-[0.8125rem] tabular-nums text-slate-600">{localDate(o.ordered_at) === me.today ? fmtTime(o.ordered_at) : fmtDateTime(o.ordered_at)}</span>
+                        <span className="line-clamp-2 min-w-0 flex-1 text-body font-semibold leading-snug text-slate-900">{o.service_name}</span>
+                        <span className="shrink-0 pt-0.5 text-small tabular-nums text-slate-600">{localDate(o.ordered_at) === me.today ? fmtTime(o.ordered_at) : fmtDateTime(o.ordered_at)}</span>
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="min-w-0 flex-1 basis-[11rem] text-[0.8125rem] leading-snug text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> <span className="whitespace-nowrap tabular-nums">{pid(o.patient_number)}</span>{showBranch && <span className="block">{o.branch_name}</span>}</span>
+                        <span className="min-w-0 flex-1 basis-[11rem] text-small leading-snug text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> <span className="whitespace-nowrap tabular-nums">{pid(o.patient_number)}</span>{showBranch && <span className="block">{o.branch_name}</span>}</span>
                         {!status && <span className="shrink-0"><LabStatus status={o.status} /></span>}
                       </span>
                     </button>
@@ -153,14 +153,14 @@ function OrderDetail({ id }: { id: string }) {
       <div className="space-y-4 p-5">
         <div>
           <p className="text-base text-slate-900"><b>{fullName(d)}</b> <span className="tabular-nums text-slate-600">{pid(d.patient_number)}</span> <span className="text-slate-400" aria-hidden="true">·</span> <span className="whitespace-nowrap tabular-nums">{ageFrom(d.birth_date, me.today)} ({fmtDate(d.birth_date)})</span></p>
-          <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[0.8125rem] text-slate-600">
+          <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-small text-slate-600">
             <div className="flex gap-1"><dt>{t('clinical.f.ordered')}</dt><dd className="tabular-nums text-slate-800">{fmtDateTime(d.ordered_at)}{d.ordered_by ? `, ${d.ordered_by}` : ''}</dd></div>
             <div className="flex gap-1"><dt>{t('clinical.f.branch')}</dt><dd className="text-slate-800">{d.branch_name}</dd></div>
             <div className="flex gap-1"><dt>{t('clinical.f.orderId')}</dt><dd className="font-mono text-slate-800">{d.id.slice(0, 8)}</dd></div>
           </dl>
         </div>
         {/* the workflow: done steps ticked, the current one blue (green once verified) */}
-        <ol className="flex flex-wrap items-center gap-x-1 gap-y-2 text-[0.8125rem]">
+        <ol className="flex flex-wrap items-center gap-x-1 gap-y-2 text-small">
           {steps.map((s, i) => {
             const done = i < at || (i === at && s === 'verified');
             return (
@@ -174,7 +174,7 @@ function OrderDetail({ id }: { id: string }) {
           })}
         </ol>
         {(d.collected_at || d.entered_at || d.verified_at) && (
-          <div className="space-y-0.5 text-[0.8125rem] text-slate-600">
+          <div className="space-y-0.5 text-small text-slate-600">
             {d.collected_at && <p>{t('clinical.lab.collectedAt', { at: fmtDateTime(d.collected_at), name: d.collected_by_name })}</p>}
             {d.entered_at && <p>{t('clinical.lab.enteredAt', { at: fmtDateTime(d.entered_at), name: d.entered_by_name })}</p>}
             {d.verified_at && <p className="font-medium text-emerald-800">{t('clinical.lab.verifiedAt', { at: fmtDateTime(d.verified_at), name: d.verified_by_name })}</p>}
@@ -184,7 +184,7 @@ function OrderDetail({ id }: { id: string }) {
         {!isLab && <Alert tone="blue">{t('clinical.lab.statusOnly')}</Alert>}
         {isLab && d.status === 'ordered' && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/60 px-4 py-3">
-            <p className="min-w-0 flex-1 basis-[14rem] text-[0.9375rem] text-slate-900">{t('clinical.lab.collectHint')}</p>
+            <p className="min-w-0 flex-1 basis-[14rem] text-body text-slate-900">{t('clinical.lab.collectHint')}</p>
             <Button variant="primary" className="max-sm:w-full" icon={<TestTube className="h-4 w-4" />} loading={collect.isPending} onClick={() => collect.mutate()}>{t('clinical.lab.collectAction')}</Button>
           </div>
         )}
@@ -192,7 +192,7 @@ function OrderDetail({ id }: { id: string }) {
           <div>
             <div className="-mx-1 overflow-x-auto px-1">
             <table className="w-full text-sm sm:min-w-[26rem]">
-              <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600"><th className="py-1 pr-2">{t('lab.param')}</th><th className="w-28 py-1 pr-2 text-right">{t('clinical.lab.value')}</th><th className="py-1 pr-2">{t('lab.unit')}</th><th className="hidden py-1 pr-2 sm:table-cell">{t('lab.reference')}</th><th className="hidden py-1 sm:table-cell">{t('lab.flag')}</th></tr></thead>
+              <thead><tr className="text-left text-small font-semibold text-slate-600"><th className="py-1 pr-2">{t('lab.param')}</th><th className="w-28 py-1 pr-2 text-right">{t('clinical.lab.value')}</th><th className="py-1 pr-2">{t('lab.unit')}</th><th className="hidden py-1 pr-2 sm:table-cell">{t('lab.reference')}</th><th className="hidden py-1 sm:table-cell">{t('lab.flag')}</th></tr></thead>
               <tbody>{(d.lab_template ?? []).map((p: any, i: number) => {
                 const v = values[p.code] ?? '';
                 const f = flagOf(p, v);
@@ -202,10 +202,10 @@ function OrderDetail({ id }: { id: string }) {
                 return (
                   <tr key={p.code} className="border-t border-slate-100">
                     <td className="py-1.5 pr-2"><label htmlFor={`v-${p.code}`}>{p.name}</label>{/* phone: reference and flag under the name instead of two more columns */}<div className="text-xs text-slate-600 sm:hidden"><span className="whitespace-nowrap tabular-nums">{refText(p)}</span>{flag && <span className="ml-2 whitespace-nowrap">{flag}</span>}</div></td>
-                    <td className="py-1.5 pr-2"><Input id={`v-${p.code}`} className={cx('h-9 text-right tabular-nums', out && !bad && '!border-red-600 !bg-red-50 font-semibold !text-red-800')} inputMode="decimal" value={v} invalid={bad}
+                    <td className="py-1.5 pr-2"><Input id={`v-${p.code}`} size="sm" className={cx('text-right tabular-nums', out && !bad && '!border-red-600 !bg-red-50 font-semibold !text-red-800')} inputMode="decimal" value={v} invalid={bad}
                       onChange={(e) => setValues((x) => ({ ...x, [p.code]: e.target.value }))} /></td>
                     <td className="py-1.5 pr-2 text-slate-600">{p.unit}</td><td className="hidden whitespace-nowrap py-1.5 pr-2 tabular-nums text-slate-600 sm:table-cell">{refText(p)}</td>
-                    <td className="hidden whitespace-nowrap py-1.5 text-[0.8125rem] sm:table-cell">{flag}</td>
+                    <td className="hidden whitespace-nowrap py-1.5 text-small sm:table-cell">{flag}</td>
                   </tr>
                 );
               })}</tbody>
@@ -214,7 +214,7 @@ function OrderDetail({ id }: { id: string }) {
             {nonNumeric.length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{t('clinical.lab.needNumber', { names: nonNumeric.join(', ') })}</p>}
             {/* server field errors, except the ones the line above already explains */}
             {serverFieldErrors.length > 0 && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{serverFieldErrors.join('; ')}</p>}
-            <div className="mt-3"><label className="text-[0.8125rem] font-medium text-slate-700" htmlFor="lab-comment">{t('clinical.lab.comment')}</label><Textarea id="lab-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
+            <div className="mt-3"><label className="text-small font-medium text-slate-700" htmlFor="lab-comment">{t('clinical.lab.comment')}</label><Textarea id="lab-comment" rows={2} value={comment} onChange={(e) => setComment(e.target.value)} /></div>
             <p className="mt-2 text-xs text-slate-600">{t('clinical.lab.refNote')}</p>
             <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
               {verifyBlocked && <p id="verify-why" className="mr-auto text-sm text-slate-600">{verifyBlocked}</p>}

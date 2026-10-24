@@ -29,7 +29,7 @@ function Slip({ id }: { id: string }) {
   // the other paper size, one click away (the chosen one is shown pressed)
   // a quiet choice, not a second blue button next to «Chop etish»: the chosen size is a white capsule with a tick
   const size = (on: boolean, href: string, label: string) => (
-    <LinkButton size="sm" variant={on ? 'secondary' : 'ghost'} className={on ? 'ring-2 ring-inset ring-brand-600 !text-brand-800' : '!text-slate-700'} href={href} icon={on ? <Check className="h-4 w-4" /> : undefined}>{label}</LinkButton>
+    <LinkButton variant={on ? 'secondary' : 'ghost'} className={on ? 'ring-2 ring-inset ring-brand-600 !text-brand-800' : '!text-slate-700'} href={href} icon={on ? <Check className="h-4 w-4" /> : undefined}>{label}</LinkButton>
   );
   const toolbar = (
     <div className="flex gap-2" role="group" aria-label={t('print.appt.paper')}>

@@ -124,7 +124,7 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
         actions={<Button size="sm" variant="ghost" icon={<X className="h-4 w-4" />} onClick={onClose}>{t('admin.staff.closeDetail')}</Button>}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <section className="min-w-0">
-            <div className="mb-2 flex min-h-9 flex-wrap items-center justify-between gap-2">
+            <div className="mb-2 flex min-h-control-sm flex-wrap items-center justify-between gap-2">
               <h3 className="text-body font-bold text-slate-900">{t('admin.doc.schedule')}</h3>
               {me.role === 'manager' && <Button size="sm" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setEditSchedule(true)}>{t('admin.doc.editSchedule')}</Button>}
             </div>
@@ -146,11 +146,11 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
                 </table>
               </div>
             )}
-            <h3 className="mb-2 mt-5 flex min-h-9 items-center text-body font-bold text-slate-900">{t('admin.off.title')}</h3>
+            <h3 className="mb-2 mt-5 flex min-h-control-sm items-center text-body font-bold text-slate-900">{t('admin.off.title')}</h3>
             <DaysOff doctorId={d.doctor.id} canEdit={me.role === 'manager'} />
           </section>
           <section className="min-w-0">
-            <h3 className="mb-2 flex min-h-9 items-center text-body font-bold text-slate-900">{t('admin.doc.today')}</h3>
+            <h3 className="mb-2 flex min-h-control-sm items-center text-body font-bold text-slate-900">{t('admin.doc.today')}</h3>
             {today.isLoading ? <LoadingRows rows={3} /> : !today.data?.length ? <p className="py-2 text-sm text-slate-600">{t('admin.doc.noToday')}</p> : (
               <ul className="divide-y divide-slate-100 border-t border-slate-200">{today.data.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">

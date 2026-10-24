@@ -47,8 +47,10 @@ Interfeys Apple’ning Liquid Glass (iOS 26) materialida, «Clear» variantida. 
 ## 2. Tokenlar va o‘lchamlar
 
 Tokenlar `apps/web/tailwind.config.ts` da nomlangan, qiymatlari `globals.css :root` da. Ixtiyoriy qiymat
-(`text-[…]`, `shadow-[…]`, `z-[…]`, rang hex) yozilmaydi — kerakli token bo‘lmasa, avval token qo‘shiladi.
-Eski qiymatlardan tokenga o‘tish jadvali: `docs/ui-tokens-migration.md`.
+(`text-[…]`, `shadow-[…]`, `z-[…]`, rang hex) yozilmaydi — kerakli token bo‘lmasa, avval token qo‘shiladi. Istisnolar:
+qog‘oz uchun o‘lchamlar (`app/print/**`, `print-doc.tsx`), logotip ranglari (`logo.tsx`), Telegram simulyatori va
+telefon kamerasi chizmasi. Grafik (SVG) ranglari — `fill-brand-*`/`stroke-slate-*` klasslari yoki `currentColor`; SVG
+matni ekranda ham `text-small` o‘lchamida qolishi uchun chizma kengligi o‘lchab olinadi (1 birlik = 1 px).
 
 **Matn o‘lchami**
 
@@ -91,9 +93,12 @@ Karta ichki chekkasi `p-5`, sarlavha/toolbar `px-5`; jadvalning birinchi va oxir
 
 1. **PageHeader** — sarlavha, (ixtiyoriy) qisqa izoh, o‘ngda asosiy tugma.
 2. **Asosiy raqamlar** (agar bo‘lsa) — 3–5 ta `StatCard`. Nomi uchun doim 2 qatorlik joy (raqamlar bir chiziqda),
-   uzun nom o‘raladi — kesilmaydi. Telefonda 400 px dan tor bo‘lsa — bitta ustun.
+   uzun nom o‘raladi — kesilmaydi. 360 px dan tor ekranda — bitta ustun
+   (`grid-cols-1 min-[360px]:grid-cols-2`); 390 px telefonda ikki ustun, uzun nom bo‘g‘in bo‘yicha o‘raladi.
 3. **Filtrlar paneli** (`Toolbar`) — kartaning tepasida: chapda qidiruv/filtrlar, o‘ngda ikkinchi darajali harakatlar.
-   Davr uchun faqat `components/date-range.tsx`. Hammasi bir balandlikda (§2).
+   Davr uchun faqat `components/date-range.tsx` (moliya: `PeriodPicker` — sana + «Bugun / 7 kun / 30 kun» `Segmented`).
+   Hammasi bir balandlikda (§2). Filtrlar ikkinchi qatorga o‘tsa, o‘ngdagi harakat (CSV) birinchi qatorda qoladi.
+   Sana maydoni bosilgan joyidan kalendarni ochadi; telefonda sana kalendar belgisi ostiga kirmaydi.
 4. **Asosiy kontent** — jadval (`Card padded={false}` + `Table`: sarlavha qatori kartaning yumaloq burchagidan
    chiqmaydi) yoki ro‘yxat. Raqamlar o‘ngda (`right`), qatordagi harakat — belgi + fe’l.
 5. **Ikkinchi darajali bloklar** — pastda yoki o‘ng ustunda (xl dan).

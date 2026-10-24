@@ -102,7 +102,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
   // each message sits under the cells it is about: branch/room, working hours, break
   const err = (wd: number, fields: string[]) => fields.map((f) => errors[`${wd}.${f}`]).find(Boolean);
   const errLine = (m?: string) => m ? <p className="mt-1 text-sm font-medium text-red-700" role="alert">{m}</p> : null;
-  const timeCls = 'h-11 w-[7.5rem] tabular-nums';
+  const timeCls = 'w-[7.5rem] tabular-nums';
 
   return (
     <Modal open={open} onClose={onClose} dirty={dirty && !save.isSuccess} width="max-w-5xl" title={t('registrar.sched.title', { name: doctor.display_name })}
