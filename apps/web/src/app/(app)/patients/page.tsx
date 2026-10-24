@@ -1,6 +1,5 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarPlus, Search, UserPlus, Users, X } from 'lucide-react';
@@ -9,7 +8,7 @@ import { ageFrom, fmtDate, fmtDateTime, formatPhone, fullName, pid } from '@/lib
 import { useDebounced } from '@/lib/hooks';
 import { takePatientSearch, usePatientSearchListener } from '@/lib/patient-search';
 import { useSession } from '@/lib/session';
-import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, Th, Toolbar } from '@/components/ui';
+import { Badge, Button, Card, EmptyState, ErrorState, Input, LoadingRows, PageHeader, Pagination, Table, Td, TextLink, Th, Toolbar } from '@/components/ui';
 import { PatientFormModal } from '@/components/patient-form';
 import { BookingModal, BookingInit } from '@/components/booking';
 import { useT } from '@/lib/i18n';
@@ -48,11 +47,11 @@ function Patients() {
         <Toolbar>
           <div className="relative w-full sm:max-w-md">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
-            <Input className="pl-9 pr-10" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
+            <Input className="pl-9 pr-12" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.searchPlaceholder')} aria-label={t('registrar.search')} />
             {search && (
               <button type="button" onClick={() => setSearch('')} aria-label={t('registrar.clear')} title={t('registrar.clear')}
-                className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
-                <X className="h-4 w-4" />
+                className="absolute right-0.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-[0.625rem] text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-focus">
+                <X className="h-5 w-5" />
               </button>
             )}
           </div>
@@ -77,10 +76,10 @@ function Patients() {
                   <tr key={p.id} className="cursor-pointer hover:bg-slate-50" onClick={(e) => openRow(e, p.id)}>
                     <Td className="hidden whitespace-nowrap tabular-nums text-slate-600 md:table-cell">{pid(p.patient_number)}</Td>
                     <Td>
-                      <Link href={`/patients/${p.id}`} className="rounded font-semibold text-slate-900 underline-offset-2 hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [overflow-wrap:anywhere]">{fullName(p, true)}</Link>
+                      <TextLink tone="ink" href={`/patients/${p.id}`} className="[overflow-wrap:anywhere]">{fullName(p, true)}</TextLink>
                       {p.anonymised_at && <Badge className="ml-2">{t('registrar.anonymised')}</Badge>}
                       {/* phone: the hidden columns in one short line under the name (a phone number never breaks in the middle) */}
-                      <div className="mt-0.5 text-[0.8125rem] tabular-nums text-slate-600 md:hidden">{pid(p.patient_number)} · {ageFrom(p.birth_date, me.today)}{!minimal && p.phone ? <> · <span className="whitespace-nowrap">{formatPhone(p.phone)}</span></> : ''}</div>
+                      <div className="mt-0.5 text-small tabular-nums text-slate-600 md:hidden">{pid(p.patient_number)} · {ageFrom(p.birth_date, me.today)}{!minimal && p.phone ? <> · <span className="whitespace-nowrap">{formatPhone(p.phone)}</span></> : ''}</div>
                     </Td>
                     <Td className="hidden whitespace-nowrap tabular-nums md:table-cell">{fmtDate(p.birth_date)}<span className="text-slate-600"> · {ageFrom(p.birth_date, me.today)}</span></Td>
                     {!minimal && <Td className="hidden whitespace-nowrap tabular-nums lg:table-cell">{p.phone ? formatPhone(p.phone) : <span className="text-slate-600">—</span>}</Td>}

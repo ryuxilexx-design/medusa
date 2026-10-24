@@ -77,11 +77,11 @@ export function DhpSettings() {
       <div className="flex min-w-0 flex-col gap-5">
         <Card title={t('admin.dhp.title')}>
           <div className="flex flex-col gap-4">
-            <p className="text-[0.9375rem] text-slate-700">{t('admin.dhp.intro')}</p>
+            <p className="text-body text-slate-700">{t('admin.dhp.intro')}</p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-200 px-4 py-3">
               {s.mode === 'off' ? <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.dhp.mode.off')}</Badge>
                 : <Badge tone={s.mode === 'live' ? 'green' : 'blue'} icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t(`admin.dhp.mode.${s.mode}` as MessageKey)}</Badge>}
-              {s.last_sent_at && <span className="text-[0.8125rem] text-slate-600">{t('admin.dhp.lastSent', { at: fmtDateTime(s.last_sent_at) })}</span>}
+              {s.last_sent_at && <span className="text-small text-slate-600">{t('admin.dhp.lastSent', { at: fmtDateTime(s.last_sent_at) })}</span>}
             </div>
             {s.last_error && <Alert tone="red" title={t('admin.dhp.broken')}>{s.last_error}{s.last_error_at ? ` (${fmtDateTime(s.last_error_at)})` : ''}</Alert>}
             {!s.secrets_configured && <Alert tone="yellow" title={t('admin.tg.noSecretsTitle')}>{t('admin.tg.noSecrets', { key: 'APP_SECRET_KEY' })}</Alert>}
@@ -105,7 +105,7 @@ export function DhpSettings() {
             <DateRange from={from} to={to} onFrom={setFrom} onTo={(v) => setTo(v)} />
             <Button icon={<Download className="h-4 w-4" />} loading={downloading} onClick={download}>{t('admin.dhp.export')}</Button>
           </div>
-          <p className="mt-2 text-[0.8125rem] text-slate-600">{t('admin.dhp.periodHint')}</p>
+          <p className="mt-2 text-small text-slate-600">{t('admin.dhp.periodHint')}</p>
         </Card>
 
         <Card title={t('admin.dhp.recent')} padded={false}>
@@ -115,14 +115,14 @@ export function DhpSettings() {
               <tbody>{list.data!.map((r) => (
                 <tr key={r.id}>
                   <Td className="whitespace-nowrap tabular-nums text-slate-700">{fmtDateTime(r.created_at)}</Td>
-                  <Td className="text-slate-900">{t(`admin.dhp.kind.${r.resource_type}` as MessageKey)}<div className="text-[0.8125rem] text-slate-600 sm:hidden">{pid(r.patient_number)}</div></Td>
+                  <Td className="text-slate-900">{t(`admin.dhp.kind.${r.resource_type}` as MessageKey)}<div className="text-small text-slate-600 sm:hidden">{pid(r.patient_number)}</div></Td>
                   <Td className="hidden tabular-nums text-slate-700 sm:table-cell">{pid(r.patient_number)}</Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={TONE[r.status]}>{t(`admin.dhp.status.${r.status}` as MessageKey)}</Badge>
                       {r.status === 'failed' && s.mode !== 'off' && <Button size="sm" icon={<RotateCcw className="h-4 w-4" />} loading={retry.isPending && retry.variables === r.id} onClick={() => retry.mutate(r.id)}>{t('admin.dhp.retry')}</Button>}
                     </div>
-                    {r.error && <div className="mt-1 max-w-[22rem] break-words text-[0.8125rem] text-red-700">{r.error}</div>}
+                    {r.error && <div className="mt-1 max-w-[22rem] break-words text-small text-red-700">{r.error}</div>}
                   </Td>
                 </tr>
               ))}</tbody>
@@ -140,7 +140,7 @@ export function DhpSettings() {
             </div>
           ))}
         </dl>
-        {s.without_pinfl > 0 && <p className="border-t border-slate-100 px-5 py-3 text-[0.8125rem] font-medium text-amber-800">{t('admin.dhp.withoutPinfl', { n: s.without_pinfl })}</p>}
+        {s.without_pinfl > 0 && <p className="border-t border-slate-100 px-5 py-3 text-small font-medium text-amber-800">{t('admin.dhp.withoutPinfl', { n: s.without_pinfl })}</p>}
       </Card>
     </div>
   );

@@ -59,10 +59,10 @@ function Cashier() {
               <thead><tr><Th>{t('cash.colPatient')}</Th><Th className="hidden sm:table-cell">{t('cash.colInvoice')}</Th><Th className="hidden 2xl:table-cell">{t('cash.colServices')}</Th><Th right className="hidden md:table-cell">{t('cash.colTotal')}</Th><Th right className="hidden 2xl:table-cell">{t('cash.colPaid')}</Th><Th right>{t('cash.colDue')}</Th><Th className="hidden sm:table-cell">{t('cash.status')}</Th><Th right className="right-0 z-10">{t('cash.colAction')}</Th></tr></thead>
               <tbody>{q.data.data.map((i: any) => (
                 <tr key={i.id} className="group hover:bg-slate-50">
-                  <Td className="min-w-[9rem]"><div className="font-medium text-slate-900">{fullName(i)}</div><div className="text-[0.8125rem] text-slate-600">{pid(i.patient_number)}{showBranch && `, ${i.branch_name}`}</div>
+                  <Td className="min-w-[9rem]"><div className="font-medium text-slate-900">{fullName(i)}</div><div className="text-small text-slate-600">{pid(i.patient_number)}{showBranch && `, ${i.branch_name}`}</div>
                     {/* phone: the invoice number and the status move under the name (their columns are hidden) */}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] tabular-nums text-slate-600 sm:hidden"><span>№{i.invoice_number}</span><InvoiceStatus status={i.status} /></div></Td>
-                  <Td className="hidden whitespace-nowrap sm:table-cell"><div className="tabular-nums">№{i.invoice_number}</div><div className="text-[0.8125rem] text-slate-600">{fmtDateTime(i.created_at)}</div><div className="w-0 min-w-full truncate text-[0.8125rem] text-slate-600 2xl:hidden">{i.services}</div></Td>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-small tabular-nums text-slate-600 sm:hidden"><span>№{i.invoice_number}</span><InvoiceStatus status={i.status} /></div></Td>
+                  <Td className="hidden whitespace-nowrap sm:table-cell"><div className="tabular-nums">№{i.invoice_number}</div><div className="text-small text-slate-600">{fmtDateTime(i.created_at)}</div><div className="w-0 min-w-full truncate text-small text-slate-600 2xl:hidden">{i.services}</div></Td>
                   <Td className="hidden max-w-[16rem] 2xl:table-cell"><div className="truncate">{i.services}</div></Td>
                   <Td right className="hidden md:table-cell">{formatSom(i.total)}</Td><Td right className="hidden 2xl:table-cell">{formatSom(i.paid_amount)}</Td>
                   <Td right className={i.status !== 'void' && i.due > 0 ? 'font-semibold text-red-700' : ''}>{i.status === 'void' ? '—' : formatSom(i.due)}</Td>

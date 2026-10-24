@@ -10,7 +10,7 @@ export function SourceMark({ appt }: { appt: { source?: string; patient_confirme
   if (appt.source !== 'telegram' && appt.source !== 'doctor' && !appt.patient_confirmed_at) return null;
   return (
     <span className="ml-1 inline-flex items-center gap-1 align-middle">
-      {appt.source === 'telegram' && <span title={t('source.telegram')} aria-label={t('source.telegramShort')} className="inline-flex items-center rounded bg-sky-50 px-1 py-px text-[0.625rem] font-semibold text-sky-700 ring-1 ring-inset ring-sky-200"><Send className="mr-0.5 h-2.5 w-2.5" />TG</span>}
+      {appt.source === 'telegram' && <span title={t('source.telegram')} aria-label={t('source.telegramShort')} className="inline-flex items-center rounded bg-sky-50 px-1 py-px text-2xs font-semibold text-sky-700 ring-1 ring-inset ring-sky-200"><Send className="mr-0.5 h-2.5 w-2.5" />TG</span>}
       {appt.source === 'doctor' && <span title={t('source.doctor')} aria-label={t('source.doctorShort')} className="inline-flex items-center rounded bg-violet-50 px-1 py-px text-violet-700 ring-1 ring-inset ring-violet-200"><Stethoscope className="h-3 w-3" /></span>}
       {appt.patient_confirmed_at && appt.status === 'scheduled' && <span title={t('source.confirmed')} aria-label={t('source.confirmedShort')} className="inline-flex text-emerald-600"><CheckCheck className="h-3.5 w-3.5" /></span>}
     </span>

@@ -5,7 +5,7 @@ import { Ban, Check, Plus, ShieldAlert } from 'lucide-react';
 import { ALLERGY_SEVERITIES, latinToCyrillic, type AllergySeverity, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
-import { Alert, Badge, Button, cx, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, type Tone, useToast } from '@/components/ui';
+import { Alert, Badge, Button, cx, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Radio, Select, TextLink, type Tone, useToast } from '@/components/ui';
 import { DrugCombobox, drugName, type Drug } from '@/components/drug-picker';
 import { useI18n, useT } from '@/lib/i18n';
 
@@ -49,7 +49,7 @@ export function AllergiesPanel({ patientId, legacyNote }: { patientId: string; l
   return (
     <section aria-labelledby={`alg-${patientId}`} data-testid="allergies-panel">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 id={`alg-${patientId}`} className="flex items-center gap-2 text-[0.9375rem] font-bold text-slate-900"><ShieldAlert className="h-5 w-5 text-red-700" />{t('alg.title')}</h3>
+        <h3 id={`alg-${patientId}`} className="flex items-center gap-2 text-body font-bold text-slate-900"><ShieldAlert className="h-5 w-5 text-red-700" />{t('alg.title')}</h3>
         <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => setAdding(true)}>{t('alg.add')}</Button>
       </div>
       {q.isLoading ? <LoadingRows rows={2} /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : (
@@ -67,7 +67,7 @@ export function AllergiesPanel({ patientId, legacyNote }: { patientId: string; l
                       {!a.confirmed_at && <Badge tone="yellow">{t('alg.unconfirmed')}</Badge>}
                     </p>
                     {a.reaction && <p className="mt-0.5 text-slate-800">{t('rx.warn.reaction', { r: a.reaction })}</p>}
-                    <p className="mt-0.5 text-[0.8125rem] text-slate-600">{t('alg.recorded', { name: a.recorded_by_name, at: fmtDateTime(a.recorded_at) })}</p>
+                    <p className="mt-0.5 text-small text-slate-600">{t('alg.recorded', { name: a.recorded_by_name, at: fmtDateTime(a.recorded_at) })}</p>
                   </div>
                   <span className="flex shrink-0 gap-1.5">
                     {!a.confirmed_at && <Button size="sm" icon={<Check className="h-4 w-4" />} loading={confirm.isPending && confirm.variables === a.id} onClick={() => confirm.mutate(a.id)}>{t('alg.confirm')}</Button>}
@@ -77,10 +77,10 @@ export function AllergiesPanel({ patientId, legacyNote }: { patientId: string; l
               ))}
             </ul>
           )}
-          {legacyNote && <p className="mt-2 text-[0.8125rem] text-slate-700">{t('alg.cardNote', { note: legacyNote })}</p>}
+          {legacyNote && <p className="mt-2 text-small text-slate-700">{t('alg.cardNote', { note: legacyNote })}</p>}
           {old.length > 0 && (
             <div className="mt-2">
-              <button type="button" className="min-h-10 rounded text-sm font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-expanded={showOld} onClick={() => setShowOld((v) => !v)}>{t('alg.showWithdrawn', { n: old.length })}</button>
+              <TextLink className="text-sm" aria-expanded={showOld} onClick={() => setShowOld((v) => !v)}>{t('alg.showWithdrawn', { n: old.length })}</TextLink>
               {showOld && (
                 <ul className="mt-1 space-y-1 text-sm text-slate-600">
                   {old.map((a) => <li key={a.id}><span className="line-through">{what(a)}</span> — {t('alg.withdrawn', { reason: a.withdraw_reason ?? '' })} ({a.withdrawn_by_name})</li>)}
@@ -128,9 +128,9 @@ export function AllergyAddModal({ patientId, onClose, onSaved }: { patientId: st
       footer={<><ModalCancel /><Button variant="primary" loading={save.isPending} disabled={!ready} onClick={() => { setFormError(null); save.mutate(); }}>{t('common.save')}</Button></>}>
       <div className="space-y-3">
         {formError && <Alert tone="red">{formError}</Alert>}
-        <fieldset className="flex flex-wrap gap-x-5 gap-y-1 text-[0.9375rem]"><legend className="mb-1 text-sm font-semibold text-slate-800">{t('alg.kind')}</legend>
+        <fieldset className="flex flex-wrap gap-x-5"><legend className="mb-1 text-sm font-semibold text-slate-800">{t('alg.kind')}</legend>
           {(['class', 'drug', 'text'] as Kind[]).map((k) => (
-            <label key={k} className="flex min-h-10 items-center gap-2"><input type="radio" name="alg-kind" className="h-4 w-4 accent-brand-600" checked={kind === k} onChange={() => setKind(k)} />{t(`alg.kind.${k}` as MessageKey)}</label>
+            <Radio key={k} name="alg-kind" checked={kind === k} onChange={() => setKind(k)} label={t(`alg.kind.${k}` as MessageKey)} />
           ))}
         </fieldset>
         {kind === 'class' && (
@@ -149,9 +149,9 @@ export function AllergyAddModal({ patientId, onClose, onSaved }: { patientId: st
         )}
         {kind === 'text' && <Field label={t('alg.text')} required error={errors.free_text}>{(id) => <Input id={id} data-autofocus maxLength={300} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('alg.textPh')} invalid={!!errors.free_text} />}</Field>}
         <Field label={t('alg.reaction')} error={errors.reaction}>{(id) => <Input id={id} maxLength={300} value={reaction} onChange={(e) => setReaction(e.target.value)} placeholder={t('alg.reactionPh')} />}</Field>
-        <fieldset className="flex flex-wrap gap-x-5 gap-y-1 text-[0.9375rem]"><legend className="mb-1 text-sm font-semibold text-slate-800">{t('alg.severity')}</legend>
+        <fieldset className="flex flex-wrap gap-x-5"><legend className="mb-1 text-sm font-semibold text-slate-800">{t('alg.severity')}</legend>
           {ALLERGY_SEVERITIES.map((s) => (
-            <label key={s} className={cx('flex min-h-10 items-center gap-2', s === 'severe' && 'font-semibold text-red-800')}><input type="radio" name="alg-sev" className="h-4 w-4 accent-brand-600" checked={severity === s} onChange={() => setSeverity(s)} />{t(`alg.sev.${s}` as MessageKey)}</label>
+            <Radio key={s} name="alg-sev" checked={severity === s} onChange={() => setSeverity(s)} rowClassName={s === 'severe' ? 'font-semibold !text-red-800' : undefined} label={t(`alg.sev.${s}` as MessageKey)} />
           ))}
         </fieldset>
       </div>

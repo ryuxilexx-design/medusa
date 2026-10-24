@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, formatPhone, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, Field, Input, Modal, ModalCancel, Select, Textarea, useToast } from './ui';
+import { Alert, Button, Checkbox, Field, Input, Modal, ModalCancel, Select, Textarea, TextLink, useToast } from './ui';
 import { FileSignature, Printer } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 
@@ -98,7 +98,7 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
               <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                 <div className="min-w-0 [overflow-wrap:anywhere]"><span className="font-medium">{fullName(d, true)}</span> <span className="text-slate-600">{pid(d.patient_number)}, {fmtDate(d.birth_date)}, {formatPhone(d.phone)}</span>
                   <div className="text-xs text-slate-600">{d.match === 'phone' ? t('registrar.form.dupPhone') : t('registrar.form.dupNameBirth')}</div></div>
-                <Link href={`/patients/${d.id}`} onClick={onClose} className="shrink-0 rounded text-sm font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('registrar.form.openProfile')}</Link>
+                <Link href={`/patients/${d.id}`} onClick={onClose} className="relative shrink-0 rounded text-sm font-semibold text-brand-700 hover:underline after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-[''] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-focus">{t('registrar.form.openProfile')}</Link>
               </li>
             ))}
           </ul>
@@ -139,13 +139,10 @@ function ConsentFields({ value, onChange, required, error }: { value: ConsentVal
       <legend className="inline-flex items-center gap-1.5 px-1 text-sm font-semibold text-slate-800"><FileSignature className="h-4 w-4" />{t('consent.form.section')}</legend>
       <div className="grid grid-cols-1 items-end gap-x-4 gap-y-2 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="flex min-h-11 cursor-pointer items-start gap-2.5 py-1.5 text-[0.9375rem] text-slate-900">
-            <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" checked={value.data} onChange={(e) => onChange({ ...value, data: e.target.checked })}
-              aria-invalid={!!error || undefined} aria-required={required || undefined} />
-            <span>{t('consent.form.data')}{required && <span className="text-red-700" aria-hidden> *</span>}</span>
-          </label>
-          <p id="consent-hint" className="ml-[1.875rem] text-[0.8125rem] text-slate-600">{required ? t('consent.form.dataHintProd') : t('consent.form.dataHintDemo')}</p>
-          {error && <p className="ml-[1.875rem] mt-1 text-[0.8125rem] font-medium text-red-700" role="alert">{error}</p>}
+          <Checkbox checked={value.data} onChange={(e) => onChange({ ...value, data: e.target.checked })} aria-invalid={!!error || undefined} aria-required={required || undefined}
+            label={<>{t('consent.form.data')}{required && <span className="text-red-700" aria-hidden> *</span>}</>} />
+          <p id="consent-hint" className="ml-8 text-small text-slate-600">{required ? t('consent.form.dataHintProd') : t('consent.form.dataHintDemo')}</p>
+          {error && <p className="ml-8 mt-1 text-small font-medium text-red-700" role="alert">{error}</p>}
         </div>
         <Field label={t('consent.form.method')}>{(id) => (
           <Select id={id} value={value.method} onChange={(e) => onChange({ ...value, method: e.target.value as ConsentValue['method'] })}>
@@ -153,13 +150,8 @@ function ConsentFields({ value, onChange, required, error }: { value: ConsentVal
             <option value="verbal">{t('consent.method.verbal')}</option>
           </Select>
         )}</Field>
-        <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] text-slate-900">
-          <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={value.notifications} onChange={(e) => onChange({ ...value, notifications: e.target.checked })} />
-          {t('consent.form.notifications')}
-        </label>
-        <a href="/print/consent/blank" target="_blank" rel="noopener" className="inline-flex min-h-11 items-center gap-1.5 justify-self-start rounded text-sm sm:col-span-2 font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
-          <Printer className="h-4 w-4" />{t('consent.printBlank')}
-        </a>
+        <Checkbox rowClassName="min-h-control" checked={value.notifications} onChange={(e) => onChange({ ...value, notifications: e.target.checked })} label={t('consent.form.notifications')} />
+        <TextLink href="/print/consent/blank" target="_blank" className="min-h-control-sm justify-self-start text-sm sm:col-span-2" icon={<Printer className="h-4 w-4" />}>{t('consent.printBlank')}</TextLink>
       </div>
     </fieldset>
   );

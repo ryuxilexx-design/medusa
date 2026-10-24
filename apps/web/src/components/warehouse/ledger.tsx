@@ -48,11 +48,11 @@ export function MovementsTab() {
             <thead><tr><Th>{t('wh.col.date')}</Th><Th>{t('wh.col.item')}</Th><Th right>{t('wh.col.qty')}</Th><Th className="hidden lg:table-cell">{t('wh.col.whoFor')}</Th><Th right className="hidden sm:table-cell">{t('wh.col.sum')}</Th>{me.role === 'manager' && <Th><span className="sr-only">{t('wh.mv.void')}</span></Th>}</tr></thead>
             <tbody>{rows.map((m) => (
               <tr key={m.id} className={m.voided_at ? 'text-slate-500 line-through decoration-slate-400' : ''}>
-                <Td className="whitespace-nowrap text-[0.9375rem]">{fmtDateTime(m.occurred_at)}<div className="text-[0.8125rem] text-slate-600">{t(`wh.kind.${m.kind}` as MessageKey)}{m.doc_no ? ` · ${m.doc_no}` : ''}</div></Td>
-                <Td className="min-w-[9rem]">{m.item_name}{m.controlled && <> <ControlledBadge /></>}<div className="text-[0.8125rem] text-slate-600">{t('wh.col.batch')} {m.batch_no ?? '—'}</div></Td>
-                <Td right><span className={m.type === 'in' ? 'font-semibold text-emerald-700' : 'font-semibold text-slate-900'}>{m.type === 'in' ? '+' : '−'}{qty(m.quantity)}</span> <span className="text-[0.8125rem] text-slate-600">{m.unit}</span></Td>
-                <Td className="hidden max-w-[20rem] text-[0.9375rem] lg:table-cell">{m.receiver_name ? <>{m.receiver_name}<div className="text-[0.8125rem] text-slate-600">{m.purpose ? <PurposeText r={m} /> : null}</div></> : <span className="text-slate-600">{m.actor_name}</span>}
-                  {m.voided_at && <div className="text-[0.8125rem] no-underline">{t('wh.voided')}: {m.void_reason}</div>}</Td>
+                <Td className="whitespace-nowrap text-body">{fmtDateTime(m.occurred_at)}<div className="text-small text-slate-600">{t(`wh.kind.${m.kind}` as MessageKey)}{m.doc_no ? ` · ${m.doc_no}` : ''}</div></Td>
+                <Td className="min-w-[9rem]">{m.item_name}{m.controlled && <> <ControlledBadge /></>}<div className="text-small text-slate-600">{t('wh.col.batch')} {m.batch_no ?? '—'}</div></Td>
+                <Td right><span className={m.type === 'in' ? 'font-semibold text-emerald-700' : 'font-semibold text-slate-900'}>{m.type === 'in' ? '+' : '−'}{qty(m.quantity)}</span> <span className="text-small text-slate-600">{m.unit}</span></Td>
+                <Td className="hidden max-w-[20rem] text-body lg:table-cell">{m.receiver_name ? <>{m.receiver_name}<div className="text-small text-slate-600">{m.purpose ? <PurposeText r={m} /> : null}</div></> : <span className="text-slate-600">{m.actor_name}</span>}
+                  {m.voided_at && <div className="text-small no-underline">{t('wh.voided')}: {m.void_reason}</div>}</Td>
                 <Td right className="hidden sm:table-cell">{formatSom(m.value)}</Td>
                 {me.role === 'manager' && <Td className="w-px">{['receipt', 'issue', 'return'].includes(m.kind) && !m.voided_at && <Button size="sm" variant="ghost" icon={<Ban className="h-4 w-4" />} onClick={() => setVoiding(m)}>{t('wh.mv.void')}</Button>}</Td>}
               </tr>
@@ -80,7 +80,7 @@ function VoidModal({ m, onClose }: { m: any; onClose: () => void }) {
   return (
     <Modal open onClose={onClose} dirty={!!reason} title={t('wh.mv.voidTitle', { name: m.item_name })}
       footer={<><ModalCancel /><Button variant="primary" loading={mut.isPending} disabled={reason.trim().length < 5} onClick={() => mut.mutate()}>{t('wh.mv.void')}</Button></>}>
-      <p className="mb-3 text-[0.9375rem] text-slate-800">{t('wh.mv.voidText')}</p>
+      <p className="mb-3 text-body text-slate-800">{t('wh.mv.voidText')}</p>
       <Field label={t('admin.inv.reason')} required error={err}>{(id) => <Input id={id} data-autofocus value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} />}</Field>
     </Modal>
   );
@@ -123,18 +123,18 @@ export function JournalTable({ entries, print = false }: { entries: any[]; print
         <tr key={e.id} className={e.voided_at ? 'text-slate-500' : ''}>
           <Row>{i + 1}</Row>
           <Row className="whitespace-nowrap">{fmtDateTime(e.occurred_at)}</Row>
-          <Row className="whitespace-nowrap">{t(`wh.kind.${e.kind}` as MessageKey)}{e.doc_no ? ` ${e.doc_no}` : ''}{e.voided_at && <div className="text-[0.75rem]">{t('wh.voided')}: {e.void_reason}</div>}</Row>
+          <Row className="whitespace-nowrap">{t(`wh.kind.${e.kind}` as MessageKey)}{e.doc_no ? ` ${e.doc_no}` : ''}{e.voided_at && <div className="text-xs">{t('wh.voided')}: {e.void_reason}</div>}</Row>
           <Row className="whitespace-nowrap">{e.batch_no ?? '—'}</Row>
           <Row className="text-right tabular-nums">{e.type === 'in' ? qty(e.quantity) : ''}</Row>
           <Row className="text-right tabular-nums">{e.type === 'out' ? qty(e.quantity) : ''}</Row>
           <Row className="text-right font-semibold tabular-nums">{qty(e.balance)}</Row>
           <Row className="min-w-[8rem]">{e.last_name ? `${e.last_name} ${e.first_name} #${e.patient_number}` : e.department ?? ''}{e.icd_codes?.length ? ` · ${e.icd_codes.join(', ')}` : ''}</Row>
-          <Row className="min-w-[9rem]">{e.actor_name}{e.second_signer_name ? ` / ${e.second_signer_name}` : ''}{e.receiver_name ? <div className="text-[0.75rem]">{t('wh.ctl.received', { name: e.receiver_name })}</div> : null}</Row>
+          <Row className="min-w-[9rem]">{e.actor_name}{e.second_signer_name ? ` / ${e.second_signer_name}` : ''}{e.receiver_name ? <div className="text-xs">{t('wh.ctl.received', { name: e.receiver_name })}</div> : null}</Row>
         </tr>
       ))}</tbody>
     </>
   );
-  return print ? <table className="w-full border-collapse text-[0.6875rem]">{body}</table> : <Table>{body}</Table>;
+  return print ? <table className="w-full border-collapse text-2xs">{body}</table> : <Table>{body}</Table>;
 }
 
 // ------------------------------------------------------------------ expiring lots
@@ -151,7 +151,7 @@ export function ExpiringTab({ onWriteoff }: { onWriteoff: (batch: any) => void }
           <thead><tr><Th>{t('wh.col.item')}</Th><Th>{t('wh.col.batch')}</Th><Th>{t('wh.col.expiry')}</Th><Th right>{t('wh.col.qty')}</Th><Th right className="hidden sm:table-cell">{t('wh.col.sum')}</Th><Th><span className="sr-only">{t('wh.wo.create')}</span></Th></tr></thead>
           <tbody>{q.data!.map((b) => (
             <tr key={b.id} className={b.expired ? 'bg-red-50/60' : ''}>
-              <Td className="min-w-[9rem]">{b.name}{b.controlled && <> <ControlledBadge /></>}{!branchId && <div className="text-[0.8125rem] text-slate-600">{b.branch_name}</div>}</Td>
+              <Td className="min-w-[9rem]">{b.name}{b.controlled && <> <ControlledBadge /></>}{!branchId && <div className="text-small text-slate-600">{b.branch_name}</div>}</Td>
               <Td>{b.batch_no ?? '—'}</Td>
               <Td className="whitespace-nowrap"><Expiry date={b.expiry_date} today={me.today} /></Td>
               <Td right>{qty(b.qty)} {b.unit}</Td>
@@ -180,7 +180,7 @@ export function FridgeTab() {
           <tbody>{q.data!.map((r) => (
             <tr key={r.id} className={r.out_of_range ? 'bg-red-50/60' : ''}>
               <Td className="whitespace-nowrap">{fmtDateTime(r.recorded_at)}</Td>
-              <Td className="min-w-[9rem]">{r.fridge}{r.note && <div className="text-[0.8125rem] text-slate-600">{r.note}</div>}</Td>
+              <Td className="min-w-[9rem]">{r.fridge}{r.note && <div className="text-small text-slate-600">{r.note}</div>}</Td>
               <Td right>{r.out_of_range ? <Badge tone="red" icon={<AlertTriangle className="h-3.5 w-3.5" />}>{r.temperature.toFixed(1)} °C</Badge> : `${r.temperature.toFixed(1)} °C`}</Td>
               <Td className="hidden sm:table-cell">{r.recorded_by_name}</Td>
             </tr>
@@ -244,7 +244,7 @@ export function ReportsTab() {
           <tbody>
             {q.data.rows.map((r: any) => (
               <tr key={r.key ?? 'none'}>
-                <Td className="min-w-[10rem]">{r.label ?? <span className="text-slate-600">{t('wh.rep.noValue')}</span>}{group === 'icd' && (locale === 'ru' ? r.title_ru : r.title_uz) && <div className="text-[0.8125rem] text-slate-600">{locale === 'ru' ? r.title_ru : r.title_uz}</div>}</Td>
+                <Td className="min-w-[10rem]">{r.label ?? <span className="text-slate-600">{t('wh.rep.noValue')}</span>}{group === 'icd' && (locale === 'ru' ? r.title_ru : r.title_uz) && <div className="text-small text-slate-600">{locale === 'ru' ? r.title_ru : r.title_uz}</div>}</Td>
                 <Td right className="hidden sm:table-cell">{r.requests}</Td>
                 <Td right className="hidden sm:table-cell">{r.patients}</Td>
                 <Td right>{formatSom(r.value)}</Td>

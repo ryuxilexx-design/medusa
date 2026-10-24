@@ -5,7 +5,7 @@ import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, newIdempotencyKey, qs } from '@/lib/api';
 import { fmtDate, formatSom, localDate, fmtTime, longDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Select, Skeleton, Textarea, useToast } from './ui';
+import { Alert, Button, Chip, cx, Field, Input, Modal, ModalCancel, Select, Skeleton, Textarea, useToast } from './ui';
 import { PatientFormModal } from './patient-form';
 import { PatientPicker } from './patient-picker';
 import { useT } from '@/lib/i18n';
@@ -139,39 +139,38 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
           <div className="md:col-span-3">
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
               <span className="text-sm font-semibold text-slate-800">{t('registrar.bk.freeSlots')}<span className="text-red-700" aria-hidden="true"> *</span></span>
-              <span className="text-[0.8125rem] text-slate-600">{longDate(date)}</span>
+              <span className="text-small text-slate-600">{longDate(date)}</span>
             </div>
             {/* the slot error shows in every state of this column, also before a doctor is picked */}
             {errors.start_time && <p className="mb-2 text-sm font-medium text-red-700" role="alert" data-testid="slot-error">{errors.start_time}</p>}
-            {!doctorId ? <p tabIndex={-1} className={cx('rounded-lg border-2 border-dashed p-6 text-center text-sm text-slate-600 focus:outline-none', errors.start_time ? 'border-red-300' : 'border-slate-200')}>{t('registrar.bk.pickDoctorDate')}</p>
-              : avail.isLoading ? <div className="grid grid-cols-5 gap-1.5">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-8" />)}</div>
+            {!doctorId ? <p tabIndex={-1} className={cx('rounded-field border-2 border-dashed px-4 py-5 text-center text-sm text-slate-600 focus:outline-none', errors.start_time ? 'border-red-300' : 'border-slate-200')}>{t('registrar.bk.pickDoctorDate')}</p>
+              : avail.isLoading ? <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{Array.from({ length: 20 }).map((_, i) => <Skeleton key={i} className="h-control-sm rounded-full" />)}</div>
               : avail.isError ? <Alert tone="red">{(avail.error as Error).message}</Alert>
-              : !avail.data?.working ? <p className="rounded-lg border-2 border-dashed border-slate-200 p-6 text-center text-sm text-slate-600">{avail.data?.reason ? t('registrar.bk.unavailable', { reason: t(`admin.off.kind.${avail.data.reason}` as MessageKey).toLowerCase() }) : t('registrar.bk.doctorOff')}</p>
+              : !avail.data?.working ? <p className="rounded-field border-2 border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-600">{avail.data?.reason ? t('registrar.bk.unavailable', { reason: t(`admin.off.kind.${avail.data.reason}` as MessageKey).toLowerCase() }) : t('registrar.bk.doctorOff')}</p>
               : (
                 <>
-                  <p className="mb-3 text-[0.8125rem] text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, <span className="whitespace-nowrap">{t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}</span>{avail.data.break_start && <>, <span className="whitespace-nowrap">{t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}</span></>}</p>
+                  <p className="mb-3 text-small text-slate-600">{t('registrar.bk.branchLabel')} <b>{avail.data.branch_name}</b>{avail.data.room_name ? `, ${avail.data.room_name}` : ''}, <span className="whitespace-nowrap">{t('registrar.bk.hours', { start: avail.data.start, end: avail.data.end })}</span>{avail.data.break_start && <>, <span className="whitespace-nowrap">{t('registrar.bk.break', { start: avail.data.break_start, end: avail.data.break_end })}</span></>}</p>
                   {avail.data.branch_id && !me.branches.some((b: any) => b.id === avail.data.branch_id) && <Alert tone="red">{t('registrar.bk.noBranchAccess')}</Alert>}
-                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6" role="group" aria-label={t('registrar.bk.freeSlots')}>
+                  <div className="grid grid-cols-4 gap-2 sm:grid-cols-6" role="group" aria-label={t('registrar.bk.freeSlots')}>
                     {/* past slots are not shown: they can never be booked */}
                     {avail.data.slots.filter((s: any) => !s.past).map((s: any) => {
                       const label = !s.free ? t('registrar.bk.slotBusy') : t('registrar.bk.slotFree');
                       return (
-                        <button key={s.time} type="button" disabled={!s.free} aria-pressed={time === s.time} aria-label={`${s.time}, ${label}`} onClick={() => { setTime(s.time); clearError('start_time'); }}
-                          className={cx('min-h-9 rounded-lg border-2 text-sm font-medium tabular-nums focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-                            time === s.time ? 'border-brand-600 bg-brand-600 text-white' : !s.free ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-500 line-through' : 'border-slate-300 bg-white text-slate-900 hover:border-brand-500 hover:bg-brand-50')}>
+                        <Chip key={s.time} disabled={!s.free} pressed={time === s.time} aria-label={`${s.time}, ${label}`} onClick={() => { setTime(s.time); clearError('start_time'); }}
+                          className={cx('px-2 font-medium tabular-nums', !s.free && 'line-through')}>
                           {s.time}
-                        </button>
+                        </Chip>
                       );
                     })}
                   </div>
                   {!avail.data.slots.some((s: any) => s.free && !s.past) && <p className="mt-2 text-sm font-medium text-amber-800">{t('registrar.bk.noFreeLeft')}</p>}
-                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.8125rem] text-slate-700" aria-hidden="true">
-                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-slate-300 bg-white" />{t('registrar.bk.slotFree')}</span>
-                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-brand-600 bg-brand-600" />{t('registrar.bk.slotChosen')}</span>
-                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded border-2 border-slate-200 bg-slate-100 text-center text-[0.625rem] leading-3 text-slate-500 line-through">00</span>{t('registrar.bk.slotBusy')}</span>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-small text-slate-700" aria-hidden="true">
+                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded-full border-2 border-slate-300 bg-white" />{t('registrar.bk.slotFree')}</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded-full border-2 border-brand-600 bg-brand-600" />{t('registrar.bk.slotChosen')}</span>
+                    <span className="inline-flex items-center gap-1.5"><span className="inline-block h-4 w-6 rounded-full border-2 border-slate-200 bg-slate-50 text-center text-2xs leading-3 text-slate-500 line-through">00</span>{t('registrar.bk.slotBusy')}</span>
                   </div>
                   {(service || reschedule) && (
-                    <div className="mt-3 space-y-0.5 border-t border-slate-100 pt-3 text-[0.8125rem] text-slate-600">
+                    <div className="mt-3 space-y-0.5 border-t border-slate-100 pt-3 text-small text-slate-600">
                       {service && <p>{t('registrar.bk.priceLine', { category: t(`service.${service.category}` as MessageKey), price: formatSom(service.price) })}</p>}
                       {reschedule && <p>{t('registrar.bk.currentTime', { at: `${fmtDate(reschedule.starts_at)} ${fmtTime(reschedule.starts_at)}` })}</p>}
                     </div>

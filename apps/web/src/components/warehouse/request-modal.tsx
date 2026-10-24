@@ -8,7 +8,7 @@ import { fmtDateTime } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
-import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
+import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Radio, Select, useToast } from '@/components/ui';
 import { parseQty, qty, useCatalog } from './common';
 
 type Purpose = 'patient' | 'procedure' | 'department';
@@ -99,11 +99,9 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
         {purposes.length > 1 && (
           <div role="radiogroup" aria-label={t('wh.req.purpose')} className="flex flex-wrap gap-2">
             {purposes.map((p) => (
-              <button key={p} type="button" role="radio" aria-checked={purpose === p} onClick={() => setPurpose(p)}
-                disabled={p === 'procedure' && !!ctx && !ctx.procedures.length}
-                className={cx('min-h-11 rounded-full border px-4 text-[0.9375rem] font-semibold disabled:opacity-50', purpose === p ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-300 text-slate-800 hover:bg-slate-50')}>
-                {t(`wh.purpose.${p}` as MessageKey)}
-              </button>
+              <Radio key={p} name="wh-purpose" checked={purpose === p} onChange={() => setPurpose(p)} disabled={p === 'procedure' && !!ctx && !ctx.procedures.length}
+                label={t(`wh.purpose.${p}` as MessageKey)}
+                rowClassName={cx('rounded-full border-2 pl-3 pr-4 font-semibold', purpose === p ? 'border-brand-600 bg-brand-50 !text-brand-800' : 'border-slate-300 hover:border-slate-500')} />
             ))}
           </div>
         )}
@@ -112,7 +110,7 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
             <option value="">—</option>{me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>)}</Field>}
         {direct && br && purpose !== 'department' && !visit && <VisitPicker branchId={br} value={picked} onChange={(v) => { setPicked(v); setReceiver(v?.doctor_membership_id ?? ''); }} error={local.encounter_id ?? err.encounter_id} />}
-        {ctx && purpose !== 'department' && ctx.label && <p className="text-[0.9375rem] text-slate-800">{ctx.label}</p>}
+        {ctx && purpose !== 'department' && ctx.label && <p className="text-body text-slate-800">{ctx.label}</p>}
         {purpose === 'procedure' && ctx && (
           <Field label={t('wh.req.procedure')} required error={local.order_id ?? err.order_id}>{(id) => (
             <Select id={id} value={orderId} invalid={!!(local.order_id ?? err.order_id)} onChange={(e) => setOrderId(e.target.value)}>
@@ -121,7 +119,7 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
         )}
         {purpose !== 'department' && ctx && (needIcd
           ? <Field label={t('wh.req.icd')} required hint={t('wh.req.icdHint')} error={local.icd_codes ?? err.icd_codes}>{(id) => <Input id={id} value={icd} invalid={!!(local.icd_codes ?? err.icd_codes)} onChange={(e) => setIcd(e.target.value)} placeholder="I10" />}</Field>
-          : <p className="text-[0.9375rem] text-slate-700">{t('wh.req.icdFromVisit', { codes: ctx.icd_codes.join(', ') })}</p>)}
+          : <p className="text-body text-slate-700">{t('wh.req.icdFromVisit', { codes: ctx.icd_codes.join(', ') })}</p>)}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label={t('wh.req.department')} required error={local.department ?? err.department}>{(id) => <Input id={id} value={department} maxLength={80} invalid={!!(local.department ?? err.department)} onChange={(e) => setDepartment(e.target.value)} placeholder={t('wh.req.departmentPh')} />}</Field>
           {direct && <Field label={t('wh.req.receiver')} required error={local.receiver_membership_id ?? err.receiver_membership_id}>{(id) => (
@@ -130,7 +128,7 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
             </Select>)}</Field>}
         </div>
         <fieldset className="space-y-2">
-          <legend className="mb-1 text-[0.9375rem] font-semibold text-slate-900">{t('wh.req.lines')}</legend>
+          <legend className="mb-1 text-body font-semibold text-slate-900">{t('wh.req.lines')}</legend>
           {lines.map((l, i) => {
             const e = lineErr(l, i);
             const it = byId.get(l.item_id);

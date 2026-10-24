@@ -3,7 +3,8 @@ import { forwardRef } from 'react';
 import { formatSom, parseSomToTiyin } from '@/lib/format';
 import { cx, Input } from '@/components/ui';
 
-type Props = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'className'> & {
+type Props = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'className' | 'size'> & {
+  size?: 'md' | 'sm';
   value: string;
   /** an outside error (e.g. «more than the amount due») also marks the field red */
   invalid?: boolean;
@@ -22,7 +23,7 @@ export const MoneyInput = forwardRef<HTMLInputElement, Props>(function MoneyInpu
   return (
     <div className={cx('flex flex-col gap-0.5', className ?? 'w-full')}>
       <Input ref={ref} inputMode="decimal" autoComplete="off" {...rest} value={value} invalid={bad} className="text-right text-base tabular-nums" />
-      {echo && <span aria-hidden="true" className="text-right text-[0.8125rem] tabular-nums text-slate-600">= {formatSom(tiyin)}</span>}
+      {echo && <span aria-hidden="true" className="text-right text-small tabular-nums text-slate-600">= {formatSom(tiyin)}</span>}
     </div>
   );
 });

@@ -5,7 +5,7 @@ import { Copy } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, weekdayName } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, cx, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
+import { Alert, Button, Checkbox, cx, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
 import { useT } from '@/lib/i18n';
 
 type Row = { on: boolean; branch_id: string; room_id: string; start: string; end: string; break_start: string; break_end: string };
@@ -120,7 +120,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
             <p>{t('registrar.sched.conflictsText')}</p>
             <ul className="mt-2 max-h-40 divide-y divide-amber-200 overflow-y-auto rounded border border-amber-200 bg-white/60">
               {conflicts.map((c) => (
-                <li key={c.appointment_id} className="flex flex-wrap gap-x-3 px-2 py-1 text-[0.8125rem]">
+                <li key={c.appointment_id} className="flex flex-wrap gap-x-3 px-2 py-1 text-small">
                   <span className="tabular-nums">{fmtDate(c.date)} {c.time}</span><span className="font-medium">{c.patient}</span><span className="text-slate-600">{c.service_name}</span><span className="ml-auto text-amber-800">{c.reason}</span>
                 </li>
               ))}
@@ -129,7 +129,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
         )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[56rem] text-sm">
-            <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600">
+            <thead><tr className="text-left text-small font-semibold text-slate-600">
               <th className="py-1 pr-2">{t('registrar.sched.day')}</th><th className="px-1">{t('registrar.branch')}</th><th className="px-1">{t('registrar.sched.room')}</th><th className="px-1">{t('registrar.sched.hours')}</th><th className="px-1">{t('registrar.sched.breakOptional')}</th>
             </tr></thead>
             <tbody>{ORDER.map((wd) => {
@@ -138,10 +138,8 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
               return (
                 <tr key={wd} className={cx('border-t border-slate-100 align-top', !r.on && 'text-slate-600')}>
                   <td className="py-1.5 pr-2">
-                    <label className="flex min-h-11 cursor-pointer items-center gap-2.5 whitespace-nowrap rounded-lg font-medium focus-within:ring-4 focus-within:ring-amber-300">
-                      <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600 focus:outline-none" checked={r.on} onChange={(ev) => set(wd, 'on', ev.target.checked)} aria-label={t('registrar.sched.ariaOn', { day })} />{day}
-                    </label>
-                    {!r.on && <span className="ml-[1.875rem] text-[0.8125rem]">{t('registrar.sched.dayOff')}</span>}
+                    <Checkbox rowClassName="min-h-control whitespace-nowrap font-medium !text-inherit" checked={r.on} onChange={(ev) => set(wd, 'on', ev.target.checked)} aria-label={t('registrar.sched.ariaOn', { day })} label={day} />
+                    {!r.on && <span className="ml-8 text-small">{t('registrar.sched.dayOff')}</span>}
                   </td>
                   {r.on ? <>
                     <td className="px-1 py-1.5"><Select aria-label={t('registrar.sched.ariaBranch', { day })} value={r.branch_id} onChange={(ev) => set(wd, 'branch_id', ev.target.value)} invalid={!!errors[`${wd}.branch_id`]}>
@@ -165,7 +163,7 @@ export function ScheduleEditor({ open, onClose, doctor, schedule }: {
             })}</tbody>
           </table>
         </div>
-        {branches.length < me.branches.length && <p className="text-[0.8125rem] text-slate-600">{t('registrar.sched.branchesHint')}</p>}
+        {branches.length < me.branches.length && <p className="text-small text-slate-600">{t('registrar.sched.branchesHint')}</p>}
       </div>
     </Modal>
   );

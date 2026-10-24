@@ -1,6 +1,5 @@
 'use client';
 import { useRef, useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PiggyBank, Undo2 } from 'lucide-react';
 import { PAYMENT_METHODS, type MessageKey } from '@meduza/contracts';
@@ -8,7 +7,7 @@ import { api, ApiError, newIdempotencyKey } from '@/lib/api';
 import { fmtDateTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Textarea, useToast } from '@/components/ui';
+import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Textarea, TextLink, Th, useToast } from '@/components/ui';
 import { canTakeMoney, ShiftLoadError, useCurrentShift, type Shift } from '@/components/cash-shift';
 import { MoneyInput } from '@/components/money-input';
 
@@ -128,7 +127,7 @@ export function DepositCard({ patientId }: { patientId: string }) {
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="flex items-center gap-2 text-[0.9375rem] font-bold text-slate-900"><PiggyBank className="h-4 w-4 text-brand-600" />{t('cash.depositHistory')}<Badge tone={balance > 0 ? 'green' : 'gray'}>{formatSom(balance)}</Badge></h3>
+        <h3 className="flex items-center gap-2 text-body font-bold text-slate-900"><PiggyBank className="h-4 w-4 text-brand-600" />{t('cash.depositHistory')}<Badge tone={balance > 0 ? 'green' : 'gray'}>{formatSom(balance)}</Badge></h3>
         {me.role === 'manager' && balance > 0 && <Button size="sm" icon={<Undo2 className="h-4 w-4" />} onClick={() => setRefunding(true)}>{t('cash.depositRefund')}</Button>}
       </div>
       {!q.data!.data.length ? <EmptyState compact title={t('cash.depositEmpty')} /> : (
@@ -136,9 +135,9 @@ export function DepositCard({ patientId }: { patientId: string }) {
           <thead><tr><Th>{t('cash.colTime')}</Th><Th>{t('cash.colWhat')}</Th><Th className="hidden sm:table-cell">{t('cash.colMethod')}</Th><Th right>{t('cash.colSum')}</Th></tr></thead>
           <tbody>{q.data!.data.map((d) => (
             <tr key={d.id}>
-              <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(d.occurred_at)}<div className="text-[0.8125rem] text-slate-600">{d.actor_name}</div></Td>
-              <Td><Badge tone={KIND_TONE[d.kind]}>{t(`cash.depositKind.${d.kind}` as MessageKey)}</Badge>{d.invoice_id && <Link href={`/cashier/${d.invoice_id}`} className="ml-2 whitespace-nowrap text-brand-700 hover:underline">№{d.invoice_number}</Link>}{d.note && <div className="text-[0.8125rem] text-slate-600">{d.note}</div>}</Td>
-              <Td className="hidden sm:table-cell">{d.method ? t(`payment.${d.method}` as MessageKey) : '—'}{d.shift_number ? <div className="text-[0.8125rem] text-slate-600">{t('cash.shiftNo', { n: d.shift_number })}</div> : null}</Td>
+              <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(d.occurred_at)}<div className="text-small text-slate-600">{d.actor_name}</div></Td>
+              <Td><Badge tone={KIND_TONE[d.kind]}>{t(`cash.depositKind.${d.kind}` as MessageKey)}</Badge>{d.invoice_id && <TextLink href={`/cashier/${d.invoice_id}`} className="ml-2 whitespace-nowrap">№{d.invoice_number}</TextLink>}{d.note && <div className="text-small text-slate-600">{d.note}</div>}</Td>
+              <Td className="hidden sm:table-cell">{d.method ? t(`payment.${d.method}` as MessageKey) : '—'}{d.shift_number ? <div className="text-small text-slate-600">{t('cash.shiftNo', { n: d.shift_number })}</div> : null}</Td>
               <Td right className={cx('font-medium tabular-nums', d.kind === 'in' ? 'text-emerald-800' : 'text-slate-800')}>{d.kind === 'in' ? '+' : '−'}{formatSom(d.amount)}</Td>
             </tr>
           ))}</tbody>

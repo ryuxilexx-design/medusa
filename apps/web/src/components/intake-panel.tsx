@@ -26,10 +26,10 @@ export function IntakePanel({ appointmentId, onUseComplaints, recordAllergyFor }
   if (!q.data) return null;
   const f = q.data;
   return (
-    <section aria-label={t('intake.label')} className="rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 text-[0.9375rem]">
+    <section aria-label={t('intake.label')} className="rounded-xl border border-sky-200 bg-sky-50/70 p-3.5 text-body">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 font-bold text-sky-950"><ClipboardList className="h-5 w-5" />{t('intake.title')}</h2>
-        <span className="text-[0.8125rem] text-sky-900">{t('intake.meta', { at: fmtDateTime(f.submitted_at) })}</span>
+        <span className="text-small text-sky-900">{t('intake.meta', { at: fmtDateTime(f.submitted_at) })}</span>
       </div>
       <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[10rem_minmax(0,1fr)]">
         <dt className="text-slate-600">{t('intake.complaints')}</dt><dd className="whitespace-pre-wrap text-slate-900">{f.complaints || '—'}</dd>

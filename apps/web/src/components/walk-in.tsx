@@ -68,7 +68,7 @@ export function WalkInModal({ open, onClose, patient: given }: { open: boolean; 
             <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden="true" />
             <div>
               <p className="text-base font-bold text-slate-900">{t('registrar.wi.doneTitle')}</p>
-              <p className="text-[0.9375rem] text-slate-700">{t('registrar.wi.done', { n: done.queue_number, time: done.start_time, doctor: doctor?.display_name })}</p>
+              <p className="text-body text-slate-700">{t('registrar.wi.done', { n: done.queue_number, time: done.start_time, doctor: doctor?.display_name })}</p>
             </div>
           </div>
         ) : (
@@ -87,7 +87,7 @@ export function WalkInModal({ open, onClose, patient: given }: { open: boolean; 
                 {doctorServices.map((s) => <option key={s.id} value={s.id}>{s.name}, {formatSom(s.price)}, {t('duration.min', { n: s.duration_min })}</option>)}
               </Select>
             )}</Field>
-            <p className="text-[0.8125rem] text-slate-600">{t('registrar.wi.hint')}</p>
+            <p className="text-small text-slate-600">{t('registrar.wi.hint')}</p>
           </div>
         )}
       </Modal>

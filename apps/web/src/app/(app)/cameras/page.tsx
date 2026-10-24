@@ -10,7 +10,7 @@ import { api, qs } from '@/lib/api';
 import { addDays, duration, fmtDate, fmtDateTime, fmtTime, localMinutes } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, Modal, ModalCancel, PageHeader, StatCard, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
+import { Badge, Button, Card, Checkbox, cx, EmptyState, ErrorState, LoadingRows, Modal, ModalCancel, PageHeader, StatCard, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
 import { PeriodPicker } from '@/components/finance-extra';
 import { type Camera, CameraFormModal, type CamerasList, Devices, FaceCodes, PushAddressModal } from '@/components/camera-devices';
 
@@ -118,7 +118,7 @@ function Attendance({ p, period, onCodes }: { p: Period; period: React.ReactNode
             <tbody>{rows.map((r) => (
               <tr key={r.day + r.membership_id}>
                 {showDate && <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDate(r.day)}</Td>}
-                <Td className="min-w-[9rem]">{showDate && <div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden">{fmtDate(r.day)}</div>}<div className="font-semibold text-slate-900">{r.full_name}</div><div className="text-[0.8125rem] text-slate-600">{t(`role.${r.role}` as MessageKey)}{r.specialty ? `, ${r.specialty}` : ''}</div></Td>
+                <Td className="min-w-[9rem]">{showDate && <div className="text-small tabular-nums text-slate-600 sm:hidden">{fmtDate(r.day)}</div>}<div className="font-semibold text-slate-900">{r.full_name}</div><div className="text-small text-slate-600">{t(`role.${r.role}` as MessageKey)}{r.specialty ? `, ${r.specialty}` : ''}</div></Td>
                 <Td className="hidden whitespace-nowrap tabular-nums text-slate-700 md:table-cell">{r.planned_start ? `${r.planned_start}–${r.planned_end}` : t('cam.att.noPlan')}</Td>
                 <Td className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{fmtTime(r.first_at)}</Td>
                 <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{r.last_at && r.last_at !== r.first_at ? fmtTime(r.last_at) : '—'}</Td>
@@ -162,9 +162,9 @@ function AttSummary({ rows, onOpen }: { rows: AttRow[]; onOpen: (id: string) => 
       </tr></thead>
       <tbody>{people.map((x) => (
         <tr key={x.r.membership_id} className="cursor-pointer hover:bg-slate-50" onClick={() => onOpen(x.r.membership_id)}>
-          <Td className="min-w-[9rem]"><div className="font-semibold text-slate-900">{x.r.full_name}</div><div className="text-[0.8125rem] text-slate-600">{t(`role.${x.r.role}` as MessageKey)}{x.r.specialty ? `, ${x.r.specialty}` : ''}</div></Td>
+          <Td className="min-w-[9rem]"><div className="font-semibold text-slate-900">{x.r.full_name}</div><div className="text-small text-slate-600">{t(`role.${x.r.role}` as MessageKey)}{x.r.specialty ? `, ${x.r.specialty}` : ''}</div></Td>
           <Td right className="font-semibold text-slate-900">{x.days}</Td>
-          <Td right className={x.late ? 'text-amber-800' : 'text-slate-600'}>{x.late}{x.late ? <div className="text-[0.8125rem]">{t('cam.sum.lateMin', { n: x.lateMin })}</div> : null}</Td>
+          <Td right className={x.late ? 'text-amber-800' : 'text-slate-600'}>{x.late}{x.late ? <div className="text-small">{t('cam.sum.lateMin', { n: x.lateMin })}</div> : null}</Td>
           <Td right className={x.absent ? 'font-semibold text-red-700' : 'text-slate-600'}>{x.absent}</Td>
           <Td right className="hidden md:table-cell">{x.avgIn == null ? '—' : hhmm(x.avgIn)}</Td>
           <Td right className="hidden lg:table-cell">{x.avgWorked == null ? '—' : duration(Math.round(x.avgWorked) * 60)}</Td>
@@ -227,9 +227,9 @@ function HourlyChart({ rows, busiest }: { rows: TrafficData['data']['hourly']; b
         <Button size="sm" variant="ghost" onClick={() => setTable((v) => !v)} aria-pressed={table} icon={table ? <BarChart3 className={ic} /> : <Table2 className={ic} />}>{table ? t('clinical.dash.chart') : t('clinical.dash.tableView')}</Button>
       </div>
       {table ? (
-        <div className="max-h-80 overflow-y-auto">
+        <div className="max-h-80 overflow-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[0.8125rem] font-semibold text-slate-600"><th className="sticky top-0 bg-white py-1.5">{t('cam.col.hour')}</th><th className="sticky top-0 bg-white py-1.5 text-right">{t('cam.col.entered')}</th><th className="sticky top-0 bg-white py-1.5 text-right">{t('cam.col.exited')}</th></tr></thead>
+            <thead><tr className="text-left text-small font-semibold text-slate-600"><th className="sticky top-0 bg-white py-1.5">{t('cam.col.hour')}</th><th className="sticky top-0 bg-white py-1.5 text-right">{t('cam.col.entered')}</th><th className="sticky top-0 bg-white py-1.5 text-right">{t('cam.col.exited')}</th></tr></thead>
             <tbody>{hours.map((h) => <tr key={h} className="border-t border-slate-100"><td className="py-1.5 tabular-nums">{hh(h)}–{hh(h + 1)}</td><td className="text-right font-semibold tabular-nums">{by.get(h)?.enter ?? 0}</td><td className="text-right tabular-nums">{by.get(h)?.exit ?? 0}</td></tr>)}</tbody>
           </table>
         </div>
@@ -240,13 +240,13 @@ function HourlyChart({ rows, busiest }: { rows: TrafficData['data']['hourly']; b
               const v = by.get(h)?.enter ?? 0;
               return (
                 <li key={h} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" aria-label={t('cam.tr.bar', { hour: hh(h), n: v })}>
-                  <span aria-hidden="true" className="text-[0.8125rem] font-semibold tabular-nums text-slate-700">{v || ''}</span>
+                  <span aria-hidden="true" className="text-small font-semibold tabular-nums text-slate-700">{v || ''}</span>
                   <span aria-hidden="true" className={cx('block w-full max-w-10 rounded-t', h === busiest ? 'bg-brand-700' : 'bg-brand-400')} style={{ height: `${(v / max) * 9}rem` }} />
                 </li>
               );
             })}
           </ul>
-          <div aria-hidden="true" className="mt-1 flex gap-1 sm:gap-2">{hours.map((h) => <span key={h} className="min-w-0 flex-1 text-center text-[0.8125rem] tabular-nums text-slate-600">{String(h).padStart(2, '0')}</span>)}</div>
+          <div aria-hidden="true" className="mt-1 flex gap-1 sm:gap-2">{hours.map((h) => <span key={h} className="min-w-0 flex-1 text-center text-small tabular-nums text-slate-600">{String(h).padStart(2, '0')}</span>)}</div>
         </div>
       )}
     </section>
@@ -268,7 +268,7 @@ function SnapshotThumb({ row, onOpen }: { row: SecurityRow; onOpen: () => void }
     return <span className="inline-flex h-[3.25rem] w-[5.75rem] items-center justify-center rounded-md bg-slate-100 text-slate-400" title={t('cam.sec.noSnapshot')}><ImageOff className="h-5 w-5" aria-hidden="true" /><span className="sr-only">{t('cam.sec.noSnapshot')}</span></span>;
   }
   return (
-    <button type="button" onClick={onOpen} className="block overflow-hidden rounded-md border border-slate-200 bg-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" aria-label={alt}>
+    <button type="button" onClick={onOpen} className="block overflow-hidden rounded-md border border-slate-200 bg-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-focus" aria-label={alt}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={snapshotUrl(row.id)} alt="" width={92} height={52} loading="lazy" className="h-[3.25rem] w-[5.75rem] object-cover" onError={() => setFailed(true)} />
     </button>
@@ -297,9 +297,7 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras, snapshotDays 
     <Card padded={false}>
       <Toolbar>
         {period}
-        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-semibold text-slate-800">
-          <input type="checkbox" className="h-5 w-5 accent-brand-600" checked={alertsOnly} onChange={(e) => setAlertsOnly(e.target.checked)} />{t('cam.sec.alertsOnly')}
-        </label>
+        <Checkbox rowClassName="min-h-control font-semibold" checked={alertsOnly} onChange={(e) => setAlertsOnly(e.target.checked)} label={t('cam.sec.alertsOnly')} />
       </Toolbar>
       {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data ? <LoadingRows /> : !q.data.data.length ? (
         <EmptyState compact icon={<CheckCircle2 />} title={t(alertsOnly ? 'cam.sec.emptyAlerts' : 'cam.sec.empty')} />
@@ -313,17 +311,17 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras, snapshotDays 
                 <Td className="w-[6.5rem] !py-1.5 !pr-0"><SnapshotThumb row={r} onOpen={() => { setViewFailed(false); setViewing(r); }} /></Td>
                 <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(r.occurred_at)}</Td>
                 <Td className="min-w-[10rem]">
-                  <div className="text-[0.8125rem] tabular-nums text-slate-600 sm:hidden">{fmtDateTime(r.occurred_at)}</div>
+                  <div className="text-small tabular-nums text-slate-600 sm:hidden">{fmtDateTime(r.occurred_at)}</div>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="font-semibold text-slate-900">{t(`cam.kind.${r.kind}` as MessageKey)}</span>
                     {r.alert && <Badge tone="red" icon={<ShieldAlert className={ic} />}>{t(always(r) ? 'cam.sec.alert' : 'cam.sec.afterHours')}</Badge>}
                   </div>
-                  <div className="text-[0.8125rem] text-slate-600 md:hidden">{r.camera_name}</div>
+                  <div className="text-small text-slate-600 md:hidden">{r.camera_name}</div>
                 </Td>
-                <Td className="hidden md:table-cell"><div className="text-slate-900">{r.camera_name}</div><div className="text-[0.8125rem] text-slate-600">{[r.location, showBranch ? r.branch_name : null].filter(Boolean).join(' · ') || '—'}</div></Td>
+                <Td className="hidden md:table-cell"><div className="text-slate-900">{r.camera_name}</div><div className="text-small text-slate-600">{[r.location, showBranch ? r.branch_name : null].filter(Boolean).join(' · ') || '—'}</div></Td>
                 <Td right className="!py-1.5">
                   {r.acked_at ? (
-                    <span className="relative inline-flex items-center gap-1.5 whitespace-normal text-left text-[0.8125rem] text-slate-700" title={t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" /><span className="sr-only md:not-sr-only">{t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}</span></span>
+                    <span className="relative inline-flex items-center gap-1.5 whitespace-normal text-left text-small text-slate-700" title={t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" /><span className="sr-only md:not-sr-only">{t('cam.sec.ackedBy', { name: r.acked_by_name ?? '—', at: fmtDateTime(r.acked_at) })}</span></span>
                   ) : r.alert ? (
                     <Button size="sm" icon={<Check className={ic} />} aria-label={t('cam.sec.ack')} loading={ack.isPending && ack.variables === r.id} onClick={() => ack.mutate(r.id)}><span className="hidden sm:inline">{t('cam.sec.ack')}</span></Button>
                   ) : null}
@@ -345,7 +343,7 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras, snapshotDays 
         )}>
         {viewing && (
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.9375rem] text-slate-700">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-slate-700">
               <span className="font-semibold tabular-nums text-slate-900">{fmtDateTime(viewing.occurred_at)}</span>
               <span>{[viewing.location, showBranch ? viewing.branch_name : null].filter(Boolean).join(' · ')}</span>
               {viewing.alert && <Badge tone="red" icon={<ShieldAlert className={ic} />}>{t(always(viewing) ? 'cam.sec.alert' : 'cam.sec.afterHours')}</Badge>}
@@ -357,7 +355,7 @@ function Security({ q, period, alertsOnly, setAlertsOnly, cameras, snapshotDays 
               <img src={snapshotUrl(viewing.id)} alt={t('cam.sec.snapshotAlt', { kind: t(`cam.kind.${viewing.kind}` as MessageKey), camera: viewing.camera_name, at: fmtDateTime(viewing.occurred_at) })}
                 className="w-full rounded-lg bg-slate-900 object-contain" onError={() => setViewFailed(true)} />
             )}
-            <p className="text-[0.8125rem] text-slate-600">{t('cam.sec.snapshotKept', { n: snapshotDays })}</p>
+            <p className="text-small text-slate-600">{t('cam.sec.snapshotKept', { n: snapshotDays })}</p>
           </div>
         )}
       </Modal>

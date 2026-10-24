@@ -191,7 +191,7 @@ export default function PhoneCameraPage() {
       <div className="mx-auto max-w-3xl space-y-4 px-4 pb-10">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{t('cam.phone.title')}</h1>
-          <p className="mt-1 text-[0.9375rem] text-slate-600">{t('cam.phone.subtitle', { brand: 'Hikvision' })}</p>
+          <p className="mt-1 text-body text-slate-600">{t('cam.phone.subtitle', { brand: 'Hikvision' })}</p>
         </div>
         <Alert tone="blue">{t('cam.phone.privacy')}</Alert>
 
@@ -223,13 +223,13 @@ export default function PhoneCameraPage() {
               <Field label={t('cam.phone.code')} className="w-36">{(id) => <Input id={id} value={code} onChange={(e) => setCode(e.target.value)} autoCapitalize="characters" />}</Field>
               <Button variant="primary" icon={<UserPlus className="h-4 w-4" />} onClick={() => void enroll()}>{t('cam.phone.enroll')}</Button>
             </div>
-            <p className="text-[0.8125rem] text-slate-600">{t('cam.phone.enrollHint', { app: 'Med.uz.ai', staff: 'S-…', patient: 'P-…' })}</p>
+            <p className="text-small text-slate-600">{t('cam.phone.enrollHint', { app: 'Med.uz.ai', staff: 'S-…', patient: 'P-…' })}</p>
             {enrolled.length > 0 && (
               <ul className="flex flex-wrap gap-2">
                 {enrolled.map((e) => (
-                  <li key={e.code} className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-50 py-1 pl-3 pr-1 text-sm font-semibold text-slate-900">
+                  <li key={e.code} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 py-0.5 pl-4 pr-0.5 text-sm font-semibold text-slate-900">
                     {e.code}
-                    <button aria-label={t('cam.phone.remove', { code: e.code })} onClick={() => setEnrolled((l) => l.filter((x) => x.code !== e.code))} className="rounded-full p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-900"><Trash2 className="h-4 w-4" /></button>
+                    <Button variant="ghost" size="icon-sm" aria-label={t('cam.phone.remove', { code: e.code })} onClick={() => setEnrolled((l) => l.filter((x) => x.code !== e.code))} className="!h-10 !w-10 !text-slate-600 hover:!text-slate-900"><Trash2 className="h-4 w-4" /></Button>
                   </li>
                 ))}
               </ul>

@@ -12,7 +12,9 @@ const TARGET = 'button:not(:disabled), a[href], [role="button"], [role="tab"], s
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 export function PressMotion() {
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || typeof Element.prototype.animate !== 'function') return;
+    if (typeof Element.prototype.animate !== 'function') return;
+    // read on every press, so turning «reduce motion» on in the OS takes effect without a reload
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
     let pressed: { el: HTMLElement; down: Animation } | null = null;
     const release = () => {
       const cur = pressed; pressed = null;
@@ -21,7 +23,7 @@ export function PressMotion() {
       cur.el.animate([{ transform: 'scale(0.94)' }, { transform: 'scale(1)' }], { duration: 450, easing: SPRING });
     };
     const down = (e: PointerEvent) => {
-      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      if (reduced.matches || (e.button !== 0 && e.pointerType === 'mouse')) return;
       const el = (e.target as Element | null)?.closest?.(TARGET) as HTMLElement | null;
       if (!el || el.closest('[data-no-press]')) return;
       if (getComputedStyle(el).transform !== 'none' && !el.getAnimations().length) return;

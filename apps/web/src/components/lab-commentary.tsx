@@ -25,7 +25,7 @@ export function LabCommentary({ orderId }: { orderId: string }) {
   );
   const trend = d?.params.filter((p) => p.previous.length) ?? [];
   return (
-    <section aria-label={t('labai.title')} className="mt-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-[0.9375rem]">
+    <section aria-label={t('labai.title')} className="mt-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-body">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h4 className="flex items-center gap-1.5 font-semibold text-slate-900"><Sparkles className="h-4 w-4 text-brand-600" aria-hidden="true" />{t('labai.title')}</h4>
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>{t('labai.hide')}</Button>
@@ -43,7 +43,7 @@ export function LabCommentary({ orderId }: { orderId: string }) {
           <ul className="list-disc space-y-1 pl-5 text-slate-900">{d.sentences.map((s, i) => <li key={i}>{s.text}</li>)}</ul>
           {trend.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-[0.8125rem]">
+              <table className="w-full text-small">
                 <caption className="pb-1 text-left font-semibold text-slate-700">{t('labai.history')}</caption>
                 <thead><tr className="text-left text-slate-600"><th className="py-0.5 pr-2 font-semibold">{t('lab.param')}</th><th className="py-0.5 pr-2 font-semibold">{t('labai.history')}</th><th className="py-0.5 pr-2 text-right font-semibold">{t('labai.now')}</th><th className="py-0.5 text-right font-semibold">{t('labai.change')}</th></tr></thead>
                 <tbody>{trend.map((p) => (
@@ -57,7 +57,7 @@ export function LabCommentary({ orderId }: { orderId: string }) {
               </table>
             </div>
           )}
-          <p className="text-[0.8125rem] text-slate-600">{t(d.source === 'model' ? 'labai.source.model' : d.mode === 'sample' ? 'labai.source.sample' : 'labai.source.template')}{d.reason ? ` · ${d.reason}` : ''}</p>
+          <p className="text-small text-slate-600">{t(d.source === 'model' ? 'labai.source.model' : d.mode === 'sample' ? 'labai.source.sample' : 'labai.source.template')}{d.reason ? ` · ${d.reason}` : ''}</p>
         </div>
       )}
     </section>

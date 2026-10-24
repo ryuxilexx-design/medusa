@@ -6,7 +6,7 @@ import { NOTE_TEXT_FIELDS, type MessageKey, type NoteTextField } from '@meduza/c
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, Field, Input, LoadingRows, Modal, ModalCancel, Select, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Checkbox, cx, EmptyState, Field, FOCUS_RING, FOCUS_RING_INSET, Input, LoadingRows, Modal, ModalCancel, RowButton, SectionTitle, Select, useToast } from '@/components/ui';
 import { applyFields, type Choice, FieldApplyList } from '@/components/apply-fields';
 import type { Icd } from '@/components/icd-picker';
 
@@ -80,16 +80,15 @@ export function TemplateModal({ open, onClose, encounterId, current, existingOrd
 
   const row = (x: NoteTemplate) => (
     <li key={x.id}>
-      <button type="button" onClick={() => { setPicked(x); setChoice({}); setOrders([]); }}
-        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
+      <RowButton onClick={() => { setPicked(x); setChoice({}); setOrders([]); }} className="px-4">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[0.9375rem] font-semibold text-slate-900">{x.name}</span>
-          <span className="block truncate text-[0.8125rem] text-slate-600">
+          <span className="block truncate text-body font-semibold text-slate-900">{x.name}</span>
+          <span className="block truncate text-small text-slate-600">
             {[x.icd.map((c) => c.code).join(', '), x.order_services.length ? t('tpl.withOrders', { n: x.order_services.length }) : '', x.starter ? t('tpl.starter') : x.author_name ?? ''].filter(Boolean).join(' · ')}
           </span>
         </span>
         <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
-      </button>
+      </RowButton>
     </li>
   );
 
@@ -102,42 +101,41 @@ export function TemplateModal({ open, onClose, encounterId, current, existingOrd
         <div className="space-y-3">
           <Input data-autofocus type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('tpl.search')} aria-label={t('tpl.search')} />
           {list.isLoading ? <LoadingRows rows={5} /> : list.isError ? <Alert tone="red">{(list.error as Error).message}</Alert>
-            : !list.data?.data.length ? <p className="rounded-lg border-2 border-dashed border-slate-300 p-6 text-center text-[0.9375rem] text-slate-600">{t('tpl.empty')}</p>
-            : !groups.length ? <p className="p-6 text-center text-[0.9375rem] text-slate-600">{t('tpl.none')}</p>
+            : !list.data?.data.length ? <EmptyState compact icon={<LayoutTemplate />} title={t('tpl.empty')} />
+            : !groups.length ? <EmptyState compact title={t('tpl.none')} />
             : groups.map((g) => (
               <section key={g.key}>
-                <h3 className="mb-1 px-3 text-[0.8125rem] font-bold uppercase tracking-wide text-slate-600">{g.key === 'mine' ? `${g.label}: ${mySpecialty}` : g.label}</h3>
-                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200" data-testid={`tpl-group-${g.key}`}>{g.items.map(row)}</ul>
+                <SectionTitle className="mb-1 px-4">{g.key === 'mine' ? `${g.label}: ${mySpecialty}` : g.label}</SectionTitle>
+                <ul className="divide-y divide-slate-100 overflow-hidden rounded-field border border-slate-200" data-testid={`tpl-group-${g.key}`}>{g.items.map(row)}</ul>
               </section>
             ))}
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2 text-[0.8125rem] text-slate-600">
+          <div className="flex flex-wrap items-center gap-2 text-small text-slate-600">
             {picked.specialty ? <Badge>{picked.specialty}</Badge> : <Badge>{t('tpl.all')}</Badge>}
             {picked.starter && <Badge tone="blue">{t('tpl.starter')}</Badge>}
             {(picked.mine || me.role === 'manager') && <Button size="sm" variant="ghost" className="ml-auto" icon={<EyeOff className="h-4 w-4" />} loading={hide.isPending} onClick={() => hide.mutate(picked.id)}>{t('tpl.hide')}</Button>}
           </div>
           {NOTE_TEXT_FIELDS.some((k) => draftOf(k).trim()) ? (
             <FieldApplyList fields={fields} draftOf={draftOf} current={current} choice={choice} onChoice={(k, c) => setChoice((x) => ({ ...x, [k]: c }))} testIdPrefix="tpl-choice" />
-          ) : <p className="text-[0.9375rem] text-slate-600">{t('tpl.noFields')}</p>}
+          ) : <p className="text-body text-slate-600">{t('tpl.noFields')}</p>}
           {newIcd.length > 0 && <Alert tone="blue">{t('tpl.icd', { codes: newIcd.map((c) => `${c.code} — ${c.title}`).join('; ') })}</Alert>}
           {icdSkipped && <Alert>{t('tpl.icdFull')}</Alert>}
           {picked.order_services.length > 0 && (
-            <fieldset className="rounded-xl border border-slate-200 bg-slate-50/60 p-4" data-testid="tpl-orders">
+            <fieldset className="rounded-field border border-slate-200 bg-slate-50/60 p-4" data-testid="tpl-orders">
               <legend className="px-1 text-sm font-bold text-slate-800">{t('tpl.orders')}</legend>
-              <div className="space-y-1">
+              <div>
                 {picked.order_services.map((s) => {
                   const dis = taken.has(s.name);
                   return (
-                    <label key={s.id} className={cx('flex min-h-10 items-center gap-2.5 rounded-lg px-2 text-[0.9375rem]', dis ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-white')}>
-                      <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" disabled={dis} checked={orders.includes(s.id)} onChange={(e) => setOrders((x) => (e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id)))} />
-                      <span className="min-w-0 flex-1">{s.name} <span className="text-[0.8125rem] text-slate-600">· {t(`service.${s.category}` as MessageKey)}{dis ? ` ${t('orders.taken')}` : ''}</span></span>
-                    </label>
+                    <Checkbox key={s.id} disabled={dis} checked={orders.includes(s.id)} onChange={(e) => setOrders((x) => (e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id)))}
+                      rowClassName={cx('rounded-field px-2', !dis && 'hover:bg-white')}
+                      label={<>{s.name} <span className="text-small text-slate-600">· {t(`service.${s.category}` as MessageKey)}{dis ? ` ${t('orders.taken')}` : ''}</span></>} />
                   );
                 })}
               </div>
-              <p className="mt-2 text-[0.8125rem] text-slate-600">{t('tpl.ordersHint')}</p>
+              <p className="mt-2 text-small text-slate-600">{t('tpl.ordersHint')}</p>
             </fieldset>
           )}
         </div>
@@ -179,7 +177,7 @@ export function SaveTemplateModal({ open, onClose, current }: { open: boolean; o
             <option value="all">{t('tpl.all')}</option>
           </Select>
         )}</Field>
-        <p className="text-[0.8125rem] text-slate-600">{t('tpl.saveHint')}</p>
+        <p className="text-small text-slate-600">{t('tpl.saveHint')}</p>
       </div>
     </Modal>
   );
@@ -229,16 +227,16 @@ export function QuickPhrases({ field, value, textarea, onInsert, disabled }: {
   const shown = showAll ? phrases : phrases.slice(0, 6);
   if (disabled) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={t('phrase.label')} data-testid={`phrases-${field}`}>
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('phrase.label')} data-testid={`phrases-${field}`}>
       {shown.map((p) => (
         <span key={p.id} className="inline-flex max-w-full items-stretch overflow-hidden rounded-full border border-slate-300 bg-white text-sm text-slate-800">
-          <button type="button" onClick={() => use(p)} title={p.text} className="min-h-9 max-w-[18rem] truncate px-3 hover:bg-brand-50 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{p.text}</button>
-          {!p.shared && <button type="button" aria-label={t('phrase.remove', { text: p.text })} onClick={() => remove.mutate(p.id)} className="border-l border-slate-200 px-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300"><X className="h-3.5 w-3.5" /></button>}
+          <button type="button" onClick={() => use(p)} title={p.text} className={cx('min-h-control-sm max-w-[18rem] truncate px-4 hover:bg-brand-50 hover:text-brand-900', FOCUS_RING_INSET)}>{p.text}</button>
+          {!p.shared && <button type="button" aria-label={t('phrase.remove', { text: p.text })} onClick={() => remove.mutate(p.id)} className={cx('flex w-10 shrink-0 items-center justify-center border-l border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900', FOCUS_RING_INSET)}><X className="h-4 w-4" /></button>}
         </span>
       ))}
-      {phrases.length > 6 && <button type="button" onClick={() => setShowAll((x) => !x)} className="min-h-9 rounded-full px-2 text-sm font-medium text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{showAll ? t('news.less') : `+${phrases.length - 6}`}</button>}
+      {phrases.length > 6 && <button type="button" onClick={() => setShowAll((x) => !x)} className={cx('min-h-control-sm rounded-full px-3 text-sm font-semibold text-brand-700 hover:underline', FOCUS_RING)}>{showAll ? t('news.less') : `+${phrases.length - 6}`}</button>}
       <button type="button" onClick={saveCurrent} disabled={add.isPending} title={t('phrase.addTitle')}
-        className="inline-flex min-h-9 items-center gap-1 rounded-full border border-dashed border-slate-400 px-3 text-sm font-medium text-slate-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 disabled:opacity-60">
+        className={cx('inline-flex min-h-control-sm items-center gap-1.5 rounded-full border border-dashed border-slate-400 px-4 text-sm font-semibold text-slate-700 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-900 disabled:opacity-60', FOCUS_RING)}>
         <Plus className="h-4 w-4" aria-hidden="true" />{t('phrase.add')}
       </button>
     </div>

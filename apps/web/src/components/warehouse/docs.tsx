@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { fmtDate, fmtDateTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, EmptyState, ErrorState, Field, Input, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Select, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Button, EmptyState, ErrorState, Field, Input, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Select, Table, Td, TextLink, Th, useToast } from '@/components/ui';
 import { MoneyInput } from '@/components/money-input';
 import { ControlledBadge, Expiry, parseQty, qty, StatusBadge } from './common';
 
@@ -42,9 +42,9 @@ export function ReceiptsTab() {
         <thead><tr><Th>{t('wh.col.doc')}</Th><Th>{t('wh.rc.supplier')}</Th><Th className="hidden sm:table-cell">{t('wh.rc.invoice')}</Th><Th right>{t('wh.col.sum')}</Th><Th><span className="sr-only">{t('common.print')}</span></Th></tr></thead>
         <tbody>{rows.map((r) => (
           <tr key={r.id}>
-            <Td className="whitespace-nowrap font-semibold">K-{r.number}<div className="text-[0.8125rem] font-normal text-slate-600">{fmtDateTime(r.received_at)}</div></Td>
-            <Td className="min-w-[9rem]">{r.supplier}<div className="text-[0.8125rem] text-slate-600">{t('wh.rc.lines', { n: r.lines })} · {r.received_by_name}</div></Td>
-            <Td className="hidden sm:table-cell">{r.invoice_no}<div className="text-[0.8125rem] text-slate-600">{fmtDate(r.invoice_date)}</div></Td>
+            <Td className="whitespace-nowrap font-semibold">K-{r.number}<div className="text-small font-normal text-slate-600">{fmtDateTime(r.received_at)}</div></Td>
+            <Td className="min-w-[9rem]">{r.supplier}<div className="text-small text-slate-600">{t('wh.rc.lines', { n: r.lines })} · {r.received_by_name}</div></Td>
+            <Td className="hidden sm:table-cell">{r.invoice_no}<div className="text-small text-slate-600">{fmtDate(r.invoice_date)}</div></Td>
             <Td right>{formatSom(r.total)}</Td>
             <Td className="w-px"><LinkButton size="sm" variant="ghost" href={`/print/warehouse/receipt/${r.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton></Td>
           </tr>
@@ -91,7 +91,7 @@ export function ReceiptModal({ onClose, presetItem }: { onClose: () => void; pre
           <Field label={t('wh.rc.invoiceDate')} required error={err.invoice_date}>{(id) => <Input id={id} type="date" max={me.today} value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
         </div>
         <fieldset className="space-y-3">
-          <legend className="mb-1 text-[0.9375rem] font-semibold text-slate-900">{t('wh.req.lines')}</legend>
+          <legend className="mb-1 text-body font-semibold text-slate-900">{t('wh.req.lines')}</legend>
           {lines.map((l, i) => {
             const e = lineErr(l, i);
             const it = (items.data ?? []).find((x) => x.id === l.item_id);
@@ -136,9 +136,9 @@ export function WriteoffsTab() {
             <thead><tr><Th>{t('wh.col.doc')}</Th><Th>{t('admin.inv.reason')}</Th><Th right>{t('wh.col.sum')}</Th><Th>{t('admin.inv.colState')}</Th></tr></thead>
             <tbody>{rows.map((r) => (
               <tr key={r.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSel(r.id)}>
-                <Td className="whitespace-nowrap"><button type="button" className="font-semibold hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={(e) => { e.stopPropagation(); setSel(r.id); }}>A-{r.number}</button>
-                  <div className="text-[0.8125rem] text-slate-600">{fmtDateTime(r.created_at)}</div></Td>
-                <Td className="min-w-[10rem]">{t(`wh.wo.reason.${r.reason}` as MessageKey)}{r.controlled && <> <ControlledBadge /></>}<div className="text-[0.8125rem] text-slate-600">{r.note}</div></Td>
+                <Td className="whitespace-nowrap"><TextLink tone="ink" onClick={(e) => { e.stopPropagation(); setSel(r.id); }}>A-{r.number}</TextLink>
+                  <div className="text-small text-slate-600">{fmtDateTime(r.created_at)}</div></Td>
+                <Td className="min-w-[10rem]">{t(`wh.wo.reason.${r.reason}` as MessageKey)}{r.controlled && <> <ControlledBadge /></>}<div className="text-small text-slate-600">{r.note}</div></Td>
                 <Td right>{formatSom(r.total)}</Td>
                 <Td className="whitespace-nowrap"><StatusBadge status={r.status} /></Td>
               </tr>
@@ -184,7 +184,7 @@ function WriteoffDetail({ id, onClose }: { id: string; onClose: () => void }) {
           {me.role === 'manager' && w.status === 'pending' && !canDecide && <Alert tone="blue">{t('wh.wo.ownAct')}</Alert>}
           <Table>
             <thead><tr><Th>{t('wh.col.item')}</Th><Th>{t('wh.col.batch')}</Th><Th right>{t('wh.col.qty')}</Th><Th right>{t('wh.col.sum')}</Th></tr></thead>
-            <tbody>{w.lines.map((l: any) => <tr key={l.id}><Td>{l.name}</Td><Td className="whitespace-nowrap">{l.batch_no ?? '—'}{l.expiry_date && <div className="text-[0.8125rem]"><Expiry date={l.expiry_date} today={me.today} /></div>}</Td><Td right>{qty(l.qty)} {l.unit}</Td><Td right>{formatSom(l.sum)}</Td></tr>)}</tbody>
+            <tbody>{w.lines.map((l: any) => <tr key={l.id}><Td>{l.name}</Td><Td className="whitespace-nowrap">{l.batch_no ?? '—'}{l.expiry_date && <div className="text-small"><Expiry date={l.expiry_date} today={me.today} /></div>}</Td><Td right>{qty(l.qty)} {l.unit}</Td><Td right>{formatSom(l.sum)}</Td></tr>)}</tbody>
           </Table>
         </div>
       )}
@@ -232,14 +232,14 @@ export function WriteoffModal({ onClose, presetBatch }: { onClose: () => void; p
           <Field label={t('wh.wo.note')} required className="sm:col-span-2" error={local.note ?? err.note}>{(id) => <Input id={id} value={note} maxLength={300} invalid={!!(local.note ?? err.note)} onChange={(e) => setNote(e.target.value)} />}</Field>
         </div>
         <fieldset>
-          <legend className="mb-1 text-[0.9375rem] font-semibold text-slate-900">{t('wh.wo.commission')}</legend>
+          <legend className="mb-1 text-body font-semibold text-slate-900">{t('wh.wo.commission')}</legend>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {members.map((v, i) => <Input key={i} aria-label={t('wh.wo.member', { n: i + 1 })} placeholder={t('wh.wo.member', { n: i + 1 })} value={v} maxLength={120} onChange={(e) => setMembers((ms) => ms.map((x, j) => (j === i ? e.target.value : x)))} />)}
           </div>
           {(local.commission ?? err.commission) && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{local.commission ?? err.commission}</p>}
         </fieldset>
         <fieldset className="space-y-2">
-          <legend className="mb-1 text-[0.9375rem] font-semibold text-slate-900">{t('wh.req.lines')}</legend>
+          <legend className="mb-1 text-body font-semibold text-slate-900">{t('wh.req.lines')}</legend>
           {lines.map((l, i) => {
             const e = lineErr(l, i);
             return (
@@ -277,9 +277,9 @@ export function CountsTab() {
           <thead><tr><Th>{t('wh.col.doc')}</Th><Th>{t('wh.cnt.scope')}</Th><Th right>{t('wh.cnt.diffs')}</Th><Th>{t('admin.inv.colState')}</Th></tr></thead>
           <tbody>{q.data!.map((c) => (
             <tr key={c.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSel(c.id)}>
-              <Td className="whitespace-nowrap"><button type="button" className="font-semibold hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={(e) => { e.stopPropagation(); setSel(c.id); }}>I-{c.number}</button>
-                <div className="text-[0.8125rem] text-slate-600">{fmtDateTime(c.started_at)} · {c.branch_name}</div></Td>
-              <Td>{t(`wh.cnt.scope.${c.scope}` as MessageKey)}<div className="text-[0.8125rem] text-slate-600">{t('wh.cnt.batches', { n: c.lines })}</div></Td>
+              <Td className="whitespace-nowrap"><TextLink tone="ink" onClick={(e) => { e.stopPropagation(); setSel(c.id); }}>I-{c.number}</TextLink>
+                <div className="text-small text-slate-600">{fmtDateTime(c.started_at)} · {c.branch_name}</div></Td>
+              <Td>{t(`wh.cnt.scope.${c.scope}` as MessageKey)}<div className="text-small text-slate-600">{t('wh.cnt.batches', { n: c.lines })}</div></Td>
               <Td right>{c.differences}</Td>
               <Td className="whitespace-nowrap"><StatusBadge status={c.status} /></Td>
             </tr>
@@ -357,7 +357,7 @@ function CountDetail({ id, onClose }: { id: string; onClose: () => void }) {
             return (
               <tr key={l.id} className={diff ? 'bg-amber-50' : ''}>
                 <Td className="min-w-[9rem]">{l.name}{l.controlled && <> <ControlledBadge /></>}</Td>
-                <Td className="whitespace-nowrap">{l.batch_no ?? '—'}{l.expiry_date && <div className="text-[0.8125rem]"><Expiry date={l.expiry_date} today={me.today} /></div>}</Td>
+                <Td className="whitespace-nowrap">{l.batch_no ?? '—'}{l.expiry_date && <div className="text-small"><Expiry date={l.expiry_date} today={me.today} /></div>}</Td>
                 <Td right>{qty(l.expected_qty)} {l.unit}</Td>
                 <Td right>{open ? <Input aria-label={t('wh.cnt.counted')} inputMode="decimal" className="ml-auto w-24" value={v.counted} onChange={(e) => setEdit((x) => ({ ...x, [l.id]: { ...v, counted: e.target.value } }))} /> : qty(l.counted_qty)}</Td>
                 <Td className="min-w-[10rem]">{open ? (diff ? <Input aria-label={t('admin.inv.reason')} value={v.reason} maxLength={200} onChange={(e) => setEdit((x) => ({ ...x, [l.id]: { ...v, reason: e.target.value } }))} /> : null) : l.reason}</Td>

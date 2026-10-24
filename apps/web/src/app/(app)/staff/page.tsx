@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { addDays, fmtDateTime, fmtTime, formatPhone, formatSom, fullName, weekdayName } from '@/lib/format';
 import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
-import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Table, Td, Th } from '@/components/ui';
+import { Badge, Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, scrollBehavior, Table, Td, TextLink, Th } from '@/components/ui';
 import { AppointmentStatus } from '@/components/status';
 import { StaffFormModal, TempPasswordModal, type StaffRow } from '@/components/staff-form';
 import { ScheduleEditor } from '@/components/schedule-editor';
@@ -23,7 +23,7 @@ function Access({ s }: { s: StaffRow }) {
   if (s.has_password && s.must_change_password) return <Badge tone="yellow">{t('admin.staff.tempPassword')}</Badge>;
   const text = !s.has_password ? t(s.demo_card ? 'admin.staff.demoCard' : 'admin.staff.noPassword')
     : s.last_login_at ? fmtDateTime(s.last_login_at) : t('admin.staff.neverLoggedIn');
-  return <span className="whitespace-nowrap text-[0.8125rem] text-slate-600">{text}</span>;
+  return <span className="whitespace-nowrap text-small text-slate-600">{text}</span>;
 }
 
 function StaffStatus({ active }: { active: boolean }) {
@@ -65,23 +65,22 @@ function Staff() {
               </tr></thead>
               <tbody>{rows.map((s) => (
                 <tr key={s.membership_id} onClick={s.doctor_id ? () => pick(s.doctor_id!) : undefined}
-                  className={cx(s.doctor_id && 'cursor-pointer hover:bg-slate-50', sel && sel === s.doctor_id && 'bg-brand-50 hover:bg-brand-50')}>
+                  className={cx(s.doctor_id && 'cursor-pointer hover:bg-slate-50', sel && sel === s.doctor_id && 'bg-brand-50 hover:bg-brand-50 [&>td:first-child]:shadow-selected')}>
                   <Td className="min-w-[11rem]">
                     <div className="flex items-baseline gap-1.5">
                       {s.doctor_id
-                        ? <button type="button" onClick={(e) => { e.stopPropagation(); pick(s.doctor_id!); }} aria-current={sel === s.doctor_id || undefined}
-                            className="rounded text-left font-semibold text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{s.full_name}</button>
+                        ? <TextLink onClick={(e) => { e.stopPropagation(); pick(s.doctor_id!); }} aria-current={sel === s.doctor_id || undefined} className="text-left">{s.full_name}</TextLink>
                         : <span className="font-semibold text-slate-900">{s.full_name}</span>}
-                      {s.is_self && <span className="text-[0.8125rem] text-slate-600">{t('admin.staff.self')}</span>}
+                      {s.is_self && <span className="text-small text-slate-600">{t('admin.staff.self')}</span>}
                     </div>
                     {/* second line: login on wide screens, role on a phone (the role column is hidden there) */}
-                    {s.login && <div className="hidden truncate text-[0.8125rem] text-slate-600 sm:block">{showLogin(s.login)}</div>}
-                    <div className="truncate text-[0.8125rem] text-slate-600 sm:hidden">{t(`role.${s.role}` as MessageKey)}{s.specialty ? `, ${s.specialty}` : ''}</div>
+                    {s.login && <div className="hidden truncate text-small text-slate-600 sm:block">{showLogin(s.login)}</div>}
+                    <div className="truncate text-small text-slate-600 sm:hidden">{t(`role.${s.role}` as MessageKey)}{s.specialty ? `, ${s.specialty}` : ''}</div>
                     {s.status !== 'active' && <div className="mt-1 sm:hidden"><StaffStatus active={false} /></div>}
                   </Td>
                   <Td className="hidden sm:table-cell">
                     <div className="text-slate-900">{t(`role.${s.role}` as MessageKey)}{s.specialty && <span className="text-slate-600">, {s.specialty}</span>}</div>
-                    {s.doctor_id && !s.has_schedule && s.status === 'active' && <div className="text-[0.8125rem] font-semibold text-amber-800">{t('admin.staff.noSchedule')}</div>}
+                    {s.doctor_id && !s.has_schedule && s.status === 'active' && <div className="text-small font-semibold text-amber-800">{t('admin.staff.noSchedule')}</div>}
                   </Td>
                   <Td className="hidden max-w-[14rem] truncate text-slate-700 md:table-cell">{branches(s)}</Td>
                   <Td className="hidden lg:table-cell"><Access s={s} /></Td>
@@ -113,7 +112,7 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const q = useQuery({ queryKey: ['staff', 'doctor', id], queryFn: () => api(`/staff/doctors/${id}?from=${from}&to=${me.today}`).then((r) => r.data) });
   const today = useQuery({ queryKey: ['appointments', 'staff', id, me.today], queryFn: () => api(`/appointments?date=${me.today}&doctor_id=${id}`).then((r) => r.data as any[]) });
   // the card opens above the list: bring it into view when another doctor is picked further down
-  useEffect(() => { if ((top.current?.getBoundingClientRect().top ?? 0) < 0 || window.scrollY > 200) top.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [id]);
+  useEffect(() => { if ((top.current?.getBoundingClientRect().top ?? 0) < 0 || window.scrollY > 200) top.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }); }, [id]);
   if (q.isLoading) return <div ref={top} className="scroll-mt-24"><Card><LoadingRows rows={4} /></Card></div>;
   if (q.isError) return <div ref={top} className="scroll-mt-24"><Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card></div>;
   const d = q.data;
@@ -121,18 +120,18 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
   return (
     <div ref={top} className="flex scroll-mt-24 flex-col gap-5">
       <Card
-        title={<span className="flex flex-wrap items-baseline gap-x-2">{d.doctor.display_name}<span className="text-[0.9375rem] font-normal text-slate-600">{d.doctor.specialty} · {t('admin.doc.defaultShare', { p: Number(d.doctor.default_share_percent) })}</span></span>}
+        title={<span className="flex flex-wrap items-baseline gap-x-2">{d.doctor.display_name}<span className="text-body font-normal text-slate-600">{d.doctor.specialty} · {t('admin.doc.defaultShare', { p: Number(d.doctor.default_share_percent) })}</span></span>}
         actions={<Button size="sm" variant="ghost" icon={<X className="h-4 w-4" />} onClick={onClose}>{t('admin.staff.closeDetail')}</Button>}>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
           <section className="min-w-0">
             <div className="mb-2 flex min-h-9 flex-wrap items-center justify-between gap-2">
-              <h3 className="text-[0.9375rem] font-bold text-slate-900">{t('admin.doc.schedule')}</h3>
+              <h3 className="text-body font-bold text-slate-900">{t('admin.doc.schedule')}</h3>
               {me.role === 'manager' && <Button size="sm" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setEditSchedule(true)}>{t('admin.doc.editSchedule')}</Button>}
             </div>
             {!d.schedule.length ? <p className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900">{t('admin.doc.noSchedule')}</p> : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead><tr className="border-b border-slate-200 text-[0.8125rem] text-slate-600">
+                  <thead><tr className="border-b border-slate-200 text-small text-slate-600">
                     <th scope="col" className="py-2 pr-3 font-semibold">{t('admin.doc.colDay')}</th><th scope="col" className="py-2 pr-3 font-semibold">{t('admin.doc.colHours')}</th>
                     <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">{t('admin.doc.colBreak')}</th><th scope="col" className="py-2 font-semibold">{t('admin.doc.colPlace')}</th>
                   </tr></thead>
@@ -147,16 +146,16 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
                 </table>
               </div>
             )}
-            <h3 className="mb-2 mt-5 flex min-h-9 items-center text-[0.9375rem] font-bold text-slate-900">{t('admin.off.title')}</h3>
+            <h3 className="mb-2 mt-5 flex min-h-9 items-center text-body font-bold text-slate-900">{t('admin.off.title')}</h3>
             <DaysOff doctorId={d.doctor.id} canEdit={me.role === 'manager'} />
           </section>
           <section className="min-w-0">
-            <h3 className="mb-2 flex min-h-9 items-center text-[0.9375rem] font-bold text-slate-900">{t('admin.doc.today')}</h3>
+            <h3 className="mb-2 flex min-h-9 items-center text-body font-bold text-slate-900">{t('admin.doc.today')}</h3>
             {today.isLoading ? <LoadingRows rows={3} /> : !today.data?.length ? <p className="py-2 text-sm text-slate-600">{t('admin.doc.noToday')}</p> : (
               <ul className="divide-y divide-slate-100 border-t border-slate-200">{today.data.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
                   <span className="w-12 shrink-0 font-medium tabular-nums">{fmtTime(a.starts_at)}</span>
-                  <span className="min-w-[9rem] flex-1"><span className="block truncate font-medium text-slate-900">{fullName(a)}</span><span className="block truncate text-[0.8125rem] text-slate-600">{a.service_name}</span></span>
+                  <span className="min-w-[9rem] flex-1"><span className="block truncate font-medium text-slate-900">{fullName(a)}</span><span className="block truncate text-small text-slate-600">{a.service_name}</span></span>
                   <AppointmentStatus status={a.status} />
                 </li>
               ))}</ul>
@@ -170,7 +169,7 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
         <dl className="grid grid-cols-1 divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           {([[t('admin.doc.services'), d.services.length], [t('admin.doc.value'), formatSom(total)], [t('admin.doc.share'), formatSom(share)]] as const).map(([k, v]) => (
             <div key={k} className="flex min-w-0 items-baseline justify-between gap-3 px-5 py-2.5 sm:block sm:py-3">
-              <dt className="truncate text-[0.8125rem] font-semibold text-slate-600">{k}</dt>
+              <dt className="truncate text-small font-semibold text-slate-600">{k}</dt>
               <dd className="whitespace-nowrap text-lg font-bold tabular-nums text-slate-900 sm:mt-1">{v}</dd>
             </div>
           ))}
@@ -188,7 +187,7 @@ function DoctorDetail({ id, onClose }: { id: string; onClose: () => void }) {
             </Table>
           </div>
         )}
-        <p className="border-t border-slate-100 px-5 py-3 text-[0.8125rem] text-slate-600">{t('admin.doc.shareNote')}</p>
+        <p className="border-t border-slate-100 px-5 py-3 text-small text-slate-600">{t('admin.doc.shareNote')}</p>
       </Card>
     </div>
   );

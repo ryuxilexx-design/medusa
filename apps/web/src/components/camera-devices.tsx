@@ -7,7 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, useToast } from './ui';
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, useToast } from './ui';
 import { FacePhotoModal, type FaceSubject } from './face-photo';
 
 export type Camera = {
@@ -51,8 +51,8 @@ export function FaceCodes() {
             <thead><tr><Th>{t('cam.col.staff')}</Th><Th>{t('cam.col.code')}</Th><Th className="hidden md:table-cell">{t('cam.col.lastSeen')}</Th><Th right><span className="sr-only">{t('cam.col.actions')}</span></Th></tr></thead>
             <tbody>{q.data.data.map((s) => (
               <tr key={s.membership_id}>
-                <Td className="min-w-[11rem]"><div className="font-semibold text-slate-900">{s.full_name}</div><div className="text-[0.8125rem] text-slate-600">{t(`role.${s.role}` as MessageKey)}{s.specialty ? `, ${s.specialty}` : ''}</div></Td>
-                <Td className="whitespace-nowrap">{s.code ? <><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[0.9375rem] font-bold text-slate-900">{s.code}</span>{s.cameras_enrolled > 0 && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('cam.photo.onCameras', { n: s.cameras_enrolled })}</div>}</> : <span className="text-slate-600">{t('cam.codes.none')}</span>}</Td>
+                <Td className="min-w-[11rem]"><div className="font-semibold text-slate-900">{s.full_name}</div><div className="text-small text-slate-600">{t(`role.${s.role}` as MessageKey)}{s.specialty ? `, ${s.specialty}` : ''}</div></Td>
+                <Td className="whitespace-nowrap">{s.code ? <><span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-body font-bold text-slate-900">{s.code}</span>{s.cameras_enrolled > 0 && <div className="mt-1 text-small text-slate-600">{t('cam.photo.onCameras', { n: s.cameras_enrolled })}</div>}</> : <span className="text-slate-600">{t('cam.codes.none')}</span>}</Td>
                 <Td className="hidden whitespace-nowrap tabular-nums text-slate-700 md:table-cell">{s.code ? (s.last_seen_at ? fmtDateTime(s.last_seen_at) : t('cam.codes.never')) : '—'}</Td>
                 <Td right className="whitespace-nowrap !py-1.5">
                   {s.code
@@ -68,7 +68,7 @@ export function FaceCodes() {
         )}
       </Card>
       <Card className="self-start" title={<span className="flex items-center gap-2"><ScanFace className="h-5 w-5 text-brand-600" aria-hidden="true" />{t('cam.codes.howTitle')}</span>}>
-        <ol className="space-y-2 text-[0.9375rem] text-slate-800">
+        <ol className="space-y-2 text-body text-slate-800">
           {(['cam.codes.step1', 'cam.codes.step2', 'cam.codes.step3'] as const).map((k, i) => (
             <li key={k} className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-800">{i + 1}</span><span className="pt-0.5">{t(k, { code: 'S-12', idNo: 'ID No.', name: 'Name' })}</span></li>
           ))}
@@ -98,11 +98,8 @@ function GiveCodeModal({ row, onClose }: { row: StaffCode | null; onClose: () =>
     <Modal open={!!row} onClose={onClose} title={row ? t('cam.codes.giveTitle', { name: row.full_name }) : ''} dirty={confirmed && !m.isSuccess}
       footer={<><ModalCancel /><Button variant="primary" icon={<KeyRound className={ic} />} loading={m.isPending} onClick={submit}>{t('cam.codes.give')}</Button></>}>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>
-        <label className="flex min-h-11 cursor-pointer items-start gap-3 text-[0.9375rem] text-slate-900">
-          <input type="checkbox" data-autofocus className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" checked={confirmed} aria-invalid={!!error && !confirmed || undefined}
-            onChange={(e) => { setConfirmed(e.target.checked); setError(null); }} />
-          <span>{t('cam.codes.consent')} <span className="text-red-700" aria-hidden="true">*</span></span>
-        </label>
+        <Checkbox data-autofocus checked={confirmed} aria-invalid={!!error && !confirmed || undefined} onChange={(e) => { setConfirmed(e.target.checked); setError(null); }}
+          rowClassName="!items-start" className="mt-[0.15rem]" label={<>{t('cam.codes.consent')} <span className="text-red-700" aria-hidden="true">*</span></>} />
         {error && <Alert tone="red">{error}</Alert>}
       </form>
     </Modal>
@@ -122,7 +119,7 @@ function RevokeCodeModal({ row, onClose }: { row: StaffCode | null; onClose: () 
     <Modal open={!!row} onClose={onClose} title={t('cam.codes.revokeTitle')}
       footer={<><ModalCancel /><Button variant="danger" icon={<CircleSlash className={ic} />} loading={m.isPending} onClick={() => m.mutate()}>{t('cam.codes.revoke')}</Button></>}>
       <div className="space-y-3">
-        <p className="text-[0.9375rem] text-slate-900">{row && t('cam.codes.revokeText', { name: row.full_name, code: row.code })}</p>
+        <p className="text-body text-slate-900">{row && t('cam.codes.revokeText', { name: row.full_name, code: row.code })}</p>
         {m.isError && <Alert tone="red">{(m.error as Error).message}</Alert>}
       </div>
     </Modal>
@@ -174,10 +171,10 @@ export function Devices({ q, onEdit, onAdd }: { q: { data?: CamerasList; isError
           </tr></thead>
           <tbody>{rows.map((c) => (
             <tr key={c.id} className={c.status === 'disabled' ? 'text-slate-600' : ''}>
-              <Td className="min-w-[10rem]"><div className="font-semibold text-slate-900">{c.name}</div><div className="text-[0.8125rem] text-slate-600">{[showBranch ? c.branch_name : null, c.location, c.model].filter(Boolean).join(' · ') || '—'}</div><div className="mt-1 flex flex-wrap gap-1"><span className="sm:hidden"><CameraStatus c={c} /></span><ConnectionBadge c={c} /></div></Td>
-              <Td className="hidden md:table-cell"><PurposeBadges purposes={c.purposes} />{c.alert_snapshots && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('cam.dev.snapshots')}</div>}</Td>
+              <Td className="min-w-[10rem]"><div className="font-semibold text-slate-900">{c.name}</div><div className="text-small text-slate-600">{[showBranch ? c.branch_name : null, c.location, c.model].filter(Boolean).join(' · ') || '—'}</div><div className="mt-1 flex flex-wrap gap-1"><span className="sm:hidden"><CameraStatus c={c} /></span><ConnectionBadge c={c} /></div></Td>
+              <Td className="hidden md:table-cell"><PurposeBadges purposes={c.purposes} />{c.alert_snapshots && <div className="mt-1 text-small text-slate-600">{t('cam.dev.snapshots')}</div>}</Td>
               <Td className="hidden whitespace-nowrap sm:table-cell"><CameraStatus c={c} /></Td>
-              <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell"><div className="text-slate-900">{c.last_event_at ? fmtDateTime(c.last_event_at) : t('cam.dev.never')}</div><div className="text-[0.8125rem] text-slate-600">{t('cam.dev.events24', { n: c.events_24h })}</div></Td>
+              <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell"><div className="text-slate-900">{c.last_event_at ? fmtDateTime(c.last_event_at) : t('cam.dev.never')}</div><div className="text-small text-slate-600">{t('cam.dev.events24', { n: c.events_24h })}</div></Td>
               <Td right className="whitespace-nowrap !py-1.5">
                 <div className="flex flex-wrap justify-end gap-1">
                   {q.data!.meta.simulator_available && c.status === 'active' && <Button size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800" icon={<FlaskConical className={ic} />} aria-label={t('cam.dev.test')} title={t('cam.dev.test')} onClick={() => setTesting(c)}><span className="hidden sm:inline">{t('cam.dev.test')}</span></Button>}
@@ -273,9 +270,7 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
           <legend className="mb-1 text-sm font-semibold text-slate-800">{t('cam.form.purposes')} <span className="text-red-700" aria-hidden="true">*</span></legend>
           <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             {CAMERA_PURPOSES.map((p) => (
-              <label key={p} className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] text-slate-900">
-                <input type="checkbox" className="h-5 w-5 accent-brand-600" checked={f.purposes.includes(p)} onChange={() => togglePurpose(p)} aria-invalid={!!errors.purposes || undefined} />{t(`cam.purpose.${p}`)}
-              </label>
+              <Checkbox key={p} checked={f.purposes.includes(p)} onChange={() => togglePurpose(p)} aria-invalid={!!errors.purposes || undefined} label={t(`cam.purpose.${p}`)} />
             ))}
           </div>
           {errors.purposes && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{errors.purposes}</p>}
@@ -287,10 +282,7 @@ export function CameraFormModal({ open, camera, onClose, onPushPath }: { open: b
                 <option value="after_hours">{t('cam.form.afterHours')}</option><option value="always">{t('cam.form.always')}</option>
               </Select>
             )}</Field>
-            <label className="flex min-h-11 cursor-pointer items-start gap-2.5 text-[0.9375rem] text-slate-900">
-              <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-brand-600" checked={f.alert_snapshots} onChange={(e) => set('alert_snapshots', e.target.checked)} />
-              <span>{t('cam.form.snapshots')}<span className="block text-[0.8125rem] text-slate-600">{t('cam.form.snapshotsHint')}</span></span>
-            </label>
+            <Checkbox checked={f.alert_snapshots} onChange={(e) => set('alert_snapshots', e.target.checked)} label={t('cam.form.snapshots')} hint={t('cam.form.snapshotsHint')} />
           </>
         )}
         {camera && (
@@ -342,8 +334,8 @@ export function PushAddressModal({ path, onClose }: { path: string | null; onClo
           </Alert>
         )}
         <section aria-labelledby="push-setup-h">
-          <h3 id="push-setup-h" className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('cam.push.setup')}</h3>
-          <ol className="space-y-2 text-[0.9375rem] text-slate-800">
+          <h3 id="push-setup-h" className="mb-2 text-body font-bold text-slate-900">{t('cam.push.setup')}</h3>
+          <ol className="space-y-2 text-body text-slate-800">
             {steps.map((s, i) => <li key={i} className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-800">{i + 1}</span><span className="min-w-0 break-words pt-0.5">{s}</span></li>)}
           </ol>
         </section>
@@ -440,7 +432,7 @@ function ConnectModal({ camera, onClose }: { camera: Camera | null; onClose: () 
             </Alert>
           )}
           {d && connected && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[0.8125rem] text-slate-700">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-small text-slate-700">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><ConnectionBadge c={{ ...camera!, isapi_connected: true, isapi_model: d.model, isapi_host: d.host, isapi_error: d.error }} />{d.checked_at && <span>{t('cam.isapi.checkedAt', { at: fmtDateTime(d.checked_at) })}</span>}</div>
               {d.model && <div className="mt-1">{t('cam.isapi.device', { model: d.model, firmware: d.firmware ?? '—', serial: d.serial ?? '—' })}</div>}
               {d.fdlib_id && <div>{t('cam.isapi.library', { id: d.fdlib_id })}</div>}
@@ -464,9 +456,7 @@ function ConnectModal({ camera, onClose }: { camera: Camera | null; onClose: () 
             <Field label={t('cam.isapi.host', { ip: 'IP' })} required error={errors.host}>{(id) => <Input id={id} data-autofocus maxLength={120} autoComplete="off" inputMode="url" placeholder="192.168.1.64" value={f.host} invalid={!!errors.host} onChange={(e) => set('host', e.target.value)} />}</Field>
             <Field label={t('cam.isapi.port')} error={errors.port}>{(id) => <Input id={id} type="number" min={1} max={65535} inputMode="numeric" value={f.port} invalid={!!errors.port} onChange={(e) => set('port', e.target.value)} />}</Field>
           </div>
-          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] text-slate-900">
-            <input type="checkbox" className="h-5 w-5 accent-brand-600" checked={f.https} onChange={(e) => set('https', e.target.checked)} />{t('cam.isapi.https', { proto: 'HTTPS' })}
-          </label>
+          <Checkbox checked={f.https} onChange={(e) => set('https', e.target.checked)} label={t('cam.isapi.https', { proto: 'HTTPS' })} />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label={t('cam.isapi.username')} required error={errors.username}>{(id) => <Input id={id} maxLength={64} autoComplete="off" value={f.username} invalid={!!errors.username} onChange={(e) => set('username', e.target.value)} />}</Field>
             <Field label={t('cam.isapi.password')} required error={errors.password} hint={connected ? t('cam.isapi.passwordHint') : undefined}>{(id) => <Input id={id} type="password" maxLength={128} autoComplete="new-password" value={f.password} invalid={!!errors.password} onChange={(e) => set('password', e.target.value)} />}</Field>

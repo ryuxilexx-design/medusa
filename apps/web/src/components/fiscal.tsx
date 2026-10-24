@@ -5,7 +5,7 @@ import { ReceiptText } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Field, Input, Modal, ModalCancel, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Field, Input, Modal, ModalCancel, TextLink, useToast } from '@/components/ui';
 
 /**
  * Fiscal receipt (ОФД) of a payment or refund. Parallel mode («manual»): the clinic's certified KKM prints the
@@ -68,7 +68,7 @@ export function FiscalEnterForm({ kind, id, onDone, compact }: { kind: 'payment'
           <Field label={t('cash.fiscal.sign')} error={err.fiscal_sign}>{(fid) => <Input id={fid} value={sign} invalid={!!err.fiscal_sign} maxLength={80} onChange={(e) => setSign(e.target.value)} />}</Field>
           <Field label={t('cash.fiscal.terminal')} error={err.terminal_id}>{(fid) => <Input id={fid} value={terminal} invalid={!!err.terminal_id} maxLength={60} onChange={(e) => setTerminal(e.target.value)} />}</Field>
         </div>
-      ) : <button type="button" className="min-h-9 text-[0.9375rem] font-semibold text-brand-700 hover:underline" onClick={() => setMore(true)}>{t('cash.fiscal.sign')} / {t('cash.fiscal.terminal')}</button>}
+      ) : <TextLink className="self-start text-body" onClick={() => setMore(true)}>{t('cash.fiscal.sign')} / {t('cash.fiscal.terminal')}</TextLink>}
       <Button type="submit" variant="primary" className={compact ? undefined : 'w-full'} loading={m.isPending} icon={<ReceiptText className="h-4 w-4" />}>{t('cash.fiscal.save')}</Button>
     </form>
   );

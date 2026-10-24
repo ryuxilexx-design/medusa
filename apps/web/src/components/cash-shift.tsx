@@ -160,7 +160,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
           <div aria-hidden="true" className="col-span-2 my-0.5 border-t border-slate-200" />
           <dt className="font-semibold">{t('cash.expectedCashShort')}</dt><dd className="text-right font-semibold tabular-nums">{formatSom(shift.expected_cash)}</dd>
         </dl>
-        <p className="text-[0.8125rem] text-slate-600">{t('cash.nonCashLine', { card: formatSom(tot.payments.card.sum), transfer: formatSom(tot.payments.transfer.sum) })}</p>
+        <p className="text-small text-slate-600">{t('cash.nonCashLine', { card: formatSom(tot.payments.card.sum), transfer: formatSom(tot.payments.transfer.sum) })}</p>
         {!!shift.fiscal_pending && <Alert tone="yellow" title={t('cash.fiscal.shiftPending', { n: shift.fiscal_pending })}>{t('cash.fiscal.shiftPendingHint')}</Alert>}
         <Field label={t('cash.countedCash')} required error={errors.counted_cash ?? (counted && tiyin == null ? t('cash.enterAmountNumber') : undefined)}>
           {(id) => <MoneyInput id={id} className="w-56" value={counted} onChange={(e) => { setCounted(e.target.value); setErrors({}); }} invalid={!!errors.counted_cash} autoFocus />}
@@ -169,7 +169,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
         {diff != null && (diff !== 0 || errors.note) && (
           <Field label={t('cash.diffReason')} required error={errors.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('cash.diffReasonPlaceholder')} />}</Field>
         )}
-        <p className="text-[0.8125rem] text-slate-600">{t('cash.closedShiftFooter')}</p>
+        <p className="text-small text-slate-600">{t('cash.closedShiftFooter')}</p>
         {!ready && counted.trim() !== '' && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </div>
     </Modal>
