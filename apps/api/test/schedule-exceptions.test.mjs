@@ -70,7 +70,7 @@ test('dam olish kuni: qabul 409 DOCTOR_UNAVAILABLE, bo‘sh vaqt yo‘q, ro‘yx
   assert.equal(b.body.error.code, 'DOCTOR_UNAVAILABLE');
   assert.match(b.body.error.message, /dam olish kuni/);
   // the list: manager, and the doctor for their own days
-  const list = (await manager.get(`/schedule-exceptions?from=${day}&to=${day}`)).body.data;
+  const list = (await manager.get(`/schedule-exceptions?from=${day}&to=${day}&doctor_id=${SEED_IDS.doctor(0)}`)).body.data; // the seed has other doctors' days off too
   assert.equal(list.length, 1); assert.equal(list[0].kind, 'day_off'); assert.equal(list[0].note, 'Kasal'); assert.equal(list[0].doctor_name, doc.doctor.display_name);
   const own = (await doctor.get(`/schedule-exceptions?from=${day}&to=${day}&doctor_id=${SEED_IDS.doctor(1)}`)).body.data;
   assert.equal(own.length, 1, 'shifokor boshqa shifokorni so‘rasa ham faqat o‘zinikini ko‘radi'); assert.equal(own[0].doctor_id, SEED_IDS.doctor(0));

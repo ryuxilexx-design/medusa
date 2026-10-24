@@ -83,7 +83,9 @@ before(async () => {
   t2 = session(); await t2.demo(M.tenant2Manager);
 
   const docId = (await pool.query(`SELECT id FROM doctors WHERE membership_id = $1`, [M.doctor(0)])).rows[0].id;
-  const a = (await pool.query(`SELECT a.patient_id, a.branch_id FROM appointments a WHERE a.doctor_id = $1 ORDER BY a.starts_at LIMIT 1`, [docId])).rows[0];
+  // a patient of this doctor with no verified results of their own yet (the seed follows some patients for months)
+  const a = (await pool.query(`SELECT a.patient_id, a.branch_id FROM appointments a WHERE a.doctor_id = $1
+      AND NOT EXISTS (SELECT 1 FROM service_orders o WHERE o.patient_id = a.patient_id AND o.category = 'lab' AND o.status = 'verified') ORDER BY a.starts_at LIMIT 1`, [docId])).rows[0];
   patient = (await pool.query(`SELECT id, last_name, first_name, middle_name, patient_number, phone, to_char(birth_date, 'YYYY-MM-DD') AS birth FROM patients WHERE id = $1`, [a.patient_id])).rows[0];
   // a doctor who never saw this patient
   for (let i = 1; i < 8; i++) {

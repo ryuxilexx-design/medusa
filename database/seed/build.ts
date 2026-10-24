@@ -11,6 +11,8 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { buildWarehouse } from './warehouse';
+import { buildHistory } from './history';
+import { fitTemplate, icdSnap, labValues, NOTE_TEMPLATES, profilesOf, uziVariant, type NoteTpl } from './clinical';
 
 export const DEMO_TIMEZONE_OFFSET_HOURS = 5; // Asia/Tashkent, no DST
 
@@ -31,6 +33,7 @@ export interface SeedData {
   inventory_receipts: Row[]; inventory_batches: Row[]; inventory_requests: Row[]; inventory_request_lines: Row[]; inventory_writeoffs: Row[];
   inventory_writeoff_lines: Row[]; inventory_doc_counters: Row[]; fridge_temperature_log: Row[];
   patient_consents: Row[];
+  medical_documents: Row[]; note_addenda: Row[]; patient_summaries: Row[]; patient_allergies: Row[]; schedule_exceptions: Row[]; patient_deposits: Row[]; refunds: Row[];
   cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[]; camera_snapshots: Row[];
 }
 
@@ -105,6 +108,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     inventory_receipts: [], inventory_batches: [], inventory_requests: [], inventory_request_lines: [], inventory_writeoffs: [], inventory_writeoff_lines: [],
     inventory_doc_counters: [], fridge_temperature_log: [],
     patient_consents: [],
+    medical_documents: [], note_addenda: [], patient_summaries: [], patient_allergies: [], schedule_exceptions: [], patient_deposits: [], refunds: [],
     cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [], camera_snapshots: [],
   };
 
@@ -249,6 +253,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   const FEMALE = ['Nilufar', 'Gulchehra', 'Malika', 'Dilnoza', 'Zarina', 'Madina', 'Shahnoza', 'Feruza', 'Kamola', 'Lola', 'Sevara', 'Munisa', 'Nargiza', 'Ozoda', 'Dildora', 'Mohira', 'Yulduz', 'Sabina', 'Barno', 'Hilola', 'Iroda', 'Umida', 'Zuhra', 'Charos', 'Gulbahor'];
   const SURN = ['Karimov', 'Umarov', 'Nurmatov', 'Tursunov', 'Rahimov', 'Yusupov', 'Aliyev', 'Ismoilov', 'Qodirov', 'Ergashev', 'Xolmatov', 'Abdullayev', 'Nazarov', 'Saidov', 'Mirzayev', 'Rasulov', 'Hasanov', 'Sobirov', 'Jo‘rayev', 'Mahmudov', 'Usmonov', 'Qosimov', 'Sultonov', 'Ahmedov', 'Haydarov', 'Normatov', 'Boboyev', 'Fayzullayev', 'Salimov', 'Valiyev'];
   const STREETS = ['Chilonzor', 'Yunusobod', 'Mirzo Ulug‘bek', 'Yakkasaroy', 'Shayxontohur', 'Olmazor', 'Sergeli', 'Uchtepa', 'Mirobod', 'Bektemir'];
+  const STREET_NAMES = ['Bunyodkor', 'Qatortol', 'Navro‘z', 'Bog‘ishamol', 'Farg‘ona yo‘li', 'Mustaqillik', 'Shota Rustaveli', 'Lutfiy', 'Zarqaynar', 'Bodomzor', 'Olmachi', 'Sebzor', 'Mukimiy', 'Beruniy'];
   const ALLERGENS = ['Penitsillin', 'Aspirin', 'Yong‘oq', 'Changlanish (mavsumiy)', 'Lidokain', 'Sulfanilamidlar'];
   const usedPhones = new Set<string>();
   const phoneGen = () => {
@@ -292,7 +297,13 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
         allergy_state: chance(0.15) ? 'known' : chance(0.55) ? 'denied' : 'unknown',
       };
       if (row.allergy_state === 'known') row.allergy_note = pick(ALLERGENS);
-      if (age < 14) { row.contact_name = `${sur}${chance(0.5) ? 'a' : ''} ${chance(0.5) ? pick(FEMALE) : pick(MALE)} (ota-onasi)`; row.contact_phone = phoneGen(); }
+      if (age < 14) {
+        // the same three draws as before (the seeded numbers stay), now read as: mother or father, and the mother's name
+        const mother = chance(0.5); chance(0.5); const motherName = pick(FEMALE);
+        row.contact_name = mother ? `${sur}a ${motherName} (onasi)` : `${sur} ${father} (otasi)`;
+        row.contact_phone = phoneGen();
+        if (age < 10) row.phone = row.contact_phone; // a small child is reached on the parent's phone
+      }
     }
     const created = new Date(createdBase.getTime() + i * 3600_000 * 7);
     patients.push({
@@ -300,7 +311,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       last_name: row.last_name, first_name: row.first_name, middle_name: row.middle_name ?? null,
       birth_date: row.birth_date, sex: row.sex, phone: row.phone ?? null,
       contact_name: row.contact_name ?? null, contact_phone: row.contact_phone ?? null,
-      address: `Toshkent sh., ${pick(STREETS)} tumani (demo)`, note: row.note ?? null,
+      address: `Toshkent sh., ${pick(STREETS)} tumani, ${STREET_NAMES[(i * 5 + 3) % STREET_NAMES.length]} ko‘chasi, ${1 + ((i * 13) % 58)}-uy (demo)`, note: row.note ?? null,
       allergy_state: row.allergy_state, allergy_note: row.allergy_note ?? null, created_at: created, updated_at: created,
     });
   }
@@ -414,48 +425,44 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     fut++;
   }
 
+  // Lola Abdullayeva's three-day vacation: the first three past days without her bookings (cameras and the schedule agree)
+  const lolaLeave = ((): [number, number] => {
+    for (let back = 6; back <= 26; back++) if ([0, 1, 2].every((k) => !plans.some((p) => p.doc === 4 && p.date === addDays(demoDate, -(back + k))))) return [back + 2, back];
+    return [12, 10];
+  })();
   plans.sort((a, b) => (a.date + String(a.start).padStart(4, '0')).localeCompare(b.date + String(b.start).padStart(4, '0')) || a.doc - b.doc);
 
   // ---------- build appointments and everything that hangs off them ----------
-  const NOTE_TEMPLATES: Record<number, { c: string; a: string; e: string; d: string; r: string }[]> = {
-    0: [
-      { c: 'Tomoq og‘rig‘i, burun bitishi, 37.6°C gacha harorat 2 kundan beri.', a: 'Kasallik o‘tkir boshlangan, oilada shamollash holatlari bor.', e: 'Tomoq shilliq qavati qizargan, o‘pkada vezikulyar nafas.', d: 'O‘tkir respirator infeksiya (demo)', r: 'Ko‘p suyuqlik, dam olish. 5 kundan keyin ahvol yaxshilanmasa qayta murojaat.' },
-      { c: 'Umumiy holsizlik, tez charchash.', a: '1 oydan beri, ish yuklamasi oshgan.', e: 'Teri qoplamlari rangpar, AQB me’yorida.', d: 'Holsizlik sindromi, tekshiruv davom etadi (demo)', r: 'UQT va ferritin tahlili. Natija bilan qayta ko‘rik.' },
-      { c: 'Bosh og‘rig‘i, bosh aylanishi.', a: 'Kechqurunlari kuchayadi, qon bosimi o‘lchanmagan.', e: 'AQB 145/90, puls ritmik.', d: 'Arterial gipertenziya shubhasi (demo)', r: 'Uyda AQB kundaligi yuritish, kardiolog konsultatsiyasi.' },
-    ],
-    1: [
-      { c: 'Yurak sohasida vaqti-vaqti bilan sanchiq.', a: 'Jismoniy yuklamadan keyin, 2 haftadan beri.', e: 'Yurak tonlari aniq, ritmik. AQB 135/85.', d: 'Kardialgiya, tekshiruv rejalashtirildi (demo)', r: 'EKG, lipid profil. Qayta ko‘rik 2 haftadan keyin.' },
-      { c: 'Yurak urishi tezlashishi.', a: 'Stress fonida, kofe iste’moli ko‘p.', e: 'Puls 92, ritmik.', d: 'Sinusli taxikardiya (demo)', r: 'Kofeinni kamaytirish, uyqu rejimi.' },
-    ],
-    2: [
-      { c: 'Bo‘yin va yelkada og‘riq.', a: 'Kompyuterda uzoq ishlash, 3 haftadan beri.', e: 'Bo‘yin mushaklarida taranglik.', d: 'Bo‘yin osteoxondrozi belgilari (demo)', r: 'Ish joyi ergonomikasi, mashqlar majmuasi.' },
-      { c: 'Uyqusizlik, bosh og‘rig‘i.', a: 'Bir oydan beri.', e: 'Nevrologik status o‘zgarishsiz.', d: 'Kuchlanish tipidagi bosh og‘rig‘i (demo)', r: 'Uyqu gigiyenasi, 1 oydan keyin nazorat.' },
-    ],
-    3: [
-      { c: 'Yo‘tal, harorat 38°C.', a: 'Bolalar bog‘chasida shamollash holatlari.', e: 'Tomoq qizargan, o‘pkada quruq xirillashlar yo‘q.', d: 'O‘tkir respirator infeksiya (demo)', r: 'Iliq suyuqlik, harorat nazorati. 3 kundan keyin ko‘rik.' },
-      { c: 'Rejalashtirilgan profilaktik ko‘rik.', a: 'Shikoyat yo‘q.', e: 'Yoshiga mos rivojlangan.', d: 'Sog‘lom bola (demo)', r: 'Keyingi profilaktik ko‘rik 6 oydan keyin.' },
-    ],
-    4: [
-      { c: 'Profilaktik ko‘rik.', a: 'Shikoyat yo‘q.', e: 'Patologik o‘zgarish aniqlanmadi.', d: 'Profilaktik ko‘rik, patologiya aniqlanmadi (demo)', r: 'Yillik ko‘rik.' },
-      { c: 'Qorin pastida og‘riq.', a: 'Bir haftadan beri.', e: 'Palpatsiyada sezilarli og‘riq yo‘q.', d: 'Tekshiruv talab etiladi (demo)', r: 'Kichik chanoq UZI, natija bilan qayta ko‘rik.' },
-    ],
-    5: [
-      { c: 'Chanqash, tez-tez siyish.', a: '2 oydan beri, oilada qandli diabet bor.', e: 'Tana vazni indeksi 31.', d: 'Uglevod almashinuvi buzilishi shubhasi (demo)', r: 'Glyukoza, HbA1c. Ovqatlanish kundaligi.' },
-      { c: 'Holsizlik, vazn ortishi.', a: '6 oy davomida 5 kg.', e: 'Qalqonsimon bez paypaslanmaydi.', d: 'Gipotireoz shubhasi (demo)', r: 'TTG tahlili, qalqonsimon bez UZI.' },
-    ],
-    6: [
-      { c: 'Yo‘llanma bo‘yicha UZI tekshiruvi.', a: 'Shifokor yo‘llanmasi.', e: 'UZI o‘tkazildi.', d: 'UZI tekshiruvi o‘tkazildi — xulosa «Diagnostika» bo‘limida (demo)', r: 'Natija bilan davolovchi shifokorga murojaat.' },
-    ],
+  // note templates with ICD-10 codes and ultrasound findings: database/seed/clinical.ts
+  /** Fixed stories: the returning patient Aziz Karimov, the cardiologist's echo referral and Gulchehra's anaemia work-up. */
+  const STORY: Record<string, NoteTpl> = {
+    aziz1: { c: 'Ensa sohasida bosh og‘rig‘i, ertalab kuchayadi, quloqda shang‘illash.', a: '3 oy oldin ko‘rikda xolesterin yuqori chiqqan. Uyda AQB 150/95 gacha. Penitsillinga allergiya (toshma).',
+      e: 'Yurak tonlari aniq, ritmik, aortada II ton aksenti. Oyoqlarda shish yo‘q.', d: 'Arterial gipertenziya, 1-daraja, birinchi aniqlangan', icd: ['I10'],
+      r: 'Tuz kuniga 5 g gacha, AQB kundaligi. Umumiy qon tahlili. Kardiolog konsultatsiyasiga yo‘llanma berildi.', v: { sys: [148, 156], dia: [92, 96], temp: [36.5, 36.7] } },
+    aziz2: { c: 'AQB kundaligi bo‘yicha 145–160/90–100, ertalab bosh og‘rig‘i.', a: 'Terapevt yo‘llanmasi bilan. Giperxolesterinemiya (LDL 4,21 mmol/L). Otasida gipertoniya.',
+      e: 'Yurak chegarasi kengaymagan, aortada II ton aksenti. EKG: sinus ritmi, 74/daq.', d: 'Gipertoniya kasalligi, I bosqich, 1-daraja. Giperxolesterinemiya', icd: ['I10', 'E78.0'],
+      r: 'Amlodipin 5 mg ertalab, atorvastatin 20 mg kechqurun, har kuni. AQB kundaligi. 2 haftadan keyin terapevt nazorati.', v: { sys: [150, 158], dia: [92, 98], temp: [36.5, 36.7] } },
+    aziz3: { c: 'Davo fonida bosh og‘rig‘i kamaygan.', a: 'Amlodipin va atorvastatinni muntazam ichmoqda, nojo‘ya ta’sir yo‘q.',
+      e: 'Yurak tonlari aniq, ritmik. Oyoqlarda shish yo‘q.', d: 'Arterial gipertenziya, 1-daraja, davo fonida nazoratda', icd: ['I10'],
+      r: 'Davoni davom ettirish. 3 oydan keyin lipid profil va ALT.', v: { sys: [128, 136], dia: [80, 86], temp: [36.5, 36.7] } },
+    echoOrder: { c: 'Tez yurganda to‘sh orqasida siqiluvchi og‘riq, dam olganda 3–5 daqiqada o‘tadi.', a: '3 haftadan beri. Chekadi (20 yil). Otasi infarkt o‘tkazgan.',
+      e: 'Yurak tonlari bo‘g‘iqroq, ritmik. O‘pkada xirillash yo‘q. EKG: sinus ritmi, ST o‘zgarishsiz.', d: 'Yurak ishemik kasalligi: zo‘riqish stenokardiyasi, FS II', icd: ['I20.8'],
+      r: 'Exokardiografiya bugun, lipid profil. Jismoniy yuklamani cheklash, chekishni tashlash. Og‘riq 15 daqiqadan uzoq davom etsa — 103 ga qo‘ng‘iroq.', v: { sys: [136, 146], dia: [84, 90] } },
+    gulchehra: { c: 'Kuchli holsizlik, zinadan chiqqanda hansirash, bosh aylanishi.', a: '2 oydan beri kuchaygan. Ishtahasi pasaygan, go‘sht kam yeydi.',
+      e: 'Teri va shilliq qavatlar keskin rangpar. Yurak cho‘qqisida sistolik shovqin, taxikardiya.', d: 'Holsizlik va charchoq, og‘ir anemiya istisno qilinmoqda', icd: ['R53'],
+      r: 'Umumiy qon tahlili bugun (cito). Natija bilan shu kuni qayta ko‘rik.', v: { sys: [104, 112], dia: [62, 68], pulse: [98, 106], temp: [36.4, 36.7] } },
   };
-  const UZI_TEXT: Record<string, { d: string; c: string }> = {
-    U01: { d: 'Jigar o‘lchami me’yorda, exostruktura bir xil. O‘t pufagi devori yupqa, toshlar aniqlanmadi. Oshqozon osti bezi va taloq o‘zgarishsiz.', c: 'Qorin bo‘shlig‘i a’zolarida exografik patologiya aniqlanmadi (demo).' },
-    U02: { d: 'O‘ng bo‘lak 15×16×45 mm, chap bo‘lak 14×15×44 mm. Exostruktura bir xil, tugunlar aniqlanmadi.', c: 'Qalqonsimon bez exografik me’yorda (demo).' },
-    U03: { d: 'Buyraklar odatiy joylashgan, o‘lchamlari me’yorda. Kosacha-jom tizimi kengaymagan.', c: 'Buyraklarda exografik patologiya aniqlanmadi (demo).' },
-    U04: { d: 'Bachadon o‘lchamlari me’yorda, endometriy sikl fazasiga mos. Tuxumdonlar odatiy.', c: 'Kichik chanoq a’zolarida exografik patologiya aniqlanmadi (demo).' },
-    U05: { d: 'Yurak bo‘shliqlari kengaymagan. CHQ qisqaruvchanligi saqlangan, EF 62%. Klapanlar o‘zgarishsiz.', c: 'Exokardiografik ko‘rsatkichlar me’yor doirasida (demo).' },
-    U06: { d: 'Sut bezlari to‘qimasi yoshga mos. Hajmli hosilalar aniqlanmadi.', c: 'Sut bezlarida exografik patologiya aniqlanmadi (demo).' },
-    U07: { d: 'Bachadonda bitta homila, yurak urishi aniqlanadi.', c: 'Homiladorlik muddatiga mos (demo).' },
+  // vitals are drawn from their own stream, so a picture (fever, high blood pressure) never moves the seeded KPIs
+  const vrnd = mulberry32(20261031);
+  const vIn = ([a, b]: [number, number], dec = 0) => Number((a + (b - a) * vrnd()).toFixed(dec));
+  const vitalsFor = (t: NoteTpl, age: number): Record<string, number> => {
+    if (age < 12) return { bp_sys: vIn([92, 108]), bp_dia: vIn([55, 68]), pulse: vIn(age < 5 ? [100, 125] : [82, 104]), temp: vIn(t.v?.temp ?? [36.5, 36.8], 1) };
+    const sys = t.v?.sys ?? [Math.min(112 + Math.max(0, age - 30) * 0.4, 132), Math.min(124 + Math.max(0, age - 30) * 0.5, 142)] as [number, number];
+    const dia = t.v?.dia ?? [70, Math.min(80 + Math.max(0, age - 40) * 0.2, 88)] as [number, number];
+    const fever = (t.v?.temp?.[0] ?? 36.4) >= 37.2;
+    return { bp_sys: vIn(sys), bp_dia: vIn(dia), pulse: vIn(t.v?.pulse ?? (fever ? [84, 98] : [64, 84])), temp: vIn(t.v?.temp ?? [36.4, 36.8], 1) };
   };
+  const noteTplByEnc: Record<string, NoteTpl> = {};
 
   const cashierFor = (branch: string) => (branch === BC ? { id: M.cashier, name: 'Nodira Aliyeva' } : { id: M.cashier2, name: 'Jasur Toshmatov' });
   const registrarFor = (branch: string) => (branch === BC ? { id: M.registrar, name: 'Malika Yusupova' } : { id: M.registrar2, name: 'Shahzod Rahimov' });
@@ -507,17 +514,29 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
         order.encounter_id = encId;
         data.encounters.push({ id: encId, tenant_id: T, branch_id: branch, appointment_id: apptId, patient_id: patients[p.patient].id, doctor_id: SEED_IDS.doctor(p.doc),
           status: p.status === 'completed' ? 'closed' : 'open', started_at: started, closed_at: finished });
-        const t = pick(NOTE_TEMPLATES[p.doc]);
-        const vitals: Record<string, number> = p.doc === 6 ? {} : { bp_sys: int(110, 150), bp_dia: int(70, 95), pulse: int(62, 96), temp: Number((36.4 + rnd() * 1.4).toFixed(1)) };
+        // the same draws as before (template pick, four vitals), so every seeded number after them stays as it was
+        const picked = pick(NOTE_TEMPLATES[p.doc] ?? [null]);
+        if (p.doc !== 6) { int(110, 150); int(70, 95); int(62, 96); rnd(); }
+        const age = pAge(p.patient), sex = patients[p.patient].sex;
+        let t: NoteTpl;
+        if (p.doc === 6) {
+          const u = uziVariant(p.svc, order.id, sex, age);
+          t = { c: `Yo‘llanma bo‘yicha: ${svc[p.svc].name}.`, a: 'Davolovchi shifokor yo‘llanmasi.', e: u.d, d: u.c, icd: u.icd, r: 'Xulosa bilan davolovchi shifokorga murojaat qiling.' };
+        } else t = STORY[p.fixedKey ?? ''] ?? (p.patient === 4 && p.date === demoDate ? STORY.gulchehra : fitTemplate(NOTE_TEMPLATES[p.doc], picked!, age, sex));
+        noteTplByEnc[encId] = t;
+        const vitals: Record<string, number> = p.doc === 6 ? {} : vitalsFor(t, age);
         if (p.status === 'completed') {
           data.clinical_notes.push({ id: sid(`note:${encId}`), tenant_id: T, encounter_id: encId, complaints: t.c, anamnesis: t.a, examination: t.e, diagnosis: t.d,
             recommendations: t.r, follow_up_date: chance(0.3) ? addDays(p.date, 14) : null, vitals, status: 'signed', version: 2, saved_at: end,
-            signed_by: M.doctor(p.doc), signed_by_name: DOCS[p.doc].name, signed_at: end });
+            signed_by: M.doctor(p.doc), signed_by_name: DOCS[p.doc].name, signed_at: end, icd10: icdSnap(t.icd) });
           if (p.date >= addDays(demoDate, -7) || idx % 3 === 0) audit(end, branch, M.doctor(p.doc), DOCS[p.doc].name, 'doctor', 'clinical_note.sign', 'encounter', encId, 'Klinik qayd tasdiqlandi');
         } else {
-          data.clinical_notes.push({ id: sid(`note:${encId}`), tenant_id: T, encounter_id: encId, complaints: t.c, anamnesis: t.a, examination: null, diagnosis: null,
-            recommendations: null, follow_up_date: null, vitals: { bp_sys: vitals.bp_sys ?? null, bp_dia: vitals.bp_dia ?? null, pulse: null, temp: null }, status: 'draft', version: 1,
-            saved_at: new Date(started.getTime() + 8 * 60_000), signed_by: null, signed_by_name: null, signed_at: null });
+          // a visit in progress: the doctor has written the examination and a working diagnosis (not yet on the ultrasound visit — its report is a draft)
+          // Akmal Rasulov (doctor 0) is still examining: no diagnosis yet — the demo writes it and picks the MKB-10 code live
+          const working = p.doc !== 6 && p.doc !== 0;
+          data.clinical_notes.push({ id: sid(`note:${encId}`), tenant_id: T, encounter_id: encId, complaints: t.c, anamnesis: t.a, examination: working ? t.e : null, diagnosis: working ? t.d : null,
+            recommendations: null, follow_up_date: null, vitals: { bp_sys: vitals.bp_sys ?? null, bp_dia: vitals.bp_dia ?? null, pulse: vitals.pulse ?? null, temp: vitals.temp ?? null }, status: 'draft', version: 1,
+            saved_at: new Date(started.getTime() + 8 * 60_000), signed_by: null, signed_by_name: null, signed_at: null, icd10: working ? icdSnap(t.icd) : [] });
         }
       }
     }
@@ -562,7 +581,13 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   labPlan.push({ v: todayDoc(4, '09:00'), code: 'L07', status: 'ordered' });
 
   const LAB_TECH = 'Gulnora Saidova';
-  const valueFor = (p: any, abnormal: boolean) => {
+  // The values below come from a separate stream with plausible per-parameter, sex, age and diagnosis distributions
+  // (clinical.ts). `legacyDraw` keeps the old draws of the main stream, so the invoices and payments after it stay the same.
+  const lrnd = mulberry32(20261032);
+  // two critical (panic) values: Gulchehra's anaemia today (draft, the lab verifies it in the demo) and one past glucose
+  const firstGlucose = labPlan.findIndex((x) => x.status === 'verified' && x.code === 'L03');
+  let plannedCritical: { encounterId: string; text: string } | undefined;
+  const legacyDraw = (p: any, abnormal: boolean) => {
     const lo = p.ref_low ?? 0, hi = p.ref_high ?? lo * 2 + 1;
     const span = hi - lo;
     let v = abnormal ? (chance(0.5) ? hi + span * (0.1 + rnd() * 0.3) : Math.max(lo * 0.6, lo - span * (0.05 + rnd() * 0.2))) : lo + span * (0.15 + rnd() * 0.7);
@@ -583,7 +608,20 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
       performed_at: lp.status === 'verified' ? verifiedAt : null, created_by: M.doctor(v.plan.doc) });
     if (lp.status !== 'ordered') {
       const collected = new Date(orderedAt.getTime() + int(10, 40) * 60_000);
-      const values = lp.status === 'sample_collected' ? [] : (s.lab_template as any[]).map((p) => valueFor(p, chance(0.25)));
+      const legacy = lp.status === 'sample_collected' ? [] : (s.lab_template as any[]).map((p) => legacyDraw(p, chance(0.25)));
+      const pt = patients[v.plan.patient];
+      let fixed: Record<string, number> = {};
+      if (v.plan.patient === 4 && v.plan.date === demoDate && lp.code === 'L01') fixed = { HGB: 68, WBC: 5.8, PLT: 214, ESR: 34 };
+      if (i === firstGlucose) {
+        fixed = { GLU: 24.1 };
+        const n = data.clinical_notes.find((x) => x.encounter_id === enc)!;
+        Object.assign(n, { complaints: 'Chanqash, og‘izda quruqlik, tez-tez siyish, holsizlik.', anamnesis: '1 oydan beri, 4 kg ozgan. Onasida qandli diabet.',
+          examination: 'Til quruq. Tana vazni indeksi 29 kg/m². Oyoq panjalarida sezuvchanlik saqlangan.', diagnosis: 'Qandli diabet, 2-tip shubhasi',
+          recommendations: 'Och qoringa glyukoza bugun. Natija bilan endokrinolog konsultatsiyasi.', icd10: icdSnap(['E11.9']) });
+        noteTplByEnc[enc] = { ...noteTplByEnc[enc], icd: ['E11.9'] };
+        plannedCritical = { encounterId: enc, text: 'Glyukoza 24,1 mmol/L — kritik qiymat. Laboratoriya xabar berdi, bemorga telefon qilindi; shu kuni endokrinolog ko‘rigiga yo‘naltirildi.' };
+      }
+      const values = legacy.length ? labValues(s.lab_template as any[], pt.sex, pAge(v.plan.patient), profilesOf(noteTplByEnc[enc]?.icd ?? []), lrnd, fixed) : [];
       data.lab_results.push({ id: sid(`labres:${orderId}`), tenant_id: T, order_id: orderId, values, comment: null,
         status: lp.status === 'verified' ? 'verified' : 'draft', collected_at: collected, collected_by_name: LAB_TECH,
         entered_by_name: lp.status === 'sample_collected' ? null : LAB_TECH, entered_at: lp.status === 'sample_collected' ? null : new Date(collected.getTime() + 3600_000),
@@ -608,7 +646,8 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     const code = data.services.find((s) => s.id === o.service_id)!.code;
     const signed = o.status === 'completed';
     const when = signed ? (o.performed_at as Date) : new Date(v.start.getTime() + 15 * 60_000);
-    const txt = UZI_TEXT[code];
+    const pt = data.patients.find((x) => x.id === o.patient_id)!;
+    const txt = uziVariant(code, o.id, pt.sex, ageOf(pt.birth_date));
     data.diagnostic_reports.push({ id: sid(`uzi:${o.id}`), tenant_id: T, order_id: o.id, template_version: 'uzi-v1', exam_type: o.service_name,
       description: txt.d, conclusion: signed ? txt.c : null, specialist_name: DOCS[6].name, status: signed ? 'signed' : 'draft',
       signed_by: signed ? M.doctor(6) : null, signed_at: signed ? when : null, updated_at: when });
@@ -820,7 +859,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     // the Yunusobod cashier sometimes leaves early; everyone else is mostly punctual (rare lateness / absence).
     const HISTORY_DAYS = 30;
     const entryCam = (b: string) => (b === BC ? 'mrk-entry' : 'yun-entry');
-    const LEAVE: Record<string, [number, number]> = { [M.doctor(4)]: [12, 10] }; // days back, inclusive
+    const LEAVE: Record<string, [number, number]> = { [M.doctor(4)]: lolaLeave }; // days back, inclusive
     for (let back = HISTORY_DAYS - 1; back >= 0; back--) {
       const day = addDays(demoDate, -back), wd = weekdayOf(day);
       for (const sc of staffCodes) {
@@ -953,6 +992,10 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   // ---------- warehouse (migration 030): batches, receipts, requests, controlled journal, write-off, fridge log ----------
   // No RNG: every number below is fixed, so the seeded KPIs above stay exactly as they were.
   buildWarehouse(data, demoDate, demoTime);
+
+  // ---------- the longer story (history.ts): months of results, documents, summaries, addenda, allergies, deposits, promises ----------
+  // Its own PRNG stream, after everything above: the seeded KPIs of «today» stay as they were.
+  buildHistory(data, { demoDate, demoTime, rnd: mulberry32(20261033), docs: DOCS, svc, schedOf, priceAt, adultsActive, ageOf: pAge, visits, lolaLeave, plannedCritical });
 
   return data;
 }

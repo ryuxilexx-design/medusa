@@ -81,8 +81,9 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
 
 const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
-  'doctor_services', 'patients', 'patient_consents', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
-  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'expenses',
+  'doctor_services', 'schedule_exceptions', 'patients', 'patient_consents', 'patient_allergies', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
+  'note_addenda', 'medical_documents', 'patient_summaries',
+  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'refunds', 'patient_deposits', 'expenses',
   'inventory_items', 'inventory_receipts', 'inventory_batches', 'inventory_requests', 'inventory_request_lines', 'inventory_movements',
   'inventory_writeoffs', 'inventory_writeoff_lines', 'inventory_doc_counters', 'fridge_temperature_log', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions', 'camera_snapshots',
 ];
@@ -91,7 +92,22 @@ export class ResetInProgressError extends Error {
   constructor() { super('Demo reset is already running'); }
 }
 
-const JSON_COLUMNS = new Set(['values', 'lab_template', 'vitals']);
+const JSON_COLUMNS = new Set(['values', 'lab_template', 'vitals', 'icd10', 'body']);
+
+/**
+ * Seed prescriptions name their drugs by INN; the reference ids (and ATC, prescription-only) live in the `drugs` table,
+ * whose ids the database generates. Filled in before insert, so the issued document is stored in its final form.
+ */
+async function linkSeedPrescriptions(q: Pick<PoolClient, 'query'>, docs: Record<string, any>[]): Promise<void> {
+  const inns = [...new Set(docs.filter((d) => d.kind === 'prescription').flatMap((d) => (d.body.items as any[]).map((it) => String(it.inn).toLowerCase())))];
+  if (!inns.length) return;
+  const rows = (await q.query(`SELECT id, inn, atc, prescription_only FROM drugs WHERE lower(inn) = ANY($1) AND active`, [inns])).rows;
+  const byInn = new Map(rows.map((r) => [String(r.inn).toLowerCase(), r]));
+  for (const d of docs) if (d.kind === 'prescription') for (const it of d.body.items as any[]) {
+    const r = byInn.get(String(it.inn).toLowerCase());
+    Object.assign(it, { drug_id: r?.id ?? null, inn: r?.inn ?? null, atc: r?.atc ?? null, prescription_only: r?.prescription_only ?? false });
+  }
+}
 
 async function insertRows(client: PoolClient, table: string, rows: Record<string, unknown>[]): Promise<void> {
   if (!rows.length) return;
@@ -343,6 +359,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     const all = ['sessions', ...TABLES_IN_INSERT_ORDER].reverse();
     await client.query(`TRUNCATE ${all.join(', ')} RESTART IDENTITY CASCADE`);
     const counts: Record<string, number> = {};
+    await linkSeedPrescriptions(client, seed.medical_documents);
     for (const t of TABLES_IN_INSERT_ORDER) {
       await insertRows(client, t, seed[t] as Record<string, unknown>[]);
       counts[t] = seed[t].length;

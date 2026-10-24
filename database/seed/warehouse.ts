@@ -24,7 +24,7 @@ export const seedDrugLinks = (): [string, string][] =>
  * Invariant: opening_qty + Σ ledger = Σ batch balances.
  */
 export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: string) {
-  const T = SEED_IDS.tenant, BC = SEED_IDS.branchCentral, M = SEED_IDS.membership;
+  const T = SEED_IDS.tenant, BC = SEED_IDS.branchCentral, BY = SEED_IDS.branchYunusobod, M = SEED_IDS.membership;
   const KEEPER = { id: M.storekeeper, name: 'Sherzod Qodirov' };
   const MANAGER = { id: M.manager, name: 'Dilnoza Karimova' };
   const C = (v: number | string) => Math.round(Number(v) * 100);
@@ -86,6 +86,26 @@ export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: stri
     data.inventory_receipts.push({ id, tenant_id: T, branch_id: BC, number: r.n, supplier: r.supplier, invoice_no: r.inv, invoice_date: addDays(demoDate, r.d - 1), note: null, total,
       received_by: KEEPER.id, received_by_name: KEEPER.name, received_at: when });
   }
+  // ---- this week's restock of everyday consumables (one receipt per branch): most items now last beyond the
+  //      30-day horizon, so «Buyurtma taklifi» shows the few that really need ordering (masks, gloves, tubes, strips …)
+  const RESTOCK: { n: number; d: number; branch: string; supplier: string; inv: string; lines: [number, number, number][] }[] = [
+    { n: 3, d: -4, branch: BC, supplier: 'Medtexnika Servis (demo)', inv: 'MS-0912', lines: [[2, 1000, 540], [4, 300, 610], [8, 4, 480], [9, 20, 700], [18, 200, 650]] },
+    { n: 4, d: -3, branch: BY, supplier: 'Medtexnika Servis (demo)', inv: 'MS-0918', lines: [[10, 150, 900], [12, 200, 720], [13, 300, 800], [14, 24, 560], [15, 300, 640], [16, 100, 600]] },
+  ];
+  for (const r of RESTOCK) {
+    const id = sid(`receipt:${r.n}`); const when = day(r.d, hm('10:20'));
+    let total = 0;
+    r.lines.forEach(([i, qty, exp], j) => {
+      const it = data.inventory_items[i]; const cost = it.purchase_price; const qc = C(qty); total += val(qc, cost);
+      const bid = sid(`batch:restock:${r.n}:${j}`);
+      batches.push({ id: bid, tenant_id: T, item_id: it.id, batch_no: `S${2600 + i * 7 + j}`, expiry_date: addDays(demoDate, exp), qty: '0', qtyC: qc, received_qty: q2(qc), unit_cost: cost,
+        supplier: r.supplier, invoice_no: r.inv, receipt_id: id, received_at: when });
+      data.inventory_movements.push(move({ id: sid(`whmv:rc:${r.n}:${j}`), branch_id: r.branch, item_id: it.id, type: 'in', quantity: q2(qc), reason: `Kirim K-${r.n}: ${r.supplier}, nakladnaya ${r.inv}`,
+        occurred_at: when, kind: 'receipt', batch_id: bid, unit_cost: cost, value: val(qc, cost), doc_no: `K-${r.n}`, receipt_id: id }));
+    });
+    data.inventory_receipts.push({ id, tenant_id: T, branch_id: r.branch, number: r.n, supplier: r.supplier, invoice_no: r.inv, invoice_date: addDays(demoDate, r.d - 1), note: null, total,
+      received_by: KEEPER.id, received_by_name: KEEPER.name, received_at: when });
+  }
   /** One ledger row with every column present (the seed loader takes the column list from the first row). */
   function move(m: Row): Row {
     return { tenant_id: T, branch_id: BC, actor_name: KEEPER.name, actor_membership_id: KEEPER.id, receiver_membership_id: null, receiver_name: null, purpose: null, patient_id: null,
@@ -112,7 +132,9 @@ export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: stri
     reqN++;
     const id = sid(`whreq:${reqN}`);
     const enc = o.purpose === 'department' ? undefined : o.enc ?? encOf(o.order!.encounter_id);
-    const icd = enc ? [ICD_BY_DOC[docIdx(enc.doctor_id)]] : [];
+    // the visit's ICD-10 codes as the doctor signed (or is writing) them — codes only, never note text
+    const noteCodes = enc ? ((data.clinical_notes.find((n) => n.encounter_id === enc.id)?.icd10 ?? []) as { code: string }[]).map((c) => c.code) : [];
+    const icd = enc ? (noteCodes.length ? noteCodes : [ICD_BY_DOC[docIdx(enc.doctor_id)]]) : [];
     const issueAt = new Date(o.when.getTime() + (o.issuedAfterMin ?? 15) * 60_000);
     const needsApproval = o.lines.some(([it]) => itemOf(it).controlled);
     const done = o.status === 'issued';
@@ -184,7 +206,7 @@ export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: stri
   for (const b of batches) { const { qtyC, ...row } = b; data.inventory_batches.push({ ...row, qty: q2(qtyC) }); }
   // the legacy rows (before 030) need every column of the warehouse rows: the loader takes the column list from the first row
   data.inventory_movements = data.inventory_movements.map((m) => (m.kind ? m : move({ ...m, kind: 'legacy', batch_id: null, actor_membership_id: null, unit_cost: 0, value: 0, doc_no: null })));
-  data.inventory_doc_counters.push({ tenant_id: T, kind: 'receipt', last: RECEIPTS.length }, { tenant_id: T, kind: 'request', last: reqN }, { tenant_id: T, kind: 'writeoff', last: expired ? 1 : 0 });
+  data.inventory_doc_counters.push({ tenant_id: T, kind: 'receipt', last: RECEIPTS.length + RESTOCK.length }, { tenant_id: T, kind: 'request', last: reqN }, { tenant_id: T, kind: 'writeoff', last: expired ? 1 : 0 });
 
   // ---- fridge log, twice a day; one reading out of range three days ago
   for (let d = -6; d <= 0; d++) for (const [t, base] of [[hm('08:00'), 4.2], [hm('18:00'), 5.1]] as const) {
