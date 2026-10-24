@@ -15,7 +15,7 @@ const PAGE_CSS: Record<PaperSize, string> = {
   ticket: '@media print { @page { size: 58mm auto; margin: 3mm; } }',
 };
 
-export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, paper = 'A4', toolbar, info, children }: {
+export function PrintDoc({ title, number, date, branch, patient, responsible, status, statusLabel, draft, footer, paper = 'A4', toolbar, info, legal = true, children }: {
   title: string; number: string; date: string | Date; branch?: string; patient: any; responsible: string; status: string; draft?: boolean; children: React.ReactNode;
   /** Label of the fourth patient-box cell (default «Holat:»). */
   statusLabel?: string;
@@ -26,6 +26,8 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
   toolbar?: React.ReactNode;
   /** A document that is not about one patient (warehouse acts): these label/value cells replace the patient box. */
   info?: [string, React.ReactNode][];
+  /** The «Tasdiqlangan is not an e-signature» note: only for documents that carry that status (not a slip or a payment record). */
+  legal?: boolean;
 }) {
   const me = useMeQuery();
   const t = useT();
@@ -64,8 +66,9 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
         <Button variant="primary" className="ml-auto max-w-full !whitespace-normal text-center" icon={<Printer className="h-5 w-5 shrink-0" />} onClick={() => window.print()}>{t('print.print')}</Button>
       </div>
       <article className={cx('relative mx-auto overflow-hidden bg-white text-slate-900 shadow-lg print:min-h-0 print:max-w-none print:p-0 print:shadow-none', sheet)}>
-        {demo && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="-rotate-[30deg] select-none whitespace-nowrap text-[2.625rem] font-black tracking-widest text-slate-200/60 print:text-slate-200">{t('print.demoMark')}</span>
+        {/* the mark is sized by the sheet's own width (cqw), so it stays inside an A4 or A5 page in every language */}
+        {demo && <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden [container-type:inline-size]">
+          <span className="-rotate-[30deg] select-none whitespace-nowrap text-[4.25cqw] font-black tracking-widest text-slate-200/60 print:text-slate-200">{t('print.demoMark')}</span>
         </div>}
         <div className="relative">
           <header className="flex items-start justify-between border-b-2 border-slate-800 pb-3">
@@ -90,7 +93,7 @@ export function PrintDoc({ title, number, date, branch, patient, responsible, st
           {footer ? <footer className="print-avoid-break mt-8">{footer}{demo && <p className="mt-3 text-right text-xs text-slate-600">{t('print.demoFooter')}</p>}</footer> : (
             <footer className="print-avoid-break mt-10 flex items-end justify-between border-t border-slate-300 pt-3 text-xs text-slate-600">
               <div>{t('print.responsible')} <b className="text-slate-800">{responsible}</b><div className="mt-6">{t('print.signature')}</div></div>
-              <div className="max-w-[60%] text-right">{t('print.legal')}{demo && <><br />{t('print.demoFooter')}</>}</div>
+              <div className="max-w-[60%] text-right">{legal && t('print.legal')}{legal && demo && <br />}{demo && t('print.demoFooter')}</div>
             </footer>
           )}
         </div>

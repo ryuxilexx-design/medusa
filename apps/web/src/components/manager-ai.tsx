@@ -138,7 +138,7 @@ export function AskNumbers() {
     <Card title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 shrink-0 text-brand-600" />{t('mgrai.ask.title')}</span>}>
       <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (text.trim().length >= 3) m.mutate({ question: text.trim() }); }}>
         <label htmlFor="ask-q" className="sr-only">{t('mgrai.ask.label')}</label>
-        <Input id="ask-q" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} disabled={!aiLive} placeholder={aiLive ? t('mgrai.ask.placeholder') : t('mgrai.ask.offHint')} className="min-w-0 flex-1" />
+        <Input id="ask-q" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} disabled={!aiLive} placeholder={aiLive ? t('mgrai.ask.placeholder') : t('mgrai.ask.offHint')} className="min-w-0 shrink-0 sm:flex-1 sm:shrink" />
         <Button type="submit" variant="primary" icon={<Send className="h-4 w-4" />} disabled={!aiLive || text.trim().length < 3} loading={m.isPending && !!m.variables?.question}>{t('mgrai.ask.send')}</Button>
       </form>
       <div className="mt-3 flex flex-wrap gap-2" aria-label={t('clinical.dash.quickQuestions')}>

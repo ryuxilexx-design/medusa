@@ -27,7 +27,10 @@ await d.goto(BASE + '/doctor', { waitUntil: 'networkidle0' }); await settle(d);
 await d.evaluate(() => [...document.querySelectorAll('a')].find((a) => a.textContent.includes('Karimov Aziz')).click()); await settle(d);
 await clickText(d, 'Qabulni boshlash'); await waitText(d, 'Klinik qayd'); await settle(d);
 const complaints = await textareaFor(d, 'Shikoyatlar');
+// print and preview of a draft live in the note's «Yana» menu
+await d.click('[data-testid="note-more"]'); await sleep(200);
 const encId = await d.evaluate(() => new URL(document.querySelector('a[href^="/print/note/"]').href).pathname.split('/').pop());
+await d.keyboard.press('Escape');
 const TEXT1 = 'Ikki kundan beri bosh og‘rig‘i (oflayn sinov matni)';
 await setVal(d, complaints, TEXT1);
 await d.setOfflineMode(true);

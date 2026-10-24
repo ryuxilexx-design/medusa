@@ -29,6 +29,11 @@ function Diagnostics() {
   // the work still to do comes first; when there is none, the signed reports
   const current: Tab = tab ?? (todo.length ? 'todo' : 'signed');
   const shown = current === 'todo' ? todo : rows.filter((o) => o.report_status === 'signed');
+  // a wide screen never shows an empty report beside the list: the first one opens by itself
+  const first = shown[0]?.id as string | undefined;
+  useEffect(() => {
+    if (!sel && first && window.matchMedia('(min-width: 1280px)').matches) router.replace(`/diagnostics?order=${first}`, { scroll: false });
+  }, [sel, first, router]);
   const pick = (id: string) => {
     router.replace(`/diagnostics?order=${id}`, { scroll: false });
     // below xl the report sits under the list: bring it into view so the tap visibly does something
@@ -47,15 +52,13 @@ function Diagnostics() {
             {!shown.length ? <EmptyState compact title={t('clinical.uzi.tabEmpty')} /> : (
               <ul className="divide-y divide-slate-100">{shown.map((o) => (
                 <li key={o.id}><button onClick={() => pick(o.id)} aria-current={sel === o.id || undefined}
-                  className={cx('flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', sel === o.id && 'bg-brand-50 shadow-[inset_4px_0_0_#2d64bd] hover:bg-brand-50')}>
+                  className={cx('flex w-full items-start gap-3 px-4 py-3 text-left sm:px-5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', sel === o.id && 'bg-brand-50 shadow-[inset_4px_0_0_#2d64bd] hover:bg-brand-50')}>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[0.9375rem] font-semibold text-slate-900">{o.service_name}</span>
-                    <span className="block truncate text-[0.8125rem] text-slate-600">{fullName(o)} {pid(o.patient_number)}</span>
+                    <span className="line-clamp-2 text-[0.9375rem] font-semibold leading-snug text-slate-900">{o.service_name}</span>
+                    <span className="mt-0.5 block text-[0.8125rem] leading-snug text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> <span className="whitespace-nowrap tabular-nums">{pid(o.patient_number)}</span></span>
+                    <span className="block text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(o.ordered_at)}</span>
                   </span>
-                  <span className="flex shrink-0 flex-col items-end gap-1">
-                    <NoteStatus status={o.report_status} />
-                    <span className="text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(o.ordered_at)}</span>
-                  </span>
+                  <span className="shrink-0"><NoteStatus status={o.report_status} /></span>
                 </button></li>
               ))}</ul>
             )}

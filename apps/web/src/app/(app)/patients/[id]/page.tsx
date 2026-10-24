@@ -7,7 +7,7 @@ import { ALLERGY_LABEL, type ConsentKind, type MessageKey } from '@meduza/contra
 import { api } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, formatPhone, formatSom, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Tabs, Td, Textarea, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Select, Table, Tabs, Td, Textarea, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus, LabStatus, NoteStatus } from '@/components/status';
 import { PatientFormModal } from '@/components/patient-form';
 import { type BookingInit, BookingModal } from '@/components/booking';
@@ -56,11 +56,11 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
   return (
     <>
       <div className="mb-5 overflow-hidden surface">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-5 py-4">
-          <div className="flex min-w-0 flex-1 basis-[22rem] items-center gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3.5 sm:px-5 sm:py-4">
+          <div className="flex min-w-0 flex-1 basis-[min(22rem,100%)] items-center gap-4">
             <div className="hidden h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand-50 text-lg font-bold text-brand-700 sm:flex" aria-hidden="true">{pt.last_name?.[0]}{pt.first_name?.[0]}</div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold leading-tight text-slate-900 [overflow-wrap:anywhere]">{fullName(pt, true)}</h1>
+              <h1 className="text-xl font-bold leading-tight text-slate-900 [overflow-wrap:anywhere] sm:text-2xl">{fullName(pt, true)}</h1>
               {/* each fact carries its own separator, so a wrapped line never ends with a dangling dot */}
               <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.9375rem] text-slate-700">
                 {[
@@ -75,8 +75,8 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   {/* the doctor's recommended follow-up: reception books it from here; once booked the marker turns green */}
                   {pt.follow_up && !pt.follow_up.booked && (
-                    <span className="inline-flex flex-wrap items-center gap-2" data-testid="follow-up-marker">
-                      <Badge tone="yellow" icon={<CalendarCheck className="h-3.5 w-3.5" />}>{t('registrar.fu.recommended', { date: fmtDate(pt.follow_up.date), doctor: pt.follow_up.doctor_name })}</Badge>
+                    <span className="inline-flex max-w-full flex-wrap items-center gap-2" data-testid="follow-up-marker">
+                      <Badge tone="yellow" className="max-w-full !whitespace-normal" icon={<CalendarCheck className="h-3.5 w-3.5 shrink-0" />}>{t('registrar.fu.recommended', { date: fmtDate(pt.follow_up.date), doctor: pt.follow_up.doctor_name })}</Badge>
                       {(canEdit || role === 'doctor') && <Button size="sm" variant="ghost" className="-my-1" onClick={() => setBook({ patient: pt, doctorId: pt.follow_up.doctor_id, date: pt.follow_up.date, followUp: true })}>{t('registrar.fu.book')}</Button>}
                     </span>
                   )}
@@ -215,7 +215,7 @@ function Notes({ notes }: { notes: any[] }) {
         <div key={n.id} className="rounded-md border border-slate-200 p-3">
           <div className="mb-1 flex flex-wrap items-center gap-2 text-sm">
             <b>{fmtDate(n.starts_at)}</b><span className="text-slate-600">{n.doctor_name}, {n.specialty}</span><NoteStatus status={n.status} />
-            {n.status === 'signed' && <Link href={`/print/note/${n.encounter_id}`} target="_blank" className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"><Printer className="h-3.5 w-3.5" />{t('common.print')}</Link>}
+            {n.status === 'signed' && <LinkButton size="sm" variant="ghost" className="ml-auto -my-1" target="_blank" href={`/print/note/${n.encounter_id}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>}
           </div>
           {n.complaints && <p className="text-sm"><span className="text-slate-600">{t('registrar.complaint')}</span> {n.complaints}</p>}
           {n.diagnosis && <p className="text-sm"><span className="text-slate-600">{t('registrar.conclusion')}</span> {n.diagnosis}</p>}
@@ -234,16 +234,19 @@ function Labs({ labs, diagnostics, role }: { labs: any[]; diagnostics: any[]; ro
       {role === 'manager' && labs.length > 0 && <p className="text-[0.8125rem] text-slate-600">{t('registrar.managerStatusOnly')}</p>}
       {labs.map((l) => (
         <div key={l.id} className="rounded-md border border-slate-200 p-3">
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <b>{l.service_name}</b><span className="text-slate-600">{t('registrar.orderedAt', { at: fmtDateTime(l.ordered_at) })}{l.ordered_by ? `, ${l.ordered_by}` : ''}</span>
-            <span className="ml-auto"><LabStatus status={l.status} short={role === 'registrar'} /></span>
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5 text-sm">
+            <div className="min-w-0 flex-1 basis-[12rem]"><b className="[overflow-wrap:anywhere]">{l.service_name}</b><span className="block text-[0.8125rem] text-slate-600">{t('registrar.orderedAt', { at: fmtDateTime(l.ordered_at) })}{l.ordered_by ? `, ${l.ordered_by}` : ''}</span></div>
+            <span className="shrink-0"><LabStatus status={l.status} short={role === 'registrar'} /></span>
           </div>
-          {l.values && l.status === 'verified' && <div className="mt-2"><LabValues values={l.values} /><p className="mt-1 text-xs text-slate-600">{t('registrar.verifiedBy', { name: l.verified_by_name, at: fmtDateTime(l.verified_at) })}</p>{role === 'doctor' && <LabCommentary orderId={l.id} />}</div>}
+          {l.values && l.status === 'verified' && <div className="mt-2"><div className="sm:hidden"><LabValues values={l.values} compact /></div><div className="hidden overflow-x-auto sm:block"><LabValues values={l.values} /></div><p className="mt-1 text-xs text-slate-600">{t('registrar.verifiedBy', { name: l.verified_by_name, at: fmtDateTime(l.verified_at) })}</p>{role === 'doctor' && <LabCommentary orderId={l.id} />}</div>}
         </div>
       ))}
       {diagnostics.map((d) => (
         <div key={d.id} className="rounded-md border border-slate-200 p-3 text-sm">
-          <div className="flex items-center gap-2"><b>{d.service_name}</b><span className="text-slate-600">{fmtDateTime(d.ordered_at)}</span><span className="ml-auto"><NoteStatus status={d.report_status} /></span></div>
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
+            <div className="min-w-0 flex-1 basis-[12rem]"><b className="[overflow-wrap:anywhere]">{d.service_name}</b><span className="block text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(d.ordered_at)}</span></div>
+            <span className="shrink-0"><NoteStatus status={d.report_status} /></span>
+          </div>
           {d.report_status === 'signed' && <p className="mt-1"><span className="text-slate-600">{t('registrar.conclusion')}</span> {d.conclusion}</p>}
         </div>
       ))}
@@ -280,9 +283,9 @@ function Docs({ h, role }: { h: any; role: string }) {
   return (
     <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
       {docs.sort((a, b) => +new Date(b.date) - +new Date(a.date)).map((d) => (
-        <li key={d.href} className="flex items-center gap-3 px-3 py-2 text-sm">
-          <FileText className="h-4 w-4 text-slate-400" /><span className="flex-1">{d.title}</span><span className="text-slate-600">{fmtDate(d.date)}</span>
-          <Link href={d.href} target={d.href.startsWith('/print') ? '_blank' : undefined} className="font-medium text-brand-700 hover:underline">{t('registrar.open')}</Link>
+        <li key={d.href} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+          <FileText className="h-4 w-4 shrink-0 text-slate-400" /><span className="min-w-0 flex-1 basis-[10rem] [overflow-wrap:anywhere]">{d.title}<span className="block text-[0.8125rem] tabular-nums text-slate-600">{fmtDate(d.date)}</span></span>
+          <LinkButton size="sm" variant="ghost" className="ml-auto" href={d.href} target={d.href.startsWith('/print') ? '_blank' : undefined}>{t('registrar.open')}</LinkButton>
         </li>
       ))}
     </ul>

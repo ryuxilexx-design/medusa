@@ -3,7 +3,7 @@ import { Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarPlus, CheckCircle2, Clock, Eye, FilePlus2, FlaskConical, LayoutTemplate, PlayCircle, Printer, Save, ShieldAlert, Sparkles, Stethoscope } from 'lucide-react';
+import { CalendarPlus, CheckCircle2, Clock, Eye, FilePlus2, FlaskConical, LayoutTemplate, MoreHorizontal, PlayCircle, Printer, Save, Search, ShieldAlert, Sparkles, Stethoscope } from 'lucide-react';
 import { REQUIRED_FOR_SIGN, type MessageKey, type NoteTextField } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { ageFrom, fmtDate, fmtDateTime, fmtTime, formatSom, fullName, longDate, pid } from '@/lib/format';
@@ -17,7 +17,7 @@ import { DocumentsCard } from '@/components/documents-card';
 import { PatientSummaryCard } from '@/components/patient-summary';
 import { EncounterMaterials } from '@/components/warehouse/encounter-materials';
 import { AllergiesPanel } from '@/components/allergies';
-import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, Skeleton, Textarea, Toolbar, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Select, Skeleton, Textarea, useToast } from '@/components/ui';
 import { AppointmentStatus, LabStatus, NoteStatus } from '@/components/status';
 import { LabValues } from '@/components/lab-values';
 import { LabCommentary } from '@/components/lab-commentary';
@@ -67,36 +67,67 @@ function Cabinet() {
     if (!selectedId && sorted.length) router.replace(`/doctor?appointment=${(sorted.find((a) => a.status === 'in_progress') ?? sorted.find((a) => a.status === 'arrived') ?? sorted[0]).id}`);
   }, [selectedId, sorted, router]);
 
+  // no visits today (or the list failed): no empty column eating the width — the note gets the whole row
+  const hasList = day.isLoading || day.isError || sorted.length > 0;
+  // the phone strip scrolls sideways only: keep the open patient's chip in view
+  const strip = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    const s = strip.current, el = s?.querySelector<HTMLElement>('[aria-current="true"]');
+    if (s && el && (el.offsetLeft < s.scrollLeft || el.offsetLeft + el.offsetWidth > s.scrollLeft + s.clientWidth)) s.scrollLeft = el.offsetLeft - 16;
+  }, [selectedId, sorted.length]);
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
-      <Card padded={false} className="self-start lg:sticky lg:top-[5rem]"
-        title={<span className="flex items-center gap-2">{t('doctor.today')}{day.data && <span className="rounded-full bg-slate-100 px-2 text-[0.8125rem] font-semibold tabular-nums text-slate-700">{sorted.length}</span>}</span>}>
-        {day.isLoading ? <LoadingRows rows={5} /> : day.isError ? <ErrorState error={day.error} onRetry={() => day.refetch()} /> : !sorted.length ? <EmptyState compact title={t('doctor.noVisits')} /> : (
-          <ul className="max-h-[16rem] divide-y divide-slate-100 overflow-y-auto lg:max-h-[calc(100vh-9rem)]">
+    <>
+      <h1 className="sr-only">{t('nav.doctor')}</h1>
+      {/* phone/tablet: today's patients as one row of chips that scrolls sideways, so the note starts right under it */}
+      {sorted.length > 0 && (
+        <nav aria-label={t('doctor.today')} className="-mx-4 mb-3 lg:hidden">
+          <ul ref={strip} className="relative flex gap-2 overflow-x-auto px-4 pb-1">
             {sorted.map((a) => (
-              <li key={a.id}>
+              <li key={a.id} className="shrink-0">
                 <Link href={`/doctor?appointment=${a.id}`} aria-current={a.id === selectedId ? 'true' : undefined}
-                  className={cx('block px-4 py-3 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', a.id === selectedId && 'bg-brand-50 shadow-[inset_4px_0_0_#2d64bd] hover:bg-brand-50')}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-base font-bold tabular-nums text-slate-900">{fmtTime(a.starts_at)}{a.queue_number && <span className="ml-2 text-[0.8125rem] font-semibold text-slate-600">{t('doctor.queueNo', { n: a.queue_number })}</span>}</span>
-                    <AppointmentStatus status={a.status} />
-                  </div>
-                  <div className="mt-0.5 truncate text-[0.9375rem] font-semibold text-slate-900">{fullName(a)}</div>
-                  <div className="truncate text-[0.8125rem] text-slate-600">{a.service_name}</div>
+                  className={cx('flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-[0.9375rem] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
+                    a.id === selectedId ? 'border-brand-600 bg-brand-50 font-semibold text-brand-900' : 'border-white bg-white text-slate-900')}>
+                  <span className="font-bold tabular-nums">{fmtTime(a.starts_at)}</span>
+                  <span className="max-w-[10rem] truncate">{a.last_name}</span>
+                  {a.status === 'in_progress' && a.id !== selectedId && <PlayCircle className="h-4 w-4 text-violet-700" aria-hidden="true" />}
                 </Link>
               </li>
             ))}
           </ul>
+        </nav>
+      )}
+      <div className={cx('grid grid-cols-1 gap-5', hasList ? 'lg:grid-cols-[15rem_minmax(0,1fr)] 2xl:grid-cols-[15rem_minmax(0,1fr)_20rem]' : '2xl:grid-cols-[minmax(0,1fr)_20rem]')}>
+        {hasList && (
+          <Card padded={false} className="hidden self-start lg:sticky lg:top-[5rem] lg:block"
+            title={<span className="flex items-center gap-2">{t('doctor.today')}{day.data && <span className="rounded-full bg-slate-100 px-2 text-[0.8125rem] font-semibold tabular-nums text-slate-700">{sorted.length}</span>}</span>}>
+            {day.isLoading ? <LoadingRows rows={5} /> : day.isError ? <ErrorState error={day.error} onRetry={() => day.refetch()} /> : (
+              <ul className="max-h-[calc(100vh-9rem)] divide-y divide-slate-100 overflow-y-auto">
+                {sorted.map((a) => (
+                  <li key={a.id}>
+                    <Link href={`/doctor?appointment=${a.id}`} aria-current={a.id === selectedId ? 'true' : undefined}
+                      className={cx('block px-4 py-2.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', a.id === selectedId && 'bg-brand-50 shadow-[inset_4px_0_0_#2d64bd] hover:bg-brand-50')}>
+                      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                        <span className="text-base font-bold tabular-nums text-slate-900">{fmtTime(a.starts_at)}{a.queue_number && <span className="ml-2 text-[0.8125rem] font-semibold text-slate-600">{t('doctor.queueNo', { n: a.queue_number })}</span>}</span>
+                        <AppointmentStatus status={a.status} />
+                      </div>
+                      <div className="mt-0.5 text-[0.9375rem] font-semibold leading-snug text-slate-900 [overflow-wrap:anywhere]">{fullName(a)}</div>
+                      <div className="truncate text-[0.8125rem] text-slate-600">{a.service_name}</div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
         )}
-      </Card>
-      {!selectedId ? <Card><EmptyState icon={<Stethoscope />} title={t('doctor.pickPatient')} /></Card>
-        : !appt ? (single.isError || day.isError ? <Card><ErrorState error={single.isError ? single.error : day.error} onRetry={() => (single.isError ? single.refetch() : day.refetch())} /></Card> : <Card><LoadingRows /></Card>)
-        : <Workspace key={appt.id} appt={appt} />}
-      {/* side information: history and news, quiet, in a third column only on wide screens */}
-      <div className="hidden space-y-5 2xl:block">{appt && <HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} />}<NewsCard /></div>
-      {/* column 2 only: the sticky patient list in column 1 must never slide over it */}
-      <div className="lg:col-start-2 2xl:hidden"><NewsCard /></div>
-    </div>
+        {!selectedId ? <Card><EmptyState icon={<Stethoscope />} title={day.data && !sorted.length ? t('doctor.noVisits') : t('doctor.pickPatient')} /></Card>
+          : !appt ? (single.isError || day.isError ? <Card><ErrorState error={single.isError ? single.error : day.error} onRetry={() => (single.isError ? single.refetch() : day.refetch())} /></Card> : <Card><LoadingRows /></Card>)
+          : <Workspace key={appt.id} appt={appt} />}
+        {/* side information: history and news, quiet, in a third column only on wide screens */}
+        <div className="hidden space-y-5 2xl:block">{appt && <HistoryPanel patientId={appt.patient_id} currentEncounter={appt.encounter_id} />}<NewsCard /></div>
+        {/* under the note only: the sticky patient list in column 1 must never slide over it */}
+        <div className={cx('2xl:hidden', hasList && 'lg:col-start-2')}><NewsCard /></div>
+      </div>
+    </>
   );
 }
 
@@ -115,10 +146,10 @@ function Workspace({ appt }: { appt: any }) {
 
   const header = (
     <section className="overflow-hidden surface">
-      <div className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+      <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-5 sm:px-5 sm:py-4">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><h1 className="text-2xl font-bold leading-tight text-slate-900">{fullName(appt, true)}</h1><AppointmentStatus status={appt.status} /></div>
-          <p className="mt-1.5 text-[0.9375rem] text-slate-600">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1"><h2 className="text-xl font-bold leading-tight text-slate-900 [overflow-wrap:anywhere] sm:text-2xl">{fullName(appt, true)}</h2><AppointmentStatus status={appt.status} /></div>
+          <p className="mt-1 text-[0.9375rem] leading-snug text-slate-600">
             <span className="whitespace-nowrap font-semibold text-slate-900">{ageFrom(appt.birth_date, me.today)}</span>
             {[fmtDate(appt.birth_date), pid(appt.patient_number), appt.service_name, [fmtTime(appt.starts_at), appt.room_name ?? appt.branch_name].filter(Boolean).join(', ')].map((x, i) => <span key={i}> <span aria-hidden="true" className="text-slate-400">·</span> <span className={i !== 2 ? 'whitespace-nowrap' : undefined}>{x}</span></span>)}
           </p>
@@ -127,13 +158,13 @@ function Workspace({ appt }: { appt: any }) {
       </div>
       {patient.data && allergy && (
         // a known allergy is the one thing that must never be missed: full-width red band
-        <div role={allergy === 'known' ? 'alert' : undefined} className={cx('flex flex-wrap items-start gap-x-2 gap-y-1 px-5 py-2.5 text-[0.9375rem]',
+        <div role={allergy === 'known' ? 'alert' : undefined} className={cx('flex flex-wrap items-start gap-x-2 gap-y-1 px-4 py-2 text-[0.9375rem] sm:px-5',
           allergy === 'known' ? 'bg-red-700 font-bold text-white' : allergy === 'denied' ? 'border-t border-slate-100 bg-slate-50 text-slate-800' : 'border-t border-amber-200 bg-amber-50 font-medium text-amber-900')}>
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
-          <span className="min-w-[12rem] flex-1">{allergy === 'known' && patient.data.allergy_note
+          <span className="min-w-[8rem] flex-1">{allergy === 'known' && patient.data.allergy_note
             ? t('doctor.allergyKnown', { note: patient.data.allergy_note })
             : `${t('doctor.allergy', { state: t(`allergy.${allergy}` as MessageKey) })}${patient.data.allergy_note ? `: ${patient.data.allergy_note}` : ''}`}</span>
-          <Link href={`/patients/${appt.patient_id}`} className={cx('ml-7 shrink-0 whitespace-nowrap rounded text-sm font-semibold underline-offset-2 sm:ml-0 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', allergy === 'known' ? 'text-white' : 'text-brand-700')}>{t('doctor.profile')}</Link>
+          <Link href={`/patients/${appt.patient_id}`} className={cx('shrink-0 whitespace-nowrap rounded text-sm font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', allergy === 'known' ? 'text-white' : 'text-brand-700')}>{t('doctor.profile')}</Link>
         </div>
       )}
     </section>
@@ -287,7 +318,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
   const missingToSign = REQUIRED_FOR_SIGN.some((k) => errors[k] === t('note.fillToSign'));
   const aiDisabledReason = me.ai_mode === 'off' ? (me.ai_off_reason ?? t('note.aiOff')).replace(/\.$/, '') : null;
   const applyDraft = (d: Partial<NoteForm>, done: MessageKey = 'note.aiApplied') => { if (!Object.keys(d).length) { toast.info(t('ai.nothingApplied')); return; } setForm((f) => ({ ...f!, ...d })); setErrors((x) => ({ ...x, ...Object.fromEntries(Object.keys(d).map((k) => [k, ''])) })); toast.info(t(done)); };
-  const printLink = <LinkButton size="sm" variant="ghost" target="_blank" href={`/print/note/${encounterId}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>;
+  const printLink = <LinkButton size="sm" target="_blank" href={`/print/note/${encounterId}`} icon={<Printer className="h-4 w-4 text-brand-600" />}>{t('common.print')}</LinkButton>;
   // a chip puts its line under the text already in the field (a new line), never over it
   const insertPhrase = (k: NoteTextField) => (text: string) => { setForm((f) => ({ ...f!, [k]: f![k].trim() ? `${f![k].replace(/\s+$/, '')}\n${text}` : text })); setErrors((x) => ({ ...x, [k]: '' })); };
   const textField = (f: (typeof FIELDS)[number]) => (
@@ -314,19 +345,37 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
     <div className="space-y-5">
       {mine && <MyText mine={mine} server={form} canPutBack={!signed} onPutBack={() => { setForm(mine); setMine(null); }} onDismiss={() => setMine(null)} />}
       <Card padded={false} title={<span className="flex items-center gap-2 whitespace-nowrap">{t('note.title')} <NoteStatus status={enc.data.note.status} /></span>}
-        actions={signed ? <><Button size="sm" icon={<FilePlus2 className="h-4 w-4" />} onClick={() => setAddendumOpen(true)}>{t('note.addendum')}</Button>{printLink}</> : undefined}>
-        {!signed && (
-          <Toolbar actions={<><Button size="sm" variant="ghost" icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(true)}>{t('note.preview')}</Button>{printLink}</>}>
-            <Button size="sm" icon={<LayoutTemplate className="h-4 w-4 text-brand-600" />} data-testid="tpl-open" onClick={() => setTplOpen(true)}>{t('tpl.button')}</Button>
-            <Button size="sm" icon={<Sparkles className="h-4 w-4 text-brand-600" />} disabled={!!aiDisabledReason} title={aiDisabledReason ?? t('note.aiButtonTitle')} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</Button>
-            {FIELDS.some((f) => form[f.key].trim()) && <Button size="sm" variant="ghost" icon={<Save className="h-4 w-4" />} onClick={() => setSaveTplOpen(true)}>{t('tpl.save')}</Button>}
-            {dictOn && <MicButton d={dict} target="all" variant="secondary" label={t('dict.wholeNote')}>{t('dict.wholeNote')}</MicButton>}
-            {aiDisabledReason && <span className="text-[0.8125rem] text-slate-600">{t('note.aiOffLine', { reason: aiDisabledReason })}</span>}
-            {!dictOn && me.dictation_off_reason && <span className="text-[0.8125rem] text-slate-600" data-testid="dict-off">{t('dict.offLine', { reason: me.dictation_off_reason.replace(/\.$/, '') })}</span>}
-            {dictOn && dict.micBlocked && <span className="text-[0.8125rem] text-red-700">{t('dict.offLine', { reason: t('dict.micBlocked') })}</span>}
-          </Toolbar>
+>
+        {signed && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5 sm:px-5">
+            <Button size="sm" icon={<FilePlus2 className="h-4 w-4 text-brand-600" />} onClick={() => setAddendumOpen(true)}>{t('note.addendum')}</Button>{printLink}
+          </div>
         )}
-        <div className="space-y-4 p-5">
+        {!signed && (
+          // the writing tools in one row of equal capsules; the rare ones (save as template, preview, print) behind «Yana»
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-2.5 sm:px-5">
+            <Button size="sm" icon={<LayoutTemplate className="h-4 w-4 text-brand-600" />} data-testid="tpl-open" onClick={() => setTplOpen(true)}>{t('tpl.button')}</Button>
+            {/* phone: the AI button sits first in «Yana», so the tools stay one row */}
+            <Button size="sm" className="max-sm:!hidden" icon={<Sparkles className="h-4 w-4 text-brand-600" />} disabled={!!aiDisabledReason} title={aiDisabledReason ?? t('note.aiButtonTitle')} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</Button>
+            {dictOn && <MicButton d={dict} target="all" variant="secondary" label={t('dict.wholeNote')}>{t('dict.wholeShort')}</MicButton>}
+            <MoreMenu label={t('note.more')}>
+              <MenuItem className="sm:hidden" icon={<Sparkles className="h-4 w-4" />} disabled={!!aiDisabledReason} onClick={() => setAiOpen(true)}>{t('note.aiButton')}</MenuItem>
+              {FIELDS.some((f) => form[f.key].trim()) && <MenuItem icon={<Save className="h-4 w-4" />} onClick={() => setSaveTplOpen(true)}>{t('tpl.save')}</MenuItem>}
+              <MenuItem icon={<Eye className="h-4 w-4" />} onClick={() => setPreview(true)}>{t('note.preview')}</MenuItem>
+              <MenuItem icon={<Printer className="h-4 w-4" />} href={`/print/note/${encounterId}`}>{t('common.print')}</MenuItem>
+              {/* why there is no microphone: a quiet footnote here, not a permanent technical line over the note */}
+              {!dictOn && me.dictation_off_reason && <p className="border-t border-slate-100 px-3 pb-1 pt-2 text-[0.8125rem] text-slate-600" data-testid="dict-off">{t('dict.offLine', { reason: me.dictation_off_reason.replace(/\.$/, '') })}</p>}
+            </MoreMenu>
+          </div>
+        )}
+        {!signed && (aiDisabledReason || (dictOn && dict.micBlocked)) && (
+          // shown only when a visible button will not work, so the doctor knows why
+          <div className="space-y-1 border-b border-slate-100 px-5 py-2 text-[0.8125rem]">
+            {aiDisabledReason && <p className="text-slate-600">{t('note.aiOffLine', { reason: aiDisabledReason })}</p>}
+            {dictOn && dict.micBlocked && <p className="text-red-700">{t('dict.offLine', { reason: t('dict.micBlocked') })}</p>}
+          </div>
+        )}
+        <div className="space-y-4 p-4 sm:p-5 [&_input]:scroll-mb-40 [&_textarea]:scroll-mb-40 lg:[&_input]:scroll-mb-28 lg:[&_textarea]:scroll-mb-28">
           {!signed && <DictationBar d={dict} target="all" />}
           {signed && <p className="text-[0.8125rem] text-slate-600">{t('note.signedBy', { name: enc.data.note.signed_by_name, at: fmtDateTime(enc.data.note.signed_at) })}</p>}
           <IntakePanel appointmentId={appointmentId} recordAllergyFor={enc.data.patient?.id} onUseComplaints={signed ? undefined : (text) => {
@@ -397,7 +446,7 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
 
       {/* the two decisions of the visit, always in reach while the doctor writes, orders and issues documents */}
       {!signed && (
-        <div className="surface sticky bottom-[var(--tabbar)] z-10 space-y-2 px-4 py-3 lg:bottom-0" data-testid="note-actions">
+        <div className="surface sticky bottom-[var(--tabbar)] z-10 space-y-2 px-3 py-2 sm:px-4 lg:bottom-0" data-testid="note-actions">
           {saveError && <Alert tone="red">{saveError}</Alert>}
           {conflict && (
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900" role="alert" data-testid="note-conflict">
@@ -406,12 +455,18 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
             </div>
           )}
           {missingToSign && <Alert tone="red">{t('note.requiredToSign')}</Alert>}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className={cx('w-full text-[0.8125rem] sm:w-auto sm:flex-1 sm:whitespace-nowrap', dirty ? 'font-semibold text-amber-800' : 'text-slate-600')}>{dirty ? t('note.dirty') : savedAt ? t('note.savedAt', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>
-            <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto">
-              <Button className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" loading={saveDraft.isPending} disabled={!dirty || !!conflict} onClick={() => saveDraft.mutate()}>{t('note.saveDraft')}</Button>
-              <Button variant="primary" className="max-sm:!whitespace-normal max-sm:!px-3 max-sm:text-sm max-sm:leading-tight" loading={sign.isPending} disabled={!!conflict} onClick={trySign}>{t('note.sign')}</Button>
-            </div>
+          {/* one row everywhere: the save state on the left, the two decisions on the right (short labels on a phone) */}
+          <div className="flex items-center gap-2 sm:gap-4">
+            <span className={cx('min-w-0 flex-1 text-[0.8125rem] leading-tight', dirty ? 'font-semibold text-amber-800' : 'text-slate-600')} aria-live="polite">
+              <span className="sm:hidden">{dirty ? t('note.dirtyShort') : savedAt ? t('note.savedShort', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>
+              <span className="hidden sm:inline">{dirty ? t('note.dirty') : savedAt ? t('note.savedAt', { time: fmtTime(savedAt) }) : t('note.notSaved')}</span>
+            </span>
+            <Button className="shrink-0 max-sm:!px-3.5" loading={saveDraft.isPending} disabled={!dirty || !!conflict} onClick={() => saveDraft.mutate()}>
+              <span className="sm:hidden">{t('note.saveShort')}</span><span className="hidden sm:inline">{t('note.saveDraft')}</span>
+            </Button>
+            <Button variant="primary" className="shrink-0 max-sm:!px-3.5" loading={sign.isPending} disabled={!!conflict} onClick={trySign}>
+              <span className="sm:hidden">{t('note.signShort')}</span><span className="hidden sm:inline">{t('note.sign')}</span>
+            </Button>
           </div>
         </div>
       )}
@@ -436,6 +491,33 @@ function Encounter({ encounterId, appointmentId }: { encounterId: string; appoin
       </Modal>
     </div>
   );
+}
+
+/** «Yana ▾»: the note's rarely used actions in a small list under the button (Esc or a click outside closes it). */
+function MoreMenu({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); btn.current?.focus(); } };
+    document.addEventListener('pointerdown', away); document.addEventListener('keydown', key);
+    // the first item takes the focus, so the keyboard continues inside the list
+    requestAnimationFrame(() => box.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus());
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', key); };
+  }, [open]);
+  return (
+    <div ref={box} className="relative" onClick={(e) => { if ((e.target as HTMLElement).closest('[role=menuitem]')) setOpen(false); }}>
+      <Button ref={btn} size="sm" icon={<MoreHorizontal className="h-4 w-4" />} aria-haspopup="menu" aria-expanded={open} data-testid="note-more" onClick={() => setOpen((o) => !o)}>{label}</Button>
+      {open && <div role="menu" aria-label={label} className="surface absolute left-0 top-full z-30 mt-2 w-[18rem] max-w-[calc(100vw-2rem)] p-1.5 sm:left-auto sm:right-0">{children}</div>}
+    </div>
+  );
+}
+function MenuItem({ icon, children, onClick, href, disabled, className }: { icon: React.ReactNode; children: React.ReactNode; onClick?: () => void; href?: string; disabled?: boolean; className?: string }) {
+  const cls = cx(className, 'flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 text-left text-[0.9375rem] font-semibold text-slate-800 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300 [&>svg]:text-brand-600 disabled:cursor-not-allowed disabled:opacity-60');
+  return href ? <Link role="menuitem" href={href} target="_blank" rel="noopener" className={cls}>{icon}{children}</Link>
+    : <button type="button" role="menuitem" className={cls} disabled={disabled} onClick={onClick}>{icon}{children}</button>;
 }
 
 /** Compares note texts the way the server stores them (trimmed, numbers normalised). */
@@ -683,9 +765,13 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
   const [sel, setSel] = useState<string[]>([]);
   // quantity per chosen service: only a procedure can be a course (× 10 injections); a test or a scan has one result
   const [qty, setQty] = useState<Record<string, number>>({});
-  useEffect(() => { if (open) { setSel([]); setQty({}); } }, [open]);
+  const [find, setFind] = useState('');
+  useEffect(() => { if (open) { setSel([]); setQty({}); setFind(''); } }, [open]);
   const taken = new Set(existing.filter((o) => o.status !== 'cancelled').map((o) => o.service_name));
-  const groups = useMemo(() => ['lab', 'ultrasound', 'procedure'].map((c) => ({ c, items: (services.data ?? []).filter((s) => s.category === c) })), [services.data]);
+  const orderable = (services.data ?? []).filter((s) => ['lab', 'ultrasound', 'procedure'].includes(s.category));
+  // a long list gets a filter; chosen services stay visible while the doctor types
+  const needle = find.trim().toLocaleLowerCase();
+  const groups = useMemo(() => ['lab', 'ultrasound', 'procedure'].map((c) => ({ c, items: (services.data ?? []).filter((s) => s.category === c && (!needle || sel.includes(s.id) || String(s.name).toLocaleLowerCase().includes(needle))) })).filter((g) => g.items.length), [services.data, needle, sel]);
   const qtyOf = (id: string) => qty[id] ?? 1;
   const m = useMutation({
     mutationFn: () => api(`/encounters/${encounterId}/orders`, { method: 'POST', body: { items: sel.map((id) => ({ service_id: id, quantity: qtyOf(id) })) } }),
@@ -695,26 +781,36 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
   const total = (services.data ?? []).filter((s) => sel.includes(s.id)).reduce((a, s) => a + s.price * qtyOf(s.id), 0);
   const step = (id: string, d: number) => setQty((x) => ({ ...x, [id]: Math.min(50, Math.max(1, (x[id] ?? 1) + d)) }));
   return (
-    <Modal open={open} onClose={onClose} width="max-w-3xl" dirty={sel.length > 0} title={t('orders.modalTitle')}
+    <Modal open={open} onClose={onClose} width="max-w-4xl" dirty={sel.length > 0} title={t('orders.modalTitle')}
       footer={<><span className="mr-auto text-sm text-slate-700">{t('orders.selected', { n: sel.length, sum: formatSom(total) })}</span><ModalCancel /><Button variant="primary" disabled={!sel.length} loading={m.isPending} onClick={() => m.mutate()}>{t('orders.submit')}</Button></>}>
       {services.isLoading ? <LoadingRows /> : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <>
+          {orderable.length > 8 && (
+            <div className="relative mb-4">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+              <Input type="search" className="pl-9" value={find} onChange={(e) => setFind(e.target.value)} placeholder={t('orders.search')} aria-label={t('orders.search')} data-autofocus />
+            </div>
+          )}
+          {!groups.length && <p className="py-6 text-center text-[0.9375rem] text-slate-600">{t('orders.noMatch')}</p>}
+        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {groups.map((g) => (
-            <fieldset key={g.c}><legend className="mb-1 text-sm font-bold text-slate-800">{t(`service.${g.c}` as MessageKey)}</legend>
+            <fieldset key={g.c} className="min-w-0"><legend className="mb-1 text-sm font-bold text-slate-800">{t(`service.${g.c}` as MessageKey)}</legend>
               {g.items.map((s) => {
                 const on = sel.includes(s.id);
                 return (
                   <div key={s.id} className={cx('rounded-lg px-2 py-1.5 hover:bg-slate-50', taken.has(s.name) && 'opacity-60')}>
+                    {/* the name gets the whole width; the price (with «so‘m») sits under it */}
                     <label className={cx('flex min-h-10 cursor-pointer items-start gap-2.5 text-[0.9375rem]', taken.has(s.name) && 'cursor-not-allowed')}>
                       <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-brand-600" disabled={taken.has(s.name)} checked={on} onChange={(e) => setSel((x) => e.target.checked ? [...x, s.id] : x.filter((i) => i !== s.id))} />
-                      <span className="min-w-0 flex-1">{s.name}{taken.has(s.name) && <span className="text-[0.8125rem] text-slate-600"> {t('orders.taken')}</span>}</span><span className="shrink-0 whitespace-nowrap tabular-nums text-[0.8125rem] text-slate-600">{formatSom(s.price, false)}</span>
+                      <span className="min-w-0 flex-1 leading-snug">{s.name}{taken.has(s.name) && <span className="text-[0.8125rem] text-slate-600"> {t('orders.taken')}</span>}
+                        <span className="block whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{formatSom(s.price)}</span></span>
                     </label>
                     {on && g.c === 'procedure' && (
-                      <div className="ml-7 mt-1 flex items-center gap-2" role="group" aria-label={t('orders.qty')}>
+                      <div className="ml-7 mt-1 flex flex-wrap items-center gap-2" role="group" aria-label={t('orders.qty')}>
                         <Button type="button" size="sm" aria-label={t('orders.qtyLess')} disabled={qtyOf(s.id) <= 1} onClick={() => step(s.id, -1)}>−</Button>
                         <span className="min-w-[3.5rem] text-center text-[0.9375rem] font-semibold tabular-nums">{t('orders.times', { n: qtyOf(s.id) })}</span>
                         <Button type="button" size="sm" aria-label={t('orders.qtyMore')} disabled={qtyOf(s.id) >= 50} onClick={() => step(s.id, 1)}>+</Button>
-                        {qtyOf(s.id) > 1 && <span className="text-[0.8125rem] tabular-nums text-slate-600">= {formatSom(s.price * qtyOf(s.id), false)}</span>}
+                        {qtyOf(s.id) > 1 && <span className="text-[0.8125rem] tabular-nums text-slate-600">= {formatSom(s.price * qtyOf(s.id))}</span>}
                       </div>
                     )}
                   </div>
@@ -723,6 +819,7 @@ function OrderModal({ open, onClose, encounterId, existing }: { open: boolean; o
             </fieldset>
           ))}
         </div>
+        </>
       )}
       <p className="mt-3 text-[0.8125rem] text-slate-600">{t('orders.priceNote')}</p>
     </Modal>

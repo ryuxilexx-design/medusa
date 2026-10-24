@@ -57,7 +57,7 @@ export default function QueuePage() {
           <Card className="2xl:col-span-2" padded={false} title={<span className="inline-flex items-center gap-2">{t('registrar.q.inQueue')}<Badge tone={active.length ? 'yellow' : 'gray'}>{active.length}</Badge></span>}>
             {!active.length ? <EmptyState compact icon={<Users />} title={t('registrar.q.empty')} text={staff && q.data.expected.length ? t('registrar.q.emptyHint') : undefined} /> : (
               <Table>
-                <thead><tr><Th>№</Th><Th>{t('registrar.patient')}</Th><Th className="hidden sm:table-cell">{t('registrar.q.doctorRoom')}</Th><Th className="hidden md:table-cell">{t('registrar.q.arrived')}</Th><Th>{t('registrar.q.wait')}</Th><Th className="hidden sm:table-cell">{t('registrar.status')}</Th><Th right><span className="sr-only">{t('registrar.action')}</span></Th></tr></thead>
+                <thead><tr><Th>№</Th><Th>{t('registrar.patient')}</Th><Th className="hidden sm:table-cell">{t('registrar.q.doctorRoom')}</Th><Th className="hidden md:table-cell">{t('registrar.q.arrived')}</Th><Th className="hidden sm:table-cell">{t('registrar.q.wait')}</Th><Th className="hidden sm:table-cell">{t('registrar.status')}</Th><Th right><span className="sr-only">{t('registrar.action')}</span></Th></tr></thead>
                 <tbody>{active.map((x: any) => {
                   const w = waitOf(x);
                   const next = nextIds.has(x.id);
@@ -65,20 +65,22 @@ export default function QueuePage() {
                   return (
                     <tr key={x.id} className={x.status === 'in_progress' ? 'bg-violet-50/50' : next ? 'bg-amber-50/50' : ''}>
                       <Td><span className={cx('inline-flex h-9 min-w-9 items-center justify-center rounded-lg px-1.5 text-base font-bold tabular-nums', x.status === 'in_progress' ? 'bg-violet-700 text-white' : 'bg-slate-900 text-white')}>{x.number}</span></Td>
-                      <Td className="min-w-[11rem]">
+                      <Td className="sm:min-w-[11rem]">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-semibold text-slate-900 [overflow-wrap:anywhere]">{fullName(x)}</span>{next && <Badge tone="yellow" icon={<ArrowRight className="h-3.5 w-3.5" />}>{t('registrar.q.next')}</Badge>}</div>
                         <div className="whitespace-nowrap text-[0.8125rem] tabular-nums text-slate-600">{pid(x.patient_number)} · {t('registrar.q.apptAt', { time: fmtTime(x.starts_at) })}</div>
+                        {/* phone: the waiting time under the name instead of a column that would be cut */}
+                        <div className={cx('text-[0.8125rem] tabular-nums sm:hidden', long ? 'font-semibold text-red-700' : 'text-slate-700')}>{long && <AlertTriangle className="mr-1 inline h-3.5 w-3.5 align-[-0.15em]" aria-hidden="true" />}{t('registrar.q.wait')}: {x.started_at ? t('registrar.q.waitFinal', { d: duration(x.wait_seconds) }) : duration(w)}</div>
                       </Td>
                       <Td className="hidden whitespace-nowrap sm:table-cell"><div className="text-slate-900">{x.doctor_name}</div><div className="text-[0.8125rem] text-slate-600">{x.room_name ?? x.branch_name}</div></Td>
                       <Td className="hidden tabular-nums md:table-cell">{fmtTime(x.arrived_at)}</Td>
-                      <Td className={cx('whitespace-nowrap tabular-nums', long ? 'font-semibold text-red-700' : 'text-slate-900')}>
+                      <Td className={cx('hidden whitespace-nowrap tabular-nums sm:table-cell', long ? 'font-semibold text-red-700' : 'text-slate-900')}>
                         {long && <AlertTriangle className="mr-1 inline h-4 w-4 align-[-0.15em]" aria-hidden="true" />}{x.started_at ? t('registrar.q.waitFinal', { d: duration(x.wait_seconds) }) : duration(w)}
                       </Td>
                       <Td className="hidden sm:table-cell"><AppointmentStatus status={x.status} /></Td>
                       <Td right className="whitespace-nowrap !py-1.5">
                         {me.role === 'doctor' && x.status === 'arrived' && <Button size="sm" variant={next && !busy.has(x.doctor_id) ? 'primary' : 'secondary'} icon={<PlayCircle className="h-4 w-4" />} onClick={() => router.push(`/doctor?appointment=${x.appointment_id}`)}>{t('registrar.startVisit')}</Button>}
                         {me.role === 'doctor' && x.status === 'in_progress' && <Button size="sm" variant="primary" onClick={() => router.push(`/doctor?appointment=${x.appointment_id}`)}>{t('registrar.open')}</Button>}
-                        {me.role !== 'doctor' && <LinkButton size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800" href={`/patients/${x.patient_id}`}>{t('registrar.profile')}</LinkButton>}
+                        {me.role !== 'doctor' && <LinkButton size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800 max-sm:!px-2.5" href={`/patients/${x.patient_id}`}>{t('registrar.profile')}</LinkButton>}
                       </Td>
                     </tr>
                   );
@@ -91,10 +93,11 @@ export default function QueuePage() {
             {!q.data.expected.length ? <EmptyState compact icon={<CalendarCheck />} title={t('registrar.q.noExpected')} /> : (
               <ul className="divide-y divide-slate-100">
                 {q.data.expected.map((a: any) => (
-                  <li key={a.appointment_id} className="flex items-center gap-3 px-5 py-2.5">
-                    <span className="w-12 shrink-0 text-[0.9375rem] font-bold tabular-nums text-slate-900">{fmtTime(a.starts_at)}</span>
-                    <div className="min-w-0 flex-1 leading-snug"><div className="font-medium text-slate-900 [overflow-wrap:anywhere]">{fullName(a)}</div><div className="text-[0.8125rem] text-slate-600">{a.doctor_name}, {a.service_name}<SourceMark appt={a} /></div></div>
-                    {staff && <Button size="sm" className="shrink-0" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.id === a.appointment_id}
+                  // phone: the name keeps the row's width; doctor and service on the next line, the button under them
+                  <li key={a.appointment_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:flex-nowrap sm:px-5">
+                    <span className="w-12 shrink-0 self-start text-[0.9375rem] font-bold leading-snug tabular-nums text-slate-900">{fmtTime(a.starts_at)}</span>
+                    <div className="min-w-0 flex-1 basis-[calc(100%-3.75rem)] leading-snug sm:basis-auto"><div className="font-medium text-slate-900 [overflow-wrap:anywhere]">{fullName(a)}</div><div className="text-[0.8125rem] text-slate-600">{a.doctor_name}, {a.service_name}<SourceMark appt={a} /></div></div>
+                    {staff && <Button size="sm" className="ml-[3.75rem] shrink-0 sm:ml-0" icon={<UserCheck className="h-4 w-4" />} loading={act.isPending && act.variables?.id === a.appointment_id}
                       onClick={() => act.mutate({ id: a.appointment_id, action: 'check-in', body: { version: a.version } })}><span className="hidden sm:inline">{t('registrar.checkIn')}</span><span className="sm:hidden">{t('registrar.q.arrived')}</span></Button>}
                   </li>
                 ))}
