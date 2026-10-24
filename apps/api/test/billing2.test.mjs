@@ -273,7 +273,7 @@ test('ro‘yxat chegaralari: xarajat va qaytarish sahifalanadi; ombor harakatlar
   const ex2 = (await manager.get(`/expenses?from=${today}&to=${today}&page_size=1&page=2`)).body;
   assert.ok(!ex2.data.length || ex2.data[0].id !== ex.data[0].id);
   const rf = (await manager.get(`/refunds?from=${today}&to=${today}&page_size=1`)).body;
-  assert.equal(rf.data.length, 1); assert.ok(rf.meta.count >= 2); assert.equal(rf.meta.total, Number((await pool.query(`SELECT sum(amount) AS s FROM refunds WHERE tenant_id = $1`, [SEED_IDS.tenant])).rows[0].s));
+  assert.equal(rf.data.length, 1); assert.ok(rf.meta.count >= 2); assert.equal(rf.meta.total, Number((await pool.query(`SELECT sum(amount) AS s FROM refunds WHERE tenant_id = $1 AND refunded_at >= ($2::date)::timestamp AT TIME ZONE 'Asia/Tashkent' AND refunded_at < ($2::date + 1)::timestamp AT TIME ZONE 'Asia/Tashkent'`, [SEED_IDS.tenant, today])).rows[0].s)); // the seed also has an older refund
   const item = (await manager.get('/inventory')).body.data[0];
   const one = (await manager.get(`/inventory/${item.id}`)).body.data;
   assert.ok(one.movements.length <= 100); assert.equal(typeof one.movements_total, 'number'); assert.ok(one.movements_total >= one.movements.length);

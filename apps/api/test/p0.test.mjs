@@ -194,8 +194,10 @@ test('dashboard tushumi filtrlangan to‘lovlar yig‘indisiga teng (filial kesi
     for (const period of ['today', '7d', '30d']) {
       const d = (await manager.get(`/dashboard?period=${period}${branch}`)).body.data;
       const p = (await manager.get(`/payments?from=${d.range.from}&to=${d.range.to}${branch}&page_size=1`)).body.meta;
-      assert.equal(d.kpi.revenue, p.sum, `${period} ${branch}`);
-      assert.equal(d.daily.reduce((s, x) => s + x.revenue, 0), p.sum);
+      // revenue is net of refunds (the seed has one refund in the last 30 days)
+      const rf = (await manager.get(`/refunds?from=${d.range.from}&to=${d.range.to}${branch}&page_size=1`)).body.meta.total;
+      assert.equal(d.kpi.revenue, p.sum - rf, `${period} ${branch}`);
+      assert.equal(d.daily.reduce((s, x) => s + x.revenue, 0), p.sum - rf);
       const debts = (await manager.get(`/invoices?debt=1${branch}&page_size=1`)).body.meta.sums.due;
       assert.equal(d.kpi.debt, debts);
     }
@@ -231,6 +233,6 @@ test('reset: boshlang‘ich seed tiklanadi, parallel reset bloklanadi', async ()
   assert.equal((await manager.get('/patients?page_size=1')).body.meta.total, 100);
   assert.equal((await manager.get(`/patients/${state.patientId}`)).status, 404);
   const inv = (await cashier.get('/invoices?page_size=1')).body.meta.total;
-  assert.equal(inv, 180);
+  assert.equal(inv, 193); // 180 in the last 30 days + 13 older visits of the patients followed over months
   assert.equal((await manager.get('/me')).status, 200, 'sessiya resetdan keyin saqlanadi');
 });

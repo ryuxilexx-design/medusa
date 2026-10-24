@@ -28,7 +28,7 @@ Exit code 2 → people did real work. Show the user the `by_action` counts and l
 
 ## 4. Verify and report
 
-After a reset the Rahbar dashboard for "Bugun" must show: 28 qabul, tushum 2 510 000 so‘m (12 to‘lov), qarzdorlik 6 205 000 so‘m (45 hisob), demo time 18.10.2026 ~11:30, clinic name «Med.uz.ai Demo Clinic». Check via `GET /api/v1/dashboard` and `/me` (or the browser) and report these numbers.
+After a reset the Rahbar dashboard for "Bugun" must show: 28 qabul, tushum 2 510 000 so‘m (12 to‘lov), qarzdorlik 6 315 000 so‘m (46 hisob), demo time 18.10.2026 ~11:30, clinic name «Med.uz.ai Demo Clinic». Check via `GET /api/v1/dashboard` and `/me` (or the browser) and report these numbers.
 
 ## Timing advice for meetings
 

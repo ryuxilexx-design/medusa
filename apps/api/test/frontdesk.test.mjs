@@ -48,6 +48,7 @@ const uniquePhone = async () => (await pool.query(
     WHERE p.tenant_id = $1 AND p.phone IS NOT NULL AND p.contact_phone IS NULL
       AND (SELECT count(*) FROM patients x WHERE x.tenant_id = $1 AND (x.phone = p.phone OR x.contact_phone = p.phone)) = 1
       AND NOT EXISTS (SELECT 1 FROM telegram_chats tc WHERE tc.phone = p.phone)
+      AND NOT EXISTS (SELECT 1 FROM patient_consents c WHERE c.patient_id = p.id AND c.kind = 'notifications' AND NOT c.granted)
       AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a.patient_id = p.id AND a.status = 'scheduled' AND a.starts_at > demo_now())
     ORDER BY p.patient_number LIMIT 1`, [SEED_IDS.tenant])).rows[0];
 

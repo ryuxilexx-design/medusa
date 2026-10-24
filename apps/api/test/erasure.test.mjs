@@ -166,6 +166,8 @@ test('anonimlashtirish: karta anonim, qidiruv topmaydi, bot ko‘rmaydi, qaydlar
     payments: (await pool.query(`SELECT count(*)::int AS n, coalesce(sum(p.amount),0)::bigint AS sum FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.patient_id = $1`, [id])).rows[0],
     appts: (await pool.query(`SELECT count(*)::int AS n FROM appointments WHERE patient_id = $1`, [id])).rows[0].n,
     consents: (await pool.query(`SELECT count(*)::int AS n FROM patient_consents WHERE patient_id = $1`, [id])).rows[0].n,
+    // kinds whose latest row is a grant: each gets one withdrawal row
+    granted: (await pool.query(`SELECT count(*)::int AS n FROM (SELECT DISTINCT ON (kind) granted FROM patient_consents WHERE patient_id = $1 ORDER BY kind, recorded_at DESC, seq DESC) x WHERE granted`, [id])).rows[0].n,
     history: (await doctor.get(`/patients/${id}/history`)).body.data,
   };
   assert.ok(before.notes.length >= 1 && before.history.notes.length >= 1);
@@ -190,7 +192,7 @@ test('anonimlashtirish: karta anonim, qidiruv topmaydi, bot ko‘rmaydi, qaydlar
   const card = (await manager.get(`/patients/${id}`)).body.data;
   assert.ok(card.anonymised_at); assert.equal(card.phone, null); assert.equal(card.telegram_linked, false);
   assert.equal(card.consents.data_processing.granted, false, 'rozilik qaytarib olingan (yangi qator)');
-  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM patient_consents WHERE patient_id = $1`, [id])).rows[0].n, before.consents + 1, 'eski rozilik dalili saqlanadi');
+  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM patient_consents WHERE patient_id = $1`, [id])).rows[0].n, before.consents + before.granted, 'eski rozilik dalili saqlanadi, har bir berilgan rozilikka qaytarib olish qatori');
   assert.equal((await pool.query(`SELECT count(*)::int AS n FROM face_codes WHERE patient_id = $1 AND revoked_at IS NULL`, [id])).rows[0].n, 0);
 
   // bot: the chat verified with that number is unlinked; the number no longer leads to the card

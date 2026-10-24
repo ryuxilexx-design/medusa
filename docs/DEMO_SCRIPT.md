@@ -33,11 +33,16 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 | Bo‘sh vaqt | Akmal Rasulovda bugun **11:45 dan 13:00 gacha** va **13:30 dan 17:00 gacha** bo‘sh. Tavsiya: **14:00** (reset uchrashuvdan 2,5 soatdan ko‘p oldin qilinmagan bo‘lsa, bu vaqt hali o‘tmagan bo‘ladi) |
 | Band vaqt misoli | Akmal Rasulov **10:00** (Hasanova Barno, «Qabulda») — slot chizilgan, tanlanmaydi |
 | Buyuriladigan tahlil | **Umumiy qon tahlili (UQT)** — 60 000 so‘m → hisob jami **210 000 so‘m** |
-| Qayta kelgan bemor | **Karimov Aziz** (#1001) — 3 ta oldingi tashrif, tasdiqlangan UQT, allergiya «Penitsillin», eski qarz |
+| Qayta kelgan bemor | **Karimov Aziz** (#1001) — 4 ta oldingi tashrif (iyul ko‘rigi → terapevt → kardiolog → nazorat), ikki tasdiqlangan UQT va lipid profil, MKB-10 I10/E78.0, kardiologga yo‘llanma va retsept (amlodipin, atorvastatin), shifokor tasdiqlagan allergiya «Penitsillinlar», eski qarz (va’da: 20.10) |
+| Natija sharhi (trend) | **Boboyeva Gulchehra** (#1014, Akmal Rasulov): temir tanqisligi anemiyasi, 4 oyda 3 ta UQT + ferritin (Hb 96 → 112 → 126, ferritin 6 → 15 → 34). Bemor kartasi → «Tahlillar» → **Sharh**. Shuningdek **Qodirov Bekzod** (#1010, HbA1c 9,4 → 8,1 → 7,3), **Ergasheva Madina** (#1013, LDL 4,92 → 3,74 → 2,84), **Tursunova Sevara** (#1006, TTG 9,62 → 5,41 → 2,27) |
+| Kritik qiymat | **Nurmatova Gulchehra** (#1005) UQT qoralamasida Hb 68 g/L — laborant tasdiqlasa, sharhda qizil «KRITIK» birinchi; **Ahmedov Alisher** (#1017) glyukoza 24,1 mmol/L (tasdiqlangan, qaydga qo‘shimcha yozuv bilan) |
+| Hujjatlar, xulosa | 11 ta berilgan hujjat (retsept, yo‘llanma, ma’lumotnoma; №6 bekor qilingan va qayta berilgan); 2 ta tasdiqlangan «Bemor uchun xulosa» (Ergasheva, Qodirov); 4 ta qo‘shimcha yozuv |
+| Kassa | 1 ta qaytarish (08.10, karta, 75 000), 2 ta depozit bugun (450 000 karta, 200 000 naqd), 4 ta qarzga to‘lov va’dasi (bittasi muddati o‘tgan), «31+ kun» qarzdor — Ergasheva Madina |
+| Ish jadvali | Lola Abdullayeva 03–05.10 ta’tilda (kamera davomati bilan mos), Sardor Nazarov 20.10 08:00–13:00, Kamola Ismoilova 21.10 dam oladi, 08.12 va 01.01 — bayram |
 | Bir telefonli oila | **Tursunova Nilufar** (ona) va **Tursunova Madina** (qizi), telefon **90 111 22 33** |
 | Tasdiqni kutayotgan natija | **Nurmatova Gulchehra** (#1005) — UQT, holati «Natija qoralama» |
 | Qisman to‘langan hisob | **Umarov Sherzod** (#1004) — 210 000 dan 100 000 to‘langan, qoldiq **110 000 so‘m** |
-| Boshlang‘ich KPI (Bugun, barcha filiallar) | Qabullar 28 · Kelgan bemorlar 20 · Yakunlangan 10 · Tushum **2 510 000 so‘m** (12 to‘lov) · Qarzdorlik **6 205 000 so‘m** (45 hisob) |
+| Boshlang‘ich KPI (Bugun, barcha filiallar) | Qabullar 28 · Kelgan bemorlar 20 · Yakunlangan 10 · Tushum **2 510 000 so‘m** (12 to‘lov) · Qarzdorlik **6 315 000 so‘m** (46 hisob) |
 
 ## Ochilish (0:00)
 
@@ -46,7 +51,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 ## Qadamlar
 
 ### 1. Rahbar — raqamning asosi (0:00–1:00) · Oyna 1
-1. **Umumiy ko‘rinish** ochiq. KPI kartalarini ko‘rsating: tushum 2 510 000 so‘m, qarzdorlik 6 205 000 so‘m.
+1. **Umumiy ko‘rinish** ochiq. KPI kartalarini ko‘rsating: tushum 2 510 000 so‘m, qarzdorlik 6 315 000 so‘m.
 2. Yuqoridagi filial tanlovida **Yunusobod filiali** → raqamlar qayta hisoblanadi. So‘ng **Barcha filiallar** ga qaytaring.
 3. **30 kun** → kunlik tushum grafigi; ustun ustiga kursorni olib boring (kun summasi chiqadi).
 4. **Bugun** ga qaytaring → **Qarzdorlik (joriy)** kartasini bosing → qarzdor hisoblar ro‘yxati → istalgan **To‘lash/Ochish** → xizmatlar va to‘lovlar.
@@ -80,7 +85,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 2. Qidiruvga `Abdullayev` → *Umumiy qon tahlili (UQT)* → **Namuna olindi**.
 3. Qiymatlar: Gemoglobin `138`, Eritrotsitlar `4.6`, Leykotsitlar `11.2` (avtomatik «Yuqori»), Trombotsitlar `250`, EChT `9` → **Qoralama saqlash** → **Natijani tasdiqlash**.
 4. Natijani shifokor kartasida ko‘rsatish: chiqish → **Shifokor** (Akmal Rasulov) → *Abdullayev Jamshid* → «Buyurtmalar va natijalar»da «Tasdiqlangan» va qiymatlar.
-*Vaqtni tejash uchun:* 2–3-qadamlar o‘rniga «Qoralama» tabidagi *Nurmatova Gulchehra* buyurtmasida faqat **Natijani tasdiqlash** ni bosing.
+*Vaqtni tejash uchun:* 2–3-qadamlar o‘rniga «Qoralama» tabidagi *Nurmatova Gulchehra* buyurtmasida faqat **Natijani tasdiqlash** ni bosing (Hb 68 g/L — kritik qiymat: shifokor kartasida **Sharh** qizil «KRITIK» qatordan boshlanadi).
 > «Natija qayta ko‘chirib yozilmaydi; kim va qachon tasdiqlagani saqlanadi.»
 
 ### 6. Kassir — to‘lov (6:00–7:00) · Oyna 4

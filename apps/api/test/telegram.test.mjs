@@ -113,6 +113,7 @@ const uniquePhone = async () => (await pool.query(
       AND (SELECT count(*) FROM patients x WHERE x.tenant_id = $1 AND x.phone = p.phone) = 1
       AND NOT EXISTS (SELECT 1 FROM telegram_chats tc WHERE tc.phone = p.phone)
       AND NOT EXISTS (SELECT 1 FROM appointments a WHERE a.patient_id = p.id AND a.status = 'scheduled' AND a.starts_at > demo_now())
+      AND NOT EXISTS (SELECT 1 FROM patient_consents c WHERE c.patient_id = p.id AND c.kind = 'notifications' AND NOT c.granted)
     ORDER BY p.patient_number LIMIT 1`, [SEED_IDS.tenant])).rows[0];
 
 test('ulash: /start kontakt so‘raydi; kontaktsiz menyu yo‘q; o‘z raqami bilan karta topiladi', async () => {
