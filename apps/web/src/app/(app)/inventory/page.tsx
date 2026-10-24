@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { fmtDateTime, formatSom, parseSomToTiyin } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Money, PageHeader, Select, StatCard, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
+import { Badge, Button, Card, Checkbox, cx, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Money, PageHeader, scrollBehavior, Select, StatCard, Table, Tabs, Td, TextLink, Th, Toolbar, useToast } from '@/components/ui';
 import { MoneyInput } from '@/components/money-input';
 import { CATEGORIES, ControlledBadge, Expiry, qty, STORAGE } from '@/components/warehouse/common';
 import { RequestModal } from '@/components/warehouse/request-modal';
@@ -105,7 +105,7 @@ function StockTab({ onReceipt, onIssue }: { onReceipt: (id: string) => void; onI
           <Select aria-label={t('wh.item.category')} className="sm:w-48" value={cat} onChange={(e) => setCat(e.target.value)}>
             <option value="">{t('wh.cat.all')}</option>{CATEGORIES.map((c) => <option key={c} value={c}>{t(`wh.cat.${c}` as MessageKey)}</option>)}
           </Select>
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[0.9375rem] font-medium text-slate-900"><input type="checkbox" className="h-5 w-5 accent-brand-600" checked={low} onChange={(e) => go({ low: e.target.checked })} />{t('admin.inv.lowOnly')}</label>
+          <Checkbox rowClassName="min-h-control font-medium" checked={low} onChange={(e) => go({ low: e.target.checked })} label={t('admin.inv.lowOnly')} />
         </Toolbar>
         {q.isLoading ? <LoadingRows /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !rows.length ? <EmptyState compact icon={<Package />} title={t(low ? 'admin.inv.noneLow' : 'admin.inv.notFound')} /> : (
           <Table>
@@ -113,15 +113,14 @@ function StockTab({ onReceipt, onIssue }: { onReceipt: (id: string) => void; onI
             <tbody>{rows.map((i) => {
               const l = isLow(i);
               return (
-                <tr key={i.id} onClick={() => go({ item: i.id })} className={cx('cursor-pointer', sel === i.id ? 'bg-brand-50' : 'hover:bg-slate-50')}>
+                <tr key={i.id} onClick={() => go({ item: i.id })} className={cx('cursor-pointer', sel === i.id ? 'bg-brand-50 [&>td:first-child]:shadow-selected' : 'hover:bg-slate-50')}>
                   <Td className="min-w-[9rem]">
-                    <button type="button" onClick={(e) => { e.stopPropagation(); go({ item: i.id }); }} aria-current={sel === i.id || undefined}
-                      className="rounded text-left font-semibold text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{i.name}</button>
-                    <div className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-slate-600">{t(`wh.cat.${i.category}` as MessageKey)}{i.storage !== 'room' && ` · ${t(`wh.storage.${i.storage}` as MessageKey)}`}{!branchId && ` · ${i.branch_name}`}{i.controlled && <ControlledBadge />}{!i.active && ` · ${t('admin.inv.inactive')}`}</div>
+                    <TextLink tone="ink" onClick={(e) => { e.stopPropagation(); go({ item: i.id }); }} aria-current={sel === i.id || undefined} className="text-left">{i.name}</TextLink>
+                    <div className="flex flex-wrap items-center gap-1.5 text-small text-slate-600">{t(`wh.cat.${i.category}` as MessageKey)}{i.storage !== 'room' && ` · ${t(`wh.storage.${i.storage}` as MessageKey)}`}{!branchId && ` · ${i.branch_name}`}{i.controlled && <ControlledBadge />}{!i.active && ` · ${t('admin.inv.inactive')}`}</div>
                   </Td>
-                  <Td right><span className={l ? 'font-bold text-red-700' : 'font-semibold text-slate-900'}>{qty(i.qty)}</span> <span className="text-[0.8125rem] text-slate-600">{i.unit}</span>
-                    {l && <div className="text-[0.8125rem] font-semibold text-red-700">{t('admin.inv.low')}</div>}
-                    {Number(i.usable_qty) < Number(i.qty) && <div className="text-[0.8125rem] text-red-700">{t('wh.stock.usable', { qty: qty(i.usable_qty) })}</div>}</Td>
+                  <Td right><span className={l ? 'font-bold text-red-700' : 'font-semibold text-slate-900'}>{qty(i.qty)}</span> <span className="text-small text-slate-600">{i.unit}</span>
+                    {l && <div className="text-small font-semibold text-red-700">{t('admin.inv.low')}</div>}
+                    {Number(i.usable_qty) < Number(i.qty) && <div className="text-small text-red-700">{t('wh.stock.usable', { qty: qty(i.usable_qty) })}</div>}</Td>
                   <Td className="hidden whitespace-nowrap md:table-cell"><ExpiryCell date={i.next_expiry} /></Td>
                   <Td right className="hidden sm:table-cell">{formatSom(i.value)}</Td>
                 </tr>
@@ -145,7 +144,7 @@ function ItemDetail({ id, onClose, onReceipt, onIssue }: { id: string; onClose: 
   const q = useQuery({ queryKey: ['inventory', 'item', id], queryFn: () => api(`/inventory/${id}`).then((r) => r.data) });
   const [editing, setEditing] = useState(false);
   const top = useRef<HTMLDivElement>(null);
-  useEffect(() => { if (window.innerWidth < 1536) top.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [id]);
+  useEffect(() => { if (window.innerWidth < 1536) top.current?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' }); }, [id]);
   if (q.isLoading) return <div ref={top} className="scroll-mt-24 border-t border-slate-100 2xl:border-l 2xl:border-t-0"><LoadingRows /></div>;
   if (q.isError) return <div ref={top} className="scroll-mt-24 border-t border-slate-100 2xl:border-l 2xl:border-t-0"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div>;
   const it = q.data;
@@ -158,7 +157,7 @@ function ItemDetail({ id, onClose, onReceipt, onIssue }: { id: string; onClose: 
       </div>
       <div className="space-y-4 p-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className={cx('text-[1.5rem] font-bold leading-none tabular-nums', low ? 'text-red-700' : 'text-slate-900')}>{qty(it.qty)} <span className="text-base font-semibold text-slate-600">{it.unit}</span></span>
+          <span className={cx('text-stat font-bold leading-none tabular-nums', low ? 'text-red-700' : 'text-slate-900')}>{qty(it.qty)} <span className="text-base font-semibold text-slate-600">{it.unit}</span></span>
           {low && <Badge tone="red" icon={<AlertTriangle className="h-3.5 w-3.5" />}>{t('admin.inv.low')}</Badge>}
         </div>
         <div className="divide-y divide-slate-100">
@@ -171,32 +170,32 @@ function ItemDetail({ id, onClose, onReceipt, onIssue }: { id: string; onClose: 
           <Button icon={<ArrowDownToLine className="h-4 w-4" />} onClick={() => onReceipt(it.id)}>{t('admin.inv.in')}</Button>
           <Button icon={<ArrowUpFromLine className="h-4 w-4" />} disabled={it.controlled} onClick={() => onIssue(it.id)}>{t('wh.item.issue')}</Button>
         </div>
-        {it.controlled && <p className="text-[0.8125rem] text-slate-700">{t('wh.req.controlledDirect')}</p>}
+        {it.controlled && <p className="text-small text-slate-700">{t('wh.req.controlledDirect')}</p>}
       </div>
-      <h3 className="border-t border-slate-100 px-5 pb-1 pt-4 text-[0.9375rem] font-bold text-slate-900">{t('wh.item.batches')}</h3>
-      {!it.batches.length ? <p className="px-5 pb-3 text-[0.9375rem] text-slate-600">{t('wh.item.noBatches')}</p> : (
+      <h3 className="border-t border-slate-100 px-5 pb-1 pt-4 text-body font-bold text-slate-900">{t('wh.item.batches')}</h3>
+      {!it.batches.length ? <p className="px-5 pb-3 text-body text-slate-600">{t('wh.item.noBatches')}</p> : (
         <ul className="divide-y divide-slate-100 px-5 pb-2 text-sm">
           {it.batches.map((b: any) => (
             <li key={b.id} className="flex items-start gap-3 py-2.5">
               <span className="min-w-0 flex-1"><span className="block font-semibold text-slate-900">{b.batch_no ?? t('wh.item.noSeries')}</span>
-                <span className="block text-[0.8125rem] text-slate-600"><Expiry date={b.expiry_date} today={me.today} />{b.supplier ? ` · ${b.supplier}` : ''}</span></span>
+                <span className="block text-small text-slate-600"><Expiry date={b.expiry_date} today={me.today} />{b.supplier ? ` · ${b.supplier}` : ''}</span></span>
               <span className="whitespace-nowrap font-semibold tabular-nums">{qty(b.qty)}</span>
             </li>
           ))}
         </ul>
       )}
-      <h3 className="border-t border-slate-100 px-5 pb-1 pt-4 text-[0.9375rem] font-bold text-slate-900">{t('admin.inv.history')}</h3>
+      <h3 className="border-t border-slate-100 px-5 pb-1 pt-4 text-body font-bold text-slate-900">{t('admin.inv.history')}</h3>
       <ul className="divide-y divide-slate-100 px-5 pb-2 text-sm">
         {it.movements.map((mv: any) => (
           <li key={mv.id} className={cx('flex items-start gap-3 py-2.5', mv.voided_at && 'text-slate-500 line-through')}>
             <span className="min-w-0 flex-1">
               <span className="block text-slate-900">{t(`wh.kind.${mv.kind}` as MessageKey)}{mv.doc_no ? ` ${mv.doc_no}` : ''}{mv.receiver_name ? ` → ${mv.receiver_name}` : ''}</span>
-              <span className="block text-[0.8125rem] text-slate-600">{fmtDateTime(mv.occurred_at)} · {mv.actor_name}</span>
+              <span className="block text-small text-slate-600">{fmtDateTime(mv.occurred_at)} · {mv.actor_name}</span>
             </span>
             <span className={cx('whitespace-nowrap font-semibold tabular-nums', mv.type === 'in' ? 'text-emerald-700' : 'text-slate-800')}>{mv.type === 'in' ? '+' : '−'}{qty(mv.quantity)}</span>
           </li>
         ))}
-        {it.movements_total > it.movements.length && <li className="py-2.5 text-[0.8125rem] text-slate-600">{t('admin.inv.movementsShown', { n: it.movements.length, total: it.movements_total })}</li>}
+        {it.movements_total > it.movements.length && <li className="py-2.5 text-small text-slate-600">{t('admin.inv.movementsShown', { n: it.movements.length, total: it.movements_total })}</li>}
         <li className="flex items-start gap-3 py-2.5 text-slate-600"><span className="min-w-0 flex-1">{t('admin.inv.opening')}</span><span className="tabular-nums">{qty(it.opening_qty)}</span></li>
       </ul>
       {editing && <ItemModal item={it} onClose={() => setEditing(false)} />}
@@ -270,8 +269,8 @@ function ItemModal({ item, onClose, onCreated }: { item: any | null; onClose: ()
         <Field label={t('wh.item.price')} error={e('purchase_price')}>{(i) => <MoneyInput id={i} value={price} invalid={!!e('purchase_price')} onChange={(ev) => setPrice(ev.target.value)} />}</Field>
         <Field label={t('wh.item.packSize')} error={e('pack_size')}>{(i) => <Input id={i} inputMode="decimal" value={pack} invalid={!!e('pack_size')} onChange={(ev) => setPack(ev.target.value)} />}</Field>
         {!item && <Field label={t('admin.inv.openingQty')} required error={e('opening_qty')}>{(i) => <Input id={i} inputMode="decimal" value={opening} invalid={!!e('opening_qty')} onChange={(ev) => setOpening(ev.target.value)} />}</Field>}
-        <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-medium text-slate-900 sm:col-span-2"><input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={controlled} onChange={(ev) => setControlled(ev.target.checked)} />{t('wh.item.controlledCheck')}</label>
-        {item && <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-medium text-slate-900 sm:col-span-2"><input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={active} onChange={(ev) => setActive(ev.target.checked)} />{t('admin.inv.activeCheck')}</label>}
+        <Checkbox rowClassName="font-medium sm:col-span-2" checked={controlled} onChange={(ev) => setControlled(ev.target.checked)} label={t('wh.item.controlledCheck')} />
+        {item && <Checkbox rowClassName="font-medium sm:col-span-2" checked={active} onChange={(ev) => setActive(ev.target.checked)} label={t('admin.inv.activeCheck')} />}
       </div>
     </Modal>
   );

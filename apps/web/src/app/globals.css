@@ -4,15 +4,37 @@
 
 :root {
   color-scheme: light;
+  /* ---------- Design tokens (docs/UI_GUIDE.md §2; named in tailwind.config.ts) ----------
+     Colours are "r g b" channels so Tailwind opacity modifiers work: rgb(var(--brand-600) / 0.9). */
+  /* Med.uz.ai blues; 600 is THE accent — the primary button, the selected state, the focus border of a field */
+  --brand-50: 238 245 253; --brand-100: 217 232 250; --brand-200: 185 212 244; --brand-300: 141 184 236; --brand-400: 99 153 224;
+  --brand-500: 74 134 214; --brand-600: 10 88 202; --brand-700: 37 81 156; --brand-800: 31 59 120; --brand-900: 26 47 94;
+  --accent: rgb(var(--brand-600));
+  /* the one keyboard-focus colour (= amber-300, the ring-amber-300 used everywhere) */
+  --focus: 252 211 77;
+  /* the one text colour (= slate-900) */
+  --ink: 15 23 42;
+  /* radius: field (rounded rectangle) · surface (cards) · panel (dialogs, glass panels); buttons/segments are capsules */
+  --radius-field: 0.75rem; --radius-surface: 1.375rem; --radius-panel: 1.75rem;
+  /* shadows */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 30px -18px rgba(15, 23, 42, 0.25);
+  --shadow-popover: 0 24px 48px -16px rgba(10, 30, 70, 0.4);
+  --shadow-modal: 0 30px 60px -20px rgba(10, 30, 70, 0.45);
+  --shadow-pill: 0 2px 8px rgba(15, 23, 42, 0.12), 0 1px 1px rgba(15, 23, 42, 0.06);
+  --shadow-primary: 0 14px 28px -10px rgb(var(--brand-600) / 0.6);
+  /* control heights: one for every control in a row (md), a compact one for dense tables/toolbars (still ≥ 44px) */
+  --control-h: 2.75rem; --control-h-sm: 2.5rem;
   /* Liquid Glass «Clear» (chosen 2026-10-21): the control layer is glass over a coloured wallpaper, content stays on
      opaque surfaces. Tokens here, so the material is changed in one place. */
   --wall-1: #3b82f6; --wall-2: #f472b6; --wall-3: #22c55e; --wall-4: #a78bfa; --wall-base-a: #bfd3f2; --wall-base-b: #b7c9e6;
   --glass-tint: rgba(255, 255, 255, 0.10);
   --glass-rim: rgba(255, 255, 255, 0.9);
   --glass-shadow: 0 1px 1px rgba(10, 30, 70, 0.06), 0 18px 40px -12px rgba(10, 30, 70, 0.30);
-  --accent: #0a58ca;
-  /* height of the phone tab bar + its gap: sticky action bars sit above it (bottom: var(--tabbar)) */
-  --tabbar: 5rem;
+  /* the phone tab bar's bottom gap (above the home indicator on an iPhone) and its full height + gap: sticky action bars
+     sit above it (bottom: var(--tabbar)) */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-gap: calc(0.75rem + var(--safe-bottom));
+  --tabbar: calc(5rem + var(--safe-bottom));
   /* Motion «Prujina» (chosen 2026-10-22): one spring for everything that moves — a press shrinks fast, the release,
      a page, a dialog, a toast and a moving pill all spring back with a small overshoot. transform/opacity only. */
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -21,7 +43,7 @@
 }
 /* 18px base for every reader; sizes are in rem, so they all follow the root. */
 html { font-size: 112.5%; }
-html, body { color: #1a2233; }
+html, body { color: rgb(var(--ink)); }
 body {
   -webkit-font-smoothing: antialiased;
   background:
@@ -34,7 +56,7 @@ body {
   background-color: var(--wall-base-b);
 }
 .tabular { font-variant-numeric: tabular-nums; }
-:focus-visible { outline-color: #f2b33d; }
+:focus-visible { outline-color: rgb(var(--focus)); }
 
 /* ---------- Liquid Glass material ----------
    .glass        a panel (sidebar, toolbar, drawer): thick blur, lensing at the rim (SVG filter from <GlassDefs/>),
@@ -65,23 +87,42 @@ body {
 }
 .glass > * { position: relative; z-index: 1; }
 .glass-pill { border-radius: 9999px; }
+/* the secondary button: a neutral, nearly opaque white capsule with a hairline edge — the same on the wallpaper, on a
+   white card and in a dialog footer (it never takes the wallpaper's colour, so it never reads as a second primary) */
 .glass-btn {
-  border-radius: 9999px; color: #0f172a;
-  background: rgba(255, 255, 255, 0.34);
-  -webkit-backdrop-filter: blur(14px) saturate(180%); backdrop-filter: blur(14px) saturate(180%);
-  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.35), 0 10px 24px -10px rgba(10, 30, 70, 0.35);
+  border-radius: 9999px; color: rgb(var(--ink));
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: blur(14px) saturate(140%); backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(15, 23, 42, 0.14), 0 1px 2px rgba(15, 23, 42, 0.08), 0 8px 18px -10px rgba(10, 30, 70, 0.30);
 }
-.glass-btn:hover { background: rgba(255, 255, 255, 0.52); }
-.glass-btn-tint { background: rgba(10, 88, 202, 0.88); color: #fff; box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.15), 0 14px 28px -10px rgba(10, 88, 202, 0.6); }
-.glass-btn-tint:hover { background: rgba(8, 72, 170, 0.94); }
+.glass-btn:hover { background: rgba(255, 255, 255, 0.95); }
+.glass-btn:disabled:not([aria-busy="true"]) { color: #475569; box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.10); }
+/* the primary button: the accent, tinted glass */
+.glass-btn-tint { background: rgb(var(--brand-600) / 0.9); color: #fff; box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.45), inset 0 -1px 0 rgba(0, 0, 0, 0.15), var(--shadow-primary); }
+.glass-btn-tint:hover { background: rgb(var(--brand-600) / 0.97); }
+/* a disabled primary is plainly grey (readable text, ≥ 4.5:1), not a faded blue; a busy one stays blue */
+.glass-btn-tint:disabled:not([aria-busy="true"]) { background: #e2e8f0; color: #475569; box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08); opacity: 1; }
+.btn-danger { color: #b91c1c; }
+.btn-success, .btn-success:hover { background: rgb(4 120 87 / 0.92); color: #fff; box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.4), 0 10px 22px -10px rgb(4 120 87 / 0.6); }
+.btn-success:hover { background: rgb(6 95 70); }
 /* an item picked inside glass (menu, segmented control): a brighter, raised capsule */
-.glass-on { background: rgba(255, 255, 255, 0.74); box-shadow: inset 0 1.5px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, 0.5), 0 8px 18px -8px rgba(10, 30, 70, 0.35); }
+.glass-on { background: rgba(255, 255, 255, 0.8); box-shadow: inset 0 1.5px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, 0.5), var(--shadow-pill); }
 /* a field inside glass */
 .glass-field { background: rgba(255, 255, 255, 0.46); box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.95), inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
 .glass-field:focus-within { background: rgba(255, 255, 255, 0.82); }
 
 /* content layer */
-.surface { background: #fff; border: 1px solid #fff; border-radius: 1.375rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 30px -18px rgba(15, 23, 42, 0.25); }
+.surface { background: #fff; border: 1px solid #fff; border-radius: var(--radius-surface); box-shadow: var(--shadow-card); }
+/* Card padded={false}: its body takes the card's radius on its open edges, the first/last child (a table, a toolbar)
+   take it from the body, so a table's grey header row and footer never stick out of the rounded corners */
+.card-flush { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+.card-flush:first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.card-flush > :first-child { border-top-left-radius: inherit; border-top-right-radius: inherit; }
+.card-flush > :last-child { border-bottom-left-radius: inherit; border-bottom-right-radius: inherit; }
+/* a horizontally scrolling strip (Tabs) shows a soft fade on the side that has more */
+.fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem); mask-image: linear-gradient(to right, transparent, #000 2.5rem); }
+.fade-r { -webkit-mask-image: linear-gradient(to left, transparent, #000 2.5rem); mask-image: linear-gradient(to left, transparent, #000 2.5rem); }
+.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent); mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent); }
 
 /* no backdrop-filter (old browsers) or the person asked for less transparency: solid panels, same layout */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -123,6 +164,8 @@ body {
 .drawer { transition: transform var(--spring-ms) var(--spring-soft); }
 @media (prefers-reduced-motion: reduce) {
   .press, .pill, .drawer { transition-duration: 1ms; }
+  /* Skeletons stop pulsing; a loading spinner stands still (its text says «Yuklanmoqda») */
+  .animate-pulse, .animate-spin { animation: none; }
   .page-enter, .page-enter .grid > *, .page-enter tbody > tr, .page-enter .divide-y > *, .page-enter .stagger > *, .modal-backdrop, .modal-panel, .toast-in { animation: none; }
 }
 

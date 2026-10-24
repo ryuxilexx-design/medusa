@@ -42,7 +42,7 @@ export function PatientRights({ patient, role }: { patient: any; role: string })
 
   return (
     <section>
-      <h3 className="mb-2 text-[0.9375rem] font-bold text-slate-900">{t('registrar.rights.title')}</h3>
+      <h3 className="mb-2 text-body font-bold text-slate-900">{t('registrar.rights.title')}</h3>
       <div className="flex flex-wrap gap-2">
         <LinkButton size="sm" href={`/print/patient/${patient.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('registrar.rights.printCard')}</LinkButton>
         {manager && <Button size="sm" loading={downloading} icon={<Download className="h-4 w-4" />} onClick={download} title={t('registrar.rights.exportHint')}>{t('registrar.rights.export')}</Button>}

@@ -9,7 +9,7 @@ import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { MoneyInput } from '@/components/money-input';
 import { DaysOff } from '@/components/days-off';
-import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Toolbar, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 /**
  * The clinic's catalogue, managed by the manager without a developer: services with prices, rooms and branches.
@@ -17,9 +17,7 @@ import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, KeyVa
  */
 
 const ActiveCheck = ({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) => (
-  <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] font-medium text-slate-900 sm:col-span-2">
-    <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={checked} onChange={(e) => onChange(e.target.checked)} />{label}
-  </label>
+  <Checkbox rowClassName="font-medium sm:col-span-2" checked={checked} onChange={(e) => onChange(e.target.checked)} label={label} />
 );
 const useFieldErrors = () => {
   const [err, setErr] = useState<Record<string, string>>({});
@@ -58,7 +56,7 @@ export function ClinicSettings() {
             <ul className="divide-y divide-slate-100">{b.data!.map((x) => (
               <li key={x.id} className="flex items-start gap-3 px-5 py-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900"><span>{x.name}</span><span className="text-[0.8125rem] font-medium tabular-nums text-slate-600">{x.code}</span>
+                  <div className="flex flex-wrap items-center gap-2 font-semibold text-slate-900"><span>{x.name}</span><span className="text-small font-medium tabular-nums text-slate-600">{x.code}</span>
                     {!x.active && <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('settings.branches.inactive')}</Badge>}</div>
                   {(x.address || x.phone) && <div className="text-sm text-slate-600">{[x.address, x.phone ? formatPhone(x.phone) : null].filter(Boolean).join(' · ')}</div>}
                 </div>
@@ -75,8 +73,8 @@ export function ClinicSettings() {
             <thead><tr><Th>{t('admin.set.colRoom')}</Th><Th>{t('admin.set.colPurpose')}</Th><Th className="hidden sm:table-cell">{t('admin.set.colBranch')}</Th><Th right><span className="sr-only">{t('admin.set.colActions')}</span></Th></tr></thead>
             <tbody>{rooms.data!.map((r) => (
               <tr key={r.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setRoom(r)}>
-                <Td className="whitespace-nowrap font-medium text-slate-900">{r.name}{!r.active && <div className="text-[0.8125rem] font-normal text-slate-600">{t('settings.rooms.inactive')}</div>}</Td>
-                <Td className="text-slate-700">{r.purpose}<div className="text-[0.8125rem] text-slate-600 sm:hidden">{r.branch_name}</div></Td>
+                <Td className="whitespace-nowrap font-medium text-slate-900">{r.name}{!r.active && <div className="text-small font-normal text-slate-600">{t('settings.rooms.inactive')}</div>}</Td>
+                <Td className="text-slate-700">{r.purpose}<div className="text-small text-slate-600 sm:hidden">{r.branch_name}</div></Td>
                 <Td className="hidden whitespace-nowrap text-slate-700 sm:table-cell">{r.branch_name}</Td>
                 <Td right className="w-px"><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setRoom(r); }} aria-label={`${t('admin.set.edit')}: ${r.name}`}><span className="hidden 2xl:inline">{t('admin.set.edit')}</span></Button></Td>
               </tr>
@@ -99,11 +97,11 @@ function FiscalCard({ fiscal }: { fiscal: { provider: string; services_without_i
     <Card title={t('admin.set.fiscal')}>
       <div className="space-y-3">
         <KeyVal k={t('admin.set.fiscal')} v={<Badge tone={fiscal.provider === 'none' ? 'yellow' : 'green'}>{mode}</Badge>} />
-        <p className="text-[0.9375rem] text-slate-700">{fiscal.provider === 'manual' ? t('admin.set.fiscalManual') : fiscal.provider === 'none' ? t('admin.set.fiscalNone') : t('admin.set.fiscalAuto', { name: fiscal.provider })}</p>
+        <p className="text-body text-slate-700">{fiscal.provider === 'manual' ? t('admin.set.fiscalManual') : fiscal.provider === 'none' ? t('admin.set.fiscalNone') : t('admin.set.fiscalAuto', { name: fiscal.provider })}</p>
         {/* IKPU codes matter for the receipt: a real clinic sees which services still lack one; the demo (none) has nothing to fiscalise */}
         {(fiscal.provider !== 'none' || !me.demo) && (fiscal.services_without_ikpu > 0
           ? <Alert tone="yellow">{t('admin.set.fiscalNoIkpu', { n: fiscal.services_without_ikpu })}</Alert>
-          : <p className="text-[0.8125rem] text-slate-600">{t('admin.set.fiscalAllIkpu')}</p>)}
+          : <p className="text-small text-slate-600">{t('admin.set.fiscalAllIkpu')}</p>)}
       </div>
     </Card>
   );
@@ -225,12 +223,12 @@ export function ServicesSettings() {
             <tr key={s.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setEdit(s)}>
               <Td className="hidden whitespace-nowrap tabular-nums text-slate-600 sm:table-cell">{s.code}</Td>
               <Td className="min-w-[11rem]"><span className="font-semibold text-slate-900">{s.name}</span>
-                {!s.active && <div className="text-[0.8125rem] text-slate-600 sm:hidden">{t('admin.set.inactive')}</div>}</Td>
+                {!s.active && <div className="text-small text-slate-600 sm:hidden">{t('admin.set.inactive')}</div>}</Td>
               <Td className="hidden whitespace-nowrap text-slate-700 lg:table-cell">{t(`service.${s.category}` as MessageKey)}</Td>
               <Td right className="font-medium text-slate-900">{formatSom(s.price)}</Td>
               <Td right className="hidden text-slate-700 md:table-cell">{t('admin.set.minutes', { n: s.duration_min })}</Td>
               <Td right className="hidden text-slate-700 lg:table-cell">{s.share_percent == null ? '—' : `${Number(s.share_percent)}%`}</Td>
-              <Td className="hidden whitespace-nowrap tabular-nums text-slate-700 xl:table-cell">{s.ikpu_code ?? <span className="text-slate-500">—</span>}<span className="block text-[0.8125rem] text-slate-600">{s.vat_exempt ? t('settings.services.vatExempt') : `${t('settings.services.vat')} ${s.vat_percent ?? 12}%`}</span></Td>
+              <Td className="hidden whitespace-nowrap tabular-nums text-slate-700 xl:table-cell">{s.ikpu_code ?? <span className="text-slate-500">—</span>}<span className="block text-small text-slate-600">{s.vat_exempt ? t('settings.services.vatExempt') : `${t('settings.services.vat')} ${s.vat_percent ?? 12}%`}</span></Td>
               <Td className="hidden sm:table-cell">{s.active ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.set.active')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.set.inactive')}</Badge>}</Td>
               <Td right><Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />} onClick={(e) => { e.stopPropagation(); setEdit(s); }} aria-label={`${t('admin.set.edit')}: ${s.name}`}><span className="hidden md:inline">{t('admin.set.edit')}</span></Button></Td>
             </tr>

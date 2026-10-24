@@ -13,7 +13,7 @@ export function refText(v: any) {
 export function LabValues({ values, compact }: { values: any[]; compact?: boolean }) {
   const t = useT();
   if (compact) return (
-    <ul className="text-[0.8125rem]">
+    <ul className="text-small">
       {values.map((v) => (
         <li key={v.code} className="flex items-baseline justify-between gap-2 border-t border-slate-100 py-0.5" title={t('lab.referenceTitle', { ref: refText(v) })}>
           <span className="truncate">{v.name}</span>
@@ -26,8 +26,8 @@ export function LabValues({ values, compact }: { values: any[]; compact?: boolea
     </ul>
   );
   return (
-    <table className={cx('w-full text-sm', compact && 'text-[0.8125rem]')}>
-      <thead><tr className="text-left text-[0.8125rem] text-slate-600"><th className="py-1 pr-2 font-semibold">{t('lab.param')}</th><th className="py-1 pr-2 text-right font-semibold">{t('lab.result')}</th><th className="py-1 pr-2 font-semibold">{t('lab.unit')}</th><th className="py-1 pr-2 font-semibold">{t('lab.reference')}</th><th className="py-1 font-semibold">{t('lab.flag')}</th></tr></thead>
+    <table className={cx('w-full text-sm', compact && 'text-small')}>
+      <thead><tr className="text-left text-small text-slate-600"><th className="py-1 pr-2 font-semibold">{t('lab.param')}</th><th className="py-1 pr-2 text-right font-semibold">{t('lab.result')}</th><th className="py-1 pr-2 font-semibold">{t('lab.unit')}</th><th className="py-1 pr-2 font-semibold">{t('lab.reference')}</th><th className="py-1 font-semibold">{t('lab.flag')}</th></tr></thead>
       <tbody>
         {values.map((v) => (
           <tr key={v.code} className="border-t border-slate-100">
@@ -35,7 +35,7 @@ export function LabValues({ values, compact }: { values: any[]; compact?: boolea
             <td className={cx('py-1 pr-2 text-right font-medium tabular-nums', v.flag === 'high' || v.flag === 'low' ? 'text-red-700' : 'text-slate-900')}>{v.value || '—'}</td>
             <td className="py-1 pr-2 text-slate-600">{v.unit}</td>
             <td className="whitespace-nowrap py-1 pr-2 tabular-nums text-slate-600">{refText(v)}</td>
-            <td className="whitespace-nowrap py-1 text-[0.8125rem]">{v.flag === 'high' ? <span className="inline-flex items-center gap-0.5 font-medium text-red-700"><ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />{t('lab.high')}</span> : v.flag === 'low' ? <span className="inline-flex items-center gap-0.5 font-medium text-red-700"><ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />{t('lab.low')}</span> : v.flag === 'normal' ? <span className="text-slate-600">{t('lab.normal')}</span> : ''}</td>
+            <td className="whitespace-nowrap py-1 text-small">{v.flag === 'high' ? <span className="inline-flex items-center gap-0.5 font-medium text-red-700"><ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />{t('lab.high')}</span> : v.flag === 'low' ? <span className="inline-flex items-center gap-0.5 font-medium text-red-700"><ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />{t('lab.low')}</span> : v.flag === 'normal' ? <span className="text-slate-600">{t('lab.normal')}</span> : ''}</td>
           </tr>
         ))}
       </tbody>

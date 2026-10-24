@@ -6,7 +6,7 @@ import { Bookmark, ListChecks, Newspaper } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Button, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Tabs } from '@/components/ui';
+import { Button, Card, Chip, EmptyState, ErrorState, LoadingRows, PageHeader, Tabs } from '@/components/ui';
 import { NewsArticle, NewsSourceLine, TopicsModal, useNewsActions, useSpLabel, type NewsResponse } from '@/components/news';
 
 export default function NewsPage() { return <Suspense><News /></Suspense>; }
@@ -64,11 +64,7 @@ function News() {
         {tab === 'feed' && topics.length > 1 && (
           <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3" role="group" aria-label={t('news.topicFilter')} data-testid="news-topics">
             {['', ...topics].map((k) => (
-              <button key={k || 'all'} type="button" aria-pressed={topic === k} onClick={() => go({ topic: k })}
-                className={cx('min-h-9 rounded-full border-2 px-3.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-                  topic === k ? 'border-brand-600 bg-brand-50 text-brand-800' : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500')}>
-                {k ? label(k) : t('news.allTopics')}
-              </button>
+              <Chip key={k || 'all'} pressed={topic === k} onClick={() => go({ topic: k })}>{k ? label(k) : t('news.allTopics')}</Chip>
             ))}
           </div>
         )}

@@ -1,12 +1,11 @@
 'use client';
-import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cctv, UserCheck, X } from 'lucide-react';
 import { api, ApiError, qs } from '@/lib/api';
 import { fmtTime, fullName, pid } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Button, useToast } from './ui';
+import { Badge, Button, TextLink, useToast } from './ui';
 
 type Arrival = {
   id: string; seen_at: string; camera_name: string; appointment_id: string; starts_at: string; version: number;
@@ -51,10 +50,10 @@ export function CameraArrivals() {
           <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
             <div className="min-w-0 flex-1 basis-[16rem] leading-snug">
               <div className="flex flex-wrap items-baseline gap-x-2">
-                <Link href={`/patients/${a.patient_id}`} className="font-semibold text-slate-900 [overflow-wrap:anywhere] hover:text-brand-800 hover:underline">{fullName(a)}</Link>
-                <span className="text-[0.8125rem] tabular-nums text-slate-600">{pid(a.patient_number)}</span>
+                <TextLink tone="ink" href={`/patients/${a.patient_id}`} className="[overflow-wrap:anywhere]">{fullName(a)}</TextLink>
+                <span className="text-small tabular-nums text-slate-600">{pid(a.patient_number)}</span>
               </div>
-              <div className="text-[0.8125rem] text-slate-600">
+              <div className="text-small text-slate-600">
                 {t('cam.arr.booked', { time: fmtTime(a.starts_at), doctor: a.doctor_name })} · <span className="whitespace-nowrap font-semibold text-slate-800">{t('cam.arr.seen', { time: fmtTime(a.seen_at) })}</span>
               </div>
             </div>

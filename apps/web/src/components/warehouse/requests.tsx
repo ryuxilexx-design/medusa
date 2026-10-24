@@ -7,7 +7,7 @@ import { api, ApiError, qs } from '@/lib/api';
 import { fmtDate, fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, EmptyState, ErrorState, Field, Input, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Table, Tabs, Td, Th, useToast } from '@/components/ui';
+import { Alert, Button, EmptyState, ErrorState, Field, Input, KeyVal, LinkButton, LoadingRows, Modal, ModalCancel, Pagination, Table, Tabs, Td, TextLink, Th, useToast } from '@/components/ui';
 import { ControlledBadge, parseQty, PurposeText, qty, StatusBadge } from './common';
 
 type Filter = 'open' | 'done' | 'all';
@@ -34,12 +34,12 @@ export function RequestsList({ mine = false }: { mine?: boolean }) {
             <thead><tr><Th>{t('wh.col.doc')}</Th><Th className="hidden sm:table-cell">{t('wh.col.requester')}</Th><Th className="hidden md:table-cell">{t('wh.col.purpose')}</Th><Th className="hidden lg:table-cell">{t('wh.col.lines')}</Th><Th>{t('admin.inv.colState')}</Th></tr></thead>
             <tbody>{rows.map((r) => (
               <tr key={r.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSel(r.id)}>
-                <Td className="whitespace-nowrap"><button type="button" className="font-semibold text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={(e) => { e.stopPropagation(); setSel(r.id); }}>T-{r.number}</button>
-                  <div className="text-[0.8125rem] text-slate-600">{fmtDateTime(r.created_at)}</div><div className="text-[0.8125rem] text-slate-800 sm:hidden">{r.requester_name}</div></Td>
-                <Td className="hidden min-w-[9rem] sm:table-cell">{r.requester_name}<div className="text-[0.8125rem] text-slate-600">{r.department}</div></Td>
-                <Td className="hidden max-w-[18rem] text-[0.9375rem] md:table-cell"><PurposeText r={r} /></Td>
-                <Td className="hidden text-[0.9375rem] lg:table-cell">{r.lines.slice(0, 2).map((l: any) => `${l.name} × ${qty(l.qty)}`).join('; ')}{r.lines.length > 2 ? ` +${r.lines.length - 2}` : ''}</Td>
-                <Td className="whitespace-nowrap"><StatusBadge status={r.status} />{r.needs_approval && !r.approved_at && ['submitted'].includes(r.status) && <div className="mt-1 text-[0.8125rem] font-semibold text-violet-800">{t('wh.req.waitsApproval')}</div>}</Td>
+                <Td className="whitespace-nowrap"><TextLink tone="ink" onClick={(e) => { e.stopPropagation(); setSel(r.id); }}>T-{r.number}</TextLink>
+                  <div className="text-small text-slate-600">{fmtDateTime(r.created_at)}</div><div className="text-small text-slate-800 sm:hidden">{r.requester_name}</div></Td>
+                <Td className="hidden min-w-[9rem] sm:table-cell">{r.requester_name}<div className="text-small text-slate-600">{r.department}</div></Td>
+                <Td className="hidden max-w-[18rem] text-body md:table-cell"><PurposeText r={r} /></Td>
+                <Td className="hidden text-body lg:table-cell">{r.lines.slice(0, 2).map((l: any) => `${l.name} × ${qty(l.qty)}`).join('; ')}{r.lines.length > 2 ? ` +${r.lines.length - 2}` : ''}</Td>
+                <Td className="whitespace-nowrap"><StatusBadge status={r.status} />{r.needs_approval && !r.approved_at && ['submitted'].includes(r.status) && <div className="mt-1 text-small font-semibold text-violet-800">{t('wh.req.waitsApproval')}</div>}</Td>
               </tr>
             ))}</tbody>
           </Table>
@@ -114,12 +114,12 @@ export function RequestDetail({ id, onClose }: { id: string; onClose: () => void
           ))}</tbody>
         </Table>
         {r.movements.length > 0 && <>
-          <h3 className="text-[0.9375rem] font-bold text-slate-900">{t('wh.req.issuedFrom')}</h3>
+          <h3 className="text-body font-bold text-slate-900">{t('wh.req.issuedFrom')}</h3>
           <ul className="divide-y divide-slate-100 text-sm">
             {r.movements.map((m: any) => (
               <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
                 <span className="min-w-0 flex-1">{t(`wh.kind.${m.kind}` as MessageKey)}: {m.name} · {t('wh.col.batch')} {m.batch_no ?? '—'}{m.expiry_date ? `, ${fmtDate(m.expiry_date)}` : ''}
-                  <span className="block text-[0.8125rem] text-slate-600">{fmtDateTime(m.occurred_at)} · {m.actor_name}{m.second_signer_name ? ` + ${m.second_signer_name}` : ''}{m.voided_at ? ` · ${t('wh.voided')}: ${m.void_reason}` : ''}</span></span>
+                  <span className="block text-small text-slate-600">{fmtDateTime(m.occurred_at)} · {m.actor_name}{m.second_signer_name ? ` + ${m.second_signer_name}` : ''}{m.voided_at ? ` · ${t('wh.voided')}: ${m.void_reason}` : ''}</span></span>
                 <span className="whitespace-nowrap font-semibold tabular-nums">{m.type === 'in' ? '+' : '−'}{qty(m.quantity)}</span>
                 {keeper && m.kind === 'issue' && !m.voided_at && Number(m.returned) < Number(m.quantity) &&
                   <Button size="sm" variant="ghost" icon={<Undo2 className="h-4 w-4" />} onClick={() => setRet(m)}>{t('wh.ret.action')}</Button>}

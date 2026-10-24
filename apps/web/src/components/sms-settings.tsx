@@ -5,7 +5,7 @@ import { CheckCircle2, MessageSquareText, MinusCircle, Send } from 'lucide-react
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, fmtDateTime } from '@/lib/format';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Table, Td, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, LoadingRows, Table, Td, Th, useToast } from '@/components/ui';
 
 type Settings = { eskiz_email: string | null; has_password: boolean; sender: string; enabled: boolean; last_error: string | null; last_error_at: string | null; updated_at: string | null; secrets_configured: boolean };
 type Stats = { days: { day: string; sent: number; delivered: number; failed: number; parts: number }[]; totals: { sent_30d: number; failed_30d: number; pending: number }; last_error: string | null; last_error_at: string | null };
@@ -47,16 +47,16 @@ export function SmsSettings() {
       <div className="flex min-w-0 flex-col gap-5">
         <Card title={t('admin.sms.account')}>
           <div className="flex flex-col gap-4">
-            <p className="text-[0.9375rem] text-slate-700">{t('admin.sms.intro')}</p>
+            <p className="text-body text-slate-700">{t('admin.sms.intro')}</p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-slate-200 px-4 py-3">
               <MessageSquareText className="h-5 w-5 text-slate-600" aria-hidden="true" />
               <span className="font-semibold text-slate-900">{s.eskiz_email ?? 'Eskiz.uz'}</span>
               {s.enabled ? <Badge tone="green" icon={<CheckCircle2 className="h-3.5 w-3.5" />}>{t('admin.sms.statusOn')}</Badge> : <Badge icon={<MinusCircle className="h-3.5 w-3.5" />}>{t('admin.sms.statusOff')}</Badge>}
-              {s.updated_at && <span className="text-[0.8125rem] text-slate-600">{t('admin.tg.updatedAt', { at: fmtDateTime(s.updated_at) })}</span>}
+              {s.updated_at && <span className="text-small text-slate-600">{t('admin.tg.updatedAt', { at: fmtDateTime(s.updated_at) })}</span>}
             </div>
             {s.last_error && <Alert tone="red" title={t('admin.sms.broken')}>{s.last_error}{s.last_error_at ? ` (${fmtDateTime(s.last_error_at)})` : ''}</Alert>}
             {!s.enabled && (
-              <ol className="list-decimal space-y-1.5 pl-5 text-[0.9375rem] text-slate-700">
+              <ol className="list-decimal space-y-1.5 pl-5 text-body text-slate-700">
                 <li>{t('admin.sms.step1')}</li>
                 <li>{t('admin.sms.step2', { default: DEFAULT_SENDER })}</li>
               </ol>
@@ -69,9 +69,7 @@ export function SmsSettings() {
                   {(id) => <Input id={id} type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={s.has_password ? '••••••••' : ''} disabled={!s.secrets_configured} invalid={!!errors.password} />}
                 </Field>
                 <Field label={t('admin.sms.sender')} error={errors.sender} hint={t('admin.sms.senderHint', { default: DEFAULT_SENDER })}>{(id) => <Input id={id} value={sender} onChange={(e) => setSender(e.target.value)} maxLength={20} invalid={!!errors.sender} />}</Field>
-                <label className="flex min-h-11 cursor-pointer items-center gap-2.5 self-end text-[0.9375rem] font-medium text-slate-900">
-                  <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />{t('admin.sms.enabled')}
-                </label>
+                <Checkbox rowClassName="min-h-control self-end font-medium" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} label={t('admin.sms.enabled')} />
               </div>
               <div><Button type="submit" variant="primary" disabled={!dirty} loading={save.isPending}>{t('common.save')}</Button></div>
             </form>
@@ -100,7 +98,7 @@ export function SmsSettings() {
                 </tr>
               ))}</tbody>
             </Table>
-            {stats.data!.totals.pending > 0 && <p className="px-5 py-3 text-[0.8125rem] text-slate-600">{t('admin.sms.pending', { n: stats.data!.totals.pending })}</p>}
+            {stats.data!.totals.pending > 0 && <p className="px-5 py-3 text-small text-slate-600">{t('admin.sms.pending', { n: stats.data!.totals.pending })}</p>}
           </>
         )}
       </Card>

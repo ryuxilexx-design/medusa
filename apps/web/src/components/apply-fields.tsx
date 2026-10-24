@@ -1,6 +1,6 @@
 'use client';
 import type { MessageKey } from '@meduza/contracts';
-import { cx } from '@/components/ui';
+import { cx, Radio } from '@/components/ui';
 import { useT } from '@/lib/i18n';
 
 /**
@@ -40,17 +40,15 @@ export function FieldApplyList<K extends string>({ fields, draftOf, current, cho
         const plan = planOf(text, current[f.key]);
         return (
           <div key={f.key} className="rounded-lg border border-slate-200 px-3 py-2">
-            <div className="text-[0.8125rem] font-semibold text-slate-600">{f.label}</div>
-            <div className={cx('whitespace-pre-wrap text-[0.9375rem]', !text && 'text-slate-500')}>{text || t('common.notEntered')}</div>
-            {plan === 'fill' && <div className="mt-1 text-[0.8125rem] text-emerald-800">{t('ai.toEmpty')}</div>}
-            {plan === 'same' && <div className="mt-1 text-[0.8125rem] text-slate-600">{t('ai.same')}</div>}
+            <div className="text-small font-semibold text-slate-600">{f.label}</div>
+            <div className={cx('whitespace-pre-wrap text-body', !text && 'text-slate-500')}>{text || t('common.notEntered')}</div>
+            {plan === 'fill' && <div className="mt-1 text-small text-emerald-800">{t('ai.toEmpty')}</div>}
+            {plan === 'same' && <div className="mt-1 text-small text-slate-600">{t('ai.same')}</div>}
             {plan === 'ask' && (
               <fieldset className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" data-testid={`${testIdPrefix}-${f.key}`}>
                 <legend className="mb-1 font-medium text-amber-900">{t('ai.hasText')}</legend>
                 {(['keep', 'replace', 'append'] as Choice[]).map((c) => (
-                  <label key={c} className="flex min-h-8 items-center gap-1.5">
-                    <input type="radio" name={`${testIdPrefix}-${f.key}`} className="h-4 w-4 accent-brand-600" checked={(choice[f.key] ?? 'keep') === c} onChange={() => onChoice(f.key, c)} />{t(`ai.${c}` as MessageKey)}
-                  </label>
+                  <Radio key={c} name={`${testIdPrefix}-${f.key}`} rowClassName="text-sm" checked={(choice[f.key] ?? 'keep') === c} onChange={() => onChoice(f.key, c)} label={t(`ai.${c}` as MessageKey)} />
                 ))}
               </fieldset>
             )}

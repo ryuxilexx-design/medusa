@@ -8,7 +8,7 @@ import { MESSAGES, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDate } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { Alert, Badge, Button, cx, LoadingRows, Modal, ModalCancel, useToast } from '@/components/ui';
+import { Alert, Badge, Button, buttonClass, Checkbox, cx, FOCUS_RING, LoadingRows, Modal, ModalCancel, useToast } from '@/components/ui';
 
 export type NewsItem = {
   id: string; specialty_key: string; title: string; title_uz: string | null; summary_uz: string | null; takeaway_uz: string | null;
@@ -60,17 +60,15 @@ export function useNewsActions() {
   return { read, save, rate };
 }
 
-const iconBtn = 'rounded-lg p-2.5 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300';
-
 /** Thumbs up / down (the existing «Foydali» feedback). */
 export function RateButtons({ item, onRate }: { item: NewsItem; onRate: (useful: boolean) => void }) {
   const { t } = useI18n();
   return (
     <span className="flex shrink-0 gap-1">
-      <button type="button" aria-label={t('news.useful')} aria-pressed={item.useful === true} title={t('news.useful')} onClick={() => onRate(true)}
-        className={cx(iconBtn, item.useful === true ? 'text-emerald-700' : 'text-slate-500')}><ThumbsUp className="h-5 w-5" /></button>
-      <button type="button" aria-label={t('news.notUseful')} aria-pressed={item.useful === false} title={t('news.notUseful')} onClick={() => onRate(false)}
-        className={cx(iconBtn, item.useful === false ? 'text-red-700' : 'text-slate-500')}><ThumbsDown className="h-5 w-5" /></button>
+      <Button variant="ghost" size="icon-sm" aria-label={t('news.useful')} aria-pressed={item.useful === true} title={t('news.useful')} onClick={() => onRate(true)}
+        className={item.useful === true ? '!text-emerald-700' : '!text-slate-600'}><ThumbsUp className="h-5 w-5" /></Button>
+      <Button variant="ghost" size="icon-sm" aria-label={t('news.notUseful')} aria-pressed={item.useful === false} title={t('news.notUseful')} onClick={() => onRate(false)}
+        className={item.useful === false ? '!text-red-700' : '!text-slate-600'}><ThumbsDown className="h-5 w-5" /></Button>
     </span>
   );
 }
@@ -80,10 +78,10 @@ export function ArticleTitle({ item, onOpen, className }: { item: NewsItem; onOp
   return (
     <>
       <a href={item.url} target="_blank" rel="noopener noreferrer" lang={item.title_uz ? 'uz-Latn' : 'en'} onClick={onOpen}
-        className={cx('font-bold leading-snug text-slate-900 [overflow-wrap:anywhere] hover:text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', className)}>
+        className={cx('rounded font-bold leading-snug text-slate-900 [overflow-wrap:anywhere] hover:text-brand-700 hover:underline', FOCUS_RING, className)}>
         {item.title_uz ?? item.title}
       </a>
-      {item.title_uz && <p lang="en" className="mt-0.5 text-[0.8125rem] leading-snug text-slate-600 [overflow-wrap:anywhere]">{item.title}</p>}
+      {item.title_uz && <p lang="en" className="mt-0.5 text-small leading-snug text-slate-600 [overflow-wrap:anywhere]">{item.title}</p>}
     </>
   );
 }
@@ -97,18 +95,17 @@ export function NewsArticle({ item, topicLabel, actions }: { item: NewsItem; top
   const busyRead = actions.read.isPending && actions.read.variables === item.id;
   const open = () => { if (unread) actions.read.mutate(item.id); };
   return (
-    <li data-news-item={item.id} data-unread={unread || undefined} className={cx('px-5 py-4', unread && 'bg-brand-50/40 shadow-[inset_4px_0_0_#2d64bd]')}>
+    <li data-news-item={item.id} data-unread={unread || undefined} className={cx('px-5 py-4', unread && 'bg-brand-50/40 shadow-selected')}>
       {(topicLabel || unread) && <div className="mb-1.5 flex flex-wrap items-center gap-2">
         {topicLabel && <Badge tone="teal">{topicLabel}</Badge>}
         {unread && <Badge tone="blue" icon={<span className="h-2 w-2 rounded-full bg-sky-600" aria-hidden="true" />}>{t('news.new')}</Badge>}
       </div>}
       <h3 className="text-base"><ArticleTitle item={item} onOpen={open} /></h3>
-      {item.summary_uz && <p lang="uz-Latn" className="mt-1.5 line-clamp-3 text-[0.9375rem] leading-snug text-slate-800">{item.summary_uz}</p>}
-      {item.takeaway_uz && <p className="mt-1.5 text-[0.9375rem] leading-snug text-slate-800"><b className="font-semibold">{t('news.takeaway')}</b> <span lang="uz-Latn">{item.takeaway_uz}</span></p>}
-      <p className="mt-1.5 text-[0.8125rem] text-slate-600 [overflow-wrap:anywhere]">{[item.journal, pubDate(item.published)].filter(Boolean).join(' · ')}</p>
+      {item.summary_uz && <p lang="uz-Latn" className="mt-1.5 line-clamp-3 text-body leading-snug text-slate-800">{item.summary_uz}</p>}
+      {item.takeaway_uz && <p className="mt-1.5 text-body leading-snug text-slate-800"><b className="font-semibold">{t('news.takeaway')}</b> <span lang="uz-Latn">{item.takeaway_uz}</span></p>}
+      <p className="mt-1.5 text-small text-slate-600 [overflow-wrap:anywhere]">{[item.journal, pubDate(item.published)].filter(Boolean).join(' · ')}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={open}
-          className="inline-flex min-h-9 items-center gap-2 whitespace-nowrap rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:border-slate-500 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
+        <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={open} className={buttonClass('secondary', 'sm')}>
           <ExternalLink className="h-4 w-4" />{t('news.open')}
         </a>
         <Button size="sm" variant="ghost" aria-pressed={saved} loading={busySave} className={saved ? 'text-emerald-800 hover:bg-emerald-50' : undefined}
@@ -128,7 +125,7 @@ export function NewsSourceLine({ items }: { items: NewsItem[] }) {
   if (!items.length) return null;
   const latest = items.reduce((a, x) => (x.fetched_on > a ? x.fetched_on : a), items[0].fetched_on);
   return (
-    <p className="border-t border-slate-100 px-5 py-2.5 text-[0.8125rem] leading-snug text-slate-600">
+    <p className="border-t border-slate-100 px-5 py-2.5 text-small leading-snug text-slate-600">
       {t('news.source')} {items.some((x) => x.model) ? `${t('news.aiNote')} ` : ''}{locale !== 'uz' && items.some((x) => x.summary_uz) ? `${t('news.uzOnly')} ` : ''}{t('news.disclaimer', { date: fmtDate(latest) })}
     </p>
   );
@@ -183,15 +180,10 @@ export function TopicsModal({ open, onClose, onSaved }: { open: boolean; onClose
               const disabled = own || (!on && full);
               return (
                 <li key={s.key}>
-                  <label data-topic={s.key} className={cx('flex min-h-11 items-center gap-3 rounded-lg border-2 px-3 py-2 text-[0.9375rem]',
-                    on ? 'border-brand-600 bg-brand-50 text-slate-900' : 'border-slate-200 text-slate-800', disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:border-slate-400', disabled && !on && 'opacity-60')}>
-                    <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={on} disabled={disabled} onChange={() => toggle(s.key)}
-                      data-autofocus={i === (all[0]?.key === d.own ? 1 : 0) || undefined} />
-                    <span className="min-w-0 leading-snug">
-                      <span className="block font-semibold">{s.name}</span>
-                      {own && <span className="block text-[0.8125rem] text-slate-600">{t('news.topics.own')}</span>}
-                    </span>
-                  </label>
+                  <Checkbox rowProps={{ 'data-topic': s.key }} checked={on} disabled={disabled} onChange={() => toggle(s.key)}
+                    data-autofocus={i === (all[0]?.key === d.own ? 1 : 0) || undefined}
+                    rowClassName={cx('h-full rounded-field border-2 px-3 leading-snug', on ? 'border-brand-600 bg-brand-50 !text-slate-900' : 'border-slate-200', !disabled && 'hover:border-slate-400', disabled && !on && 'opacity-60')}
+                    label={<span className="block font-semibold">{s.name}</span>} hint={own ? t('news.topics.own') : undefined} />
                 </li>
               );
             })}

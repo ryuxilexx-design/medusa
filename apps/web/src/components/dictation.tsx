@@ -5,7 +5,7 @@ import type { DictationTarget, MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Button, cx } from '@/components/ui';
+import { Button, cx, scrollBehavior, Segmented } from '@/components/ui';
 
 /**
  * Doctor dictation: the browser records (MediaRecorder, webm/opus — mp4 on Safari), the API hands the recording to
@@ -163,37 +163,31 @@ export function DictationBar({ d, target }: { d: Dictation; target: DictationTar
   const barRef = useRef<HTMLDivElement>(null);
   const mine = d.target === target;
   // the bar may open under the sticky note actions (phone): bring it to the middle; the stop button takes the focus
-  useEffect(() => { if (mine && d.phase === 'starting') barRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [mine, d.phase]);
+  useEffect(() => { if (mine && d.phase === 'starting') barRef.current?.scrollIntoView({ block: 'center', behavior: scrollBehavior() }); }, [mine, d.phase]);
   useEffect(() => { if (mine && d.phase === 'recording') stopRef.current?.focus({ preventScroll: true }); }, [mine, d.phase]);
   if (d.error?.target === target && !d.busy) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert" data-testid="dict-error">
-        <span className="flex-1">{d.error.text}</span>
-        <button type="button" className="rounded p-1 text-red-800 hover:bg-red-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('common.close')} onClick={d.clearError}><X className="h-4 w-4" /></button>
+      <div className="flex items-center gap-2 rounded-field border border-red-200 bg-red-50 py-0.5 pl-4 pr-0.5 text-sm text-red-800" role="alert" data-testid="dict-error">
+        <span className="flex-1 py-2">{d.error.text}</span>
+        <Button variant="ghost" size="icon-sm" className="!text-red-800 hover:!bg-red-100" aria-label={t('common.close')} onClick={d.clearError}><X className="h-5 w-5" /></Button>
       </div>
     );
   }
   if (d.target !== target || !d.busy) return null;
   const left = Math.max(0, MAX_SECONDS - d.seconds);
   return (
-    <div ref={barRef} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" data-testid="dict-bar" aria-live="polite">
+    <div ref={barRef} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-field border border-slate-200 bg-slate-50 px-3 py-2" data-testid="dict-bar" aria-live="polite">
       {d.phase === 'recording' ? (
         <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
           <span aria-hidden="true" className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-600" />{t('dict.recording')}
           <span className={cx('tabular-nums', left < 20 ? 'text-red-700' : 'text-slate-700')}>{clock(d.seconds)} / {clock(MAX_SECONDS)}</span>
         </span>
       ) : (
-        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Loader2 className="h-4 w-4 animate-spin" />{t(d.phase === 'sending' ? 'dict.sending' : 'dict.starting')}</span>
+        <span className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />{t(d.phase === 'sending' ? 'dict.sending' : 'dict.starting')}</span>
       )}
       {d.phase !== 'sending' && (
-        <span role="group" aria-label={t('dict.language')} className="inline-flex overflow-hidden rounded-full border border-slate-300 bg-white text-[0.8125rem]">
-          {(['uz', 'ru'] as const).map((l) => (
-            <button key={l} type="button" aria-pressed={d.lang === l} onClick={() => d.setLang(l)}
-              className={cx('min-h-9 px-3 font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300', d.lang === l ? 'bg-brand-600 text-white' : 'text-slate-800 hover:bg-slate-100')}>
-              {t(l === 'uz' ? 'dict.langUz' : 'dict.langRu')}
-            </button>
-          ))}
-        </span>
+        <Segmented size="compact" label={t('dict.language')} value={d.lang} onChange={d.setLang}
+          options={[{ value: 'uz', label: t('dict.langUz') }, { value: 'ru', label: t('dict.langRu') }]} />
       )}
       <span className="ml-auto flex flex-wrap gap-2">
         {d.phase === 'recording' && <Button ref={stopRef} size="sm" variant="primary" icon={<Square className="h-4 w-4" />} onClick={d.stop} data-testid="dict-stop">{t('dict.stop')}</Button>}

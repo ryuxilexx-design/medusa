@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Banknote, Boxes, PackageOpen, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, ListOrdered, Loader2, LogOut, Menu, Newspaper, ScanLine, Search, Settings,
+  BarChart3, Banknote, Boxes, PackageOpen, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, Languages, ListOrdered, Loader2, LogOut, Menu, Newspaper, ScanLine, Search, Settings,
   Stethoscope, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
 import { meReconnecting, SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
 import { fmtTime, localDate, longDate } from '@/lib/format';
 import { useI18n, useT } from '@/lib/i18n';
-import { Button, cx, Modal, Select, SlidingPill } from '@/components/ui';
+import { Button, cx, FOCUS_RING, FOCUS_RING_INSET, Modal, Select, SlidingPill, TextLink } from '@/components/ui';
 import { PasswordForm } from '@/components/password-form';
 import { LanguagePicker, LanguageSwitch } from '@/components/prefs';
 import { confirmLeave, hasUnsaved, NavigationGuard } from '@/lib/unsaved';
@@ -112,7 +112,7 @@ function ForcedPasswordChange({ name }: { name: string }) {
           <h1 className="text-xl font-bold text-slate-900">{t('password.forcedTitle')}</h1>
           <p className="mt-1 text-base text-slate-700">{t('password.forcedText', { name })}</p>
           <PasswordForm className="mt-5" submitLabel={t('password.forcedSubmit')} onDone={() => qc.invalidateQueries({ queryKey: ['me'] })} />
-          <button onClick={logout} className="mt-4 text-sm font-semibold text-brand-700 underline-offset-2 hover:underline">{t('shell.logout')}</button>
+          <TextLink onClick={logout} className="mt-4 text-sm">{t('shell.logout')}</TextLink>
         </div>
       </div>
     </main>
@@ -124,7 +124,7 @@ function Clock() {
   const { demoNow } = useSession();
   const [now, setNow] = useState(() => demoNow());
   useEffect(() => { const i = setInterval(() => setNow(demoNow()), 15_000); return () => clearInterval(i); }, [demoNow]);
-  return <span className="truncate text-[0.8125rem] text-slate-600">{longDate(localDate(now))}, {fmtTime(now)}</span>;
+  return <span className="truncate text-small text-slate-700">{longDate(localDate(now))}, {fmtTime(now)}</span>;
 }
 
 /** Clinic name, date/time and — only in a demo — one «Demo» mark (the single place it is shown inside the app). */
@@ -134,7 +134,7 @@ function ClinicInfo({ className }: { className?: string }) {
   return (
     <div className={cx('min-w-0 flex-col leading-tight', className)}>
       <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate text-[0.9375rem] font-bold text-slate-900" title={me.clinic_name}>{me.clinic_name}</span>
+        <span className="truncate text-body font-bold text-slate-900" title={me.clinic_name}>{me.clinic_name}</span>
         {me.demo && <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-px text-2xs font-semibold text-amber-900" title={t('shell.demoClockTitle')}>{t('shell.demoMark')}</span>}
       </span>
       <Clock />
@@ -164,7 +164,7 @@ function usePageTitle(items: Item[], role: Role) {
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
-/** The person's menu in the top bar: who is signed in, interface language, password, sign out. */
+/** The person's menu in the top bar (every screen width): who is signed in, interface language, password, sign out. */
 function UserMenu({ onPassword }: { onPassword: () => void }) {
   const { me } = useSession();
   const t = useT();
@@ -180,26 +180,31 @@ function UserMenu({ onPassword }: { onPassword: () => void }) {
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
   }, [open]);
   const role = `${t(`role.${me.role}` as MessageKey)}${me.doctor_specialty ? `, ${me.doctor_specialty}` : ''}`;
-  const item = 'flex min-h-11 w-full items-center gap-3 rounded-lg px-3 text-left text-[0.9375rem] font-semibold text-slate-800 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300';
+  const item = cx('flex min-h-control w-full items-center gap-3 rounded-field px-3 text-left text-body font-semibold text-slate-800 hover:bg-slate-100', FOCUS_RING_INSET);
   return (
     <div ref={box} className="relative">
       <button ref={btn} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="true" data-testid="user-menu"
-        className="flex min-h-11 items-center gap-2.5 rounded-full py-1 pl-1 pr-2 hover:bg-white/50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
+        className={cx('flex min-h-control items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-white/50', FOCUS_RING)}>
         <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">{initials(me.name)}</span>
         {/* the name only from 2xl: at 1366 px the patient search needs the room (the name is in the menu anyway) */}
         <span className="hidden max-w-[12rem] text-left leading-tight 2xl:block">
           <span className="block truncate text-sm font-semibold text-slate-900">{me.name}</span>
-          <span className="block truncate text-[0.8125rem] text-slate-600">{role}</span>
+          <span className="block truncate text-small text-slate-700">{role}</span>
         </span>
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-500" aria-hidden="true" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-700" aria-hidden="true" />
         {/* the name stays readable (screen readers, narrow screens) even while the visible label is hidden */}
         <span className="sr-only 2xl:hidden">{me.name}, {role}. </span><span className="sr-only">{t('shell.userMenu')}</span>
       </button>
-      {/* kept in the DOM while closed (hidden) */}
-      <div hidden={!open} className="surface absolute right-0 top-full z-30 mt-3 w-72 p-2 !shadow-[0_24px_48px_-16px_rgba(10,30,70,0.4)]">
+      {/* kept in the DOM while closed (hidden); the header (z-header) sits above the phone tab bar, so the menu does too */}
+      <div hidden={!open} className="surface absolute right-0 top-full mt-3 w-[min(20rem,calc(100vw-1.5rem))] p-2 !shadow-popover">
         <div className="border-b border-slate-100 px-3 pb-3 pt-1.5 leading-tight">
-          <div className="text-[0.9375rem] font-bold text-slate-900">{me.name}</div>
-          <div className="mt-0.5 text-[0.8125rem] text-slate-600">{role}</div>
+          <div className="text-body font-bold text-slate-900">{me.name}</div>
+          <div className="mt-0.5 text-small text-slate-600">{role}</div>
+        </div>
+        {/* the interface language: here on every screen width (the top bar keeps its room for the patient search) */}
+        <div className="border-b border-slate-100 px-3 py-3">
+          <div className="mb-2 flex items-center gap-2 text-small font-semibold text-slate-700"><Languages className="h-4 w-4" aria-hidden="true" />{t('pref.language')}</div>
+          <LanguageSwitch signedIn />
         </div>
         <div className="pt-1.5">
           {me.auth_kind === 'password' && <button className={item} onClick={() => { setOpen(false); onPassword(); }}><KeyRound className="h-5 w-5 text-slate-600" />{t('password.change')}</button>}
@@ -250,6 +255,14 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
     const ro = new ResizeObserver(measure); ro.observe(el);
     return () => { el.removeEventListener('scroll', measure); ro.disconnect(); };
   }, [items.length]);
+  // the open section stays visible in the list (a short screen scrolls the menu, never the page)
+  useEffect(() => {
+    const el = navEl.current, a = el?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!el || !a) return;
+    const top = a.offsetTop, bottom = top + a.offsetHeight;
+    if (top < el.scrollTop + 8) el.scrollTop = Math.max(0, top - 40);
+    else if (bottom > el.scrollTop + el.clientHeight - 8) el.scrollTop = bottom - el.clientHeight + 40;
+  }, [pathname]);
   const search = (cls: string) => (
     <form className={cls} role="search" onSubmit={(e) => {
       e.preventDefault();
@@ -257,38 +270,37 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
       const term = q.trim();
       confirmLeave(() => { handPatientSearch(term); if (pathname !== '/patients') router.push('/patients'); });
     }}>
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-700" aria-hidden="true" />
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('shell.search')} aria-label={t('shell.searchLabel')}
-        className="glass-field h-11 w-full rounded-full border-0 pl-10 pr-4 text-[0.9375rem] text-slate-900 placeholder:text-slate-600 focus:outline-none focus:ring-4 focus:ring-amber-300" />
+        className="glass-field h-control w-full rounded-full border-0 pl-10 pr-4 text-body text-slate-900 placeholder:text-slate-700 focus:outline-none focus:ring-4 focus:ring-focus" />
     </form>
   );
 
   return (
-    <div className="min-h-screen pb-28 lg:pb-0 lg:pl-[18.5rem]">
+    <div className="min-h-screen pb-[calc(var(--tabbar)+1.5rem)] lg:pb-0 lg:pl-[18.5rem]">
       <title>{pageTitle}</title>
-      <a href="#main" className="sr-only z-[70] rounded-lg bg-white px-4 py-3 font-semibold text-brand-800 shadow-lg focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:outline-none focus:ring-4 focus:ring-amber-300">{t('shell.skipToContent')}</a>
+      <a href="#main" className="sr-only z-skip rounded-field bg-white px-4 py-3 font-semibold text-brand-800 shadow-popover focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:outline-none focus:ring-4 focus:ring-focus">{t('shell.skipToContent')}</a>
       {/* Liquid Glass: the menu is a floating glass panel, detached from the edges; a drawer below lg */}
-      <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('glass drawer fixed bottom-4 left-4 top-4 z-40 flex w-[16.5rem] flex-col print:hidden lg:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1.5rem)]')}>
-        <div className="flex h-16 shrink-0 items-center justify-between gap-2 pl-5 pr-2">
-          <Link href="/" className="rounded-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" aria-label={t('nav.home')}><BrandLockup /></Link>
-          <Button variant="ghost" className="!px-2.5 text-slate-700 lg:hidden" onClick={closeNav} aria-label={t('nav.close')}><X className="h-6 w-6" /></Button>
+      <aside id="app-menu" ref={drawer} inert={!desktop && !navOpen} className={cx('glass drawer fixed bottom-4 left-4 top-4 z-drawer flex w-[16.5rem] flex-col print:hidden lg:translate-x-0', navOpen ? 'translate-x-0' : '-translate-x-[calc(100%+1.5rem)]')}>
+        <div className="flex h-16 shrink-0 items-center justify-between gap-2 pl-5 pr-2 [@media(max-height:820px)]:h-14">
+          <Link href="/" className={cx('rounded-lg', FOCUS_RING)} aria-label={t('nav.home')}><BrandLockup /></Link>
+          <Button variant="ghost" size="icon" className="!text-slate-700 lg:hidden" onClick={closeNav} aria-label={t('nav.close')}><X className="h-6 w-6" /></Button>
         </div>
         {/* below xl the clinic and date leave the top bar and are shown here */}
         <ClinicInfo className="flex px-5 pb-3 xl:hidden" />
-        {/* phone: the language is at the top of the menu (the top bar has no room for it) */}
-        <div className="px-5 pb-2.5 md:hidden"><LanguagePicker signedIn className="w-full [&>select]:flex-1" /></div>
         {canSearch && search('relative mx-3 mt-3 sm:hidden')}
-        <nav ref={navEl} className="relative flex-1 overflow-y-auto px-3 py-3" aria-label={t('nav.menu')}>
+        {/* a short screen (1366×768: 12 sections for a manager) gets compact rows, still ≥ 44px tall */}
+        <nav ref={navEl} className="relative flex-1 overflow-y-auto px-3 py-3 [@media(max-height:820px)]:py-2" aria-label={t('nav.menu')}>
           <SlidingPill container={navEl} active={pathname} className="glass-on rounded-full" />
           {groups.map((g, gi) => (
-            <div key={g.key} className={gi ? 'mt-4' : ''}>
-              {groups.length > 1 && <div className="px-4 pb-1.5 text-[0.75rem] font-bold uppercase tracking-wider text-slate-600">{t(`nav.group.${g.key}` as MessageKey)}</div>}
+            <div key={g.key} className={gi ? 'mt-4 [@media(max-height:820px)]:mt-2.5' : ''}>
+              {groups.length > 1 && <div className="px-4 pb-1 text-2xs font-bold uppercase tracking-wider text-slate-700">{t(`nav.group.${g.key}` as MessageKey)}</div>}
               {g.items.map((it) => {
                 const active = pathname === it.href || pathname.startsWith(it.href + '/');
                 const Icon = it.icon;
                 return (
                   <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
-                    className={cx('press relative z-[1] mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-[1rem] font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 [@media(max-height:820px)]:mb-0.5 [@media(max-height:820px)]:min-h-11',
+                    className={cx('press relative z-raised mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-base font-semibold [@media(max-height:820px)]:mb-0 [@media(max-height:820px)]:min-h-control-sm [@media(max-height:820px)]:text-body', FOCUS_RING_INSET,
                       active ? 'text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
                     <Icon className={cx('h-[1.375rem] w-[1.375rem] shrink-0', active ? 'text-brand-700' : 'text-slate-700')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
                   </Link>
@@ -297,54 +309,54 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
             </div>
           ))}
         </nav>
-        <div className="relative px-5 py-3 text-2xs text-slate-700">
+        <div className="relative px-5 py-3 text-2xs text-slate-700 [@media(max-height:820px)]:py-2">
           {navMore && <div aria-hidden="true" className="pointer-events-none !absolute inset-x-0 bottom-full h-12 bg-gradient-to-t from-white/80 to-transparent" />}
           {t(me.demo ? 'shell.release' : 'shell.releaseProd')}
         </div>
       </aside>
-      {/* above the tab bar (z-30), so the drawer's backdrop also covers «Menyu» */}
-      {navOpen && <div className="fixed inset-0 z-[35] bg-slate-900/30 backdrop-blur-sm lg:hidden" onClick={closeNav} />}
+      {/* above the tab bar and the top bar (z-overlay), so the drawer's backdrop also covers «Menyu» */}
+      {navOpen && <div className="fixed inset-0 z-overlay bg-slate-900/30 backdrop-blur-sm lg:hidden" onClick={closeNav} />}
 
       {/* the toolbar: a floating glass capsule; the content scrolls under it */}
-      <header className="glass glass-pill sticky top-3 z-20 mx-3 flex min-h-[3.75rem] items-center gap-2.5 px-3 py-1.5 print:hidden sm:mx-4 lg:top-4 lg:mx-8 lg:gap-3 lg:px-4">
-        <Button ref={burger} variant="ghost" className="-ml-1 !px-2.5 text-slate-700 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
+      <header className="glass glass-pill sticky top-3 z-header mx-3 flex min-h-[3.75rem] items-center gap-2 px-2 py-1.5 print:hidden sm:mx-4 sm:px-3 lg:top-4 lg:mx-8 lg:gap-3 lg:px-4">
+        <Button ref={burger} variant="ghost" size="icon" className="!text-slate-800 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
         <ClinicInfo className="hidden max-w-[14rem] shrink xl:flex" />
         {me.branches.length > 1 ? (
-          <Select aria-label={t('shell.branch')} className="glass-field min-w-0 flex-1 !rounded-full !border-0 !bg-transparent pr-7 text-sm font-semibold sm:w-auto sm:max-w-[12.5rem] sm:flex-none sm:text-[0.9375rem]" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+          <Select aria-label={t('shell.branch')} className="glass-field min-w-0 flex-1 !rounded-full !border-0 !bg-transparent pr-7 text-sm font-semibold sm:w-auto sm:max-w-[12.5rem] sm:flex-none sm:text-body" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             <option value="">{t('shell.allBranches')}</option>
             {me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
-        ) : <span className="glass-field min-w-0 truncate rounded-full px-4 py-2.5 text-[0.9375rem] font-semibold text-slate-900">{me.branches[0]?.name}</span>}
-        {canSearch && search('relative hidden min-w-[5rem] max-w-[18rem] flex-1 sm:block')}
-        {/* the language is one click away, in plain sight (not inside the person's menu) */}
-        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2"><LanguageSwitch signedIn /><UserMenu onPassword={() => setPwOpen(true)} /></div>
+        ) : <span className="glass-field flex h-control min-w-0 items-center truncate rounded-full px-4 text-body font-semibold text-slate-900">{me.branches[0]?.name}</span>}
+        {canSearch && search('relative hidden min-w-[5rem] max-w-[22rem] flex-1 sm:block')}
+        <div className="ml-auto flex min-w-0 shrink-0 items-center"><UserMenu onPassword={() => setPwOpen(true)} /></div>
       </header>
       {sessionEnded ? (
-        <div role="alert" className="sticky top-20 z-10 mx-4 flex rounded-2xl lg:mx-8 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-900 print:hidden">
+        <div role="alert" className="sticky top-20 z-sticky mx-4 flex rounded-2xl lg:mx-8 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-900 print:hidden">
           {t('session.lostTitle')}
           <Button size="sm" onClick={sessionEnded}>{t('session.lostGo')}</Button>
         </div>
       ) : reconnecting && (
-        <div role="status" className="sticky top-20 z-10 mx-4 flex items-center rounded-2xl lg:mx-8 justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 print:hidden">
+        <div role="status" className="sticky top-20 z-sticky mx-4 flex items-center rounded-2xl lg:mx-8 justify-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 print:hidden">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />{t('net.reconnecting')}
         </div>
       )}
-      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1440px] px-4 py-6 focus:outline-none lg:px-8">{allowed ? children : <NoAccess role={me.role} />}</main>
-      {/* phone and tablet: a floating capsule tab bar with the first sections; «Menyu» opens the full list */}
-      <nav ref={tabbar} aria-label={t('nav.menu')} className="glass glass-pill fixed bottom-3 left-1/2 z-30 flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-0.5 p-1.5 print:hidden lg:hidden">
+      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[80rem] px-4 py-6 focus:outline-none lg:px-8">{allowed ? children : <NoAccess role={me.role} />}</main>
+      {/* phone and tablet: a floating capsule tab bar with the first sections; «Menyu» opens the full list.
+          It floats above the iPhone home indicator (--tabbar-gap includes env(safe-area-inset-bottom)). */}
+      <nav ref={tabbar} aria-label={t('nav.menu')} className="glass glass-pill fixed bottom-[var(--tabbar-gap)] left-1/2 z-tabbar flex max-w-[calc(100vw-1.5rem)] -translate-x-1/2 items-center gap-0.5 p-1.5 print:hidden lg:hidden">
         <SlidingPill container={tabbar} active={pathname} className="glass-on rounded-full" />
         {items.slice(0, 4).map((it, i) => {
           const active = pathname === it.href || pathname.startsWith(it.href + '/');
           const Icon = it.icon;
           return (
             <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
-              className={cx('press relative z-[1] min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold', i === 3 ? 'hidden sm:flex' : 'flex', active ? 'text-brand-800' : 'text-slate-900')}>
-              <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5.5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
+              className={cx('press relative z-raised min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET, i === 3 ? 'hidden sm:flex' : 'flex', active ? 'text-brand-800' : 'text-slate-900')}>
+              <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
             </Link>
           );
         })}
         <button type="button" onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-controls="app-menu"
-          className="press relative z-[1] flex min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-3 text-[0.6875rem] font-bold text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-[0.9375rem] sm:font-semibold">
+          className={cx('press relative z-raised flex min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold text-slate-900 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET)}>
           <Menu className="h-5 w-5" /><span>{t('nav.more')}</span>
         </button>
       </nav>

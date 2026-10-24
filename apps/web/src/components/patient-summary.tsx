@@ -5,7 +5,7 @@ import { HeartHandshake, Printer, Send } from 'lucide-react';
 import type { MessageKey, SummaryLanguage } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
-import { Alert, Badge, Button, Card, ErrorState, LinkButton, LoadingRows, Modal, ModalCancel, Skeleton, Tabs, Textarea, useToast, type Tone } from '@/components/ui';
+import { Alert, Badge, Button, Card, Checkbox, ErrorState, LinkButton, LoadingRows, Modal, ModalCancel, Skeleton, Tabs, Textarea, type Tone, useToast } from '@/components/ui';
 import { useT } from '@/lib/i18n';
 
 type Summary = { id: string; version: number; language: SummaryLanguage; text: string; approved_by_name: string; approved_at: string; send_requested: boolean;
@@ -33,7 +33,7 @@ export function PatientSummaryCard({ encounterId }: { encounterId: string }) {
             <li key={s.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
               <span className="font-semibold">{t('ps.version', { n: s.version })}</span>
               <span className="text-slate-700">{t(LANG[s.language])}</span>
-              <span className="text-[0.8125rem] text-slate-600">{s.approved_by_name}, {fmtDateTime(s.approved_at)}</span>
+              <span className="text-small text-slate-600">{s.approved_by_name}, {fmtDateTime(s.approved_at)}</span>
               {s.delivery_status ? <Badge tone={STATUS_TONE[s.delivery_status]}>{t(s.channel === 'sms' ? 'ps.ch.sms' : 'ps.ch.telegram')} · {t(`ps.st.${s.delivery_status}` as MessageKey)}</Badge> : <Badge>{t('ps.st.none')}</Badge>}
               <span className="ml-auto"><LinkButton size="sm" target="_blank" href={`/print/summary/${s.id}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton></span>
             </li>
@@ -91,28 +91,20 @@ function SummaryModal({ encounterId, meta, onClose }: { encounterId: string; met
         </div>
         {error && <Alert tone="red">{error}</Alert>}
         {make.isPending ? <div className="space-y-2"><Skeleton className="h-6 w-1/2" /><Skeleton className="h-40" /></div> : !draft && !text ? (
-          <p className="rounded-lg border-2 border-dashed border-slate-300 p-8 text-center text-[0.9375rem] text-slate-600">{t('ps.empty')}</p>
+          <p className="rounded-lg border-2 border-dashed border-slate-300 p-8 text-center text-body text-slate-600">{t('ps.empty')}</p>
         ) : <>
           <div className="flex flex-wrap items-center gap-2">
             {label}
             {draft && draft.dropped > 0 && <Badge tone="yellow" className="!whitespace-normal">{t('ps.dropped', { n: draft.dropped })}</Badge>}
             <span className="ml-auto"><Tabs value={view} onChange={setView} items={[{ value: 'edit', label: t('ps.tabEdit') }, { value: 'preview', label: t('ps.tabPreview') }]} /></span>
           </div>
-          {draft && draft.mode !== 'live' && draft.language !== 'uz' && <p className="text-[0.8125rem] text-slate-600">{t('ps.templateLang')}</p>}
+          {draft && draft.mode !== 'live' && draft.language !== 'uz' && <p className="text-small text-slate-600">{t('ps.templateLang')}</p>}
           {view === 'edit'
             ? <Textarea aria-label={t('ps.text')} data-testid="ps-text" rows={9} className="min-h-[12rem]" value={text} maxLength={4000} onChange={(e) => setText(e.target.value)} />
-            : <div className="max-h-[18rem] overflow-y-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-4 text-[0.9375rem] leading-relaxed text-slate-900" data-testid="ps-preview">{text}</div>}
+            : <div className="max-h-[18rem] overflow-y-auto whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-4 text-body leading-relaxed text-slate-900" data-testid="ps-preview">{text}</div>}
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-            <label className="flex min-h-10 items-start gap-2.5 text-[0.9375rem]">
-              <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={send} disabled={!meta.channel} onChange={(e) => setSend(e.target.checked)} data-testid="ps-send" />
-              <span><span className="font-semibold">{t('ps.send')}</span><span className="block text-[0.8125rem] text-slate-600">{via}</span></span>
-            </label>
-            {send && (
-              <label className="flex min-h-10 items-start gap-2.5 text-[0.9375rem] font-medium text-slate-900">
-                <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} data-testid="ps-confirm" />
-                <span>{t('ps.confirmSend')}</span>
-              </label>
-            )}
+            <Checkbox checked={send} disabled={!meta.channel} onChange={(e) => setSend(e.target.checked)} data-testid="ps-send" label={<span className="font-semibold">{t('ps.send')}</span>} hint={via} />
+            {send && <Checkbox rowClassName="font-medium" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} data-testid="ps-confirm" label={t('ps.confirmSend')} />}
           </div>
         </>}
       </div>

@@ -6,7 +6,7 @@ import { ArrowRight, Banknote, Boxes, Briefcase, ClipboardList, FlaskConical, St
 import type { MessageKey, Role } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { HOME_BY_ROLE } from '@/lib/session';
-import { Alert, Button, cx, ErrorState, Field, Input, Select, Skeleton, useToast } from '@/components/ui';
+import { Alert, Button, cx, ErrorState, Field, Input, Segmented, Select, Skeleton, useToast } from '@/components/ui';
 import { BrandLockup } from '@/components/logo';
 import { LanguagePicker } from '@/components/prefs';
 import { useT } from '@/lib/i18n';
@@ -50,12 +50,6 @@ export default function LoginPage() {
     } catch (e) { toast.error(e); setBusy(null); }
   }
 
-  const tabBtn = (v: 'demo' | 'password', label: string) => (
-    <button type="button" role="tab" aria-selected={tab === v} aria-controls={`login-${v}`} id={`login-tab-${v}`} onClick={() => setTab(v)}
-      className={cx('min-h-11 flex-1 rounded-full px-3 text-[0.9375rem] font-bold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300',
-        tab === v ? 'bg-white text-brand-800 shadow-[0_4px_10px_-4px_rgba(10,30,70,0.4)]' : 'text-slate-800 hover:bg-white/50')}>{label}</button>
-  );
-
   return (
     <main className="min-h-screen">
       <title>{`${t('login.pageTitle')} — Med.uz.ai`}</title>
@@ -64,11 +58,10 @@ export default function LoginPage() {
         <div className="glass p-4 sm:p-7 sm:!rounded-[2.5rem]">
           <div className="flex flex-wrap items-center justify-between gap-3"><BrandLockup size="lg" /><LanguagePicker /></div>
           <h1 className="mt-4 text-2xl font-bold text-slate-900">{t('login.heading')}</h1>
-          <p className="mt-1 text-[0.9375rem] text-slate-800">{t('login.tagline')}{demoMode && <> · <span className="font-semibold text-amber-900">{t('common.demoEnv')}</span></>}</p>
+          <p className="mt-1 text-body text-slate-800">{t('login.tagline')}{demoMode && <> · <span className="font-semibold text-amber-900">{t('common.demoEnv')}</span></>}</p>
           {demoMode && (
-            <div role="tablist" aria-label={t('login.heading')} className="glass-field my-4 flex gap-1 rounded-full p-1">
-              {tabBtn('demo', t('login.tabDemo'))}{tabBtn('password', t('login.tabPassword'))}
-            </div>
+            <Segmented role="tablist" variant="glass" stretch label={t('login.heading')} value={tab} onChange={setTab} className="my-4"
+              options={[{ value: 'demo', label: t('login.tabDemo'), id: 'login-tab-demo', controls: 'login-demo' }, { value: 'password', label: t('login.tabPassword'), id: 'login-tab-password', controls: 'login-password' }]} />
           )}
           <div className={cx('surface p-3 sm:p-4', !demoMode && 'mt-4')}>
           {demoMode && tab === 'demo' ? (
@@ -80,7 +73,7 @@ export default function LoginPage() {
                   </Field>
                 </div>
               )}
-              <p className="mb-3 text-[0.9375rem] text-slate-700">{t('login.demoPick')}</p>
+              <p className="mb-3 text-body text-slate-700">{t('login.demoPick')}</p>
               <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200">
                 {accounts.isLoading && Array.from({ length: 5 }).map((_, i) => <li key={i} className="p-3"><Skeleton className="h-11" /></li>)}
                 {accounts.isError && <li><ErrorState error={accounts.error} onRetry={() => accountsQ.refetch()} /></li>}
@@ -95,7 +88,7 @@ export default function LoginPage() {
                       </div>
                       <Button className="shrink-0 px-3 sm:px-4" loading={busy === c.role} disabled={!!busy} onClick={() => enter(c.role)}>{t('login.enter')}<ArrowRight className="hidden h-4 w-4 sm:block" /></Button>
                       {c.role === 'doctor' && (
-                        <Select aria-label={t('login.pickDoctor')} data-testid="doctor-pick" className="basis-full text-[0.9375rem] min-[400px]:ml-[3.25rem] min-[400px]:basis-[calc(100%-3.25rem)]" value={doctorId || doctors.find((d) => d.specialty === 'Terapevt')?.membership_id || ''} onChange={(e) => setDoctorId(e.target.value)}>
+                        <Select aria-label={t('login.pickDoctor')} data-testid="doctor-pick" className="basis-full text-body min-[400px]:ml-[3.25rem] min-[400px]:basis-[calc(100%-3.25rem)]" value={doctorId || doctors.find((d) => d.specialty === 'Terapevt')?.membership_id || ''} onChange={(e) => setDoctorId(e.target.value)}>
                           {/* the name first: a narrow screen cuts the end of the line, never the person */}
                           {doctors.map((d) => <option key={d.membership_id} value={d.membership_id}>{d.full_name} — {d.specialty}</option>)}
                         </Select>
@@ -109,7 +102,7 @@ export default function LoginPage() {
             <section id="login-password" role={demoMode ? 'tabpanel' : undefined} aria-labelledby={demoMode ? 'login-tab-password' : undefined}><StaffLogin /></section>
           )}
           </div>
-          {demoMode && <p className="mt-4 text-[0.8125rem] text-slate-800">{t('login.demoFooter')}</p>}
+          {demoMode && <p className="mt-4 text-small text-slate-800">{t('login.demoFooter')}</p>}
         </div>
       </div>
     </main>
@@ -173,7 +166,7 @@ function StaffLogin() {
           </Field>
         )}
         <Button type="submit" variant="primary" className="min-h-12 w-full text-base" loading={busy}>{t('login.enter')}</Button>
-        <p className="text-[0.8125rem] text-slate-600">{t('login.staffHint')} {t('login.forgot')}</p>
+        <p className="text-small text-slate-600">{t('login.staffHint')} {t('login.forgot')}</p>
       </div>
     </form>
   );

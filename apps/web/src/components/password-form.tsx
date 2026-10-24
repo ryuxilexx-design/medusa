@@ -51,9 +51,9 @@ export function PasswordForm({ onDone, submitLabel, className }: { onDone: () =>
         {(id) => <Input id={id} type={type} autoComplete="new-password" value={v.repeat} onChange={set('repeat')} invalid={!!errors.repeat} />}
       </Field>
       <div className="flex items-center justify-between gap-3 pt-1">
-        <button type="button" onClick={() => setShow((s) => !s)} className="inline-flex min-h-10 items-center gap-1.5 rounded-lg px-1 text-sm font-semibold text-slate-700 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
-          {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}{show ? t('common.hide') : t('common.show')}
-        </button>
+        <Button type="button" size="sm" variant="ghost" className="-ml-2 !text-slate-700" onClick={() => setShow((s) => !s)} icon={show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}>
+          {show ? t('common.hide') : t('common.show')}
+        </Button>
         <Button type="submit" variant="primary" loading={save.isPending}>{submitLabel}</Button>
       </div>
     </form>

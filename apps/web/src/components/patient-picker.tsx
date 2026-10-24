@@ -23,22 +23,22 @@ export function PatientPicker({ value, onChange, error, locked, onNew }: {
   const pick = (p: PatientRef | null) => { onChange(p); setSearch(''); };
   return (
     <Field label={t('registrar.patient')} required error={error}>{(id) => value ? (
-      <div className="flex min-h-11 items-center justify-between gap-2 rounded-lg border-2 border-slate-200 bg-slate-50 py-1 pl-3 pr-1 text-[0.9375rem]">
+      <div className="flex min-h-control items-center justify-between gap-2 rounded-field border-2 border-slate-200 bg-slate-50 py-0.5 pl-3 pr-0.5 text-body">
         <span className="min-w-0 [overflow-wrap:anywhere]"><b>{fullName(value)}</b> <span className="text-slate-600">{pid(value.patient_number)}</span></span>
         {!locked && <Button size="sm" variant="ghost" onClick={() => pick(null)}>{t('registrar.change')}</Button>}
       </div>
     ) : (
       <div>
         <Input id={id} value={search} invalid={!!error} onChange={(e) => setSearch(e.target.value)} placeholder={t('registrar.bk.patientSearch')} autoComplete="off" />
-        <div className="mt-1 overflow-hidden rounded-lg border border-slate-200">
-          {dq.trim().length < 2 ? <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.bk.min2')}</p>
+        <div className="mt-1 overflow-hidden rounded-field border border-slate-200">
+          {dq.trim().length < 2 ? <p className="px-3 py-2 text-small text-slate-600">{t('registrar.bk.min2')}</p>
             : found.isLoading ? <Skeleton className="m-2 h-6" />
             : found.data?.length ? found.data.map((p) => (
-              <button key={p.id} type="button" onClick={() => pick(p)} className="block min-h-9 w-full px-3 py-1.5 text-left text-sm [overflow-wrap:anywhere] hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">
+              <button key={p.id} type="button" data-no-press onClick={() => pick(p)} className="block min-h-control-sm w-full border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 [overflow-wrap:anywhere] hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-focus">
                 <b>{fullName(p)}</b> <span className="text-slate-600">{pid(p.patient_number)}, {fmtDate(p.birth_date)}</span>
               </button>
-            )) : <p className="px-3 py-2 text-[0.8125rem] text-slate-600">{t('registrar.patientNotFound')}</p>}
-          {onNew && <button type="button" onClick={onNew} className="block min-h-9 w-full border-t border-slate-200 px-3 py-1.5 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300">{t('registrar.bk.newPatient')}</button>}
+            )) : <p className="px-3 py-2 text-small text-slate-600">{t('registrar.patientNotFound')}</p>}
+          {onNew && <button type="button" data-no-press onClick={onNew} className="flex min-h-control-sm w-full items-center border-t border-slate-200 px-3 py-2 text-left text-sm font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-focus">{t('registrar.bk.newPatient')}</button>}
         </div>
       </div>
     )}</Field>

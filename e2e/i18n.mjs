@@ -6,7 +6,10 @@ import { launch, newPage, login, shot, settle, sleep, check, waitText, BASE } fr
 const errors = [];
 const b = await launch();
 const text = (p) => p.evaluate(() => document.body.innerText);
+// before sign-in: the select on the login page; signed in: the segments in the user menu (top bar → person's menu)
 const pickLanguage = (p, id) => p.evaluate((id) => {
+  const seg = document.querySelector(`[data-testid="language-switch"] [data-value="${id}"]`);
+  if (seg) { seg.click(); return; }
   const s = document.querySelector('select[data-testid="language"]');
   Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, id);
   s.dispatchEvent(new Event('change', { bubbles: true }));

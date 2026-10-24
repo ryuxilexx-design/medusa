@@ -9,7 +9,7 @@ import { api, qs } from '@/lib/api';
 import { formatSom } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, EmptyState, ErrorState, LinkButton, LoadingRows, Select, Table, Td, Th, Toolbar, type Tone } from '@/components/ui';
+import { Alert, Badge, Button, Checkbox, EmptyState, ErrorState, LinkButton, LoadingRows, Select, Table, Td, Th, type Tone, Toolbar } from '@/components/ui';
 import { CsvLink } from '@/components/finance-extra';
 import { qty } from './common';
 
@@ -45,7 +45,7 @@ export function ReorderTab() {
         <Select aria-label={t('wh.ro.horizon')} className="sm:w-60" value={horizon} onChange={(e) => { setHorizon(Number(e.target.value)); brief.reset(); }}>
           {HORIZONS.map((h) => <option key={h} value={h}>{t('wh.ro.horizon')}: {t('wh.ro.horizonDays', { n: h })}</option>)}
         </Select>
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-[0.9375rem] font-medium text-slate-900"><input type="checkbox" className="h-5 w-5 accent-brand-600" checked={only} onChange={(e) => setOnly(e.target.checked)} />{t('wh.ro.onlyOrder')}</label>
+        <Checkbox rowClassName="min-h-control font-medium" checked={only} onChange={(e) => setOnly(e.target.checked)} label={t('wh.ro.onlyOrder')} />
         {/* the actions wrap with the filters (a shrink-0 action group would push the page sideways at 390 px) */}
         <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
           <Button icon={<Sparkles className="h-4 w-4 text-brand-600" />} loading={brief.isPending} onClick={() => brief.mutate()}>{t('wh.ro.brief')}</Button>
@@ -57,8 +57,8 @@ export function ReorderTab() {
         <div className="px-3 pb-3">
           {brief.isError ? <Alert tone="red">{(brief.error as Error).message}</Alert> : (
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-              <ul className="list-disc space-y-1 pl-5 text-[0.9375rem] text-slate-900">{brief.data!.bullets.map((b, i) => <li key={i}>{b.text}</li>)}</ul>
-              <p className="mt-1.5 text-[0.8125rem] text-slate-600">{t(brief.data!.source === 'model' ? 'wh.ro.briefModel' : brief.data!.mode === 'sample' ? 'wh.ro.briefSample' : 'wh.ro.briefTemplate')}{brief.data!.reason ? ` · ${brief.data!.reason}` : ''}</p>
+              <ul className="list-disc space-y-1 pl-5 text-body text-slate-900">{brief.data!.bullets.map((b, i) => <li key={i}>{b.text}</li>)}</ul>
+              <p className="mt-1.5 text-small text-slate-600">{t(brief.data!.source === 'model' ? 'wh.ro.briefModel' : brief.data!.mode === 'sample' ? 'wh.ro.briefSample' : 'wh.ro.briefTemplate')}{brief.data!.reason ? ` · ${brief.data!.reason}` : ''}</p>
             </div>
           )}
         </div>
@@ -73,12 +73,12 @@ export function ReorderTab() {
             {rows.map((r) => (
               <tr key={r.item_id}>
                 <Td className="min-w-[8rem] sm:min-w-[10rem]"><div className="font-semibold text-slate-900">{r.name}</div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-slate-600"><ReorderStatus status={r.status} />{!branchId && <span>{r.branch_name}</span>}{r.days_left !== null && <span className={r.days_left < 14 ? 'font-bold text-red-700 sm:hidden' : 'sm:hidden'}>{t('wh.ro.horizonDays', { n: r.days_left })}</span>}</div></Td>
-                <Td right className="hidden whitespace-nowrap md:table-cell">{qty(r.usable)} <span className="text-[0.8125rem] text-slate-600">{r.unit}</span></Td>
-                <Td right className="hidden whitespace-nowrap lg:table-cell">{r.rate_basis ? <>{qty(r.daily_rate)}<div className="text-[0.8125rem] text-slate-600">{t('wh.ro.col.rateBasis', { n: r.rate_basis })}</div></> : <span className="text-slate-600">{t('wh.ro.noRate')}</span>}</Td>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-small text-slate-600"><ReorderStatus status={r.status} />{!branchId && <span>{r.branch_name}</span>}{r.days_left !== null && <span className={r.days_left < 14 ? 'font-bold text-red-700 sm:hidden' : 'sm:hidden'}>{t('wh.ro.horizonDays', { n: r.days_left })}</span>}</div></Td>
+                <Td right className="hidden whitespace-nowrap md:table-cell">{qty(r.usable)} <span className="text-small text-slate-600">{r.unit}</span></Td>
+                <Td right className="hidden whitespace-nowrap lg:table-cell">{r.rate_basis ? <>{qty(r.daily_rate)}<div className="text-small text-slate-600">{t('wh.ro.col.rateBasis', { n: r.rate_basis })}</div></> : <span className="text-slate-600">{t('wh.ro.noRate')}</span>}</Td>
                 <Td right className="hidden whitespace-nowrap sm:table-cell">{r.days_left === null ? '—' : <span className={r.days_left < 14 ? 'font-bold text-red-700' : ''}>{t('wh.ro.horizonDays', { n: r.days_left })}</span>}</Td>
                 <Td right className="hidden whitespace-nowrap md:table-cell">{Number(r.expiring_unusable) > 0 ? <span className="font-semibold text-red-700">{qty(r.expiring_unusable)} {r.unit}</span> : '—'}</Td>
-                <Td right className="whitespace-nowrap">{Number(r.suggested) > 0 ? <><b>{qty(r.suggested)}</b> <span className="text-[0.8125rem] text-slate-600">{r.unit}</span>{r.packs ? <div className="text-[0.8125rem] text-slate-600">{t('wh.ro.packs', { n: r.packs })}</div> : null}</> : '—'}</Td>
+                <Td right className="whitespace-nowrap">{Number(r.suggested) > 0 ? <><b>{qty(r.suggested)}</b> <span className="text-small text-slate-600">{r.unit}</span>{r.packs ? <div className="text-small text-slate-600">{t('wh.ro.packs', { n: r.packs })}</div> : null}</> : '—'}</Td>
               </tr>
             ))}
             {total > 0 && <tr className="font-bold"><Td>{t('wh.ro.total')}</Td><Td className="hidden md:table-cell" /><Td className="hidden lg:table-cell" /><Td className="hidden sm:table-cell" /><Td className="hidden md:table-cell" /><Td right className="whitespace-nowrap">{formatSom(total)}</Td></tr>}

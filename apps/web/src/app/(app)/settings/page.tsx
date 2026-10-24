@@ -72,8 +72,8 @@ function Audit() {
             <tbody>{q.data.data.map((a: any) => (
               <tr key={a.id} className="align-top">
                 <Td className="tabular-nums text-slate-700"><div className="whitespace-nowrap">{fmtDateTime(a.occurred_at)}</div><div className="font-medium text-slate-900 sm:hidden">{a.actor_name}</div></Td>
-                <Td className="hidden min-w-[9rem] sm:table-cell"><div className="font-medium text-slate-900">{a.actor_name}</div>{a.actor_role in ROLE_LABEL && <div className="text-[0.8125rem] text-slate-600">{t(`role.${a.actor_role}` as MessageKey)}</div>}</Td>
-                <Td className="sm:min-w-[10rem]"><div className="font-medium text-slate-900">{label(a.action)}</div><div lang="uz-Latn" className="text-[0.8125rem] text-slate-600 md:hidden">{a.summary}</div></Td>
+                <Td className="hidden min-w-[9rem] sm:table-cell"><div className="font-medium text-slate-900">{a.actor_name}</div>{a.actor_role in ROLE_LABEL && <div className="text-small text-slate-600">{t(`role.${a.actor_role}` as MessageKey)}</div>}</Td>
+                <Td className="sm:min-w-[10rem]"><div className="font-medium text-slate-900">{label(a.action)}</div><div lang="uz-Latn" className="text-small text-slate-600 md:hidden">{a.summary}</div></Td>
                 {/* the stored detail is a server-written Uzbek line (data, not interface text): marked as such for screen readers */}
                 <Td className="hidden min-w-[14rem] max-w-[32rem] break-words text-slate-700 md:table-cell"><span lang="uz-Latn" title={locale === 'uz' ? undefined : t('admin.audit.detailLang')}>{a.summary}</span></Td>
               </tr>
@@ -101,8 +101,8 @@ function Demo() {
   return (
     <Card title={t('admin.set.resetButton')} className="max-w-2xl">
       <div className="flex flex-col items-start gap-4">
-        <p className="text-[0.9375rem] text-slate-700">{t('admin.set.demoDate')} <b className="whitespace-nowrap text-slate-900">{fmtDate(me.today)}</b></p>
-        <p className="text-[0.9375rem] text-slate-700">{t('admin.set.demoTextRest')}</p>
+        <p className="text-body text-slate-700">{t('admin.set.demoDate')} <b className="whitespace-nowrap text-slate-900">{fmtDate(me.today)}</b></p>
+        <p className="text-body text-slate-700">{t('admin.set.demoTextRest')}</p>
         <Button variant="danger" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setConfirm(true)}>{t('admin.set.resetButton')}</Button>
       </div>
       <Modal open={confirm} onClose={() => !m.isPending && setConfirm(false)} title={t('admin.set.resetButton')}

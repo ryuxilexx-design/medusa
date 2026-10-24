@@ -6,7 +6,7 @@ import { BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, type ConsentKind, type
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Field, LinkButton, Modal, ModalCancel, Select, Textarea, useToast } from './ui';
+import { Alert, Badge, Button, Field, LinkButton, Modal, ModalCancel, Radio, Select, Textarea, useToast } from './ui';
 import { FacePhotoModal, type FaceSubject } from './face-photo';
 
 type Kind = ConsentKind;
@@ -44,9 +44,9 @@ export function ConsentNotice({ patientId, consents, role, onRecord, locked }: {
   return (
     <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-amber-200 bg-amber-50 px-5 py-2.5 text-amber-900" data-testid="consent-notice">
       <ShieldAlert className="h-5 w-5 shrink-0" aria-hidden="true" />
-      <p className="min-w-0 flex-1 basis-[16rem] text-[0.9375rem]">
+      <p className="min-w-0 flex-1 basis-[16rem] text-body">
         <span className="font-semibold">{t(withdrawn ? 'consent.withdrawnTitle' : 'consent.missingTitle')}.</span>{' '}
-        <span className="text-[0.875rem]">{t(withdrawn ? 'consent.withdrawnText' : 'consent.missingText')}</span>
+        <span className="text-sm">{t(withdrawn ? 'consent.withdrawnText' : 'consent.missingText')}</span>
       </p>
       <div className="flex flex-wrap gap-2">
         <LinkButton size="sm" href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.printShort')}</LinkButton>
@@ -66,7 +66,7 @@ export function ConsentBlock({ patientId, patientNumber, patientName, consents, 
   return (
     <section aria-labelledby="consent-h" data-testid="consent-block">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-        <h3 id="consent-h" className="text-[0.9375rem] font-bold text-slate-900">{t('consent.block.title')}</h3>
+        <h3 id="consent-h" className="text-body font-bold text-slate-900">{t('consent.block.title')}</h3>
         <div className="-mr-2 flex flex-wrap items-center gap-1">
           {canRecordConsent(role) && !locked && <Button size="sm" variant="ghost" className={quiet} icon={<FileSignature className="h-4 w-4" />} aria-label={t('consent.record')} onClick={() => onRecord(consents.data_processing?.granted ? 'notifications' : 'data_processing')}>{t('consent.recordShort')}</Button>}
           <LinkButton size="sm" variant="ghost" className={quiet} href={`/print/consent/${patientId}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('consent.printShort')}</LinkButton>
@@ -81,10 +81,10 @@ export function ConsentBlock({ patientId, patientNumber, patientName, consents, 
                 <span className="text-sm font-medium text-slate-900">{t(`consent.kind.${k}`)}</span>
                 <ConsentBadge kind={k} row={r} everGranted={everGranted(k)} />
               </div>
-              {r && <p className="mt-1 text-[0.8125rem] text-slate-600">{meta(t, r)}</p>}
-              {r?.note && <p className="mt-0.5 text-[0.8125rem] text-slate-600">{t('consent.modal.note')}: {r.note}</p>}
+              {r && <p className="mt-1 text-small text-slate-600">{meta(t, r)}</p>}
+              {r?.note && <p className="mt-0.5 text-small text-slate-600">{t('consent.modal.note')}: {r.note}</p>}
               {k === 'biometric' && r?.granted && (
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem]" data-testid="camera-code">
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-small" data-testid="camera-code">
                   <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-900"><Cctv className="h-4 w-4 text-slate-600" aria-hidden="true" />{t('consent.bio.code', { code: `P-${patientNumber}` })}</span>
                   <span className="text-slate-600">{t('consent.bio.hint')}</span>
                   {role === 'manager' && r.face_code_id && <Button size="sm" variant="ghost" className="text-slate-700 hover:bg-slate-100 hover:text-brand-800 !px-2" icon={<ImagePlus className="h-4 w-4" />} onClick={() => setPhoto({ face_code_id: r.face_code_id!, code: `P-${patientNumber}`, name: patientName ?? `P-${patientNumber}` })}>{t('cam.photo.upload')}</Button>}
@@ -95,8 +95,8 @@ export function ConsentBlock({ patientId, patientNumber, patientName, consents, 
         })}
       </div>
       {!!h.data?.length && (
-        <details className="group mt-2 text-[0.8125rem]">
-          <summary className="inline-flex min-h-9 cursor-pointer items-center gap-1 rounded px-1 font-semibold text-slate-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('consent.history', { n: h.data.length })}</summary>
+        <details className="group mt-2 text-small">
+          <summary className="inline-flex min-h-control-sm cursor-pointer items-center gap-1 rounded px-1 font-semibold text-slate-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-focus">{t('consent.history', { n: h.data.length })}</summary>
           <div className="mt-1 rounded-lg border border-slate-200 px-3 py-1.5">
             <ol className="divide-y divide-slate-100">
                 {h.data.map((r) => (
@@ -107,7 +107,7 @@ export function ConsentBlock({ patientId, patientNumber, patientName, consents, 
                   </li>
                 ))}
             </ol>
-            <p className="pb-1 pt-1.5 text-[0.8125rem] text-slate-600">{t('consent.appendOnly')}</p>
+            <p className="pb-1 pt-1.5 text-small text-slate-600">{t('consent.appendOnly')}</p>
           </div>
         </details>
       )}
@@ -154,13 +154,11 @@ export function ConsentModal({ open, onClose, patientId, kind: initialKind }: { 
           <legend className="mb-1 text-sm font-medium text-slate-800">{t('consent.modal.answer')} <span className="text-red-700" aria-hidden>*</span></legend>
           <div className="flex flex-wrap gap-x-5 gap-y-1">
             {(['yes', 'no'] as const).map((v) => (
-              <label key={v} className="flex min-h-11 cursor-pointer items-center gap-2 text-[0.9375rem]">
-                <input type="radio" name="consent-answer" className="h-5 w-5 accent-brand-600" checked={granted === v} onChange={() => { setGranted(v); setErrors((x) => ({ ...x, granted: '' })); }} aria-invalid={!!errors.granted || undefined} />
-                {t(v === 'yes' ? 'consent.modal.granted' : 'consent.modal.denied')}
-              </label>
+              <Radio key={v} name="consent-answer" rowClassName="min-h-control" checked={granted === v} onChange={() => { setGranted(v); setErrors((x) => ({ ...x, granted: '' })); }} aria-invalid={!!errors.granted || undefined}
+                label={t(v === 'yes' ? 'consent.modal.granted' : 'consent.modal.denied')} />
             ))}
           </div>
-          {errors.granted && <p className="mt-1 text-[0.8125rem] font-medium text-red-700" role="alert">{errors.granted}</p>}
+          {errors.granted && <p className="mt-1 text-small font-medium text-red-700" role="alert">{errors.granted}</p>}
         </fieldset>
         <Field label={t('consent.modal.method')} error={errors.method} hint={paperOnly ? t('consent.bio.paperOnly') : undefined}>{(id) => (
           <Select id={id} value={method} onChange={(e) => setMethod(e.target.value as 'signed_paper' | 'verbal')}>
@@ -169,7 +167,7 @@ export function ConsentModal({ open, onClose, patientId, kind: initialKind }: { 
         )}</Field>
         {method === 'verbal' && granted === 'yes' && kind === 'data_processing' && <Alert tone="blue">{t('consent.modal.verbalHint')}</Alert>}
         <Field label={t('consent.modal.note')} error={errors.note} hint={t('consent.modal.noteHint')}>{(id) => <Textarea id={id} rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
-        <p className="text-[0.8125rem] text-slate-600">{t('consent.modal.version', { version: versionOf(kind) })}</p>
+        <p className="text-small text-slate-600">{t('consent.modal.version', { version: versionOf(kind) })}</p>
       </form>
     </Modal>
   );

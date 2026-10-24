@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, CircleX, Send, Upload } from 'lucide-react';
 import { api, ApiError } from '@/lib/api';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, Field, Modal, useToast } from './ui';
+import { Alert, Button, Checkbox, Field, Modal, useToast } from './ui';
 
 /** The person whose face goes to the camera: a staff code (S-n) or a patient code (P-<number>). */
 export type FaceSubject = { face_code_id: string; code: string; name: string };
@@ -88,7 +88,7 @@ export function FacePhotoModal({ subject, onClose }: { subject: FaceSubject | nu
             {preview && file && (
               <span className="flex min-w-0 items-center gap-3">
                 <img src={preview} alt={t('cam.photo.preview')} className="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" />
-                <span className="min-w-0 break-all text-[0.8125rem] text-slate-700">{t('cam.photo.size', { name: file.name, kb: kb(file.size), unit: 'KB' })}</span>
+                <span className="min-w-0 break-all text-small text-slate-700">{t('cam.photo.size', { name: file.name, kb: kb(file.size), unit: 'KB' })}</span>
               </span>
             )}
           </div>
@@ -100,13 +100,8 @@ export function FacePhotoModal({ subject, onClose }: { subject: FaceSubject | nu
               {targets.map((c) => {
                 const r = results?.find((x) => x.camera_id === c.id);
                 return (
-                  <label key={c.id} className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.9375rem] text-slate-900">
-                    <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={selected.includes(c.id)} onChange={() => toggle(c.id)} />
-                    <span className="min-w-0">
-                      {c.name}
-                      {r && <span className={`ml-2 inline-flex items-center gap-1 text-[0.8125rem] font-semibold ${r.ok ? 'text-emerald-800' : 'text-red-700'}`}>{r.ok ? <CheckCircle2 className={ic} aria-hidden="true" /> : <CircleX className={ic} aria-hidden="true" />}{r.detail}</span>}
-                    </span>
-                  </label>
+                  <Checkbox key={c.id} checked={selected.includes(c.id)} onChange={() => toggle(c.id)}
+                    label={<>{c.name}{r && <span className={`ml-2 inline-flex items-center gap-1 text-small font-semibold ${r.ok ? 'text-emerald-800' : 'text-red-700'}`}>{r.ok ? <CheckCircle2 className={ic} aria-hidden="true" /> : <CircleX className={ic} aria-hidden="true" />}{r.detail}</span>}</>} />
                 );
               })}
             </div>

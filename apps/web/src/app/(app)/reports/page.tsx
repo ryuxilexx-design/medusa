@@ -76,7 +76,7 @@ function ServicesTable({ q }: { q: any }) {
       <tbody>
         {rows.map((r) => (
           <tr key={r.service_id}>
-            <Td><div className="font-semibold text-slate-900">{r.service_name}</div><div className="text-[0.8125rem] text-slate-600">{t(`service.${r.category}` as MessageKey)}</div></Td>
+            <Td><div className="font-semibold text-slate-900">{r.service_name}</div><div className="text-small text-slate-600">{t(`service.${r.category}` as MessageKey)}</div></Td>
             <Td right>{r.count}</Td>
             <Td right className="hidden text-slate-600 sm:table-cell">{Number(r.discount) ? `−${formatSom(Number(r.discount))}` : '—'}</Td>
             <Td right className="font-semibold text-slate-900">{formatSom(Number(r.value))}</Td>
@@ -99,7 +99,7 @@ function DoctorsTable({ q }: { q: any }) {
       <tbody>
         {rows.map((r) => (
           <tr key={r.doctor_id}>
-            <Td><div className="font-semibold text-slate-900">{r.name}</div><div className="text-[0.8125rem] text-slate-600">{r.specialty}</div></Td>
+            <Td><div className="font-semibold text-slate-900">{r.name}</div><div className="text-small text-slate-600">{r.specialty}</div></Td>
             <Td right>{r.services}</Td>
             <Td right className="hidden sm:table-cell">{formatSom(r.value)}</Td>
             <Td right className="font-semibold text-slate-900">{formatSom(r.share)}</Td>

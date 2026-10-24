@@ -5,7 +5,7 @@ import { Ban, ClipboardList, FileText, Pill, Plus, Printer, Send, ShieldAlert, S
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
-import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Textarea, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, Checkbox, cx, ErrorState, Field, Input, LinkButton, LoadingRows, Modal, ModalCancel, Radio, Textarea, useToast } from '@/components/ui';
 import { IcdPicker, type Icd } from '@/components/icd-picker';
 import { DrugCombobox, drugName } from '@/components/drug-picker';
 import { useClassName } from '@/components/allergies';
@@ -52,7 +52,7 @@ export function DocumentsCard({ encounterId, note, allergy }: { encounterId: str
           {docs.data.map((d) => (
             <li key={d.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
               <span className={cx('flex items-center gap-1.5 font-semibold', d.status === 'void' && 'text-slate-500 line-through')}>{ICON[d.kind]}{t('docs.numbered', { kind: t(kindKey(d.kind)), n: d.number })}</span>
-              <span className="text-[0.8125rem] text-slate-600">{fmtDateTime(d.issued_at)}</span>
+              <span className="text-small text-slate-600">{fmtDateTime(d.issued_at)}</span>
               {d.status === 'void' ? <Badge>{d.void_reason ? t('docs.voidWithReason', { reason: d.void_reason }) : t('docs.void')}</Badge> : <Badge tone="green">{t('docs.issued')}</Badge>}
               <span className="ml-auto flex gap-1.5">
                 <LinkButton size="sm" target="_blank" href={`/print/document/${d.id}`} icon={<Printer className="h-4 w-4" />}>{t('common.print')}</LinkButton>
@@ -180,7 +180,7 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
         {formError && <Alert tone="red">{formError}</Alert>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <Button size="sm" icon={<ClipboardList className="h-4 w-4 text-brand-600" />} loading={autofill.isPending} onClick={() => autofill.mutate()} data-testid="doc-autofill">{t('docs.autofill')}</Button>
-          {autoFrom && <span className="text-[0.8125rem] font-medium text-slate-700" role="status">{t(autoFrom === 'draft' ? 'docs.autofilledDraft' : 'docs.autofilled')}</span>}
+          {autoFrom && <span className="text-small font-medium text-slate-700" role="status">{t(autoFrom === 'draft' ? 'docs.autofilledDraft' : 'docs.autofilled')}</span>}
         </div>
         {kind === 'referral' && <>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -197,14 +197,14 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
             <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               <Button size="sm" variant="ghost" icon={<Sparkles className="h-4 w-4 text-brand-600" />} loading={reasonAi.isPending} onClick={() => reasonAi.mutate()} data-testid="doc-reason-ai">{t('docs.reasonAi')}</Button>
               {reasonAi.data && <Badge tone={reasonAi.data.mode === 'live' ? 'teal' : 'yellow'}>{t(reasonAi.data.mode === 'live' ? 'docs.reasonAiLive' : 'docs.reasonAiSample')}</Badge>}
-              {reasonAi.isError && <span className="text-[0.8125rem] font-medium text-red-700">{t('docs.reasonAiFailed', { msg: (reasonAi.error as Error).message })}</span>}
+              {reasonAi.isError && <span className="text-small font-medium text-red-700">{t('docs.reasonAiFailed', { msg: (reasonAi.error as Error).message })}</span>}
             </div>
           )}
           <IcdPicker value={ref.icd10} diagnosis={ref.reason} encounterId={encounterId} onChange={(icd10) => setRef({ ...ref, icd10 })} />
           {errors.icd10 && <p className="text-sm font-medium text-red-700">{errors.icd10}</p>}
-          <fieldset className="flex gap-5 text-[0.9375rem]"><legend className="sr-only">{t('docs.urgency')}</legend>
+          <fieldset className="flex gap-5"><legend className="sr-only">{t('docs.urgency')}</legend>
             {(['routine', 'urgent'] as const).map((u) => (
-              <label key={u} className="flex min-h-10 items-center gap-2"><input type="radio" name="urgency" className="h-4 w-4 accent-brand-600" checked={ref.urgency === u} onChange={() => setRef({ ...ref, urgency: u })} />{t(u === 'routine' ? 'docs.routine' : 'docs.urgent')}</label>
+              <Radio key={u} name="urgency" checked={ref.urgency === u} onChange={() => setRef({ ...ref, urgency: u })} label={t(u === 'routine' ? 'docs.routine' : 'docs.urgent')} />
             ))}
           </fieldset>
           <Field label={t('docs.notes')}>{(id) => <Textarea id={id} rows={2} value={ref.notes} onChange={(e) => setRef({ ...ref, notes: e.target.value })} />}</Field>
@@ -215,10 +215,8 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
             {(id) => <><Input id={id} list="cert-purposes" value={cert.purpose} onChange={(e) => setCert({ ...cert, purpose: e.target.value })} invalid={!!errors.purpose} />
               <datalist id="cert-purposes">{PURPOSES.map((s) => <option key={s} value={t(s)} />)}</datalist></>}
           </Field>
-          <label className={cx('flex items-start gap-2.5 text-[0.9375rem]', !note.signed && 'text-slate-500')}>
-            <input type="checkbox" className="mt-1 h-4 w-4 accent-brand-600" checked={cert.include_diagnosis} disabled={!note.signed} onChange={(e) => setCert({ ...cert, include_diagnosis: e.target.checked })} />
-            <span>{t('docs.includeDiagnosis')}<span className="block text-[0.8125rem] text-slate-600">{note.signed ? t('docs.diagnosisPrivate') : t('docs.diagnosisNeedsSign')}</span></span>
-          </label>
+          <Checkbox checked={cert.include_diagnosis} disabled={!note.signed} onChange={(e) => setCert({ ...cert, include_diagnosis: e.target.checked })}
+            label={t('docs.includeDiagnosis')} hint={note.signed ? t('docs.diagnosisPrivate') : t('docs.diagnosisNeedsSign')} />
           <Field label={t('docs.restDays')} error={errors.rest_days} hint={t('docs.restDaysHint')}>
             {(id) => <Input id={id} type="number" min={0} max={30} className="w-28" value={cert.rest_days} onChange={(e) => setCert({ ...cert, rest_days: e.target.value })} invalid={!!errors.rest_days} />}
           </Field>
@@ -227,7 +225,7 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
 
         {kind === 'prescription' && <>
           {/* the allergy is repeated right where the drugs are chosen; a known allergy is red, the patient's own answer amber */}
-          {allergy?.state === 'known' && <div role="alert" className="flex items-start gap-2 rounded-lg bg-red-700 px-3.5 py-2.5 text-[0.9375rem] font-bold text-white" data-testid="rx-allergy"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" /><span>{allergy.note ? t('docs.rxAllergyKnown', { note: allergy.note }) : t('docs.rxAllergyKnownNoNote')}</span></div>}
+          {allergy?.state === 'known' && <div role="alert" className="flex items-start gap-2 rounded-lg bg-red-700 px-3.5 py-2.5 text-body font-bold text-white" data-testid="rx-allergy"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" /><span>{allergy.note ? t('docs.rxAllergyKnown', { note: allergy.note }) : t('docs.rxAllergyKnownNoNote')}</span></div>}
           {allergy?.state !== 'known' && allergy?.intake && <Alert tone="yellow">{t('docs.rxAllergyIntake', { text: allergy.intake })}</Alert>}
           {errors.items && <Alert tone="red">{errors.items}</Alert>}
           {check.isError && <Alert tone="yellow">{t('rx.checkFailed', { msg: (check.error as Error).message })}</Alert>}
@@ -236,21 +234,21 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
             const err = (k: string) => errors[`items.${i}.${k}`];
             const field = (k: keyof Item, cls: string) => (
               <label className={cx('flex min-w-0 flex-col gap-1', cls)}>
-                <span className="text-[0.8125rem] font-semibold text-slate-700">{t(COL[k])}</span>
+                <span className="text-small font-semibold text-slate-700">{t(COL[k])}</span>
                 <Input aria-label={t('docs.rowLabel', { i: i + 1, field: t(COL[k]) })} className="h-10 text-sm" value={it[k]} onChange={(e) => setItem(i, k, e.target.value)}
                   invalid={!!err(k)} placeholder={t(`docs.ph.${k}` as MessageKey)} />
-                {err(k) && <span className="text-[0.8125rem] font-medium text-red-700">{err(k)}</span>}
+                {err(k) && <span className="text-small font-medium text-red-700">{err(k)}</span>}
               </label>
             );
             return (
               <li key={i} className={cx('rounded-xl border p-3', hits.some((w) => w.blocking) ? 'border-red-600' : hits.length ? 'border-amber-400' : 'border-slate-200')} data-testid={`rx-item-${i}`}>
                 <div className="grid grid-cols-2 gap-x-2 gap-y-2 sm:grid-cols-12">
                   <div className="col-span-2 flex min-w-0 flex-col gap-1 sm:col-span-5">
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] font-semibold text-slate-700">{i + 1}. {t('docs.drug')}
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-small font-semibold text-slate-700">{i + 1}. {t('docs.drug')}
                       {it.drug_id && <Badge tone="teal">{t('rx.fromList')}</Badge>}{it.rx && <Badge tone="blue">{t('rx.dmed')}</Badge>}</span>
                     <DrugCombobox value={it.name} drugId={it.drug_id} ariaLabel={t('docs.rowLabel', { i: i + 1, field: t('docs.drug') })} placeholder={t('rx.search')}
                       invalid={!!err('name') || !!err('drug_id')} onText={(v) => setItem(i, 'name', v)} onPick={(d) => pickDrug(i, d)} />
-                    {(err('name') || err('drug_id')) && <span className="text-[0.8125rem] font-medium text-red-700">{err('name') || err('drug_id')}</span>}
+                    {(err('name') || err('drug_id')) && <span className="text-small font-medium text-red-700">{err('name') || err('drug_id')}</span>}
                   </div>
                   {field('form', 'sm:col-span-3')}
                   {field('dose', 'sm:col-span-4')}
@@ -262,7 +260,7 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
                   </div>
                 </div>
                 {hits.map((w, k) => (
-                  <div key={k} role="alert" data-testid="rx-allergy-hit" className={cx('mt-2 flex items-start gap-2 rounded-lg px-3 py-2 text-[0.9375rem]', w.blocking ? 'bg-red-700 font-bold text-white' : 'border border-amber-300 bg-amber-50 font-medium text-amber-950')}>
+                  <div key={k} role="alert" data-testid="rx-allergy-hit" className={cx('mt-2 flex items-start gap-2 rounded-lg px-3 py-2 text-body', w.blocking ? 'bg-red-700 font-bold text-white' : 'border border-amber-300 bg-amber-50 font-medium text-amber-950')}>
                     <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
                     <span>{w.blocking && <>{t('rx.warn.severe')}: </>}{warnText(w)}{w.reaction && <span className="block font-normal">{t('rx.warn.reaction', { r: w.reaction })}</span>}</span>
                   </div>
@@ -277,7 +275,7 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
             </Field>
           )}
           <Field label={t('docs.rxNotes')}>{(id) => <Textarea id={id} rows={2} value={rxNotes} onChange={(e) => setRxNotes(e.target.value)} />}</Field>
-          <p className="text-[0.8125rem] text-slate-600">{t('docs.rxDisclaimer')}</p>
+          <p className="text-small text-slate-600">{t('docs.rxDisclaimer')}</p>
         </>}
       </div>
     </Modal>

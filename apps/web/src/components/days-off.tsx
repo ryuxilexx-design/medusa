@@ -117,10 +117,10 @@ export function DaysOff({ doctorId, clinic = false, canEdit }: { doctorId?: stri
           <p>{t('admin.off.affectedText')}</p>
           <ul className="mt-2 max-h-48 divide-y divide-amber-200 overflow-y-auto rounded border border-amber-200 bg-white/60">
             {affected.map((a) => (
-              <li key={a.appointment_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-[0.8125rem]">
+              <li key={a.appointment_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1 text-small">
                 <span className="tabular-nums">{fmtDate(a.date)} {a.time}</span><span className="font-medium">{a.patient}</span><span className="text-slate-600">{a.service_name}</span>
                 {!doctorId && <span className="text-slate-600">{a.doctor_name}</span>}
-                <LinkButton size="sm" variant="ghost" className="ml-auto !min-h-8" href={`/schedule?date=${a.date}`}>{t('admin.off.openDay')}</LinkButton>
+                <LinkButton size="sm" variant="ghost" className="ml-auto" href={`/schedule?date=${a.date}`}>{t('admin.off.openDay')}</LinkButton>
               </li>
             ))}
           </ul>

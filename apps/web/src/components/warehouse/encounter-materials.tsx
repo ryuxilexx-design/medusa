@@ -28,19 +28,19 @@ export function EncounterMaterials({ encounterId, icdDraft }: { encounterId: str
   ].filter((g) => g.rows.length);
   return (
     <Card title={t('wh.enc.title')} actions={<Button size="sm" icon={<PackageOpen className="h-4 w-4" />} onClick={() => setOpen(true)}>{t('wh.enc.ask')}</Button>}>
-      {!d.requests.length && !groups.length ? <p className="text-[0.9375rem] text-slate-600">{t('wh.enc.none')}</p> : (
+      {!d.requests.length && !groups.length ? <p className="text-body text-slate-600">{t('wh.enc.none')}</p> : (
         <div className="space-y-3">
           {groups.map((g) => (
             <div key={g.key}>
-              {g.title && <div className="text-[0.8125rem] font-semibold text-slate-600">{g.title}</div>}
-              <ul className="text-[0.9375rem]">{g.rows.map((m: any) => <li key={`${m.item_id}:${m.order_id}`} className="flex justify-between gap-3 py-0.5"><span>{m.name}</span><span className="tabular-nums">{qty(m.qty)} {m.unit}</span></li>)}</ul>
+              {g.title && <div className="text-small font-semibold text-slate-600">{g.title}</div>}
+              <ul className="text-body">{g.rows.map((m: any) => <li key={`${m.item_id}:${m.order_id}`} className="flex justify-between gap-3 py-0.5"><span>{m.name}</span><span className="tabular-nums">{qty(m.qty)} {m.unit}</span></li>)}</ul>
             </div>
           ))}
           {d.requests.length > 0 && (
             <ul className="divide-y divide-slate-100 border-t border-slate-100 pt-1">
               {d.requests.map((r: any) => (
-                <li key={r.id}><button type="button" onClick={() => setSel(r.id)} className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">
-                  <span className="min-w-0 flex-1 text-[0.9375rem]"><b>T-{r.number}</b> · {fmtTime(r.created_at)} · {r.lines.map((l: any) => `${l.name} × ${qty(l.qty)}`).join('; ')}</span>
+                <li key={r.id}><button type="button" data-no-press onClick={() => setSel(r.id)} className="flex min-h-control-sm w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-field px-2 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-focus">
+                  <span className="min-w-0 flex-1 text-body"><b>T-{r.number}</b> · {fmtTime(r.created_at)} · {r.lines.map((l: any) => `${l.name} × ${qty(l.qty)}`).join('; ')}</span>
                   <StatusBadge status={r.status} />
                 </button></li>
               ))}

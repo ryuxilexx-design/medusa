@@ -61,10 +61,10 @@ export function DrugCombobox({ value, drugId, onText, onPick, invalid, ariaLabel
                 className={cx('flex min-h-11 w-full flex-col items-start gap-0.5 px-3 py-2 text-left hover:bg-slate-50', i === active && 'bg-brand-50')}>
                 <span className="flex w-full flex-wrap items-center gap-x-2 gap-y-1">
                   <b className="text-slate-900">{drugName(d, locale)}</b>
-                  {d.atc && <span className="text-[0.8125rem] tabular-nums text-slate-600">{d.atc}</span>}
+                  {d.atc && <span className="text-small tabular-nums text-slate-600">{d.atc}</span>}
                   {d.prescription_only && <Badge tone="blue" className="ml-auto">{t('rx.rxOnly')}</Badge>}
                 </span>
-                <span className="text-[0.8125rem] text-slate-600">
+                <span className="text-small text-slate-600">
                   {locale === 'ru' ? d.inn : d.inn_ru}{d.forms.length > 0 && ` · ${d.forms.map((f) => t(`drugForm.${f}` as MessageKey)).join(', ')}`}
                 </span>
               </button>

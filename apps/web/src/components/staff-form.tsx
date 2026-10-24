@@ -7,7 +7,7 @@ import { api, ApiError } from '@/lib/api';
 import { formatPhone } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
+import { Alert, Button, Checkbox, cx, Field, Input, Modal, ModalCancel, Select, useToast } from '@/components/ui';
 
 export type StaffRow = {
   membership_id: string; full_name: string; login: string | null; role: Role; title: string | null; status: 'active' | 'inactive';
@@ -170,10 +170,8 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
           <legend className="text-sm font-semibold text-slate-800">{t('admin.form.branches')}<span className="text-red-700" aria-hidden="true"> *</span></legend>
           <div className="mt-1.5 flex flex-wrap gap-2">
             {me.branches.map((b) => (
-              <label key={b.id} className={cx('flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border-2 px-3 text-[0.9375rem] focus-within:ring-4 focus-within:ring-amber-300',
-                v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 text-brand-900' : errors.branch_ids ? 'border-red-600' : 'border-slate-300')}>
-                <input type="checkbox" className="h-5 w-5 accent-brand-600 focus:outline-none" checked={v.branch_ids.includes(b.id)} onChange={() => toggle('branch_ids', b.id)} aria-invalid={!!errors.branch_ids || undefined} />{b.name}
-              </label>
+              <Checkbox key={b.id} checked={v.branch_ids.includes(b.id)} onChange={() => toggle('branch_ids', b.id)} aria-invalid={!!errors.branch_ids || undefined} label={b.name}
+                rowClassName={cx('rounded-field border-2 px-3', v.branch_ids.includes(b.id) ? 'border-brand-400 bg-brand-50 !text-brand-900' : errors.branch_ids ? 'border-red-600' : 'border-slate-300')} />
             ))}
           </div>
           {errors.branch_ids && <p className="mt-1 text-sm font-medium text-red-700" role="alert">{errors.branch_ids}</p>}
@@ -190,25 +188,22 @@ export function StaffFormModal({ open, staff, onClose, onIssued }: { open: boole
               </Field>
             </div>
             <div>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-semibold text-slate-800">{t('admin.form.services')} <span className="text-[0.8125rem] font-normal text-slate-600">{t('admin.form.servicesPicked', { n: v.service_ids.length })}</span></div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm font-semibold text-slate-800">{t('admin.form.services')} <span className="text-small font-normal text-slate-600">{t('admin.form.servicesPicked', { n: v.service_ids.length })}</span></div>
               {services.isLoading ? <p className="mt-1 text-sm text-slate-600">{t('common.loading')}</p> : (
                 <div className="mt-1 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
                   {Object.entries(grouped).map(([cat, list]) => (
                     <div key={cat}>
-                      <div className="text-[0.8125rem] font-semibold text-slate-600">{t(`service.${cat}` as MessageKey)}</div>
+                      <div className="text-small font-semibold text-slate-600">{t(`service.${cat}` as MessageKey)}</div>
                       <div className="mt-1 grid grid-cols-1 gap-x-3 sm:grid-cols-2">
                         {list.map((s) => (
-                          <label key={s.id} className="flex min-h-9 cursor-pointer items-center gap-2 text-sm">
-                            <input type="checkbox" className="h-5 w-5 shrink-0 accent-brand-600" checked={v.service_ids.includes(s.id)} onChange={() => toggle('service_ids', s.id)} />
-                            <span className="truncate">{s.name}</span>
-                          </label>
+                          <Checkbox key={s.id} rowClassName="text-sm" checked={v.service_ids.includes(s.id)} onChange={() => toggle('service_ids', s.id)} label={<span className="line-clamp-2">{s.name}</span>} />
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
-              {isNew && <p className="mt-2 text-[0.8125rem] text-slate-600">{t('admin.form.scheduleNext')}</p>}
+              {isNew && <p className="mt-2 text-small text-slate-600">{t('admin.form.scheduleNext')}</p>}
             </div>
           </div>
         )}
@@ -230,7 +225,7 @@ export function TempPasswordModal({ issued, onClose }: { issued: Issued | null; 
     // shown once: until it is copied, Escape or a click outside asks before closing
     <Modal open onClose={onClose} dirty={!copied} title={t('admin.temp.title')} footer={<Button variant="primary" onClick={onClose}>{t('admin.temp.done')}</Button>}>
       <p className="text-sm text-slate-700">{t('admin.temp.for', { name: issued.name })}</p>
-      <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-[0.9375rem]">
+      <div className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-4 font-mono text-body">
         <div><span className="text-slate-600">{t('admin.temp.login')} </span>{loginView(issued.login)}</div>
         <div><span className="text-slate-600">{t('admin.temp.password')} </span><span className="select-all font-semibold tracking-wider text-slate-900">{issued.temp_password}</span></div>
       </div>

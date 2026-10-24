@@ -7,7 +7,7 @@ import { Ban, CalendarClock, PlayCircle, Printer, UserCheck, UserX } from 'lucid
 import { api, ApiError } from '@/lib/api';
 import { fmtDate, fmtDateTime, fmtTime, formatPhone, formatSom, fullName, pid, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
-import { Alert, Button, Field, KeyVal, LinkButton, Modal, Textarea, useToast } from './ui';
+import { Alert, Button, Field, KeyVal, LinkButton, Modal, Textarea, TextLink, useToast } from './ui';
 import { AppointmentStatus, InvoiceStatus, SourceMark } from './status';
 import { BookingModal } from './booking';
 import { useT } from '@/lib/i18n';
@@ -81,7 +81,7 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
             <KeyVal k={t('registrar.time')} v={`${fmtTime(appt.starts_at)}–${fmtTime(appt.ends_at)}`} />
             <KeyVal k={t('registrar.ap.branchRoom')} v={`${appt.branch_name}${appt.room_name ? ', ' + appt.room_name : ''}`} />
             {appt.queue_number && <KeyVal k={t('registrar.ap.queue')} v={t('registrar.ap.queueValue', { n: appt.queue_number, time: fmtTime(appt.arrived_at) })} />}
-            {appt.invoice && <KeyVal k={t('registrar.invoice')} v={<span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1"><Link className="whitespace-nowrap rounded text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" href={`/cashier/${appt.invoice.id}`}>№{appt.invoice.invoice_number} · {formatSom(appt.invoice.total)}</Link><InvoiceStatus status={appt.invoice.status} /></span>} />}
+            {appt.invoice && <KeyVal k={t('registrar.invoice')} v={<span className="inline-flex flex-wrap items-center justify-end gap-x-2 gap-y-1"><TextLink className="whitespace-nowrap" href={`/cashier/${appt.invoice.id}`}>№{appt.invoice.invoice_number} · {formatSom(appt.invoice.total)}</TextLink><InvoiceStatus status={appt.invoice.status} /></span>} />}
           </div>
         </div>
         <div className="mt-2"><LinkButton size="sm" variant="ghost" className="-ml-3" href={`/patients/${appt.patient_id}`}>{t('registrar.ap.patientProfile')}</LinkButton></div>
@@ -90,7 +90,7 @@ export function AppointmentDialog({ appt, onClose }: { appt: any | null; onClose
         {staff && appt.status === 'scheduled' && !isToday && <p className="mt-3 text-xs text-slate-600">{t('registrar.ap.checkInToday')}</p>}
         {noShow && (
           <div className="mt-4 space-y-2 rounded-md border border-slate-300 bg-slate-50 p-3" role="group" aria-labelledby="no-show-q" data-testid="no-show-confirm">
-            <p id="no-show-q" className="text-[0.9375rem] font-semibold text-slate-900">{t('registrar.ap.noShowConfirm', { name: fullName(appt), time: fmtTime(appt.starts_at) })}</p>
+            <p id="no-show-q" className="text-body font-semibold text-slate-900">{t('registrar.ap.noShowConfirm', { name: fullName(appt), time: fmtTime(appt.starts_at) })}</p>
             <p className="text-sm text-slate-600">{t('registrar.ap.noShowFinal')}</p>
             <div className="flex justify-end gap-2">
               <Button size="sm" autoFocus onClick={() => setNoShow(false)}>{t('common.back')}</Button>

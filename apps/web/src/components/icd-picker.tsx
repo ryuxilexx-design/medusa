@@ -56,9 +56,9 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
         <div className="flex flex-wrap items-center gap-2">
           {/* the whole title stays readable (Russian ICD names are long): the chip wraps instead of cutting the text */}
           {value.map((x) => (
-            <span key={x.code} className="inline-flex max-w-full items-start gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 py-1 pl-3 pr-1 text-sm text-brand-900">
-              <b className="shrink-0 pt-0.5 tabular-nums">{x.code}</b><span className="min-w-0 pt-0.5 leading-snug">{x.title}</span>
-              {!disabled && <button type="button" aria-label={t('icd.remove', { code: x.code })} className="rounded-full p-1 text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300" onClick={() => onChange(value.filter((v) => v.code !== x.code))}><X className="h-4 w-4" /></button>}
+            <span key={x.code} className={cx('inline-flex min-h-control-sm max-w-full items-center gap-1.5 rounded-2xl border border-brand-200 bg-brand-50 py-0.5 pl-3 text-sm text-brand-900', disabled ? 'pr-3' : 'pr-0.5')}>
+              <b className="shrink-0 tabular-nums">{x.code}</b><span className="min-w-0 py-1 leading-snug">{x.title}</span>
+              {!disabled && <Button variant="ghost" size="icon-sm" aria-label={t('icd.remove', { code: x.code })} className="!h-10 !w-10 !text-brand-700 hover:!bg-brand-100" onClick={() => onChange(value.filter((v) => v.code !== x.code))}><X className="h-4 w-4" /></Button>}
             </span>
           ))}
         </div>
@@ -79,7 +79,7 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
                     <button type="button" role="option" id={`${listId}-${i}`} tabIndex={-1} aria-selected={i === active} disabled={has(r.code)} onClick={() => add(r.code, r.title_uz ?? r.title_ru)}
                       onMouseEnter={() => setActive(i)} ref={(el) => { if (i === active) el?.scrollIntoView({ block: 'nearest' }); }}
                       className={cx('flex min-h-10 w-full items-start gap-2.5 px-3 py-2 text-left hover:bg-slate-50 disabled:opacity-60', i === active && 'bg-brand-50')}>
-                      <b className="w-14 shrink-0 tabular-nums text-brand-800">{r.code}</b><span>{r.title_uz ?? r.title_ru}<span className="block text-[0.8125rem] text-slate-600" lang="ru">{r.title_ru}</span></span>
+                      <b className="w-14 shrink-0 tabular-nums text-brand-800">{r.code}</b><span>{r.title_uz ?? r.title_ru}<span className="block text-small text-slate-600" lang="ru">{r.title_ru}</span></span>
                     </button>
                   </li>
                 ))}
@@ -91,11 +91,11 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
         </div>
       )}
       {/* why «Kod taklif qilish» is grey: said in words, not only in a tooltip */}
-      {!disabled && needText && <p id={`${listId}-need`} className="text-[0.8125rem] text-slate-600">{t('icd.suggestNeedText')}</p>}
+      {!disabled && needText && <p id={`${listId}-need`} className="text-small text-slate-600">{t('icd.suggestNeedText')}</p>}
       {suggest.isError && <Alert tone="red">{t('icd.suggestFailed', { msg: (suggest.error as Error).message })}</Alert>}
       {suggest.data && !disabled && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
-          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[0.8125rem] text-slate-700">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2 text-small text-slate-700">
             {suggest.data.mode === 'live' ? <Badge tone="teal">{t('icd.aiSuggestion')}</Badge> : <Badge>{t('icd.wordMatch')}</Badge>}
             <span>{t('icd.onlyClinic')}</span>
           </div>
@@ -105,8 +105,8 @@ export function IcdPicker({ value, onChange, diagnosis, encounterId, disabled }:
                 <li key={s.code} className="flex items-start gap-2 text-sm">
                   <Button size="sm" variant="ghost" icon={<Plus className="h-4 w-4" />} disabled={has(s.code) || value.length >= 5} onClick={() => add(s.code, s.title)} aria-label={t('icd.add', { code: s.code })} />
                   <div className="pt-1.5"><b className="tabular-nums">{s.code}</b> {s.title}
-                    {s.confidence && <span className={cx('ml-1.5 text-[0.8125rem] font-semibold', s.confidence === 'high' ? 'text-emerald-800' : s.confidence === 'medium' ? 'text-amber-800' : 'text-slate-600')}>({t(`icd.conf.${s.confidence}` as MessageKey)})</span>}
-                    {s.reason && <span className="block text-[0.8125rem] text-slate-600">{s.reason}</span>}</div>
+                    {s.confidence && <span className={cx('ml-1.5 text-small font-semibold', s.confidence === 'high' ? 'text-emerald-800' : s.confidence === 'medium' ? 'text-amber-800' : 'text-slate-600')}>({t(`icd.conf.${s.confidence}` as MessageKey)})</span>}
+                    {s.reason && <span className="block text-small text-slate-600">{s.reason}</span>}</div>
                 </li>
               ))}
             </ul>

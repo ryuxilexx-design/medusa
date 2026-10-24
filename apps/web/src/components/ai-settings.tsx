@@ -45,8 +45,8 @@ export function AiSettings() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <Badge tone={MODE[u.mode][1]}>{t(MODE[u.mode][0])}</Badge>
-              {u.mode === 'live' && <span className="text-[0.9375rem] text-slate-700">{pv.name}, <code>{u.model}</code>{u.gemini_free && `, ${t('admin.ai.freeTier')}`}</span>}
-              <span className="text-[0.9375rem] text-slate-600">{t('admin.ai.today', { n: u.today.calls, cost: usd(u.today.cost_usd) })}</span>
+              {u.mode === 'live' && <span className="text-body text-slate-700">{pv.name}, <code>{u.model}</code>{u.gemini_free && `, ${t('admin.ai.freeTier')}`}</span>}
+              <span className="text-body text-slate-600">{t('admin.ai.today', { n: u.today.calls, cost: usd(u.today.cost_usd) })}</span>
             </div>
             {u.mode !== 'live' && (
               <Alert tone="yellow" title={t('admin.ai.notLiveTitle')}>
@@ -59,14 +59,14 @@ export function AiSettings() {
               </Alert>
             )}
             <div className="divide-y divide-slate-100 border-t border-slate-100 pt-1">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 py-2 text-[0.9375rem]">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 py-2 text-body">
                 <h3 className="font-semibold text-slate-900">{t('admin.ai.icdTitle')}</h3>
                 <span className="text-slate-700">{t('admin.ai.icdCount', { n: u.icd10.n })}{u.icd10.official ? t('admin.ai.icdOfficial', { n: u.icd10.official }) : t('admin.ai.icdStarter')}</span>
               </div>
             </div>
             {(u.mode !== 'live' || !u.icd10.official) && (
-              <details className="text-[0.8125rem] text-slate-600">
-                <summary className="cursor-pointer rounded font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300">{t('admin.ai.adminDetails')}</summary>
+              <details className="text-small text-slate-600">
+                <summary className="inline-flex min-h-control-sm cursor-pointer items-center rounded font-medium text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-focus">{t('admin.ai.adminDetails')}</summary>
                 <ul className="mt-1 list-disc space-y-1 pl-5">
                   {u.mode !== 'live' && <li>{t('admin.ai.adminKey', { key: pv.key, setting: 'AI_MODE=live' })}</li>}
                   {!u.icd10.official && <li>{t('admin.ai.adminIcd', { cmd: 'npm run db:import-icd10 -- fayl.csv' })}</li>}
@@ -90,11 +90,11 @@ export function AiSettings() {
               <tfoot><tr className="font-semibold"><Td>{t('admin.ai.total')}</Td><Td right>{u.by_route.reduce((a, b) => a + b.calls, 0)}</Td><Td className="hidden sm:table-cell" /><Td className="hidden lg:table-cell" /><Td className="hidden md:table-cell" /><Td right>{usd(total)}</Td></tr></tfoot>
             </Table>
           )}
-          <p className="border-t border-slate-100 px-5 py-3 text-[0.8125rem] text-slate-600">{u.gemini_free ? t('admin.ai.freeCost') : t('admin.ai.estCost', { provider: pv.name })} {t('admin.ai.costFoot', { console: pv.console })}</p>
+          <p className="border-t border-slate-100 px-5 py-3 text-small text-slate-600">{u.gemini_free ? t('admin.ai.freeCost') : t('admin.ai.estCost', { provider: pv.name })} {t('admin.ai.costFoot', { console: pv.console })}</p>
         </Card>
 
         <Card title={t('admin.ai.security')}>
-          <ul className="flex flex-col gap-2 text-[0.9375rem] text-slate-700">
+          <ul className="flex flex-col gap-2 text-body text-slate-700">
             {(['admin.ai.sec1', 'admin.ai.sec2', 'admin.ai.sec3'] as const).map((k) => <li key={k} className="flex gap-2.5"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" aria-hidden="true" />{t(k)}</li>)}
           </ul>
         </Card>
