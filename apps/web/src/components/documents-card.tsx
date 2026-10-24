@@ -235,7 +235,7 @@ function DocumentModal({ kind, encounterId, note, allergy, onClose }: { kind: Ki
             const field = (k: keyof Item, cls: string) => (
               <label className={cx('flex min-w-0 flex-col gap-1', cls)}>
                 <span className="text-small font-semibold text-slate-700">{t(COL[k])}</span>
-                <Input aria-label={t('docs.rowLabel', { i: i + 1, field: t(COL[k]) })} className="h-10 text-sm" value={it[k]} onChange={(e) => setItem(i, k, e.target.value)}
+                <Input aria-label={t('docs.rowLabel', { i: i + 1, field: t(COL[k]) })} size="sm" className="text-sm" value={it[k]} onChange={(e) => setItem(i, k, e.target.value)}
                   invalid={!!err(k)} placeholder={t(`docs.ph.${k}` as MessageKey)} />
                 {err(k) && <span className="text-small font-medium text-red-700">{err(k)}</span>}
               </label>

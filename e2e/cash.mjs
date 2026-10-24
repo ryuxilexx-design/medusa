@@ -64,7 +64,7 @@ try {
   await waitText(m, 'Qaysi kassadan');
   await fill(m, 'Izoh', 'Muolaja qisman bajarilmadi', '[role=dialog]');
   await shot(m, 'cash-03-refund');
-  await clickText(m, 'Qaytarish', '[role=dialog] .justify-end button');
+  await clickText(m, 'Qaytarish', '[role=dialog] [data-modal-footer] button');
   await waitText(m, 'yozildi'); await settle(m);
   check(await m.evaluate(() => document.body.innerText.includes('Qaytarishlar') && document.body.innerText.includes('Muolaja qisman bajarilmadi')), 'Hisobda qaytarish ko‘rinadi');
 

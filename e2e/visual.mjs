@@ -23,7 +23,7 @@ let problems = 0;
 
 const m = await newPage(b, errors); await login(m, 'Rahbar');
 problems += (await snap(m, '01-rahbar-dashboard')).length;
-await clickText(m, 'Oxirgi 30 kun'); problems += (await snap(m, '02-rahbar-dashboard-30kun')).length;
+await clickText(m, '30 kun'); problems += (await snap(m, '02-rahbar-dashboard-30kun')).length;
 await goto(m, '/patients?search=Karimov Aziz'); await openRow(m, 'Karimov Aziz', 'a'); await m.waitForFunction(() => location.pathname.startsWith('/patients/'));
 problems += (await snap(m, '03-rahbar-bemor-profili')).length;
 await goto(m, '/inventory?low=1'); await m.evaluate(() => document.querySelector('tbody tr')?.click()); problems += (await snap(m, '04-rahbar-ombor')).length;

@@ -182,7 +182,7 @@ function Simulator() {
 
   return (
     <section aria-label={t('admin.tg.simAria')} className="min-w-0 self-start xl:sticky xl:top-24">
-      <div className="mb-2 flex min-h-9 flex-wrap items-center justify-between gap-x-2 gap-y-1">
+      <div className="mb-2 flex min-h-control-sm flex-wrap items-center justify-between gap-x-2 gap-y-1">
         <h2 className="whitespace-nowrap text-base font-bold text-slate-900">{t('admin.tg.simTitle')}</h2>
         <div className="flex flex-wrap gap-1">
           <Button size="sm" variant="ghost" icon={<BellRing className="h-4 w-4" />} loading={runWorkers.isPending} onClick={() => runWorkers.mutate()} title={t('admin.tg.remindersTitle')}>{t('admin.tg.reminders')}</Button>

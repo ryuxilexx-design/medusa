@@ -14,7 +14,7 @@ export function BrandMark({ className = 'h-8 w-8', title, tile = false }: { clas
 export const BRAND_NAME = 'Med.uz.ai';
 
 /** Text wordmark: "Med.uz" navy + ".ai" sky blue, as in the logo. */
-export function BrandWordmark({ className = 'text-[1.125rem]' }: { className?: string }) {
+export function BrandWordmark({ className = 'text-lg' }: { className?: string }) {
   return <span className={`font-bold tracking-tight ${className}`}><span className="text-[#00226d]">Med.uz</span><span className="text-[#2f86cf]">.ai</span></span>;
 }
 
@@ -22,7 +22,7 @@ export function BrandLockup({ size = 'md' }: { size?: 'md' | 'lg' }) {
   return (
     <span className="flex items-center gap-2">
       <BrandMark tile className={size === 'lg' ? 'h-12 w-12' : 'h-10 w-10'} />
-      <BrandWordmark className={size === 'lg' ? 'text-[1.5rem]' : 'text-[1.1875rem]'} />
+      <BrandWordmark className={size === 'lg' ? 'text-2xl' : 'text-xl'} />
     </span>
   );
 }

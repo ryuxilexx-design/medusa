@@ -9,7 +9,7 @@ import { fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from 
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { useUnsavedGuard } from '@/lib/unsaved';
-import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, PageHeader, Select, Table, Td, Textarea, Th, useToast } from '@/components/ui';
+import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, PageHeader, Select, Table, Td, Textarea, TextLink, Th, useToast } from '@/components/ui';
 import { AppointmentStatus, InvoiceStatus } from '@/components/status';
 import { canTakeMoney, ShiftLoadError, useCurrentShift } from '@/components/cash-shift';
 import { RefundModal } from '@/components/refund-modal';
@@ -39,9 +39,9 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const canPromise = canTakeMoney(me.role) && open && inv.due > 0;
   return (
     <>
-      <Link href="/cashier" className="mb-2 flex w-fit min-h-9 items-center gap-1 rounded-lg text-[0.9375rem] font-semibold text-brand-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><ArrowLeft className="h-4 w-4" />{t('cash.backToList')}</Link>
+      <div className="mb-3"><TextLink href="/cashier" className="text-body" icon={<ArrowLeft className="h-4 w-4" />}>{t('cash.backToList')}</TextLink></div>
       <PageHeader title={t('cash.invoiceNo', { n: inv.invoice_number })}
-        subtitle={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"><span className="inline-flex flex-wrap items-center gap-x-2"><Link href={`/patients/${inv.patient_id}`} className="font-semibold text-brand-700 hover:underline">{fullName(inv, true)}</Link><span className="tabular-nums">{pid(inv.patient_number)}</span></span><span className="inline-flex items-center gap-2"><span>{t('cash.invoiceStatus')}</span><InvoiceStatus status={inv.status} /></span></span>}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"><span className="inline-flex flex-wrap items-center gap-x-2"><TextLink href={`/patients/${inv.patient_id}`}>{fullName(inv, true)}</TextLink><span className="tabular-nums">{pid(inv.patient_number)}</span></span><span className="inline-flex items-center gap-2"><span>{t('cash.invoiceStatus')}</span><InvoiceStatus status={inv.status} /></span></span>}
         actions={(canDiscount || canVoid || canRefund) && <>
           {canDiscount && <Button icon={<Percent className="h-4 w-4" />} onClick={() => setDiscount(true)}>{t('cash.discount')}</Button>}
           {canVoid && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setVoiding(true)}>{t('cash.voidInvoice')}</Button>}
@@ -55,14 +55,14 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               {Number(inv.credit_amount) > 0 && <KeyVal k={t('cash.creditLabel')} v={<span className="tabular-nums text-red-700">−{formatSom(inv.credit_amount)}</span>} />}
               <KeyVal k={t('cash.invoiceTotal')} v={<span className="tabular-nums">{formatSom(inv.total)}</span>} />
               <KeyVal k={t('cash.colPaid')} v={<span className="tabular-nums text-emerald-800">{formatSom(inv.paid_amount)}</span>} />
-              <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3"><span className="text-[0.9375rem] font-semibold text-slate-700">{t('cash.colDue')}</span><span className={cx('text-2xl font-bold tabular-nums', inv.status !== 'void' && inv.due > 0 ? 'text-red-700' : 'text-slate-900')}>{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
+              <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3"><span className="text-body font-semibold text-slate-700">{t('cash.colDue')}</span><span className={cx('text-2xl font-bold tabular-nums', inv.status !== 'void' && inv.due > 0 ? 'text-red-700' : 'text-slate-900')}>{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
               {/* a debt: when the patient promised to pay (cashier or manager sets it) */}
-              {canPromise && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[0.9375rem]">
+              {canPromise && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-body">
                 <span className="text-slate-700">{t('cash.promise')}</span>
                 <Button size="sm" variant="ghost" icon={<CalendarClock className="h-4 w-4" />} onClick={() => setPromising(true)}>{inv.promise_date ? <span className="tabular-nums">{fmtDate(inv.promise_date)}</span> : t('cash.noPromise')}</Button>
-                {inv.promise_note && <span className="w-full text-[0.8125rem] text-slate-600">{inv.promise_note}</span>}
+                {inv.promise_note && <span className="w-full text-small text-slate-600">{inv.promise_note}</span>}
               </div>}
-              {Number(inv.deposit_balance) > 0 && open && <p className="border-t border-slate-100 pt-3 text-[0.9375rem] text-emerald-800">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
+              {Number(inv.deposit_balance) > 0 && open && <p className="border-t border-slate-100 pt-3 text-body text-emerald-800">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
             </div>
           </Card>
           {/* a cashier or the manager takes money (each in their own open shift); the registrar only looks */}
@@ -93,14 +93,14 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <thead><tr><Th>{t('cash.colService')}</Th><Th className="hidden 2xl:table-cell">{t('cash.colType')}</Th><Th right className="hidden sm:table-cell">{t('cash.colQty')}</Th><Th right className="hidden sm:table-cell">{t('cash.colPrice')}</Th>{hasDiscount && <Th right>{t('cash.discount')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
               <tbody>
                 {inv.items.map((it: any) => (
-                  <tr key={it.id}><Td className="min-w-[10rem]">{it.description}{it.quantity > 1 && <span className="ml-1 whitespace-nowrap font-semibold tabular-nums text-slate-700">{t('cash.times', { n: it.quantity })}</span>}{Number(it.refunded_amount) > 0 && <div className="text-[0.8125rem] text-red-700">{t('cash.refundedLine', { sum: formatSom(it.refunded_amount) })}</div>}<div className="mt-1 2xl:hidden"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></div></Td><Td className="hidden 2xl:table-cell"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></Td><Td right className="hidden sm:table-cell">{it.quantity}</Td><Td right className="hidden sm:table-cell">{formatSom(it.unit_price)}</Td>{hasDiscount && <Td right>{it.discount_share ? `−${formatSom(it.discount_share)}` : '—'}</Td>}<Td right className="font-medium">{formatSom(it.line_total)}</Td></tr>
+                  <tr key={it.id}><Td className="min-w-[10rem]">{it.description}{it.quantity > 1 && <span className="ml-1 whitespace-nowrap font-semibold tabular-nums text-slate-700">{t('cash.times', { n: it.quantity })}</span>}{Number(it.refunded_amount) > 0 && <div className="text-small text-red-700">{t('cash.refundedLine', { sum: formatSom(it.refunded_amount) })}</div>}<div className="mt-1 2xl:hidden"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></div></Td><Td className="hidden 2xl:table-cell"><Badge>{t(`service.${it.category}` as MessageKey)}</Badge></Td><Td right className="hidden sm:table-cell">{it.quantity}</Td><Td right className="hidden sm:table-cell">{formatSom(it.unit_price)}</Td>{hasDiscount && <Td right>{it.discount_share ? `−${formatSom(it.discount_share)}` : '—'}</Td>}<Td right className="font-medium">{formatSom(it.line_total)}</Td></tr>
                 ))}
               </tbody>
               <tfoot><tr className="bg-slate-50 font-semibold text-slate-900"><td className="border-b border-slate-100 px-3 py-3">{t('cash.colTotal')}</td><td className="hidden border-b border-slate-100 2xl:table-cell" /><td className="hidden border-b border-slate-100 sm:table-cell" /><td className="hidden whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums sm:table-cell">{hasDiscount && formatSom(inv.subtotal)}</td>{hasDiscount && <td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">−{formatSom(inv.discount_amount)}</td>}<td className="whitespace-nowrap border-b border-slate-100 px-3 py-3 text-right tabular-nums">{formatSom(inv.total)}</td></tr></tfoot>
             </Table>
           </Card>
           <Card title={t('cash.payments')} padded={false}>
-            {!inv.payments.length ? <p className="px-5 py-4 text-[0.9375rem] text-slate-600">{t('cash.noPayments')}</p> : (
+            {!inv.payments.length ? <p className="px-5 py-4 text-body text-slate-600">{t('cash.noPayments')}</p> : (
               <Table>
                 <thead><tr><Th>{t('cash.colReceipt')}</Th><Th className="hidden sm:table-cell">{t('cash.colTime')}</Th><Th className="hidden sm:table-cell">{t('cash.colMethod')}</Th>{fiscal && <Th className="hidden md:table-cell">{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{inv.payments.map((p: any) => {
@@ -108,13 +108,13 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                   return (
                     <tr key={p.id}>
                       <Td className="tabular-nums">
-                        <Link href={`/print/payment/${p.id}`} target="_blank" className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap font-semibold text-brand-700 hover:underline"><Printer className="h-4 w-4" />T-{p.receipt_number}<span className="font-medium">· {t('cash.internalRecord')}</span></Link>
+                        <TextLink href={`/print/payment/${p.id}`} target="_blank" className="whitespace-nowrap" icon={<Printer className="h-4 w-4" />}>T-{p.receipt_number}<span className="font-medium">· {t('cash.internalRecord')}</span></TextLink>
                         {/* phone: when, how and who under the receipt number; the fiscal row too */}
-                        <div className="text-[0.8125rem] text-slate-600 sm:hidden">{fmtDateTime(p.paid_at)} · {t(`payment.${p.method}` as MessageKey)}<span className="block">{p.cashier_name}</span></div>
+                        <div className="text-small text-slate-600 sm:hidden">{fmtDateTime(p.paid_at)} · {t(`payment.${p.method}` as MessageKey)}<span className="block">{p.cashier_name}</span></div>
                         {fiscalCell && <div className="mt-1.5 md:hidden">{fiscalCell}</div>}
                       </Td>
                       <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(p.paid_at)}</Td>
-                      <Td className="hidden sm:table-cell">{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</span></Td>
+                      <Td className="hidden sm:table-cell">{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-small text-slate-600">{p.cashier_name}</span></Td>
                       {fiscal && <Td className="hidden md:table-cell">{fiscalCell}</Td>}
                       <Td right className="align-top font-semibold sm:align-middle">{formatSom(p.amount)}</Td>
                     </tr>
@@ -128,10 +128,10 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <Table>
                 <thead><tr><Th>№</Th><Th className="hidden sm:table-cell">{t('cash.colTime')}</Th><Th className="hidden sm:table-cell">{t('cash.colMethod')}</Th><Th>{t('cash.colReason')}</Th><Th className="hidden md:table-cell">{t('cash.colApprovedBy')}</Th>{fiscal && <Th className="hidden md:table-cell">{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{inv.refunds.map((r: any) => (
-                  <tr key={r.id}><Td className="align-top tabular-nums sm:align-middle">{r.refund_number}</Td><Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(r.refunded_at)}</Td><Td className="hidden sm:table-cell">{t(`payment.${r.method}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}</span></Td>
-                    <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.reason}</span>
-                      <span className="block text-[0.8125rem] tabular-nums text-slate-600 sm:hidden">{fmtDateTime(r.refunded_at)} · {t(`payment.${r.method}` as MessageKey)}</span>
-                      <span className="block text-[0.8125rem] text-slate-600 md:hidden">{r.approved_by_name}</span></Td><Td className="hidden md:table-cell">{r.approved_by_name}</Td>
+                  <tr key={r.id}><Td className="align-top tabular-nums sm:align-middle">{r.refund_number}</Td><Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(r.refunded_at)}</Td><Td className="hidden sm:table-cell">{t(`payment.${r.method}` as MessageKey)}<span className="block text-small text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}</span></Td>
+                    <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-small text-slate-600">{r.reason}</span>
+                      <span className="block text-small tabular-nums text-slate-600 sm:hidden">{fmtDateTime(r.refunded_at)} · {t(`payment.${r.method}` as MessageKey)}</span>
+                      <span className="block text-small text-slate-600 md:hidden">{r.approved_by_name}</span></Td><Td className="hidden md:table-cell">{r.approved_by_name}</Td>
                     {fiscal && <Td className="hidden md:table-cell"><div className="flex flex-wrap items-center gap-2"><FiscalBadge f={r.fiscal} />{canEnterFiscal(me, r.fiscal, 'refund') && <Button size="sm" onClick={() => setFiscalFor({ kind: 'refund', id: r.id, label: `№${r.refund_number}` })}>{t('cash.fiscal.enter')}</Button>}</div></Td>}
                     <Td right className="align-top font-semibold text-red-700 sm:align-middle">−{formatSom(r.amount)}</Td></tr>
                 ))}</tbody>
@@ -235,7 +235,7 @@ function PaymentForm({ inv }: { inv: any }) {
         {last && !pending && <Alert tone="green" title={t('cash.receiptTitle', { receipt: last.receipt_number, amount: formatSom(last.amount) })}><Link href={`/print/payment/${last.id}`} target="_blank" className="font-medium underline">{t('cash.printReceipt')}</Link></Alert>}
         {last && !pending && lastFiscal && (lastFiscal.status === 'pending' || lastFiscal.status === 'failed') && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="mb-2 text-[0.9375rem] font-semibold text-amber-900">{t('cash.fiscal.afterPayment')}</p>
+            <p className="mb-2 text-body font-semibold text-amber-900">{t('cash.fiscal.afterPayment')}</p>
             <FiscalEnterForm kind="payment" id={last.id} compact onDone={() => setLastFiscal(null)} />
           </div>
         )}
@@ -243,7 +243,7 @@ function PaymentForm({ inv }: { inv: any }) {
         {!pending && <div className="grid grid-cols-2 gap-2">
           {[inv.due, Math.floor(inv.due / 2 / 1000000) * 1000000].filter((v, i, a) => v > 0 && a.indexOf(v) === i).map((v) => (
             <Button type="button" key={v} onClick={() => { setAmount(String(v / 100)); setFieldErr(null); }} className="!gap-0 flex-col py-1 leading-tight">
-              <span>{v === inv.due ? t('cash.full') : t('cash.half')}</span><span className="text-[0.8125rem] font-medium tabular-nums text-slate-600">{formatSom(v)}</span>
+              <span>{v === inv.due ? t('cash.full') : t('cash.half')}</span><span className="text-small font-medium tabular-nums text-slate-600">{formatSom(v)}</span>
             </Button>
           ))}
         </div>}
@@ -253,7 +253,7 @@ function PaymentForm({ inv }: { inv: any }) {
             {Number(inv.deposit_balance) > 0 && <option value="deposit">{t('payment.deposit')} — {formatSom(inv.deposit_balance, false)}</option>}
           </Select>
         )}</Field>
-        {method === 'deposit' && !pending && <p className="text-[0.8125rem] text-slate-600">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
+        {method === 'deposit' && !pending && <p className="text-small text-slate-600">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
         <Field label={t('cash.note')}>{(id) => <Textarea id={id} rows={2} value={pending ? pending.note ?? '' : note} disabled={!!pending} onChange={(e) => setNote(e.target.value)} placeholder={t('common.optional')} />}</Field>
         <Button type="submit" variant="primary" className="w-full" loading={m.isPending} icon={<CheckCircle2 className="h-4 w-4" />}>{pending ? t('cash.resend') : t('cash.recordPayment')}</Button>
         {pending && <Button type="button" className="w-full" disabled={m.isPending} onClick={abandon}>{t('cash.abandon')}</Button>}
@@ -290,7 +290,7 @@ function DiscountModal({ inv, onClose }: { inv: any; onClose: () => void }) {
             : <MoneyInput id={id} value={value} onChange={(e) => setValue(e.target.value)} invalid={!!valueErr} />}</Field>
         </div>
         <Field label={t('cash.colReason')} required error={err.reason}>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
-        <p className="text-[0.8125rem] text-slate-600">{t('cash.discountHint')}</p>
+        <p className="text-small text-slate-600">{t('cash.discountHint')}</p>
         {!valid && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}
       </div>
     </Modal>
@@ -310,7 +310,7 @@ function VoidModal({ inv, onClose }: { inv: any; onClose: () => void }) {
   return (
     <Modal open onClose={onClose} dirty={!!reason} title={t('cash.voidTitle', { n: inv.invoice_number })} footer={<><ModalCancel>{t('common.back')}</ModalCancel><Button variant="danger" disabled={reason.trim().length < 3} loading={m.isPending} onClick={() => m.mutate()}>{t('cash.voidInvoice')}</Button></>}>
       <Field label={t('cash.colReason')} required>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />}</Field>
-      <p className="mt-2 text-[0.8125rem] text-slate-600">{t('cash.voidHint')}</p>
+      <p className="mt-2 text-small text-slate-600">{t('cash.voidHint')}</p>
       {reason.trim().length < 3 && <p className="mt-2 text-sm text-slate-600">{t('cash.fillRequired')}</p>}
     </Modal>
   );
@@ -336,7 +336,7 @@ function PromiseModal({ inv, onClose }: { inv: any; onClose: () => void }) {
       <div className="space-y-3">
         <Field label={t('cash.promise')} required error={err.promise_date}>{(id) => <Input id={id} type="date" min={me.today} value={date} onChange={(e) => setDate(e.target.value)} data-autofocus />}</Field>
         <Field label={t('cash.note')} error={err.note}>{(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('common.optional')} />}</Field>
-        <p className="text-[0.8125rem] text-slate-600">{t('cash.promiseHint')}</p>
+        <p className="text-small text-slate-600">{t('cash.promiseHint')}</p>
       </div>
     </Modal>
   );

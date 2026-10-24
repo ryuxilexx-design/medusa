@@ -48,7 +48,7 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 ### 1. Rahbar — raqamning asosi (0:00–1:00) · Oyna 1
 1. **Umumiy ko‘rinish** ochiq. KPI kartalarini ko‘rsating: tushum 2 510 000 so‘m, qarzdorlik 6 205 000 so‘m.
 2. Yuqoridagi filial tanlovida **Yunusobod filiali** → raqamlar qayta hisoblanadi. So‘ng **Barcha filiallar** ga qaytaring.
-3. **Oxirgi 30 kun** → kunlik tushum grafigi; ustun ustiga kursorni olib boring (kun summasi chiqadi).
+3. **30 kun** → kunlik tushum grafigi; ustun ustiga kursorni olib boring (kun summasi chiqadi).
 4. **Bugun** ga qaytaring → **Qarzdorlik (joriy)** kartasini bosing → qarzdor hisoblar ro‘yxati → istalgan **To‘lash/Ochish** → xizmatlar va to‘lovlar.
 > «Rahbar har bir raqamning ortidagi aniq hisob va to‘lovni ko‘ra oladi.»
 

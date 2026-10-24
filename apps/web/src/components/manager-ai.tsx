@@ -10,7 +10,7 @@ import { api, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtTime, formatSom, longDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useI18n, useT } from '@/lib/i18n';
-import { Badge, Button, Card, cx, ErrorState, Input, Skeleton, Table, Td, Th } from '@/components/ui';
+import { Badge, Button, Card, cx, ErrorState, FieldError, Input, SectionTitle, Skeleton, Table, Td, Th } from '@/components/ui';
 
 type Item = { text: string; fact_keys: string[] };
 type Alert = Item & { severity: 'info' | 'warning' | 'critical' };
@@ -54,9 +54,9 @@ export function DayDigest() {
   const dayLabel = d && (d.day === addDays(me.today, -1) ? `${t('mgrai.digest.yesterday')}, ${longDate(d.day)}` : longDate(d.day));
   return (
     <Card
-      title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 shrink-0 text-brand-600" />{t('mgrai.digest.title')}{dayLabel && <span className="font-semibold text-slate-600">· {dayLabel}</span>}</span>}
+      title={<span className="flex items-start gap-2"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-brand-600" /><span className="min-w-0">{t('mgrai.digest.title')}{dayLabel && <span className="block text-small font-semibold text-slate-600">{dayLabel}</span>}</span></span>}
       actions={d && <>
-        <Badge tone={tone}>{t(badge)}</Badge>
+        <Badge tone={tone} className="max-w-full !whitespace-normal">{t(badge)}</Badge>
         {d.mode === 'live' && (
           <Button size="sm" variant="ghost" icon={<RefreshCw className="h-4 w-4" />} loading={regen.isPending} disabled={d.regenerations_left <= 0}
             title={t('mgrai.digest.left', { n: d.regenerations_left })} onClick={() => regen.mutate()}>{t('mgrai.digest.regenerate')}</Button>
@@ -68,20 +68,20 @@ export function DayDigest() {
         <>
           <div className={cx('grid grid-cols-1 gap-5', d.digest.alerts.length > 0 && 'lg:grid-cols-[3fr_2fr]')}>
             <div>
-              <h3 className="mb-2 text-[0.8125rem] font-semibold uppercase tracking-wide text-slate-600">{t('mgrai.digest.happened')}</h3>
-              <ul className="space-y-1.5 text-[0.9375rem] text-slate-900">
+              <SectionTitle className="mb-2">{t('mgrai.digest.happened')}</SectionTitle>
+              <ul className="space-y-1.5 text-body text-slate-900">
                 {d.digest.bullets.map((b, i) => <li key={i} className="flex gap-2.5"><span aria-hidden className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" /><span>{b.text}</span></li>)}
               </ul>
             </div>
             {d.digest.alerts.length > 0 && (
               <div>
-                <h3 className="mb-2 text-[0.8125rem] font-semibold uppercase tracking-wide text-slate-600">{t('mgrai.digest.attention')}</h3>
+                <SectionTitle className="mb-2">{t('mgrai.digest.attention')}</SectionTitle>
                 <ul className="space-y-2">
                   {d.digest.alerts.map((a, i) => {
                     const s = SEVERITY[a.severity] ?? SEVERITY.info;
                     const Icon = s.icon;
                     return (
-                      <li key={i} className={cx('flex gap-2.5 rounded-lg border px-3 py-2 text-[0.9375rem] text-slate-900', s.box)}>
+                      <li key={i} className={cx('flex gap-2.5 rounded-field border px-3 py-2 text-body text-slate-900', s.box)}>
                         <Icon className={cx('mt-0.5 h-5 w-5 shrink-0', s.cls)} aria-hidden /><span><span className="sr-only">{t(s.label)}: </span>{a.text}</span>
                       </li>
                     );
@@ -90,12 +90,12 @@ export function DayDigest() {
               </div>
             )}
           </div>
-          <p className="mt-3 text-[0.8125rem] text-slate-600">
+          <p className="mt-3 text-small text-slate-600">
             {t('mgrai.digest.generated', { time: `${fmtDate(d.generated_at)} ${fmtTime(d.generated_at)}` })}
             {d.dropped > 0 && ` · ${t('mgrai.digest.dropped', { n: d.dropped })}`}
             {d.reason && ` · ${d.reason}`}
           </p>
-          {regen.isError && <p className="mt-2 text-sm text-red-700" role="alert">{(regen.error as Error).message}</p>}
+          {regen.isError && <div className="mt-2"><FieldError>{(regen.error as Error).message}</FieldError></div>}
         </>
       )}
     </Card>
@@ -136,9 +136,9 @@ export function AskNumbers() {
   const r = m.data;
   return (
     <Card title={<span className="flex items-center gap-2"><Sparkles className="h-5 w-5 shrink-0 text-brand-600" />{t('mgrai.ask.title')}</span>}>
-      <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (text.trim().length >= 3) m.mutate({ question: text.trim() }); }}>
+      <form className="flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit={(e) => { e.preventDefault(); if (text.trim().length >= 3) m.mutate({ question: text.trim() }); }}>
         <label htmlFor="ask-q" className="sr-only">{t('mgrai.ask.label')}</label>
-        <Input id="ask-q" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} disabled={!aiLive} placeholder={aiLive ? t('mgrai.ask.placeholder') : t('mgrai.ask.offHint')} className="min-w-0 shrink-0 sm:flex-1 sm:shrink" />
+        <Input id="ask-q" value={text} onChange={(e) => setText(e.target.value)} maxLength={300} disabled={!aiLive} placeholder={aiLive ? t('mgrai.ask.placeholder') : t('mgrai.ask.offHint')} className="w-full min-w-0 shrink-0 sm:w-auto sm:flex-1 sm:shrink" />
         <Button type="submit" variant="primary" icon={<Send className="h-4 w-4" />} disabled={!aiLive || text.trim().length < 3} loading={m.isPending && !!m.variables?.question}>{t('mgrai.ask.send')}</Button>
       </form>
       <div className="mt-3 flex flex-wrap gap-2" aria-label={t('clinical.dash.quickQuestions')}>
@@ -146,9 +146,9 @@ export function AskNumbers() {
           <Button key={label} size="sm" loading={m.isPending && m.variables?.template === body.template && m.variables?.question === t(label)} onClick={() => m.mutate({ ...body, question: t(label) })}>{t(label)}</Button>
         ))}
       </div>
-      {m.isError && <p className="mt-3 text-sm text-red-700" role="alert">{(m.error as Error).message}</p>}
+      {m.isError && <div className="mt-3"><FieldError>{(m.error as Error).message}</FieldError></div>}
       {r?.status === 'unsupported' && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/70 px-4 py-3 text-[0.9375rem] text-slate-900" role="status">
+        <div className="mt-4 rounded-field border border-amber-200 bg-amber-50/70 px-4 py-3 text-body text-slate-900" role="status">
           <p>{r.message}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {r.can_ask.map((x) => <Button key={x.id} size="sm" variant="ghost" onClick={() => m.mutate({ template: x.id, question: x.title })}>{x.title}</Button>)}
@@ -157,7 +157,7 @@ export function AskNumbers() {
       )}
       {r?.status === 'answered' && (
         <div className="mt-4 space-y-3" role="status">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[0.9375rem] text-slate-900">
+          <div className="rounded-field border border-slate-200 bg-slate-50 px-4 py-3 text-body text-slate-900">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <span className="font-semibold">{r.title}</span>
               <Badge tone={r.answer_source === 'model' ? 'teal' : 'gray'}>{t(r.answer_source === 'model' ? 'mgrai.ask.answerModel' : 'mgrai.ask.answerTemplate')}</Badge>
@@ -165,7 +165,7 @@ export function AskNumbers() {
             {r.answer.map((a, i) => <p key={i}>{a.text}</p>)}
           </div>
           {r.rows.length > 0 && (
-            <Table className="max-h-80 rounded-lg border border-slate-200">
+            <Table className="max-h-80 rounded-field border border-slate-200">
               <thead><tr>{r.columns.map((c) => <Th key={c.key} right={numeric(c)}>{t(`mgrai.col.${c.key}` as MessageKey)}</Th>)}</tr></thead>
               <tbody>{r.rows.map((row, i) => <tr key={i}>{r.columns.map((c) => <Td key={c.key} right={numeric(c)}>{cell(c, row[c.key])}</Td>)}</tr>)}</tbody>
             </Table>

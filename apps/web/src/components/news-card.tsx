@@ -55,7 +55,7 @@ function DoctorNewsCard() {
           ))}
         </ul>
       )}
-      <Link href="/news" className="flex min-h-11 items-center gap-2 border-t border-slate-100 px-5 py-2 text-sm font-semibold text-brand-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-focus">
+      <Link href="/news" className="flex min-h-control items-center gap-2 border-t border-slate-100 px-5 py-2 text-sm font-semibold text-brand-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-focus">
         {t('news.allNews')}<ArrowRight className="h-4 w-4" />
       </Link>
       <NewsSourceLine items={items} />

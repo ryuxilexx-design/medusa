@@ -79,7 +79,7 @@ export function useShiftUi(enabled: boolean) {
     body: <>
       {s?.stale && <div className="mb-5"><Alert tone="red" title={t('cash.shiftStale', { date: fmtDate(s.opened_at) })}>{t('cash.shiftStaleHint')}</Alert></div>}
       {s && tot ? (
-        <div className="mb-5 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+        <div className="mb-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <StatCard icon={<Banknote />} label={t('cash.colCashIncome')} value={<StatMoney tiyin={tot.payments.cash.sum} />} sub={t('cash.nPayments', { n: tot.payments.cash.n })} />
           <StatCard icon={<CreditCard />} label={t('cash.cardTransfer')} value={<StatMoney tiyin={tot.payments.card.sum + tot.payments.transfer.sum} />} sub={t('cash.nPayments', { n: tot.payments.card.n + tot.payments.transfer.n })} />
           <StatCard icon={<ArrowUpRight />} label={t('cash.cashOut')} value={<StatMoney tiyin={tot.cash_out} minus />} sub={t('cash.cashOutSub')} />

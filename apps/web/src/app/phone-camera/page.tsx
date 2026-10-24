@@ -229,7 +229,7 @@ export default function PhoneCameraPage() {
                 {enrolled.map((e) => (
                   <li key={e.code} className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-50 py-0.5 pl-4 pr-0.5 text-sm font-semibold text-slate-900">
                     {e.code}
-                    <Button variant="ghost" size="icon-sm" aria-label={t('cam.phone.remove', { code: e.code })} onClick={() => setEnrolled((l) => l.filter((x) => x.code !== e.code))} className="!h-10 !w-10 !text-slate-600 hover:!text-slate-900"><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon-sm" aria-label={t('cam.phone.remove', { code: e.code })} onClick={() => setEnrolled((l) => l.filter((x) => x.code !== e.code))} className="!text-slate-600 hover:!text-slate-900"><Trash2 className="h-4 w-4" /></Button>
                   </li>
                 ))}
               </ul>

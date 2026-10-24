@@ -24,7 +24,7 @@ export function NoAccess({ role, className }: { role: Role; className?: string }
       <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
         <ShieldAlert className="h-8 w-8 text-slate-400" aria-hidden="true" />
         <h1 className="text-lg font-bold text-slate-900">{t(card ? 'state.cardNotForRole' : 'state.notForRole')}</h1>
-        <p className="text-[0.9375rem] text-slate-600">{t('state.notForRoleHint')}</p>
+        <p className="text-body text-slate-600">{t('state.notForRoleHint')}</p>
         <div className="mt-1 flex flex-wrap justify-center gap-2">
           {canBack && <Button icon={<ArrowLeft className="h-4 w-4" />} onClick={() => router.back()}>{t('common.back')}</Button>}
           <LinkButton variant="primary" href={HOME_BY_ROLE[role]} icon={<Home className="h-4 w-4" />}>{t('state.toHome')}</LinkButton>

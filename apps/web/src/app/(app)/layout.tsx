@@ -124,7 +124,7 @@ function Clock() {
   const { demoNow } = useSession();
   const [now, setNow] = useState(() => demoNow());
   useEffect(() => { const i = setInterval(() => setNow(demoNow()), 15_000); return () => clearInterval(i); }, [demoNow]);
-  return <span className="truncate text-small text-slate-700">{longDate(localDate(now))}, {fmtTime(now)}</span>;
+  return <span className="text-small text-slate-700">{longDate(localDate(now))}, {fmtTime(now)}</span>;
 }
 
 /** Clinic name, date/time and — only in a demo — one «Demo» mark (the single place it is shown inside the app). */
@@ -132,7 +132,7 @@ function ClinicInfo({ className }: { className?: string }) {
   const { me } = useSession();
   const t = useT();
   return (
-    <div className={cx('min-w-0 flex-col leading-tight', className)}>
+    <div className={cx('min-w-0 flex-col leading-tight xl:shrink-0', className)}>
       <span className="flex min-w-0 items-center gap-2">
         <span className="truncate text-body font-bold text-slate-900" title={me.clinic_name}>{me.clinic_name}</span>
         {me.demo && <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-px text-2xs font-semibold text-amber-900" title={t('shell.demoClockTitle')}>{t('shell.demoMark')}</span>}
@@ -300,7 +300,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
                 const Icon = it.icon;
                 return (
                   <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
-                    className={cx('press relative z-raised mb-1 flex min-h-12 items-center gap-3 rounded-full px-4 text-base font-semibold [@media(max-height:820px)]:mb-0 [@media(max-height:820px)]:min-h-control-sm [@media(max-height:820px)]:text-body', FOCUS_RING_INSET,
+                    className={cx('press relative z-raised mb-1 flex min-h-control items-center gap-3 rounded-full px-4 text-base font-semibold [@media(max-height:820px)]:mb-0 [@media(max-height:820px)]:min-h-control-sm [@media(max-height:820px)]:text-body', FOCUS_RING_INSET,
                       active ? 'text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
                     <Icon className={cx('h-[1.375rem] w-[1.375rem] shrink-0', active ? 'text-brand-700' : 'text-slate-700')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
                   </Link>
@@ -320,7 +320,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
       {/* the toolbar: a floating glass capsule; the content scrolls under it */}
       <header className="glass glass-pill sticky top-3 z-header mx-3 flex min-h-[3.75rem] items-center gap-2 px-2 py-1.5 print:hidden sm:mx-4 sm:px-3 lg:top-4 lg:mx-8 lg:gap-3 lg:px-4">
         <Button ref={burger} variant="ghost" size="icon" className="!text-slate-800 lg:hidden" onClick={() => setNavOpen(true)} aria-label={t('nav.open')} aria-expanded={navOpen} aria-controls="app-menu"><Menu className="h-6 w-6" /></Button>
-        <ClinicInfo className="hidden max-w-[14rem] shrink xl:flex" />
+        <ClinicInfo className="hidden max-w-[16rem] shrink xl:flex" />
         {me.branches.length > 1 ? (
           <Select aria-label={t('shell.branch')} className="glass-field min-w-0 flex-1 !rounded-full !border-0 !bg-transparent pr-7 text-sm font-semibold sm:w-auto sm:max-w-[12.5rem] sm:flex-none sm:text-body" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             <option value="">{t('shell.allBranches')}</option>
@@ -350,13 +350,13 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
           const Icon = it.icon;
           return (
             <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
-              className={cx('press relative z-raised min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET, i === 3 ? 'hidden sm:flex' : 'flex', active ? 'text-brand-800' : 'text-slate-900')}>
+              className={cx('press relative z-raised min-h-control min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET, i === 3 ? 'hidden sm:flex' : 'flex', active ? 'text-brand-800' : 'text-slate-900')}>
               <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
             </Link>
           );
         })}
         <button type="button" onClick={() => setNavOpen(true)} aria-expanded={navOpen} aria-controls="app-menu"
-          className={cx('press relative z-raised flex min-h-12 min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold text-slate-900 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET)}>
+          className={cx('press relative z-raised flex min-h-control min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold text-slate-900 sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET)}>
           <Menu className="h-5 w-5" /><span>{t('nav.more')}</span>
         </button>
       </nav>

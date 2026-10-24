@@ -48,7 +48,7 @@ function Warehouse() {
           {tab === 'stock' && <Button icon={<Plus className="h-4 w-4" />} onClick={() => open('item')}>{t('admin.inv.add')}</Button>}
           {primary && <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => open(primary[1])}>{t(primary[0])}</Button>}
         </>} />
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="mb-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={<Wallet />} label={t('wh.sum.value')} loading={s.isLoading} value={s.data && <Money tiyin={s.data.value} />} />
         <StatCard icon={<ClipboardList />} label={t('wh.sum.requests')} loading={s.isLoading} value={s.data?.requests} tone={s.data?.requests ? 'danger' : 'default'} href="/inventory?tab=requests" />
         <StatCard icon={<CalendarClock />} label={t('wh.sum.expiring')} loading={s.isLoading} value={s.data && `${s.data.expiring} / ${s.data.expired}`} sub={t('wh.sum.expiringSub')} tone={s.data?.expired ? 'danger' : 'default'} href="/inventory?tab=expiring" />
