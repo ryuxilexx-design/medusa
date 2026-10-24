@@ -34,7 +34,8 @@ try {
   await d.reload({ waitUntil: 'networkidle0' }); await settle(d);
   await waitText(d, 'Klinik qayd');
   check(await d.evaluate(() => !!document.querySelector('button[aria-label="K29.7 ni olib tashlash"]')), 'Saqlangan MKB-10 kodi sahifa yangilangandan keyin ham bor');
-  await clickText(d, 'Ko‘rib chiqish');
+  await d.click('[data-testid="note-more"]'); await sleep(200); // preview sits in the «Yana» menu
+  await clickText(d, 'Ko‘rib chiqish', '[role=menu] button');
   await waitText(d, 'MKB-10');
   check(await d.evaluate(() => document.querySelector('[role=dialog]').innerText.includes('K29.7')), 'Ko‘rib chiqishda MKB-10 kodi ko‘rinadi');
   await shot(d, 'ai-03-preview');

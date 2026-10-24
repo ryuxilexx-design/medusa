@@ -21,10 +21,16 @@ export default function PrintNote({ params }: { params: Promise<{ id: string }> 
       responsible={`${a.doctor_name}, ${a.specialty}`} status={note.status === 'signed' ? t('print.signed') : t('print.draft')} draft={note.status !== 'signed'}>
       <p className="mb-3 text-slate-600">{t('print.note.meta', { service: a.service_name, date: fmtDate(a.starts_at), room: a.room_name ?? '' })}</p>
       {vit && <div className="print-avoid-break mb-3"><h2 className="text-xs font-bold text-slate-600">{t('note.vitals')}</h2><p>{vit}</p></div>}
-      {rows.map(([k, text]) => (
-        <div key={k} className="print-avoid-break mb-3"><h2 className="text-xs font-bold text-slate-600">{t(k)}</h2><p className="whitespace-pre-wrap">{text || t('print.notEntered')}</p>
-          {k === 'note.diagnosis' && note.icd10?.length > 0 && <p className="mt-1">{t('icd.label')}: {note.icd10.map((x: { code: string; title: string }) => `${x.code} — ${x.title}`).join('; ')}</p>}
+      {rows.map(([k, text]) => k === 'note.diagnosis' ? (
+        // the diagnosis carries its ICD-10 code(s) right beside it — the code is what other clinics and DMED read
+        <div key={k} className="print-avoid-break mb-3 rounded border border-slate-300 px-3 py-2">
+          <h2 className="text-xs font-bold text-slate-600">{t(k)}</h2>
+          <p className="whitespace-pre-wrap font-semibold">{text || t('print.notEntered')}</p>
+          <p className="mt-1"><span className="text-slate-600">{t('icd.label')}:</span>{' '}
+            {note.icd10?.length ? note.icd10.map((x: { code: string; title: string }, i: number) => <span key={x.code}>{i > 0 && '; '}<b className="tabular-nums">{x.code}</b> — {x.title}</span>) : t('print.notEntered')}</p>
         </div>
+      ) : (
+        <div key={k} className="print-avoid-break mb-3"><h2 className="text-xs font-bold text-slate-600">{t(k)}</h2><p className="whitespace-pre-wrap">{text || t('print.notEntered')}</p></div>
       ))}
       {note.follow_up_date && <p><b>{t('print.note.followUp')}</b> {fmtDate(note.follow_up_date)}</p>}
       {addenda.length > 0 && (

@@ -39,6 +39,7 @@ export const common = {
   'net.reconnecting': ['Aloqa uzildi, qayta ulanmoqda… Kiritgan ma’lumotlaringiz sahifada qoladi.', 'Связь прервалась, переподключаемся… Введённые данные остаются на странице.'],
   'net.reconnectingShort': ['Server bilan aloqa yo‘q, qayta ulanmoqda…', 'Нет связи с сервером, переподключаемся…'],
   'state.notForRole': ['Bu bo‘lim sizning rolingiz uchun emas', 'Этот раздел не для вашей роли'],
+  'state.cardNotForRole': ['Bemor kartasi sizning rolingiz uchun ochiq emas', 'Карта пациента недоступна для вашей роли'],
   'state.notForRoleHint': ['Boshqa ruxsat kerak bo‘lsa, klinika rahbariga murojaat qiling.', 'Если нужен другой доступ, обратитесь к руководителю клиники.'],
   'state.toHome': ['Bosh sahifaga o‘tish', 'Перейти на главную'],
 

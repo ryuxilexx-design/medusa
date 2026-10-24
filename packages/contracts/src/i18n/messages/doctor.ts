@@ -60,6 +60,11 @@ export const doctor = {
   'note.order': ['Tekshiruv buyurish', 'Назначить обследование'],
   'note.preview': ['Ko‘rib chiqish', 'Просмотр'],
   'note.sign': ['Tasdiqlash va yakunlash', 'Подписать и завершить'],
+  'note.signShort': ['Tasdiqlash', 'Подписать'],
+  'note.saveShort': ['Saqlash', 'Сохранить'],
+  'note.savedShort': ['Saqlandi {time}', 'Сохранено {time}'],
+  'note.dirtyShort': ['Saqlanmagan', 'Не сохранено'],
+  'note.more': ['Yana', 'Ещё'],
   'note.intakeAdded': ['Bemor yozgan shikoyat qoralamaga qo‘shildi — tekshirib, saqlang', 'Жалоба пациента добавлена в черновик — проверьте и сохраните'],
   'note.aiApplied': ['AI loyihasi formaga qo‘llandi. Tekshirib, qoralamani saqlang.', 'Черновик AI перенесён в форму. Проверьте и сохраните.'],
   'note.previewTitle': ['Qaydni ko‘rib chiqish', 'Просмотр записи'],
@@ -96,12 +101,15 @@ export const doctor = {
   'orders.taken': ['(buyurilgan)', '(назначено)'],
   'orders.done': ['{n} ta tekshiruv buyurildi va hisobga qo‘shildi', { one: 'Назначено {n} обследование, добавлено в счёт', few: 'Назначено {n} обследования, добавлены в счёт', many: 'Назначено {n} обследований, добавлены в счёт' }],
   'orders.priceNote': ['Narx buyurtma paytida bemor hisobiga qo‘shiladi.', 'Цена фиксируется и добавляется в счёт пациента при назначении.'],
+  'orders.search': ['Xizmatni qidirish', 'Поиск услуги'],
+  'orders.noMatch': ['Mos xizmat topilmadi', 'Подходящих услуг нет'],
 
   // AI drafting
   // dictation (voice → text)
   'dict.field': ['Aytib yozish', 'Надиктовать'],
   'dict.fieldTitle': ['{field}: ovoz bilan yozish', '{field}: голосовой ввод'],
   'dict.wholeNote': ['Butun qaydni aytib berish', 'Надиктовать всю запись'],
+  'dict.wholeShort': ['Aytib berish', 'Надиктовать'],
   'dict.offLine': ['Ovozli yozish: {reason}.', 'Голосовой ввод: {reason}.'],
   'dict.recording': ['Yozilmoqda', 'Идёт запись'],
   'dict.starting': ['Mikrofon yoqilmoqda…', 'Включается микрофон…'],

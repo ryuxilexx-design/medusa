@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Check, CheckCircle2, ChevronRight, FlaskConical, Printer, Save, Search, TestTube } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
-import { addDays, ageFrom, fmtDate, fmtDateTime, fullName, pid } from '@/lib/format';
+import { addDays, ageFrom, fmtDate, fmtDateTime, fmtTime, fullName, localDate, pid } from '@/lib/format';
 import { useDebounced } from '@/lib/hooks';
 import { useSession } from '@/lib/session';
 import { useUnsavedGuard } from '@/lib/unsaved';
@@ -43,13 +43,18 @@ function Lab() {
   const nav = (st: string, order: string | null) => { const q = new URLSearchParams(); if (st) q.set('status', st); if (order) q.set('order', order); const qs2 = q.toString(); router.replace(`/lab${qs2 ? `?${qs2}` : ''}`, { scroll: false }); };
   const pick = (id: string) => { nav(status, id); revealDetail(); };
   const showBranch = !branchId && me.branches.length > 1;
+  // a wide screen never shows an empty detail beside a full list: the first order opens by itself
+  const first = list.data?.data?.[0]?.id as string | undefined;
+  useEffect(() => {
+    if (!selected && first && window.matchMedia('(min-width: 1280px)').matches) nav(status, first);
+  }, [selected, first]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
       <PageHeader title={t('clinical.lab.title')} subtitle={me.role === 'lab' ? t('clinical.lab.subtitleLab') : t('clinical.lab.subtitleOther')}
         actions={<Select aria-label={t('clinical.date')} className="w-full min-w-0 sm:w-auto" value={period} onChange={(e) => setPeriod(e.target.value)}><option value="all">{t('clinical.period.all')}</option><option value="today">{t('clinical.period.today')}</option><option value="7d">{t('clinical.period.last7')}</option></Select>} />
       <div className="mb-5"><Tabs value={status} onChange={(v) => { setStatus(v); nav(v, selected); }} items={STATUS_TABS.map((s) => ({ value: s, label: t(TAB_LABEL[s]), count: s ? counts[s] ?? 0 : total }))} /></div>
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <Card padded={false} className="self-start">
           <Toolbar>
             <div className="relative w-full"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" /><Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('clinical.lab.searchPlaceholder')} aria-label={t('clinical.lab.searchLabel')} /></div>
@@ -62,12 +67,13 @@ function Lab() {
                     {/* test and time on the first line; patient (and the status, unless a status tab already says it) on the second */}
                     <button onClick={() => pick(o.id)} aria-current={selected === o.id || undefined}
                       className={cx('block w-full border-l-4 px-4 py-2.5 text-left focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-inset focus-visible:ring-amber-300', selected === o.id ? 'border-brand-600 bg-brand-50' : 'border-transparent hover:bg-slate-50')}>
-                      <span className="flex items-baseline gap-3">
-                        <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-semibold text-slate-900">{o.service_name}</span>
-                        <span className="shrink-0 text-[0.8125rem] tabular-nums text-slate-600">{fmtDateTime(o.ordered_at)}</span>
+                      {/* the test and the patient are read whole (two lines at most); time and status keep the right edge */}
+                      <span className="flex items-start gap-3">
+                        <span className="line-clamp-2 min-w-0 flex-1 text-[0.9375rem] font-semibold leading-snug text-slate-900">{o.service_name}</span>
+                        <span className="shrink-0 pt-0.5 text-[0.8125rem] tabular-nums text-slate-600">{localDate(o.ordered_at) === me.today ? fmtTime(o.ordered_at) : fmtDateTime(o.ordered_at)}</span>
                       </span>
-                      <span className="mt-0.5 flex items-center gap-3">
-                        <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> {pid(o.patient_number)}{showBranch ? ` · ${o.branch_name}` : ''}</span>
+                      <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="min-w-0 flex-1 basis-[11rem] text-[0.8125rem] leading-snug text-slate-600"><span className="font-medium text-slate-800">{fullName(o)}</span> <span className="whitespace-nowrap tabular-nums">{pid(o.patient_number)}</span>{showBranch && <span className="block">{o.branch_name}</span>}</span>
                         {!status && <span className="shrink-0"><LabStatus status={o.status} /></span>}
                       </span>
                     </button>

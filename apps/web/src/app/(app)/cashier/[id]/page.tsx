@@ -41,7 +41,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     <>
       <Link href="/cashier" className="mb-2 flex w-fit min-h-9 items-center gap-1 rounded-lg text-[0.9375rem] font-semibold text-brand-700 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-amber-300"><ArrowLeft className="h-4 w-4" />{t('cash.backToList')}</Link>
       <PageHeader title={t('cash.invoiceNo', { n: inv.invoice_number })}
-        subtitle={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"><InvoiceStatus status={inv.status} /><Link href={`/patients/${inv.patient_id}`} className="font-semibold text-brand-700 hover:underline">{fullName(inv, true)}</Link><span className="tabular-nums">{pid(inv.patient_number)}</span></span>}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"><span className="inline-flex flex-wrap items-center gap-x-2"><Link href={`/patients/${inv.patient_id}`} className="font-semibold text-brand-700 hover:underline">{fullName(inv, true)}</Link><span className="tabular-nums">{pid(inv.patient_number)}</span></span><span className="inline-flex items-center gap-2"><span>{t('cash.invoiceStatus')}</span><InvoiceStatus status={inv.status} /></span></span>}
         actions={(canDiscount || canVoid || canRefund) && <>
           {canDiscount && <Button icon={<Percent className="h-4 w-4" />} onClick={() => setDiscount(true)}>{t('cash.discount')}</Button>}
           {canVoid && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setVoiding(true)}>{t('cash.voidInvoice')}</Button>}
@@ -102,24 +102,38 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <Card title={t('cash.payments')} padded={false}>
             {!inv.payments.length ? <p className="px-5 py-4 text-[0.9375rem] text-slate-600">{t('cash.noPayments')}</p> : (
               <Table>
-                <thead><tr><Th>{t('cash.colReceipt')}</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th>{fiscal && <Th>{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
-                <tbody>{inv.payments.map((p: any) => (
-                  <tr key={p.id}><Td className="tabular-nums"><Link href={`/print/payment/${p.id}`} target="_blank" title={t('cash.internalRecord')} className="inline-flex items-center gap-1.5 whitespace-nowrap font-medium text-brand-700 hover:underline"><Printer className="h-4 w-4" />{p.receipt_number}</Link></Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(p.paid_at)}</Td><Td>{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</span></Td>
-                    {fiscal && <Td><div className="flex flex-wrap items-center gap-2"><FiscalBadge f={p.fiscal} />{canEnterFiscal(me, p.fiscal, 'payment', p.cashier_membership_id) && <Button size="sm" onClick={() => setFiscalFor({ kind: 'payment', id: p.id, label: `T-${p.receipt_number}` })}>{t('cash.fiscal.enter')}</Button>}</div></Td>}
-                    <Td right className="font-medium">{formatSom(p.amount)}</Td></tr>
-                ))}</tbody>
+                <thead><tr><Th>{t('cash.colReceipt')}</Th><Th className="hidden sm:table-cell">{t('cash.colTime')}</Th><Th className="hidden sm:table-cell">{t('cash.colMethod')}</Th>{fiscal && <Th className="hidden md:table-cell">{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
+                <tbody>{inv.payments.map((p: any) => {
+                  const fiscalCell = fiscal && <div className="flex flex-wrap items-center gap-2"><FiscalBadge f={p.fiscal} />{canEnterFiscal(me, p.fiscal, 'payment', p.cashier_membership_id) && <Button size="sm" onClick={() => setFiscalFor({ kind: 'payment', id: p.id, label: `T-${p.receipt_number}` })}>{t('cash.fiscal.enter')}</Button>}</div>;
+                  return (
+                    <tr key={p.id}>
+                      <Td className="tabular-nums">
+                        <Link href={`/print/payment/${p.id}`} target="_blank" className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap font-semibold text-brand-700 hover:underline"><Printer className="h-4 w-4" />T-{p.receipt_number}<span className="font-medium">· {t('cash.internalRecord')}</span></Link>
+                        {/* phone: when, how and who under the receipt number; the fiscal row too */}
+                        <div className="text-[0.8125rem] text-slate-600 sm:hidden">{fmtDateTime(p.paid_at)} · {t(`payment.${p.method}` as MessageKey)}<span className="block">{p.cashier_name}</span></div>
+                        {fiscalCell && <div className="mt-1.5 md:hidden">{fiscalCell}</div>}
+                      </Td>
+                      <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(p.paid_at)}</Td>
+                      <Td className="hidden sm:table-cell">{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-[0.8125rem] text-slate-600">{p.cashier_name}</span></Td>
+                      {fiscal && <Td className="hidden md:table-cell">{fiscalCell}</Td>}
+                      <Td right className="align-top font-semibold sm:align-middle">{formatSom(p.amount)}</Td>
+                    </tr>
+                  );
+                })}</tbody>
               </Table>
             )}
           </Card>
           {inv.refunds?.length > 0 && (
             <Card title={t('cash.refunds')} padded={false}>
               <Table>
-                <thead><tr><Th>№</Th><Th>{t('cash.colTime')}</Th><Th>{t('cash.colMethod')}</Th><Th>{t('cash.colReason')}</Th><Th>{t('cash.colApprovedBy')}</Th>{fiscal && <Th>{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
+                <thead><tr><Th>№</Th><Th className="hidden sm:table-cell">{t('cash.colTime')}</Th><Th className="hidden sm:table-cell">{t('cash.colMethod')}</Th><Th>{t('cash.colReason')}</Th><Th className="hidden md:table-cell">{t('cash.colApprovedBy')}</Th>{fiscal && <Th className="hidden md:table-cell">{t('cash.fiscal.title')}</Th>}<Th right>{t('cash.colSum')}</Th></tr></thead>
                 <tbody>{inv.refunds.map((r: any) => (
-                  <tr key={r.id}><Td className="tabular-nums">{r.refund_number}</Td><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.refunded_at)}</Td><Td>{t(`payment.${r.method}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}</span></Td>
-                    <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.reason}</span></Td><Td>{r.approved_by_name}</Td>
-                    {fiscal && <Td><div className="flex flex-wrap items-center gap-2"><FiscalBadge f={r.fiscal} />{canEnterFiscal(me, r.fiscal, 'refund') && <Button size="sm" onClick={() => setFiscalFor({ kind: 'refund', id: r.id, label: `№${r.refund_number}` })}>{t('cash.fiscal.enter')}</Button>}</div></Td>}
-                    <Td right className="font-medium text-red-700">−{formatSom(r.amount)}</Td></tr>
+                  <tr key={r.id}><Td className="align-top tabular-nums sm:align-middle">{r.refund_number}</Td><Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(r.refunded_at)}</Td><Td className="hidden sm:table-cell">{t(`payment.${r.method}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.service_name ?? t('cash.wholeInvoice')}</span></Td>
+                    <Td className="min-w-[10rem]">{t(`cash.refundReason.${r.reason_code}` as MessageKey)}<span className="block text-[0.8125rem] text-slate-600">{r.reason}</span>
+                      <span className="block text-[0.8125rem] tabular-nums text-slate-600 sm:hidden">{fmtDateTime(r.refunded_at)} · {t(`payment.${r.method}` as MessageKey)}</span>
+                      <span className="block text-[0.8125rem] text-slate-600 md:hidden">{r.approved_by_name}</span></Td><Td className="hidden md:table-cell">{r.approved_by_name}</Td>
+                    {fiscal && <Td className="hidden md:table-cell"><div className="flex flex-wrap items-center gap-2"><FiscalBadge f={r.fiscal} />{canEnterFiscal(me, r.fiscal, 'refund') && <Button size="sm" onClick={() => setFiscalFor({ kind: 'refund', id: r.id, label: `№${r.refund_number}` })}>{t('cash.fiscal.enter')}</Button>}</div></Td>}
+                    <Td right className="align-top font-semibold text-red-700 sm:align-middle">−{formatSom(r.amount)}</Td></tr>
                 ))}</tbody>
               </Table>
             </Card>
@@ -148,8 +162,8 @@ function CashierPay({ inv }: { inv: any }) {
   if (shift.data.branch_id !== inv.branch_id) return <Alert tone="yellow" title={t('cash.shiftOtherBranch')}>{t('cash.shiftOtherBranchText', { shiftBranch: shift.data.branch_name, invoiceBranch: inv.branch_name })}</Alert>;
   // left open overnight: the server refuses the payment (SHIFT_STALE) until yesterday's shift is closed
   if (shift.data.stale) {
-    const [before, after] = t('cash.openShiftHint').split('{link}');
-    return <Alert tone="red" title={t('cash.shiftStale', { date: fmtDate(shift.data.opened_at) })}>{t('cash.shiftStaleHint')} {before}<Link href="/cashier" className="font-medium underline">{t('cash.title')}</Link>{after}</Alert>;
+    const [before, after] = t('cash.shiftStaleAction').split('{link}');
+    return <Alert tone="red" title={t('cash.shiftStale', { date: fmtDate(shift.data.opened_at) })}>{before}<Link href="/cashier" className="font-medium underline">{t('cash.title')}</Link>{after}</Alert>;
   }
   return <PaymentForm inv={inv} />;
 }

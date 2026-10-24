@@ -103,6 +103,8 @@ export const cash = {
   'cash.shiftClosedHint': ['To‘lov qabul qilish uchun smenani oching.', 'Чтобы принимать оплату, откройте смену.'],
   'cash.shiftStale': ['Smena {date} kuni ochilgan', 'Смена открыта {date}'],
   'cash.shiftStaleHint': ['Kechagi smenani yoping, keyin bugungi smenani oching — shundagina to‘lov qabul qilinadi.', 'Закройте вчерашнюю смену и откройте смену на сегодня — только тогда можно принимать оплату.'],
+  'cash.shiftStaleAction': ['Bu smena bugungi emas. {link} sahifasida uni yoping va bugungi smenani oching — shundan keyin to‘lov qabul qilinadi.', 'Эта смена не сегодняшняя. Закройте её на странице «{link}» и откройте смену на сегодня — после этого можно принимать оплату.'],
+  'cash.invoiceStatus': ['Hisob holati:', 'Статус счёта:'],
   'cash.shiftOpenedOn': ['{date} dan beri ochiq', 'открыта с {date}'],
   'cash.openShift': ['Smenani ochish', 'Открыть смену'],
   'cash.shiftOpened': ['Smena №{n} ochildi', 'Смена №{n} открыта'],

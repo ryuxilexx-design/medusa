@@ -71,7 +71,8 @@ export const print = {
   // payment record
   'print.pay.title': ['Ichki to‘lov qaydi — fiskal chek emas', 'Внутренняя запись об оплате — не фискальный чек'],
   'print.pay.cashier': ['{name}, kassir', '{name}, кассир'],
-  'print.pay.recorded': ['Qayd etilgan', 'Проведено'],
+  'print.pay.recorded': ['Qabul qilingan', 'Принят'],
+  'print.pay.statusLabel': ['To‘lov:', 'Платёж:'],
   'print.pay.service': ['Xizmat (hisob №{n})', 'Услуга (счёт №{n})'],
   'print.pay.qty': ['Miqdor', 'Кол-во'],
   'print.pay.sum': ['Summa', 'Сумма'],
@@ -138,6 +139,7 @@ export const print = {
   'print.appt.comeEarly': ['Qabuldan 10 daqiqa oldin keling.', 'Приходите за 10 минут до приёма.'],
   'print.appt.ticket': ['Kichik talon', 'Малый талон'],
   'print.appt.a5': ['Varaq', 'Лист'],
+  'print.appt.paper': ['Qog‘oz o‘lchami', 'Размер бумаги'],
   'print.shift.depositIn': ['Depozit kirim, naqd ({n})', 'Поступление депозита наличными ({n})'],
   'print.shift.depositOut': ['Depozit qaytarish, naqd ({n})', 'Возврат депозита наличными ({n})'],
 

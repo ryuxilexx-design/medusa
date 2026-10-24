@@ -17,7 +17,7 @@ export default function PrintPayment({ params }: { params: Promise<{ id: string 
   const f = p.fiscal;
   const issued = f?.status === 'issued';
   return (
-    <PrintDoc title={issued ? t('print.pay.fiscalTitle', { n: f.receipt_number }) : t('print.pay.title')} number={`T-${p.receipt_number}`} date={p.paid_at} branch={p.branch_name} patient={p} responsible={t('print.pay.cashier', { name: p.cashier_name })} status={issued ? t('print.pay.fiscalIssued') : t('print.pay.recorded')}>
+    <PrintDoc title={issued ? t('print.pay.fiscalTitle', { n: f.receipt_number }) : t('print.pay.title')} number={`T-${p.receipt_number}`} date={p.paid_at} branch={p.branch_name} patient={p} responsible={t('print.pay.cashier', { name: p.cashier_name })} statusLabel={t('print.pay.statusLabel')} status={issued ? t('print.pay.fiscalIssued') : t('print.pay.recorded')} legal={false}>
       <table className="print-avoid-break w-full text-[0.8125rem]">
         <thead><tr className="border-b border-slate-400 text-left text-xs text-slate-600"><th className="py-1">{t('print.pay.service', { n: p.invoice_number })}</th><th className="py-1 text-right">{t('print.pay.qty')}</th><th className="py-1 text-right">{t('print.pay.sum')}</th></tr></thead>
         <tbody>{(p.items ?? []).map((it: any, i: number) => <tr key={i} className="border-b border-slate-200"><td className="py-1">{it.description}</td><td className="py-1 text-right tabular-nums">{it.quantity}</td><td className="whitespace-nowrap py-1 text-right tabular-nums">{formatSom(it.line_total)}</td></tr>)}</tbody>
