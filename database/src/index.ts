@@ -4,6 +4,7 @@ import * as path from 'path';
 import { buildSeed, SeedData, DEMO_TIMEZONE_OFFSET_HOURS, SEED_IDS } from '../seed/build';
 import { seedDrugLinks } from '../seed/warehouse';
 import { STARTER_TEMPLATES } from '../seed/templates';
+import { buildGuard, GUARD_TABLES } from '../seed/guard';
 import { ensureStarterDrugs } from './drugs';
 
 // bigint (int8) money values fit safely into JS numbers (< 2^53 tiyin).
@@ -17,6 +18,7 @@ export { buildSeed };
 export type { SeedData };
 export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS, readSeedSnapshot, SNAPSHOT_DIR } from '../seed/build';
 export { STARTER_TEMPLATES } from '../seed/templates';
+export { GUARD_IDS } from '../seed/guard';
 export { ensureStarterDrugs, parseDrugsCsv, upsertDrugs, STARTER_DRUGS_CSV } from './drugs';
 
 /**
@@ -319,6 +321,40 @@ export async function backfillSeedWarehouse(q: Pick<PoolClient, 'query'>, demoDa
   return keepers.length;
 }
 
+/**
+ * Demo databases seeded before migration 038 have no security guard: adds the guards (the «Qorovul» demo card), their
+ * shifts, patrol checkpoints and rounds, the handling of the seed's camera alerts, incidents, visitors and keys —
+ * without a reset. Rows that point at a camera event this database does not have are left out (an alert created by an
+ * older seed under another id keeps its manager acknowledgement only). Idempotent: nothing happens once a guard exists.
+ */
+export async function backfillSeedGuard(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const seeded = (await q.query('SELECT 1 FROM tenants WHERE id = $1', [SEED_IDS.tenant])).rowCount;
+  const has = (await q.query(`SELECT 1 FROM memberships WHERE tenant_id = $1 AND role = 'guard' LIMIT 1`, [SEED_IDS.tenant])).rowCount;
+  if (!seeded || has) return 0;
+  const clock = (await q.query(`SELECT to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS d, to_char(demo_now() AT TIME ZONE 'Asia/Tashkent', 'HH24:MI') AS t`)).rows[0];
+  const demoTime = clock.d === demoDate ? clock.t : clock.d < demoDate ? '00:00' : '23:59';
+  const g = buildGuard(buildSeed(demoDate, demoTime), demoDate, demoTime);
+  const events = new Set((await q.query(`SELECT id FROM camera_events WHERE tenant_id = $1 AND alert`, [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const rooms = new Set((await q.query(`SELECT id FROM rooms WHERE tenant_id = $1`, [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const members = new Set((await q.query(`SELECT id FROM memberships WHERE tenant_id = $1`, [SEED_IDS.tenant])).rows.map((r) => r.id));
+  const users = new Set((await q.query('SELECT id FROM users')).rows.map((r) => r.id));
+  for (const m of g.memberships) members.add(m.id);
+  g.users = g.users.filter((u) => !users.has(u.id));
+  for (const i of g.security_incidents) {
+    if (i.alert_event_id && !events.has(i.alert_event_id)) i.alert_event_id = null;
+    if (i.room_id && !rooms.has(i.room_id)) i.room_id = null;
+  }
+  g.security_alert_actions = g.security_alert_actions.filter((a) => events.has(a.event_id) && members.has(a.actor_membership_id));
+  g.key_events = g.key_events.filter((k) => rooms.has(k.room_id) && members.has(k.holder_membership_id));
+  g.security_visitors = g.security_visitors.filter((v) => !v.host_membership_id || members.has(v.host_membership_id));
+  g.staff_presence_marks = g.staff_presence_marks.filter((m) => members.has(m.membership_id));
+  const counters = g.security_counters; g.security_counters = [];
+  for (const t of GUARD_TABLES) await insertRows(q as PoolClient, t, g[t]);
+  for (const c of counters)
+    await q.query(`INSERT INTO security_counters (tenant_id, kind, last) VALUES ($1,$2,$3) ON CONFLICT (tenant_id, kind) DO UPDATE SET last = GREATEST(security_counters.last, EXCLUDED.last)`, [c.tenant_id, c.kind, c.last]);
+  return g.memberships.length;
+}
+
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */
 export async function assertDatabaseName(q: Pick<PoolClient, 'query'>, expectSuffix: string): Promise<string> {
   const name = (await q.query('SELECT current_database() AS n')).rows[0].n as string;
@@ -356,7 +392,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     // and the bot's question-answering switch and the manager's extra text (migration 035); the daily counters start over
     const hasFaq = (await client.query(`SELECT to_regclass('telegram_faq_settings') IS NOT NULL AS ok`)).rows[0].ok;
     const faqSettings = hasFaq ? (await client.query('SELECT * FROM telegram_faq_settings')).rows.map((r) => ({ ...r, updated_by: null })) : [];
-    const all = ['sessions', ...TABLES_IN_INSERT_ORDER].reverse();
+    const all = ['sessions', ...TABLES_IN_INSERT_ORDER, ...GUARD_TABLES.filter((t) => t !== 'users' && t !== 'memberships')].reverse();
     await client.query(`TRUNCATE ${all.join(', ')} RESTART IDENTITY CASCADE`);
     const counts: Record<string, number> = {};
     await linkSeedPrescriptions(client, seed.medical_documents);
@@ -364,10 +400,13 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
       await insertRows(client, t, seed[t] as Record<string, unknown>[]);
       counts[t] = seed[t].length;
     }
+    // the security guard's demo data (migration 038): built from the rows above with its own PRNG (KPIs unchanged)
+    const guard = buildGuard(seed, demoDate, demoTime);
+    for (const t of GUARD_TABLES) { await insertRows(client, t, guard[t]); counts['guard_' + t] = guard[t].length; }
     // seed medicines point at the drug reference (its ids are generated by the database)
     for (const [itemId, inn] of seedDrugLinks()) await client.query(`UPDATE inventory_items SET drug_id = (SELECT id FROM drugs WHERE inn = $2) WHERE id = $1`, [itemId, inn]);
     await client.query(`SELECT setval('face_code_staff_seq', GREATEST((SELECT max(substring(code from 3)::int) FROM face_codes WHERE subject_type = 'staff'), 1))`);
-    const membershipIds = new Set(seed.memberships.map((m) => m.id));
+    const membershipIds = new Set([...seed.memberships, ...guard.memberships].map((m) => m.id));
     await insertRows(client, 'sessions', sessions.filter((s) => membershipIds.has(s.membership_id)));
     const tenantIds = new Set(seed.tenants.map((t) => t.id));
     const keptBots = bots.filter((b) => tenantIds.has(b.tenant_id));

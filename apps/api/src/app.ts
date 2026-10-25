@@ -4,8 +4,9 @@ import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { randomUUID } from 'crypto';
-import { backfillSeedCameras, backfillSeedConsents, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, backfillSeedGuard, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { purgeSnapshots } from './cameras/ingest';
+import { purgeVisitors } from './modules/security';
 import { config } from './core/config';
 import { syncClock } from './core/clock';
 import { rawBody } from './cameras/hik.controller';
@@ -49,6 +50,8 @@ export async function createApp(): Promise<INestApplication> {
     const snaps = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedSnapshots(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
     const keepers = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedWarehouse(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
     if (keepers) console.log(`Ombor demo: omborchi va dori partiyalari qo‘shildi`);
+    const guards = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedGuard(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    if (guards) console.log(`Qorovul demo: qorovullar, smenalar, obxod va jurnallar qo‘shildi (migratsiya 038 dan oldingi baza)`);
     if (snaps) console.log(`Demo: ${snaps} ta kamera ogohlantirish surati qo‘shildi (migratsiya 016 dan oldingi baza)`);
   } else if (await readDemoClock(pool)) {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than
@@ -61,11 +64,13 @@ export async function createApp(): Promise<INestApplication> {
     if (n) console.log(`${n} ta boshlang‘ich qayd shabloni qo‘shildi (klinika ${t.id})`);
   }
   syncClock((await pool.query('SELECT demo_now() AS n')).rows[0].n);
-  // expired sessions and old alert snapshots are removed hourly (they would only make the tables grow)
+  // expired sessions, old alert snapshots and old visitor names are removed hourly (they would only make the tables grow)
   if (config.workers) {
     const purge = () => Promise.all([
       pool.query(`DELETE FROM sessions WHERE expires_at < now() - interval '1 day'`).catch((e) => console.warn(`[sessions] purge: ${e.message}`)),
       purgeSnapshots(pool).catch((e) => console.warn(`[cameras] snapshot purge: ${e.message}`)),
+      // the visitor log keeps a name only VISITOR_RETENTION_DAYS (docs/SECURITY_GUARD.md)
+      purgeVisitors(pool).catch((e) => console.warn(`[security] visitor purge: ${e.message}`)),
     ]);
     void purge(); setInterval(purge, 3600_000).unref();
   }

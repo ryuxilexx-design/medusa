@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  BarChart3, Banknote, Boxes, PackageOpen, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, Languages, ListOrdered, Loader2, LogOut, Menu, Newspaper, ScanLine, Search, Settings,
-  Stethoscope, Users, UsersRound, Wallet, X,
+  BarChart3, Banknote, Boxes, ClipboardCheck, Contact, Footprints, PackageOpen, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, Languages, ListOrdered, Loader2, LogOut, Menu,
+  Newspaper, NotebookPen, ScanLine, Search, Settings, ShieldCheck, Stethoscope, UserCheck, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
 import { meReconnecting, SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
@@ -19,6 +19,7 @@ import { canOpen, SECTION_ROLES, type Section } from '@/lib/routes';
 import { handPatientSearch } from '@/lib/patient-search';
 import { NoAccess } from '@/components/no-access';
 import { BrandLockup } from '@/components/logo';
+import { SecurityAlarm } from '@/components/guard/alarm';
 
 type Item = { href: Section; label: MessageKey; icon: React.ElementType; roles: readonly Role[]; group: 'work' | 'manage' };
 const entry = (href: Section, label: MessageKey, icon: React.ElementType, group: Item['group']): Item => ({ href, label, icon, roles: SECTION_ROLES[href], group });
@@ -35,10 +36,19 @@ const MENU: Item[] = [
   entry('/news', 'nav.news', Newspaper, 'work'),
   entry('/cashier', 'nav.cashier', Wallet, 'work'),
   entry('/materials', 'nav.materials', PackageOpen, 'work'),
+  // the security guard: the panel first, then the logs the entrance keeps by the hour (the tab bar shows the first four)
+  entry('/guard', 'nav.guard', ShieldCheck, 'work'),
+  entry('/visitors', 'nav.visitors', Contact, 'work'),
+  entry('/keys', 'nav.keys', KeyRound, 'work'),
+  entry('/patrol', 'nav.patrol', Footprints, 'work'),
+  entry('/incidents', 'nav.incidents', NotebookPen, 'work'),
+  entry('/on-site', 'nav.onSite', UserCheck, 'work'),
+  entry('/post', 'nav.post', ClipboardCheck, 'work'),
   entry('/finance', 'nav.finance', Banknote, 'manage'),
   entry('/staff', 'nav.staff', UsersRound, 'manage'),
   entry('/inventory', 'nav.inventory', Boxes, 'manage'),
   entry('/cameras', 'nav.cameras', Cctv, 'manage'),
+  entry('/security', 'nav.security', ShieldCheck, 'manage'),
   entry('/reports', 'nav.reports', BarChart3, 'manage'),
   entry('/settings', 'nav.settings', Settings, 'manage'),
 ];
@@ -51,6 +61,7 @@ const LABEL_OVERRIDE: Partial<Record<Role, Record<string, MessageKey>>> = {
 const TAB_SHORT: Partial<Record<MessageKey, MessageKey>> = {
   'nav.dashboard': 'nav.tab.dashboard', 'nav.schedule': 'nav.tab.schedule', 'nav.doctor': 'nav.tab.doctor',
   'nav.myPatients': 'nav.tab.myPatients', 'nav.materials': 'nav.tab.materials', 'nav.warehouse': 'nav.tab.warehouse', 'nav.mySchedule': 'nav.tab.mySchedule', 'nav.myPayments': 'nav.tab.myPayments',
+  'nav.guard': 'nav.tab.guard', 'nav.visitors': 'nav.tab.visitors', 'nav.keys': 'nav.tab.keys', 'nav.patrol': 'nav.tab.patrol',
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -226,7 +237,8 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
   const items = MENU.filter((m) => m.roles.includes(me.role));
   const allowed = canOpen(me.role, pathname);
   // group headings only help when the list is long; a short menu stays one plain list
-  const groups: { key: 'work' | 'manage'; items: Item[] }[] = items.length >= 7
+  // (the guard's seven sections are all daily work: one plain list)
+  const groups: { key: 'work' | 'manage'; items: Item[] }[] = items.length >= 7 && items.some((i) => i.group === 'manage') && items.some((i) => i.group === 'work')
     ? [{ key: 'work', items: items.filter((i) => i.group === 'work') }, { key: 'manage', items: items.filter((i) => i.group === 'manage') }]
     : [{ key: 'work', items }];
   const canSearch = ['manager', 'registrar', 'doctor', 'cashier'].includes(me.role);
@@ -340,6 +352,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
           <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden="true" />{t('net.reconnecting')}
         </div>
       )}
+      {me.role === 'manager' && <SecurityAlarm />}
       <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[80rem] px-4 py-6 focus:outline-none lg:px-8">{allowed ? children : <NoAccess role={me.role} />}</main>
       {/* phone and tablet: a floating capsule tab bar with the first sections; «Menyu» opens the full list.
           It floats above the iPhone home indicator (--tabbar-gap includes env(safe-area-inset-bottom)). */}

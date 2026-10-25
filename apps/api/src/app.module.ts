@@ -53,6 +53,7 @@ import { DhpController } from './dhp/dhp.controller';
 import { DhpWorker } from './dhp/worker';
 import { LabCommentaryController } from './modules/lab-commentary.controller';
 import { ReorderController } from './modules/reorder.controller';
+import { SecurityController } from './modules/security.controller';
 
 const http = new Logger('HTTP');
 /** One line per finished request: method, path, status, ms, request id, tenant and role — never a body, a query value or clinical text. */
@@ -69,7 +70,7 @@ function requestLog(req: any, res: any) {
 
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
-    LabController, LabCommentaryController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, ReorderController, DiagnosticsController, AiController, ManagerAiController,
+    LabController, LabCommentaryController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, ReorderController, SecurityController, DiagnosticsController, AiController, ManagerAiController,
     AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, PatientSummaryController, DrugsController, AllergiesController, CashController, DepositsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController],
   providers: [Db, BotEngine, BotFaq, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
 })

@@ -450,7 +450,7 @@ export const staffDoctorSchema = z.object({
 
 export const staffCreateSchema = z.object({
   full_name: trimmed(3, 120, 'F.I.Sh.'),
-  role: z.enum(['manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper'], { errorMap: () => ({ message: 'Rolni tanlang' }) }),
+  role: z.enum(['manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper', 'guard'], { errorMap: () => ({ message: 'Rolni tanlang' }) }),
   title: optionalText(80),
   login: loginField,
   branch_ids: z.array(uuid).min(1, 'Kamida bitta filialni tanlang'),
@@ -459,7 +459,7 @@ export const staffCreateSchema = z.object({
 
 export const staffUpdateSchema = z.object({
   full_name: trimmed(3, 120, 'F.I.Sh.').optional(),
-  role: z.enum(['manager', 'registrar', 'cashier', 'lab', 'storekeeper']).optional(), // doctor role is fixed at creation (linked doctor record)
+  role: z.enum(['manager', 'registrar', 'cashier', 'lab', 'storekeeper', 'guard']).optional(), // doctor role is fixed at creation (linked doctor record)
   title: optionalText(80),
   login: loginField.optional(),
   branch_ids: z.array(uuid).min(1, 'Kamida bitta filialni tanlang').optional(),
@@ -692,5 +692,98 @@ export const facePhotoSchema = z.object({
 export const staffFaceCodeSchema = z.object({
   membership_id: z.string().uuid(),
   consent_confirmed: z.literal(true, { errorMap: () => ({ message: 'Xodimning yozma roziligini tasdiqlang' }) }),
+});
+
+// ---------- Security guard «Qorovul» (migration 038, docs/SECURITY_GUARD.md) ----------
+export const INCIDENT_CATEGORIES = ['conflict', 'theft', 'damage', 'fire', 'medical', 'suspicious', 'other'] as const;
+export type IncidentCategory = (typeof INCIDENT_CATEGORIES)[number];
+export const INCIDENT_SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type IncidentSeverity = (typeof INCIDENT_SEVERITIES)[number];
+/** How a guard closes a camera alert; «escalated» hands it to the manager, who closes it. */
+export const ALERT_OUTCOMES = ['false_alarm', 'checked_ok', 'incident', 'escalated'] as const;
+export type AlertOutcome = (typeof ALERT_OUTCOMES)[number];
+export type AlertState = 'new' | 'taken' | 'escalated' | 'resolved';
+/** The preset reasons of the «Rahbarga xabar» (SOS) button and the incident category each one files. */
+export const SOS_REASONS = ['aggression', 'medical', 'fire', 'theft', 'suspicious', 'other'] as const;
+export type SosReason = (typeof SOS_REASONS)[number];
+export const SOS_CATEGORY: Record<SosReason, IncidentCategory> = { aggression: 'conflict', medical: 'medical', fire: 'fire', theft: 'theft', suspicious: 'suspicious', other: 'other' };
+/** Non-patient visitors only: patients and their companions are never written here. */
+export const VISITOR_PURPOSES = ['delivery', 'supplier', 'repair', 'inspection', 'meeting', 'interview', 'other'] as const;
+export type VisitorPurpose = (typeof VISITOR_PURPOSES)[number];
+/** Days after which a visitor's name, organisation, pass and note are cleared (the hourly purge). */
+export const VISITOR_RETENTION_DAYS = 90;
+/** A key still out at this local hour of the day it was taken is overdue. */
+export const KEY_DUE_HOUR = 20;
+/** The manager expects one finished patrol round per this many hours of an open post shift. */
+export const PATROL_INTERVAL_HOURS = 3;
+/** An Uzbek passport (AA1234567) or a 14-digit personal number (JShShIR/ПИНФЛ): the visitor log never keeps either. */
+export const ID_DOCUMENT_RE = /(?<![\p{L}\d])[\p{L}]{2}\s?\d{7}(?!\d)|(?<!\d)\d{14}(?!\d)/u;
+const noIdDoc = (s: string | null | undefined) => !s || !ID_DOCUMENT_RE.test(s);
+
+const optionalUuid = z.string().uuid('Noto‘g‘ri identifikator').optional().nullable().transform((v) => v ?? null);
+/** «seq» = how many handling steps the client saw: a stale screen collides with the newer step (409). */
+const alertSeq = z.number({ required_error: 'Sahifani yangilang' }).int().min(0).max(19);
+export const alertTakeSchema = z.object({ seq: alertSeq });
+export const incidentCoreSchema = z.object({
+  category: z.enum(INCIDENT_CATEGORIES, { errorMap: () => ({ message: 'Hodisa turini tanlang' }) }),
+  severity: z.enum(INCIDENT_SEVERITIES, { errorMap: () => ({ message: 'Darajasini tanlang' }) }),
+  description: trimmed(3, 2000, 'Tavsif'),
+});
+export const alertResolveSchema = z.object({
+  seq: alertSeq,
+  outcome: z.enum(ALERT_OUTCOMES, { errorMap: () => ({ message: 'Natijani tanlang' }) }),
+  note: optionalText(500),
+  incident: incidentCoreSchema.optional(),
+}).refine((d) => d.outcome !== 'incident' || !!d.incident, { message: 'Hodisani tavsiflang', path: ['incident.description'] });
+export const incidentCreateSchema = incidentCoreSchema.extend({
+  branch_id: optionalUuid,
+  room_id: optionalUuid,
+  place: optionalText(120),
+});
+export const incidentEntrySchema = z.object({
+  kind: z.enum(['note', 'correction', 'close'], { errorMap: () => ({ message: 'Turini tanlang' }) }),
+  text: trimmed(3, 2000, 'Matn'),
+});
+export const sosSchema = z.object({
+  branch_id: optionalUuid,
+  reason: z.enum(SOS_REASONS, { errorMap: () => ({ message: 'Sababni tanlang' }) }),
+  note: optionalText(500),
+});
+export const visitorCreateSchema = z.object({
+  branch_id: optionalUuid,
+  full_name: trimmed(2, 120, 'F.I.Sh.').refine(noIdDoc, 'Pasport yoki JShShIR raqamini yozmang'),
+  organisation: optionalText(120).refine(noIdDoc, 'Pasport yoki JShShIR raqamini yozmang'),
+  purpose: z.enum(VISITOR_PURPOSES, { errorMap: () => ({ message: 'Maqsadni tanlang' }) }),
+  purpose_note: optionalText(200).refine(noIdDoc, 'Pasport yoki JShShIR raqamini yozmang'),
+  host_membership_id: optionalUuid,
+  // a temporary pass printed by the clinic («12», «B-07»), never an identity document
+  pass_no: optionalText(10).refine((s) => !s || /^[\p{L}\d-]{1,10}$/u.test(s), 'Ruxsatnoma raqami: harf, raqam yoki «-», 10 belgigacha'),
+});
+export const keyOutSchema = z.object({ holder_membership_id: z.string({ required_error: 'Xodimni tanlang' }).uuid('Xodimni tanlang'), note: optionalText(200) });
+export const keyInSchema = z.object({ holder_membership_id: optionalUuid, note: optionalText(200) });
+export const checkpointCreateSchema = z.object({
+  branch_id: z.string({ required_error: 'Filialni tanlang' }).uuid('Filialni tanlang'),
+  name: trimmed(2, 80, 'Nomi'),
+  position: z.number().int().min(0).max(999).optional(),
+});
+export const checkpointPatchSchema = z.object({
+  name: trimmed(2, 80, 'Nomi').optional(),
+  position: z.number().int().min(0).max(999).optional(),
+  active: z.boolean().optional(),
+});
+export const roundStartSchema = z.object({ branch_id: optionalUuid });
+export const roundMarkSchema = z.object({
+  checkpoint_id: z.string().uuid('Noto‘g‘ri identifikator'),
+  result: z.enum(['ok', 'problem'], { errorMap: () => ({ message: 'Natijani tanlang' }) }),
+  note: optionalText(500),
+  /** a problem can be filed as an incident of the patrol at once */
+  incident: incidentCoreSchema.pick({ category: true, severity: true }).optional(),
+}).refine((d) => d.result === 'ok' || (d.note != null && d.note.length >= 3), { message: 'Muammoni qisqa yozing', path: ['note'] });
+export const guardShiftOpenSchema = z.object({ branch_id: optionalUuid });
+export const guardShiftCloseSchema = z.object({ handover_note: trimmed(3, 2000, 'Topshirish izohi') });
+export const presenceMarkSchema = z.object({
+  branch_id: optionalUuid,
+  membership_id: z.string({ required_error: 'Xodimni tanlang' }).uuid('Xodimni tanlang'),
+  kind: z.enum(['in', 'out'], { errorMap: () => ({ message: 'Turini tanlang' }) }),
 });
 

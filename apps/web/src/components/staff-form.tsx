@@ -17,7 +17,7 @@ export type StaffRow = {
 type Issued = { name: string; login: string; temp_password: string };
 type Form = { full_name: string; role: Role; title: string; login: string; branch_ids: string[]; specialty: string; share_percent: string; service_ids: string[] };
 
-const ROLES: Role[] = ['registrar', 'doctor', 'cashier', 'lab', 'storekeeper', 'manager'];
+const ROLES: Role[] = ['registrar', 'doctor', 'cashier', 'lab', 'storekeeper', 'guard', 'manager'];
 const loginView = (l: string | null) => (l ? (l.startsWith('+998') ? formatPhone(l) : l) : '');
 
 /** Create a staff account or edit one. Password reset and (de)activation live here too, never for one's own account. */

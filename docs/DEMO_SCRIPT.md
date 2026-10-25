@@ -105,6 +105,11 @@ Kirish: http://127.0.0.1:3000 → kerakli kartadagi **Kirish**.
 
 ### 8. Kengayish (8:00–9:00) · Oyna 1
 - **Ombor** → «Kam qolganlar» (4 ta; dashboard ogohlantirishi bilan bir xil).
+- **Qorovul** (1,5 daqiqa; boshqa profilda «Qorovul» kartasi — Bahodir Usmonov, Markaziy filial; menyuda faqat qo‘riqlash bo‘limlari):
+  1. **Qo‘riqlash paneli**: ochiq ogohlantirishlar (surat bilan) → **Ko‘ryapman** → **Yopish** → «Yolg‘on signal». Kirishda tanilganlar: xodim — ismi bilan, bemor — faqat «Bemor»; bemorlar oqimi — faqat soat bo‘yicha son.
+  2. **Tashrif buyuruvchilar** → **Kirdi — yozish** (kuryer) → **Chiqdi**. **Kalitlar**: kechagi qaytarilmagan kalit qizil.
+  3. **Obxod** → **Obxodni boshlash** → nuqtalarni belgilash → **Obxodni tugatish**. **Rahbarga xabar** → Oyna 1 (Rahbar) ekranida qizil banner → «Ko‘rdim».
+  4. **Smena**: oldingi smena topshirig‘i, ochiq qolgan ishlar → **Smenani topshirish** → **Hisobot** (A4). Rahbar: **Xavfsizlik** → javob vaqti, obxod intizomi, CSV.
 - **Ombor (omborchi)** (1,5 daqiqa; boshqa profilda «Omborchi» kartasi — menyuda faqat «Ombor»):
   1. **Talabnomalar** → shifokorning bugungi talabnomasi (Lidokain, Natriy xlorid; bemor va MKB-10 kodi bilan) → **Berish**. «Qaysi partiyadan berildi» — eng erta muddatli partiya avtomatik (FEFO).
   2. **Muddati o‘tayotganlar** → «Bioximiya kalibratori» partiyasi muddati o‘tgan (qizil) — u hech kimga berilmaydi; «Glyukoza test-polosalari» 20 kun qoldi.

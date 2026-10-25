@@ -136,7 +136,8 @@ export class ReferenceController {
     return b as { id: string; name: string };
   }
 
-  @Get('doctors')
+  // every role except the guard (docs/SECURITY_GUARD.md: no schedules, prices or clinic settings at the entrance)
+  @Roles('manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper') @Get('doctors')
   async doctors(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const params: unknown[] = [ctx.tenantId];
     let where = 'd.tenant_id = $1 AND d.active';
@@ -152,7 +153,7 @@ export class ReferenceController {
   }
 
   /** Catalogue; `price` is the general price, or the branch's own price when `?branch_id=` names one of the person's branches. */
-  @Get('services')
+  @Roles('manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper') @Get('services')
   async services(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const branch = isUuid(q.branch_id) && ctx.branchIds.includes(q.branch_id) ? q.branch_id : null;
     const params: unknown[] = [ctx.tenantId, branch];
@@ -240,7 +241,7 @@ export class ReferenceController {
     });
   }
 
-  @Get('settings')
+  @Roles('manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper') @Get('settings')
   async settings(@CurrentCtx() ctx: Ctx) {
     const t = await this.db.one(`SELECT id, name, fiscal_provider FROM tenants WHERE id = $1`, [ctx.tenantId]);
     if (!t) throw notFound('Klinika');

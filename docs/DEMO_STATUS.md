@@ -35,6 +35,12 @@ Cheklovlar: dori tekshiruvi ma’lumotnoma ro‘yxati va nom oxirlari bo‘yicha
 
 Cheklovlar: xulosa tili — rahbarning interfeys tili (har til alohida keshlanadi); «hozirgi holat» faktlari (qarz, ombor, kamera) xulosa tuzilgan paytdagi qiymat; erkin savol faqat jonli AI’da; brauzer E2E yo‘q.
 
+## Qorovul: xavfsizlik roli (migratsiya 038, `docs/SECURITY_GUARD.md`)
+
+| Imkoniyat | Holat | Tekshiruv |
+|---|---|---|
+| Yangi rol **Qorovul** (`guard`, demo kartasi «Qorovul» — Bahodir Usmonov): qo‘riqlash paneli (kamera ogohlantirishlari surati bilan, kameralar holati, bugungi sonlar, kutilayotgan bemorlar — faqat son, kirishda tanilganlar — bemor faqat «Bemor»), ogohlantirishni olish/yopish (yolg‘on signal, tekshirildi, hodisa, rahbarga), hodisalar jurnali (append-only, tuzatish yangi qator, rahbar yopadi), «Rahbarga xabar» (rahbar ekranida banner), tashrif buyuruvchilar (pasport raqamisiz, ism 90 kundan keyin o‘chadi), kalitlar, obxod, smena va topshiriq (A4 hisobot), xodimlar binoda. Rahbar: «Xavfsizlik» bo‘limi — javob vaqti, obxod intizomi, CSV | Ishlaydi (tashrif jurnali saqlash muddati yurist ko‘rib chiqishi kerak) | API test `guard.test.mjs` (14 ta): 403 sweep, boshqa klinika 404, filial 403, bemor kodi yashirin, surat (≤ 30 kun, audit), poyga 409, triggerlar, tozalash, kalit, obxod, smena, CSV. Brauzer: `e2e/guard.mjs` (33 tekshiruv), skrinshotlar 1366×768 va 390 px, uz + ru |
+
 ## Ombor: omborchi roli, partiyalar, talabnomalar, nazoratdagi dorilar (migratsiya 030, `docs/WAREHOUSE.md`)
 
 | Nima | Holat | Tekshiruv |

@@ -56,6 +56,7 @@ export const SEED_IDS = {
     cashier2: sid('membership:cashier2'),
     lab: sid('membership:lab'),
     storekeeper: sid('membership:storekeeper'),
+    guard: sid('membership:guard'), // the security guard «Qorovul» (seed/guard.ts, migration 038)
     tenant2Manager: sid('membership:t2manager'),
     doctor: (i: number) => sid(`membership:doctor:${i}`),
   },
