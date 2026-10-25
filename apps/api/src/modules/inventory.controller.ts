@@ -7,7 +7,7 @@ import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { now, today } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
-import { COUNTING_SQL, fromC, maskCounting, STOCK_SQL, toC, USABLE_SQL } from './warehouse';
+import { assertNotCounting, COUNTING_SQL, fromC, maskCounting, STOCK_SQL, toC, USABLE_SQL } from './warehouse';
 
 // stock = Σ batch balances (migration 030); the ledger keeps opening_qty + Σ in − Σ out equal to it
 const QTY = STOCK_SQL('i');
@@ -26,8 +26,8 @@ export class InventoryController {
               coalesce((SELECT sum(quantity) FROM inventory_movements m WHERE m.item_id = i.id AND m.type = 'out'),0) AS out_qty,
               ${QTY} AS qty, ${USABLE_SQL('i')} AS usable_qty, ${COUNTING_SQL('i')} AS counting
          FROM inventory_items i JOIN branches b ON b.id = i.branch_id WHERE i.tenant_id = $1 AND i.branch_id = ANY($2)) x
-        WHERE ($3::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty)) ORDER BY active DESC, (usable_qty < minimum_qty) DESC, name LIMIT 1000`,
-      [ctx.tenantId, branchScope(ctx, q.branch_id), q.low === '1']);
+        WHERE ($3::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty AND ($4 OR NOT counting))) ORDER BY active DESC, (usable_qty < minimum_qty AND ($4 OR NOT counting)) DESC, name LIMIT 1000`,
+      [ctx.tenantId, branchScope(ctx, q.branch_id), q.low === '1', ctx.role === 'manager']);
     return { data: maskCounting(ctx, rows, ['qty', 'usable_qty', 'in_qty', 'out_qty', 'opening_qty']) };
   }
 
@@ -91,7 +91,11 @@ export class InventoryController {
         if ((await c.query(`SELECT 1 FROM inventory_batches WHERE item_id = $1 AND qty > 0`, [id])).rowCount) throw conflict('HAS_STOCK_UNIT', 'Qoldig‘i bor materialning o‘lchov birligini o‘zgartirib bo‘lmaydi');
         changes.push(`birlik: ${input.unit}`);
       }
-      if (input.minimum_qty !== undefined && input.minimum_qty !== Number(it.minimum_qty)) changes.push(`minimum: ${input.minimum_qty}`);
+      if (input.minimum_qty !== undefined && input.minimum_qty !== Number(it.minimum_qty)) {
+        // blind count: moving the minimum and watching the «kam qoldi» flag would reveal the balance — wait for the count
+        if (ctx.role !== 'manager') await assertNotCounting(c, ctx.tenantId, [id]);
+        changes.push(`minimum: ${input.minimum_qty}`);
+      }
       if (input.active !== undefined && input.active !== it.active) changes.push(input.active ? 'faol qilindi' : 'nofaol qilindi');
       if (input.pack_size !== undefined && (input.pack_size ?? null) !== (it.pack_size == null ? null : Number(it.pack_size))) changes.push(`qadoq: ${input.pack_size ?? '—'}`);
       await c.query(`UPDATE inventory_items SET name = $2, branch_id = $3, unit = COALESCE($4, unit), minimum_qty = COALESCE($5, minimum_qty), active = COALESCE($6, active),

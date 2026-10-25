@@ -47,10 +47,12 @@ export class WarehouseController {
   async summary(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const br = branchScope(ctx, q.branch_id);
     const d = today();
+    // blind count: items being counted stay out of the storekeeper's totals (a sum minus the visible items would give them away)
+    const hideCounted = ctx.role === 'manager' ? '' : `AND NOT ${COUNTING_SQL()}`;
     const r = (await this.db.one(
       `SELECT (SELECT count(*)::int FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active) AS items,
-              (SELECT count(*)::int FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active AND ${USABLE_SQL()} < i.minimum_qty) AS low,
-              (SELECT coalesce(sum(round(b.qty * b.unit_cost)),0)::bigint FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND b.qty > 0) AS value,
+              (SELECT count(*)::int FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active AND ${USABLE_SQL()} < i.minimum_qty ${hideCounted}) AS low,
+              (SELECT coalesce(sum(round(b.qty * b.unit_cost)),0)::bigint FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND b.qty > 0 ${hideCounted}) AS value,
               (SELECT count(*)::int FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id WHERE b.tenant_id = $1 AND i.branch_id = ANY($2) AND b.qty > 0 AND b.expiry_date < $3::date) AS expired,
               (SELECT count(*)::int FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id WHERE b.tenant_id = $1 AND i.branch_id = ANY($2) AND b.qty > 0 AND b.expiry_date >= $3::date AND b.expiry_date <= $3::date + 90) AS expiring,
               (SELECT count(*)::int FROM inventory_requests r WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND r.status IN ('submitted','partially_issued')) AS requests,
@@ -77,8 +79,8 @@ export class WarehouseController {
               (SELECT min(b.expiry_date) FROM inventory_batches b WHERE b.item_id = i.id AND b.qty > 0) AS next_expiry,
               (SELECT count(*)::int FROM inventory_batches b WHERE b.item_id = i.id AND b.qty > 0) AS batches
          FROM inventory_items i JOIN branches br ON br.id = i.branch_id WHERE ${where.join(' AND ')}) x
-        WHERE ($${params.length + 1}::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty))
-        ORDER BY active DESC, (usable_qty < minimum_qty) DESC, name LIMIT 1000`, [...params, q.low === '1']);
+        WHERE ($${params.length + 1}::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty AND ($${params.length + 2} OR NOT counting)))
+        ORDER BY active DESC, (usable_qty < minimum_qty AND ($${params.length + 2} OR NOT counting)) DESC, name LIMIT 1000`, [...params, q.low === '1', ctx.role === 'manager']);
     return { data: maskCounting(ctx, rows.map((r) => ({ ...r, value: Number(r.value) })), ['qty', 'usable_qty', 'value', 'batches']) };
   }
 

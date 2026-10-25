@@ -113,6 +113,11 @@ test('B2: ko‘r sanash — sanovchi hisobdagi miqdorni ko‘rmaydi; rahbar faqa
   assert.equal(card.qty, null); assert.equal(card.movements.length, 0); assert.ok(card.batches.every((b) => b.qty === null));
   assert.ok((await doctor.get(`/warehouse/catalog?branch_id=${BC}`)).body.data.filter((r) => r.counting).every((r) => r.available === null));
   assert.equal((await keeper.get(`/inventory/${inv[0].id}/movements`)).body.data.length, 0, 'tarix ham yashirin');
+  // no «kam qoldi» oracle: the storekeeper cannot move the minimum of a counted item, and counted items never show as low to him
+  const mv = await keeper.patch(`/inventory/${inv[0].id}`, { minimum_qty: 999999 });
+  assert.equal(mv.status, 409); assert.equal(mv.body.error.code, 'COUNT_IN_PROGRESS');
+  assert.ok(!(await keeper.get('/inventory?low=1')).body.data.some((r) => r.counting));
+  assert.ok(!(await keeper.get('/warehouse/stock?low=1')).body.data.some((r) => r.counting));
   assert.ok(!(await keeper.get(`/warehouse/movements?item_id=${inv[0].id}`)).body.data.length);
   assert.ok((await manager.get(`/inventory/${inv[0].id}/movements`)).body.data.length > 0, 'rahbar tarixni ko‘radi');
   const page = await keeper.get(`/warehouse/counts/${id}?page=2&page_size=10`);
