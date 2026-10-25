@@ -19,7 +19,8 @@ import { canOpen, SECTION_ROLES, type Section } from '@/lib/routes';
 import { handPatientSearch } from '@/lib/patient-search';
 import { NoAccess } from '@/components/no-access';
 import { BrandLockup } from '@/components/logo';
-import { SecurityAlarm } from '@/components/guard/alarm';
+import { GuardBadge, GuardSoundToggle, SecurityAlarm } from '@/components/guard/alarm';
+import { SosButton } from '@/components/guard/sos';
 
 type Item = { href: Section; label: MessageKey; icon: React.ElementType; roles: readonly Role[]; group: 'work' | 'manage' };
 const entry = (href: Section, label: MessageKey, icon: React.ElementType, group: Item['group']): Item => ({ href, label, icon, roles: SECTION_ROLES[href], group });
@@ -315,6 +316,7 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
                     className={cx('press relative z-raised mb-1 flex min-h-control items-center gap-3 rounded-full px-4 text-base font-semibold [@media(max-height:820px)]:mb-0 [@media(max-height:820px)]:min-h-control-sm [@media(max-height:820px)]:text-body', FOCUS_RING_INSET,
                       active ? 'text-brand-800' : 'text-slate-900 hover:bg-white/45')}>
                     <Icon className={cx('h-[1.375rem] w-[1.375rem] shrink-0', active ? 'text-brand-700' : 'text-slate-700')} />{t(LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}
+                    {me.role === 'guard' && it.href === '/guard' && <GuardBadge className="ml-auto" />}
                   </Link>
                 );
               })}
@@ -340,7 +342,9 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
           </Select>
         ) : <span className="glass-field flex h-control min-w-0 items-center truncate rounded-full px-4 text-body font-semibold text-slate-900">{me.branches[0]?.name}</span>}
         {canSearch && search('relative hidden min-w-[5rem] max-w-[22rem] flex-1 sm:block')}
-        <div className="ml-auto flex min-w-0 shrink-0 items-center"><UserMenu onPassword={() => setPwOpen(true)} /></div>
+        {/* the guard: «Rahbarga xabar» and the alert sound on every page (docs/SECURITY_GUARD.md) */}
+        {me.role === 'guard' && <div className="ml-auto flex shrink-0 items-center gap-1"><GuardSoundToggle /><SosButton compact /></div>}
+        <div className={cx('flex min-w-0 shrink-0 items-center', me.role !== 'guard' && 'ml-auto')}><UserMenu onPassword={() => setPwOpen(true)} /></div>
       </header>
       {sessionEnded ? (
         <div role="alert" className="sticky top-20 z-sticky mx-4 flex rounded-2xl lg:mx-8 flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-900 print:hidden">
@@ -364,7 +368,8 @@ function Shell({ children, reconnecting, sessionEnded }: { children: React.React
           return (
             <Link key={it.href} href={it.href} aria-current={active ? 'page' : undefined} data-active={active}
               className={cx('press relative z-raised min-h-control min-w-[4rem] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 text-xs font-bold sm:min-w-0 sm:flex-row sm:gap-2 sm:px-4 sm:text-body sm:font-semibold', FOCUS_RING_INSET, i === 3 ? 'hidden sm:flex' : 'flex', active ? 'text-brand-800' : 'text-slate-900')}>
-              <Icon className="h-5 w-5 shrink-0" /><span className="max-w-[5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
+              <span className="relative"><Icon className="h-5 w-5 shrink-0" />{me.role === 'guard' && it.href === '/guard' && <GuardBadge className="absolute -right-3 -top-2" />}</span>
+              <span className="max-w-[5rem] truncate sm:max-w-none">{t(TAB_SHORT[LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label] ?? LABEL_OVERRIDE[me.role]?.[it.href] ?? it.label)}</span>
             </Link>
           );
         })}

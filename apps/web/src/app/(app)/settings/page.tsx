@@ -40,7 +40,7 @@ export default function SettingsPage() {
 }
 
 /** Action groups for the filter: the API filters by an action-code prefix (`?action=payment.`). */
-const AUDIT_GROUPS = ['appointment.', 'patient.', 'order.', 'payment.', 'refund.', 'invoice.', 'cash_shift.', 'expense.', 'clinical_note.', 'diagnostic_report.', 'lab', 'document.', 'inventory.', 'staff.', 'doctor.', 'auth.', 'service.', 'room.', 'branch.', 'settings.', 'telegram.', 'sms.', 'camera.', 'ai.', 'demo.'] as const;
+const AUDIT_GROUPS = ['appointment.', 'patient.', 'order.', 'payment.', 'refund.', 'invoice.', 'cash_shift.', 'expense.', 'clinical_note.', 'diagnostic_report.', 'lab', 'document.', 'inventory.', 'staff.', 'doctor.', 'auth.', 'service.', 'room.', 'branch.', 'settings.', 'telegram.', 'sms.', 'camera.', 'security.', 'ai.', 'demo.'] as const;
 const groupKey = (g: string) => `admin.auditGroup.${g.replace(/\.$/, '')}` as MessageKey;
 
 function Audit() {

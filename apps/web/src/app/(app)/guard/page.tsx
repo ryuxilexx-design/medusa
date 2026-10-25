@@ -1,38 +1,40 @@
 'use client';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Camera, CameraOff, Cctv, CheckCircle2, Contact, KeyRound, ShieldAlert, UserCheck, Users } from 'lucide-react';
+import { Camera, CameraOff, Cctv, CheckCircle2, Contact, KeyRound, NotebookPen, ShieldAlert, UserCheck, Users } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { fmtDateTime, fmtTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Card, cx, EmptyState, ErrorState, LinkButton, LoadingRows, PageHeader, Segmented, StatCard } from '@/components/ui';
-import { AlertFeed, useAlerts } from '@/components/guard/alerts';
-import { SosButton } from '@/components/guard/sos';
+import { Alert, Badge, Card, cx, EmptyState, ErrorState, LinkButton, LoadingRows, PageHeader, Segmented, StatCard, TextLink } from '@/components/ui';
+import { AlertFeed, useAlertsFeed } from '@/components/guard/alerts';
 import { ic, useNow } from '@/components/guard/common';
 
 type Overview = { data: {
-  counters: { open_alerts: number; handled_today: number; people_today: number; visitors_inside: number; keys_out: number; open_incidents: number; staff_on_site: number; expected_today: number };
+  counters: { open_alerts: number; overdue_alerts: number; handled_today: number; people_today: number; visitors_inside: number; keys_out: number; open_incidents: number; staff_on_site: number; expected_today: number };
   arrivals_by_hour: { hour: number; n: number; came: number }[];
   cameras: { id: string; name: string; location: string | null; branch_name: string; last_seen_at: string | null; tamper: boolean; health: 'online' | 'silent' | 'off' | 'never' }[];
   recent_faces: { at: string; camera_name: string; subject: 'staff' | 'patient'; name?: string; title?: string | null; role?: string }[];
 } };
 type Shift = { data: { shift: { id: string; number: number; opened_at: string } | null } };
 
-/** The guard's home: what needs attention now (alerts first), the post's numbers, cameras and today's flow (counts only). */
+/**
+ * The guard's home: what needs attention now (alerts first, overdue on top, «Yana N ta» — never a silent cut-off), the
+ * post's numbers, cameras and today's flow (counts only). «Rahbarga xabar» lives in the top bar of every guard page.
+ */
 export default function GuardPanel() {
   const t = useT();
   const { me, branchId } = useSession();
   const ov = useQuery({ queryKey: ['security', 'overview', branchId], queryFn: () => api<Overview>(`/security/overview${qs({ branch_id: branchId })}`).then((r) => r.data), refetchInterval: 30_000 });
   const shift = useQuery({ queryKey: ['security', 'shift', branchId], queryFn: () => api<Shift>(`/security/shifts/current${qs({ branch_id: branchId })}`).then((r) => r.data) });
   const [view, setView] = useState<'open' | 'today'>('open');
-  const alerts = useAlerts(view === 'open' ? { state: 'open' } : { from: me.today, to: me.today });
+  const alerts = useAlertsFeed(view === 'open' ? { state: 'open' } : { from: me.today, to: me.today });
   const c = ov.data?.counters;
   const s = shift.data?.shift;
   return (
     <>
-      <PageHeader title={t('guard.panel.title')} subtitle={s ? t('guard.panel.shiftOpen', { n: s.number, time: fmtTime(s.opened_at) }) : t('guard.panel.subtitle')} actions={<SosButton />} />
+      <PageHeader title={t('guard.panel.title')} subtitle={s ? t('guard.panel.shiftOpen', { n: s.number, time: fmtTime(s.opened_at) }) : t('guard.panel.subtitle')} />
       {shift.data && !s && (
         <div className="mb-5">
           <Alert tone="yellow" title={t('guard.panel.noShift')}>
@@ -43,17 +45,24 @@ export default function GuardPanel() {
       {!(ov.isError && !c) && (
         <div className="mb-5 grid grid-cols-1 gap-4 min-[360px]:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={<ShieldAlert />} tone={c?.open_alerts ? 'danger' : 'success'} label={t('guard.stat.openAlerts')} loading={!c} value={c?.open_alerts}
-            sub={c && `${t('guard.stat.handledToday')}: ${c.handled_today}`} />
+            sub={c && (c.overdue_alerts ? <span className="font-bold text-red-700">{t('guard.stat.overdue', { n: c.overdue_alerts })}</span> : `${t('guard.stat.handledToday')}: ${c.handled_today}`)} />
           <StatCard icon={<UserCheck />} label={t('guard.stat.onSite')} loading={!c} value={c?.staff_on_site} href="/on-site" />
           <StatCard icon={<Contact />} label={t('guard.stat.visitors')} loading={!c} value={c?.visitors_inside} href="/visitors" />
-          <StatCard icon={<KeyRound />} label={t('guard.stat.keysOut')} loading={!c} value={c?.keys_out} href="/keys" sub={c && c.open_incidents ? `${t('guard.stat.openIncidents')}: ${c.open_incidents}` : undefined} />
+          <StatCard icon={<KeyRound />} label={t('guard.stat.keysOut')} loading={!c} value={c?.keys_out} href="/keys" />
         </div>
+      )}
+      {/* open incidents: their own line next to the alerts, a link to the log (not a footnote under «keys») */}
+      {!!c?.open_incidents && (
+        <p className="-mt-2 mb-4 flex flex-wrap items-center gap-x-2 text-body font-semibold text-amber-900" data-testid="open-incidents">
+          <NotebookPen className="h-5 w-5 shrink-0" aria-hidden="true" />{t('guard.shift.incidentsOpen', { n: c.open_incidents })}
+          <TextLink href="/incidents">{t('nav.incidents')}</TextLink>
+        </p>
       )}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <Card padded={false} className="min-w-0 self-start xl:col-span-2" title={t('guard.alerts.title')}
           actions={<Segmented label={t('guard.alerts.title')} size="compact" value={view} onChange={setView}
             options={[{ value: 'open', label: t('guard.alerts.open') }, { value: 'today', label: t('guard.alerts.today') }]} />}>
-          <AlertFeed q={alerts} mode="guard" emptyTitle={view === 'open' ? t('guard.alerts.empty') : t('guard.alerts.emptyPeriod')} />
+          <AlertFeed q={alerts.feed} more={alerts.more} mode="guard" emptyTitle={view === 'open' ? t('guard.alerts.empty') : t('guard.alerts.emptyPeriod')} />
         </Card>
         <div className="min-w-0 space-y-5">
           <Cameras q={ov} />

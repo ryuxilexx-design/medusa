@@ -93,7 +93,8 @@ export class AiController {
   status(@CurrentCtx() ctx: Ctx) {
     // the doctor's AI buttons follow the clinical mode: a provider that may not receive this clinic's text counts as off
     const m = this.ai.clinicalMode(ctx.tenantId);
-    return { data: { mode: m, provider: m === 'live' ? config.ai.provider : null, model: m === 'live' ? config.ai.model : null, sample_text: m === 'sample' ? SAMPLE_NOTE_TEXT : null,
+    // the sample clinical note is for the doctor's AI button only — no other role ever receives clinical-looking text
+    return { data: { mode: m, provider: m === 'live' ? config.ai.provider : null, model: m === 'live' ? config.ai.model : null, sample_text: m === 'sample' && ctx.role === 'doctor' ? SAMPLE_NOTE_TEXT : null,
       reason: reasonText(ctx, this.ai.clinicalOffReason(ctx.tenantId)) } };
   }
 

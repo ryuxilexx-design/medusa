@@ -2,7 +2,7 @@
 // Staff on site today: the entrance camera's matches of staff codes (consented) and the guard's manual marks.
 // Doctors are compared with their schedule. Never a patient.
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, CheckCircle2, Clock, Hand, Hourglass, LogOut, Moon, UserX } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
@@ -10,7 +10,7 @@ import { fmtTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, cx, EmptyState, ErrorState, Field, LoadingRows, Modal, ModalCancel, Segmented, type Tone, useToast } from '@/components/ui';
-import { ic, StaffSelect, useWriteBranch } from './common';
+import { ic, StaffSelect, useGuardedMutation, useWriteBranch } from './common';
 
 export type PresenceRow = {
   membership_id: string; full_name: string; title: string | null; role: string; specialty: string | null; status: 'in' | 'left' | 'expected' | 'absent' | 'off';
@@ -62,14 +62,14 @@ export function PresenceMarkModal({ open, onClose }: { open: boolean; onClose: (
   const [kind, setKind] = useState<'in' | 'out'>('in');
   const [err, setErr] = useState<string | undefined>();
   const close = () => { setWho(''); setKind('in'); setErr(undefined); onClose(); };
-  const m = useMutation({
+  const m = useGuardedMutation({
     mutationFn: () => api('/security/presence', { method: 'POST', body: { branch_id: branchId || null, membership_id: who, kind } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['security'] }); toast.success(t('guard.site.marked')); close(); },
     onError: (e) => { setErr(e instanceof ApiError ? e.fields?.membership_id : undefined); toast.error(e); },
   });
   return (
     <Modal open={open} onClose={close} title={t('guard.site.markTitle')}
-      footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} onClick={() => { if (!who) { setErr(t('guard.staffPick')); return; } m.mutate(); }}>{t('common.save')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} onClick={() => { if (!who) { setErr(t('guard.staffPick')); return; } m.run(); }}>{t('common.save')}</Button></>}>
       <div className="space-y-4">
         {!branchId && <Alert tone="yellow">{t('guard.branchPick')}</Alert>}
         <Field label={t('guard.col.who')} required error={err}>{(id) => <StaffSelect id={id} value={who} onChange={setWho} invalid={!!err} />}</Field>

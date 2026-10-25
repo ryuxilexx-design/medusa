@@ -63,11 +63,21 @@ try {
         await m.p.goto(`${BASE}/security?tab=${tab}`, { waitUntil: 'networkidle0' });
         await snap(m.p, `${size}-${locale}-security-${tab}`, `${size} ${locale} security ${tab}`);
       }
+      // the manager's force-close dialog (opened and closed, nothing saved)
+      if (await m.p.evaluate(() => { const b = [...document.querySelectorAll('[data-testid="shift-force"]')].find((x) => x.offsetParent !== null); b?.click(); return !!b; })) {
+        await m.p.waitForSelector('[role=dialog]'); await sleep(300);
+        issues.push(...await audit(m.p, `${size} ${locale} force-close`));
+        await m.p.screenshot({ path: `${DIR}${size}-${locale}-modal-force-close.png` });
+        await m.p.keyboard.press('Escape'); await sleep(200);
+      }
+      await m.p.goto(`${BASE}/dashboard`, { waitUntil: 'networkidle0' });
+      await snap(m.p, `${size}-${locale}-manager-alarm`, `${size} ${locale} manager alarm`);
       await m.ctx.close();
     }
   }
   const pr = await page('Qorovul', 1366, 768, 'uz');
-  const id = await pr.p.evaluate(async () => (await (await fetch('/api/v1/security/shifts?page_size=1')).json()).data[0]?.id);
+  // a closed shift: its hand-over snapshot (the open one prints «now»)
+  const id = await pr.p.evaluate(async () => (await (await fetch('/api/v1/security/shifts?page_size=10')).json()).data.find((s) => s.closed_at)?.id);
   if (id) { await pr.p.goto(`${BASE}/print/guard-shift/${id}`, { waitUntil: 'networkidle0' }); await settle(pr.p); await pr.p.screenshot({ path: `${DIR}print-shift.png`, fullPage: true }); }
   await pr.ctx.close();
 } finally { await b.close(); }

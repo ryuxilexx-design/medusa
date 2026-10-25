@@ -29,7 +29,10 @@ export class ReferenceController {
   @Get('branches')
   async branches(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const all = q.active === 'all' && ctx.role === 'manager';
-    return { data: await this.db.rows(`SELECT id, name, code, address, phone, timezone, active FROM branches WHERE tenant_id = $1 ${all ? '' : 'AND active'} ORDER BY active DESC, code LIMIT 200`, [ctx.tenantId]) };
+    // the security guard sees only the branches of their own post (docs/SECURITY_GUARD.md)
+    const own = ctx.role === 'guard';
+    return { data: await this.db.rows(`SELECT id, name, code, address, phone, timezone, active FROM branches WHERE tenant_id = $1 ${all ? '' : 'AND active'} ${own ? 'AND id = ANY($2::uuid[])' : ''}
+      ORDER BY active DESC, code LIMIT 200`, own ? [ctx.tenantId, ctx.branchIds] : [ctx.tenantId]) };
   }
 
   @Roles('manager') @Post('branches')
@@ -82,8 +85,10 @@ export class ReferenceController {
   @Get('rooms')
   async rooms(@CurrentCtx() ctx: Ctx, @Query() q: any) {
     const all = q.active === 'all' && ctx.role === 'manager';
+    const own = ctx.role === 'guard'; // the guard: only the rooms of their own branches (keys, incident places)
     return { data: await this.db.rows(`SELECT r.id, r.name, r.purpose, r.branch_id, r.active, b.name AS branch_name FROM rooms r JOIN branches b ON b.id = r.branch_id
-      WHERE r.tenant_id = $1 ${all ? '' : 'AND r.active AND b.active'} ORDER BY r.active DESC, r.name LIMIT 500`, [ctx.tenantId]) };
+      WHERE r.tenant_id = $1 ${all ? '' : 'AND r.active AND b.active'} ${own ? 'AND r.branch_id = ANY($2::uuid[])' : ''} ORDER BY r.active DESC, r.name LIMIT 500`,
+      own ? [ctx.tenantId, ctx.branchIds] : [ctx.tenantId]) };
   }
 
   @Roles('manager') @Post('rooms')

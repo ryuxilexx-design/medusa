@@ -2,7 +2,7 @@
 // The visitor log for non-patients (couriers, suppliers, repair workers, inspectors): who, from where, why, to whom,
 // in and out. Never a passport or ID number; names are cleared after VISITOR_RETENTION_DAYS.
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DoorOpen, LogOut, UserPlus } from 'lucide-react';
 import { VISITOR_PURPOSES, VISITOR_RETENTION_DAYS, type MessageKey, type VisitorPurpose } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
@@ -10,11 +10,11 @@ import { fmtDateTime, fmtTime, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, Chip, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Pagination, Table, Td, Th, useToast } from '@/components/ui';
-import { since, StaffSelect, useNow, useWriteBranch } from './common';
+import { fmtWhen, since, StaffSelect, useGuardedMutation, useNow, useWriteBranch } from './common';
 
 export type Visitor = {
   id: string; branch_name: string; full_name: string | null; organisation: string | null; purpose: VisitorPurpose; purpose_note: string | null;
-  host_name: string | null; pass_no: string | null; in_at: string; out_at: string | null; recorded_by_name: string; purged_at: string | null;
+  host_name: string | null; pass_no: string | null; in_at: string; out_at: string | null; auto_closed: boolean; recorded_by_name: string; purged_at: string | null;
 };
 
 export function useVisitorsInside() {
@@ -26,8 +26,8 @@ function useOut() {
   const qc = useQueryClient();
   const toast = useToast();
   const t = useT();
-  return useMutation({
-    mutationFn: (id: string) => api(`/security/visitors/${id}/out`, { method: 'POST' }),
+  return useGuardedMutation<unknown, string>({
+    mutationFn: (id) => api(`/security/visitors/${id}/out`, { method: 'POST' }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['security'] }); toast.success(t('guard.vis.outDone')); },
     onError: (e) => { toast.error(e); if (e instanceof ApiError && e.status === 409) qc.invalidateQueries({ queryKey: ['security'] }); },
   });
@@ -53,12 +53,12 @@ export function VisitorsInside() {
             </div>
             <div className="mt-0.5 text-sm text-slate-700">{[v.organisation, t(`guard.purpose.${v.purpose}` as MessageKey), v.purpose_note].filter(Boolean).join(' · ')}</div>
             <div className="mt-0.5 flex flex-wrap gap-x-3 text-small text-slate-600">
-              <span className="tabular-nums">{t('guard.vis.inAt', { time: fmtTime(v.in_at) })}</span>
+              <span className="tabular-nums">{t('guard.vis.inAt', { time: fmtWhen(v.in_at, now.toISOString()) })}</span>
               <span>{t('guard.vis.for', { time: since(v.in_at, now) })}</span>
               {v.host_name && <span>{t('guard.vis.host')}: {v.host_name}</span>}
             </div>
           </div>
-          <Button icon={<LogOut className="h-5 w-5" />} className="w-full sm:w-auto" loading={out.isPending && out.variables === v.id} onClick={() => out.mutate(v.id)}>{t('guard.vis.out')}</Button>
+          <Button icon={<LogOut className="h-5 w-5" />} className="w-full sm:w-auto" loading={out.isPending && out.variables === v.id} onClick={() => out.run(v.id)}>{t('guard.vis.out')}</Button>
         </li>
       ))}
     </ul>
@@ -92,7 +92,9 @@ export function VisitorLog({ from, to, page, onPage }: { from: string; to: strin
             <Td className="hidden md:table-cell">{t(`guard.purpose.${v.purpose}` as MessageKey)}{v.purpose_note && <div className="text-small text-slate-600">{v.purpose_note}</div>}</Td>
             <Td className="hidden lg:table-cell">{v.host_name ?? '—'}</Td>
             <Td className="whitespace-nowrap tabular-nums">{multiDay || localDate(v.in_at) !== me.today ? fmtDateTime(v.in_at) : fmtTime(v.in_at)}</Td>
-            <Td className="whitespace-nowrap tabular-nums">{v.out_at ? fmtTime(v.out_at) : <Badge tone="yellow">{t('guard.vis.stillInside')}</Badge>}</Td>
+            <Td className="whitespace-nowrap tabular-nums">{v.out_at
+              ? <>{fmtWhen(v.out_at, v.in_at)}{v.auto_closed && <div className="text-small text-slate-600">{t('guard.vis.autoClosed')}</div>}</>
+              : <Badge tone="yellow">{t('guard.vis.stillInside')}</Badge>}</Td>
           </tr>
         ))}</tbody>
       </Table>
@@ -111,7 +113,7 @@ export function VisitorFormModal({ open, onClose }: { open: boolean; onClose: ()
   const [errors, setErrors] = useState<Record<string, string>>({});
   const set = (k: keyof typeof v) => (val: string) => setV((s) => ({ ...s, [k]: val }));
   const reset = () => { setV({ full_name: '', organisation: '', purpose: '', purpose_note: '', host: '', pass_no: '' }); setErrors({}); };
-  const m = useMutation({
+  const m = useGuardedMutation({
     mutationFn: () => api('/security/visitors', { method: 'POST', body: {
       branch_id: branchId || null, full_name: v.full_name.trim(), organisation: v.organisation.trim() || null, purpose: v.purpose,
       purpose_note: v.purpose_note.trim() || null, host_membership_id: v.host || null, pass_no: v.pass_no.trim() || null,
@@ -124,7 +126,7 @@ export function VisitorFormModal({ open, onClose }: { open: boolean; onClose: ()
     if (v.full_name.trim().length < 2) err.full_name = t('api.v.min', { label: t('guard.vis.name'), min: 2 });
     if (!v.purpose) err.purpose = t('api.wh.pickPurpose');
     setErrors(err);
-    if (!Object.keys(err).length) m.mutate();
+    if (!Object.keys(err).length) m.run();
   };
   return (
     <Modal open={open} onClose={() => { reset(); onClose(); }} dirty={!!(v.full_name || v.organisation || v.purpose_note)} width="max-w-xl" title={t('guard.vis.addTitle')}

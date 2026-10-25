@@ -2,19 +2,20 @@
 import { Suspense, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Contact, Footprints, KeyRound, NotebookPen, Printer, ShieldAlert, Timer } from 'lucide-react';
+import { Contact, Footprints, KeyRound, NotebookPen, ShieldAlert, Timer } from 'lucide-react';
 import { INCIDENT_CATEGORIES, type MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { addDays, duration, fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Badge, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Pagination, Segmented, StatCard, Table, Tabs, Td, TextLink, Th, Toolbar } from '@/components/ui';
+import { Badge, Card, cx, EmptyState, ErrorState, LoadingRows, PageHeader, Pagination, Segmented, StatCard, Table, Tabs, Td, Th, Toolbar } from '@/components/ui';
 import { CsvLink, PeriodPicker } from '@/components/finance-extra';
 import { AlertFeed, useAlerts } from '@/components/guard/alerts';
 import { IncidentList, useIncidents } from '@/components/guard/incidents';
 import { VisitorLog } from '@/components/guard/visitors';
 import { KeyLog, KeysNow } from '@/components/guard/keys';
 import { CheckpointsManager, RoundsHistory } from '@/components/guard/patrol';
+import { ShiftList, type ShiftRow } from '@/components/guard/shifts';
 
 type Tab = 'overview' | 'alerts' | 'incidents' | 'visitors' | 'keys' | 'patrol' | 'shifts';
 const TABS: Tab[] = ['overview', 'alerts', 'incidents', 'visitors', 'keys', 'patrol', 'shifts'];
@@ -80,7 +81,7 @@ type Stats = { data: {
   incidents: { category: string; severity: string; source: string; n: number; open: number }[];
   visitors: { total: number; avg_minutes: number | null };
   keys: { issued: number; late: number; out_now: number };
-  patrol: { shifts: { id: string; number: number; guard_name: string; opened_at: string; closed_at: string | null; hours: number; expected: number; done: number; missed: number; incomplete: number; problems: number }[]; expected: number; done: number; missed: number; incomplete: number; problems: number };
+  patrol: { shifts: { id: string; number: number; guard_name: string; opened_at: string; closed_at: string | null; stale: boolean; forced: boolean; hours: number; expected: number; done: number; missed: number; incomplete: number; problems: number }[]; expected: number; done: number; missed: number; incomplete: number; problems: number };
 } };
 
 function Overview({ from, to, period }: { from: string; to: string; period: React.ReactNode }) {
@@ -102,7 +103,7 @@ function Overview({ from, to, period }: { from: string; to: string; period: Reac
             <StatCard icon={<Timer />} label={t('guard.sec.median')} loading={!s} value={s && (s.alerts.median_response_sec == null ? '—' : duration(s.alerts.median_response_sec))}
               sub={s?.alerts.max_response_sec != null ? t('guard.sec.medianSub', { time: duration(s.alerts.max_response_sec) }) : undefined} />
             <StatCard icon={<NotebookPen />} tone={incOpen ? 'danger' : 'default'} label={t('guard.sec.incidents')} loading={!s} value={incTotal} sub={s && t('guard.sec.incidentsSub', { n: incOpen })} />
-            <StatCard icon={<Contact />} label={t('guard.sec.visitors')} loading={!s} value={s?.visitors.total} sub={s?.visitors.avg_minutes != null ? t('guard.sec.visitorsSub', { time: duration(s.visitors.avg_minutes * 60) }) : undefined} />
+            <StatCard icon={<Contact />} label={t('guard.sec.tab.visitors')} loading={!s} value={s?.visitors.total} sub={s?.visitors.avg_minutes != null ? t('guard.sec.visitorsSub', { time: duration(s.visitors.avg_minutes * 60) }) : undefined} />
             <StatCard icon={<Footprints />} tone={s?.patrol.missed ? 'danger' : 'success'} label={t('guard.sec.patrolMissed')} loading={!s} value={s?.patrol.missed} sub={s && t('guard.sec.patrolSub', { done: s.patrol.done, expected: s.patrol.expected })} />
           </div>
           <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -120,20 +121,37 @@ function Overview({ from, to, period }: { from: string; to: string; period: Reac
             </Card>
           </div>
           <Card padded={false} title={t('guard.pat.compliance')}>
-            {!s ? <LoadingRows rows={4} /> : !s.patrol.shifts.length ? <EmptyState compact title={t('guard.shift.historyEmpty')} /> : (
-              <Table>
-                <thead><tr><Th>{t('guard.sec.shift')}</Th><Th className="hidden sm:table-cell">{t('guard.sec.guard')}</Th><Th right className="hidden sm:table-cell">{t('guard.pat.expected')}</Th><Th right>{t('guard.pat.done')}</Th><Th right>{t('guard.pat.missed')}</Th><Th right className="hidden md:table-cell">{t('guard.pat.incomplete')}</Th><Th right className="hidden md:table-cell">{t('guard.pat.problem')}</Th></tr></thead>
+            {!s ? <LoadingRows rows={4} /> : !s.patrol.shifts.length ? <EmptyState compact title={t('guard.shift.historyEmpty')} /> : (<>
+              {/* a phone: one stacked row per shift, every figure visible (no hidden columns) */}
+              <ul className="divide-y divide-slate-100 sm:hidden" data-testid="compliance-stacked">
+                {s.patrol.shifts.map((r) => (
+                  <li key={r.id} className={cx('px-4 py-3', r.missed ? 'bg-red-50/40' : '')}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                      <span className="font-bold text-slate-900">№{r.number} · {r.guard_name}</span>
+                      <span className="text-small tabular-nums text-slate-600">{fmtDateTime(r.opened_at)} · {t('guard.sec.hours', { n: r.hours })}</span>
+                    </div>
+                    <dl className="mt-1 grid grid-cols-3 gap-x-3 gap-y-0.5 text-small">
+                      {([['expected', r.expected], ['done', r.done], ['missed', r.missed], ['incomplete', r.incomplete], ['problem', r.problems]] as const).map(([k, v]) => (
+                        <div key={k} className="flex min-w-0 justify-between gap-1"><dt className="truncate text-slate-600">{t(`guard.pat.${k}` as MessageKey)}</dt>
+                          <dd className={cx('font-semibold tabular-nums', k === 'missed' && v ? 'text-red-700' : 'text-slate-900')}>{v}</dd></div>
+                      ))}
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+              <div className="hidden sm:block"><Table>
+                <thead><tr><Th>{t('guard.sec.shift')}</Th><Th>{t('guard.sec.guard')}</Th><Th right>{t('guard.pat.expected')}</Th><Th right>{t('guard.pat.done')}</Th><Th right>{t('guard.pat.missed')}</Th><Th right>{t('guard.pat.incomplete')}</Th><Th right>{t('guard.pat.problem')}</Th></tr></thead>
                 <tbody>{s.patrol.shifts.map((r) => (
                   <tr key={r.id} className={r.missed ? 'bg-red-50/40' : ''}>
-                    <Td className="tabular-nums"><span className="whitespace-nowrap">№{r.number} · {fmtDateTime(r.opened_at)}</span><div className="text-small text-slate-600">{t('guard.sec.hours', { n: r.hours })}<span className="sm:hidden"> · {r.guard_name}</span></div></Td>
-                    <Td className="hidden sm:table-cell">{r.guard_name}</Td>
-                    <Td right className="hidden sm:table-cell">{r.expected}</Td><Td right className="font-semibold">{r.done}</Td>
+                    <Td className="tabular-nums"><span className="whitespace-nowrap">№{r.number} · {fmtDateTime(r.opened_at)}</span><div className="text-small text-slate-600">{t('guard.sec.hours', { n: r.hours })}{r.stale && <Badge tone="red" className="ml-2">{t('guard.shift.staleBadge')}</Badge>}{r.forced && <Badge tone="violet" className="ml-2">{t('guard.shift.forced')}</Badge>}</div></Td>
+                    <Td>{r.guard_name}</Td>
+                    <Td right>{r.expected}</Td><Td right className="font-semibold">{r.done}</Td>
                     <Td right className={r.missed ? 'font-bold text-red-700' : 'text-slate-600'}>{r.missed}</Td>
-                    <Td right className="hidden md:table-cell">{r.incomplete}</Td><Td right className="hidden md:table-cell">{r.problems}</Td>
+                    <Td right>{r.incomplete}</Td><Td right>{r.problems}</Td>
                   </tr>
                 ))}</tbody>
-              </Table>
-            )}
+              </Table></div>
+            </>)}
           </Card>
         </>
       )}
@@ -159,7 +177,7 @@ function Shifts({ from, to, period, page, onPage }: { from: string; to: string; 
   const { branchId } = useSession();
   const q = useQuery({
     queryKey: ['security', 'shifts', 'list', branchId, from, to, page],
-    queryFn: () => api<{ data: { id: string; number: number; branch_name: string; guard_name: string; opened_at: string; closed_at: string | null; rounds: number }[]; meta: { total: number; page_size: number } }>(`/security/shifts${qs({ branch_id: branchId, from, to, page, page_size: 25 })}`),
+    queryFn: () => api<{ data: ShiftRow[]; meta: { total: number; page_size: number } }>(`/security/shifts${qs({ branch_id: branchId, from, to, page, page_size: 25 })}`),
     placeholderData: (p) => p,
   });
   return (
@@ -167,18 +185,7 @@ function Shifts({ from, to, period, page, onPage }: { from: string; to: string; 
       <Toolbar>{period}</Toolbar>
       {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !q.data ? <LoadingRows rows={4} /> : !q.data.data.length ? <EmptyState compact title={t('guard.shift.historyEmpty')} /> : (
         <>
-          <Table>
-            <thead><tr><Th>{t('guard.col.number')}</Th><Th>{t('guard.sec.guard')}</Th><Th>{t('guard.col.opened')}</Th><Th>{t('guard.col.closed')}</Th><Th className="hidden sm:table-cell">{t('guard.col.round')}</Th><Th right><span className="sr-only">{t('guard.col.actions')}</span></Th></tr></thead>
-            <tbody>{q.data.data.map((r) => (
-              <tr key={r.id}>
-                <Td className="tabular-nums">{r.number}</Td><Td>{r.guard_name}</Td>
-                <Td className="whitespace-nowrap tabular-nums">{fmtDateTime(r.opened_at)}</Td>
-                <Td className="whitespace-nowrap tabular-nums">{r.closed_at ? fmtDateTime(r.closed_at) : <Badge tone="blue">{t('guard.shift.openNow')}</Badge>}</Td>
-                <Td className="hidden sm:table-cell">{t('guard.shift.rounds', { n: r.rounds })}</Td>
-                <Td right><TextLink href={`/print/guard-shift/${r.id}`} target="_blank" icon={<Printer className="h-4 w-4" />}>{t('guard.shift.report')}</TextLink></Td>
-              </tr>
-            ))}</tbody>
-          </Table>
+          <ShiftList rows={q.data.data} manager />
           {q.data.meta.total > q.data.meta.page_size && <Pagination page={page} pageSize={q.data.meta.page_size} total={q.data.meta.total} onPage={onPage} />}
         </>
       )}

@@ -288,6 +288,11 @@ test('obxod: rahbar nuqta qo‘shadi; qorovul boshlaydi, belgilaydi (muammo → 
   assert.equal((await manager.patch(`/security/checkpoints/${cp.body.data.id}`, { active: false })).status, 200);
   assert.equal((await manager.patch(`/security/checkpoints/${cp.body.data.id}`, { active: true })).status, 200);
   assert.equal((await t2.patch(`/security/checkpoints/${cp.body.data.id}`, { active: false })).status, 404);
+  // a round needs the guard's own open post shift
+  const noShift = await guard.post('/security/rounds', {});
+  assert.equal(noShift.status, 409); assert.equal(noShift.body.error.code, 'SHIFT_REQUIRED');
+  const sh = await guard.post('/security/shifts', {});
+  assert.equal(sh.status, 201);
   const start = await guard.post('/security/rounds', {});
   assert.equal(start.status, 201);
   assert.equal((await guard.post('/security/rounds', {})).status, 409);
@@ -295,6 +300,16 @@ test('obxod: rahbar nuqta qo‘shadi; qorovul boshlaydi, belgilaydi (muammo → 
   assert.equal(cur.round.id, start.body.data.id);
   const pts = cur.checkpoints;
   assert.ok(pts.length >= 8);
+  // the list is frozen at the start: a point switched off now stays in the round, a point added now is not part of it
+  assert.equal((await manager.patch(`/security/checkpoints/${cp.body.data.id}`, { active: false })).status, 200);
+  const late = await manager.post('/security/checkpoints', { branch_id: BC, name: 'Kech qo‘shilgan nuqta' });
+  const frozen = (await guard.get('/security/rounds/current')).body.data.checkpoints;
+  assert.equal(frozen.length, pts.length, 'ro‘yxat o‘zgarmadi');
+  assert.ok(frozen.some((p) => p.id === cp.body.data.id) && !frozen.some((p) => p.id === late.body.data.id));
+  const outside = await guard.post(`/security/rounds/${cur.round.id}/marks`, { checkpoint_id: late.body.data.id, result: 'ok' });
+  assert.equal(outside.status, 422, 'ro‘yxatdan tashqari nuqta');
+  assert.equal((await manager.patch(`/security/checkpoints/${late.body.data.id}`, { active: false })).status, 200);
+  assert.equal((await manager.patch(`/security/checkpoints/${cp.body.data.id}`, { active: true })).status, 200);
   assert.equal((await guard.post(`/security/rounds/${cur.round.id}/marks`, { checkpoint_id: pts[0].id, result: 'ok' })).status, 201);
   assert.equal((await guard.post(`/security/rounds/${cur.round.id}/marks`, { checkpoint_id: pts[0].id, result: 'ok' })).status, 409);
   assert.equal((await guard.post(`/security/rounds/${cur.round.id}/marks`, { checkpoint_id: pts[1].id, result: 'problem' })).status, 422, 'muammo izohsiz');
@@ -309,6 +324,7 @@ test('obxod: rahbar nuqta qo‘shadi; qorovul boshlaydi, belgilaydi (muammo → 
   assert.equal((await guard.post(`/security/rounds/${cur.round.id}/finish`)).status, 409);
   const hist = (await manager.get(`/security/rounds?from=${today}&to=${today}`)).body.data;
   assert.ok(hist.some((r) => r.id === cur.round.id && r.problems === 1));
+  assert.equal((await guard.post(`/security/shifts/${sh.body.data.id}/close`, { handover_note: 'Obxod sinovi tugadi' })).status, 200);
 });
 
 test('smena: ochish, ikkinchi ochish 409, topshiriqsiz yopib bo‘lmaydi, keyingi qorovul topshiriqni ko‘radi, A4 hisobot', async () => {
@@ -390,4 +406,237 @@ test('faqat qo‘shiladi: hodisa, yozuv, harakat, kalit, belgi, obxod va smena t
   }
   // the role CHECK knows the guard
   await assert.rejects(pool.query(`UPDATE memberships SET role = 'janitor' WHERE id = $1`, [GUARD_IDS.bahodir]), /memberships_role_check/);
+});
+
+// ---------------------------------------------------------------- audit fixes (migration 040)
+
+test('tashlab ketilgan smena: begona qorovul yopolmaydi, rahbar sabab bilan majburan yopadi (auditda matn yo‘q); «stale» belgisi; obxod kutilishi 26 soatda to‘xtaydi', async () => {
+  const s = await one(`INSERT INTO guard_shifts (tenant_id, branch_id, number, guard_membership_id, guard_name, opened_at)
+     VALUES ($1,$2,90001,$3,'Dilshod Rahmonov', demo_now() - interval '30 hours') RETURNING id`, [SEED_IDS.tenant, BC, GUARD_IDS.dilshod]);
+  const cur = (await guard2.get('/security/shifts/current')).body.data;
+  assert.equal(cur.shift.id, s.id); assert.equal(cur.shift.stale, true, 'qorovulga «stale»');
+  const list = (await manager.get(`/security/shifts?from=${today}&to=${today}`)).body.data;
+  assert.equal(list[0].id, s.id, 'eskirgan smena ro‘yxat boshida'); assert.equal(list[0].stale, true);
+  const from = new Date(Date.parse(today) - 2 * 86400_000).toISOString().slice(0, 10);
+  const st = (await manager.get(`/security/stats?from=${from}&to=${today}`)).body.data.patrol.shifts.find((x) => x.id === s.id);
+  assert.ok(st.hours <= 26 && st.expected === Math.floor(26 / 3), JSON.stringify(st));
+  assert.equal((await guard.post(`/security/shifts/${s.id}/close`, { handover_note: 'Begona smena' })).status, 403);
+  assert.equal((await guard.post(`/security/shifts/${s.id}/force-close`, { reason: 'Qorovul ketib qolgan' })).status, 403, 'faqat rahbar');
+  assert.equal((await manager.post(`/security/shifts/${s.id}/force-close`, {})).status, 422, 'sababsiz');
+  assert.equal((await t2.post(`/security/shifts/${s.id}/force-close`, { reason: 'Begona klinika' })).status, 404);
+  const f = await manager.post(`/security/shifts/${s.id}/force-close`, { reason: 'Qorovul smenani topshirmay ketgan, telefoni o‘chiq' });
+  assert.equal(f.status, 200);
+  assert.equal((await manager.post(`/security/shifts/${s.id}/force-close`, { reason: 'Yana bir marta' })).status, 409);
+  const row = await one(`SELECT closed_at, closed_by, forced, force_reason, handover_note, open_items FROM guard_shifts WHERE id = $1`, [s.id]);
+  assert.ok(row.closed_at && row.forced && row.closed_by === M.manager && row.handover_note === null && row.open_items, JSON.stringify(row));
+  const au = await one(`SELECT summary FROM audit_logs WHERE action = 'security.shift_force_close' AND resource_id = $1`, [s.id]);
+  assert.ok(au && !au.summary.includes('telefoni'), 'auditda sabab matni yo‘q');
+  const rep = (await manager.get(`/security/shifts/${s.id}`)).body.data;
+  assert.equal(rep.forced, true); assert.match(rep.force_reason, /topshirmay/); assert.ok(rep.open_items);
+  assert.equal((await guard2.get('/security/shifts/current')).body.data.shift, null);
+});
+
+test('A4 hisobot: ochiq ishlar smena yopilganda saqlanadi, keyingi o‘zgarishlar hisobotni o‘zgartirmaydi; seed smenalarida ham bor', async () => {
+  assert.equal((await one(`SELECT count(*)::int AS n FROM guard_shifts WHERE closed_at IS NOT NULL AND open_items IS NULL`)).n, 0, 'har yopilgan smenada surat');
+  const o = await guard.post('/security/shifts', {});
+  assert.equal(o.status, 201);
+  const keys = (await guard.get('/security/keys')).body.data;
+  const free = keys.find((k) => !k.out && k.active);
+  assert.equal((await guard.post(`/security/keys/${free.room_id}/out`, { holder_membership_id: M.doctor(0) })).status, 201);
+  assert.equal((await guard.post(`/security/shifts/${o.body.data.id}/close`, { handover_note: 'Kalit shifokorda qoldi' })).status, 200);
+  const before = (await manager.get(`/security/shifts/${o.body.data.id}`)).body.data.open_items;
+  assert.ok(before.keys_out.some((k) => k.room_id === free.room_id), 'topshirishda kalit tashqarida');
+  // after the hand-over the key comes back: the report keeps what was open at hand-over time
+  assert.equal((await guard.post(`/security/keys/${free.room_id}/in`, {})).status, 201);
+  const after = (await manager.get(`/security/shifts/${o.body.data.id}`)).body.data.open_items;
+  assert.deepEqual(after, before);
+  // the stored snapshot never keeps a visitor's name (the names are purged after the retention period)
+  assert.ok(!JSON.stringify(after).includes('full_name'));
+  // the snapshot of a closed shift is never rewritten
+  const c = await pool.connect();
+  try { await c.query('BEGIN'); await assert.rejects(c.query(`UPDATE guard_shifts SET open_items = '{}' WHERE id = $1`, [o.body.data.id]), /closed once/); } finally { await c.query('ROLLBACK'); c.release(); }
+});
+
+test('SOS ikki marta bosilsa bitta hodisa: 60 s ichida bir xil sabab → birinchisi (200); Idempotency-Key; hodisa ham', async () => {
+  const [a, b] = await Promise.all([guard.post('/security/sos', { reason: 'medical' }), guard.post('/security/sos', { reason: 'medical' })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 201]);
+  assert.equal(a.body.data.id, b.body.data.id);
+  assert.equal((await one(`SELECT count(*)::int AS n FROM security_incidents WHERE source = 'sos' AND sos_reason = 'medical' AND reported_at >= demo_now() - interval '1 minute'`)).n, 1);
+  const other = await guard.post('/security/sos', { reason: 'fire' });
+  assert.equal(other.status, 201); assert.notEqual(other.body.data.id, a.body.data.id);
+  // the same Idempotency-Key returns the first incident; a too short key is refused
+  const cookie = await cookieOf(GUARD_IDS.bahodir);
+  const send = (path, body, key) => fetch(base + path, { method: 'POST', headers: { 'content-type': 'application/json', cookie, 'idempotency-key': key }, body: JSON.stringify(body) })
+    .then(async (r) => ({ status: r.status, body: await r.json() }));
+  const key = 'inc-test-key-' + Date.now();
+  const k1 = await send('/security/incidents', { category: 'other', severity: 'low', description: 'Ikki marta bosildi' }, key);
+  const k2 = await send('/security/incidents', { category: 'other', severity: 'low', description: 'Ikki marta bosildi' }, key);
+  assert.equal(k1.status, 201); assert.equal(k2.status, 200); assert.equal(k1.body.data.id, k2.body.data.id); assert.equal(k2.body.data.duplicate, true);
+  const s1 = await send('/security/sos', { reason: 'theft' }, key + '-sos');
+  const s2 = await send('/security/sos', { reason: 'theft' }, key + '-sos');
+  assert.equal(s1.status, 201); assert.equal(s2.status, 200); assert.equal(s1.body.data.id, s2.body.data.id);
+  assert.equal((await send('/security/incidents', { category: 'other', severity: 'low', description: 'Qisqa kalit' }, 'short')).status, 422);
+  for (const id of [a.body.data.id, other.body.data.id, s1.body.data.id]) await manager.post(`/security/incidents/${id}/seen`);
+});
+
+test('ogohlantirish: «Kechikkan» (10 daqiqa olinmagan / 30 daqiqa yopilmagan) qorovul ro‘yxatida va rahbar signalida; 30 kundan eski ochiq hisobga kirmaydi; pulse', async () => {
+  const list = (await guard.get('/security/alerts?state=open&page_size=100')).body;
+  const seeded = list.data.find((x) => x.state === 'new' && x.overdue);
+  assert.ok(seeded, 'kecha 23:12 dagi olinmagan ogohlantirish «Kechikkan»');
+  assert.equal(list.data[0].overdue, true, 'kechikkanlar tepada');
+  assert.ok((await manager.get('/security/alarms')).body.data.overdue.some((x) => x.id === seeded.id), 'rahbar signalida');
+  // a fresh alert is not overdue; taken 40 minutes ago and still open — it is
+  const id = await newAlert('intrusion');
+  assert.equal((await alertRow(guard, id)).overdue, false);
+  await pool.query(`INSERT INTO security_alert_actions (tenant_id, event_id, branch_id, seq, action, actor_membership_id, actor_name, actor_role, acted_at)
+    VALUES ($1,$2,$3,1,'take',$4,'Bahodir Usmonov','guard', demo_now() - interval '40 minutes')`, [SEED_IDS.tenant, id, BC, GUARD_IDS.bahodir]);
+  const taken = await alertRow(guard, id);
+  assert.equal(taken.state, 'taken'); assert.equal(taken.overdue, true);
+  const pulse = (await guard.get('/security/pulse')).body.data;
+  assert.ok(pulse.open >= 2 && pulse.overdue >= 2 && pulse.new >= 1, JSON.stringify(pulse));
+  for (const x of [registrar, doctor, keeper]) assert.equal((await x.get('/security/pulse')).status, 403);
+  assert.equal((await guard.post(`/security/alerts/${id}/resolve`, { seq: 1, outcome: 'checked_ok' })).status, 200);
+  // an open alert older than SECURITY_OPEN_DAYS is out of every open count (counter, list, pulse) — one bound everywhere
+  const before = (await guard.get('/security/overview')).body.data.counters.open_alerts;
+  await pool.query(`INSERT INTO camera_events (tenant_id, camera_id, branch_id, kind, occurred_at, alert, dedupe_key, target)
+     VALUES ($1,$2,$3,'intrusion', demo_now() - interval '40 days', true, 'test:old-open', 'human')`, [SEED_IDS.tenant, fx.camStore, BC]);
+  assert.equal((await guard.get('/security/overview')).body.data.counters.open_alerts, before);
+  assert.equal((await guard.get('/security/alerts?state=open&page_size=1')).body.meta.total, before, 'hisoblagich va ro‘yxat bir xil');
+  assert.equal((await guard.get('/security/pulse')).body.data.open, before);
+});
+
+test('surat: ro‘yxatdagi kichik rasm (thumb) har yuklanishda auditga yozilmaydi, katta surat yoziladi', async () => {
+  const s = await one(`SELECT s.event_id FROM camera_snapshots s JOIN camera_events e ON e.id = s.event_id WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.alert LIMIT 1`, [SEED_IDS.tenant, BC]);
+  const n = async () => (await one(`SELECT count(*)::int AS n FROM audit_logs WHERE action = 'security.snapshot_view' AND resource_id = $1`, [s.event_id])).n;
+  const n0 = await n();
+  const th = await fetch(`${base}/security/alerts/${s.event_id}/thumb`, { headers: { cookie: await cookieOf(GUARD_IDS.bahodir) } });
+  assert.equal(th.status, 200); assert.equal(th.headers.get('content-type'), 'image/jpeg');
+  assert.equal(await n(), n0, 'thumb auditga yozilmaydi');
+  await fetch(`${base}/security/alerts/${s.event_id}/snapshot`, { headers: { cookie: await cookieOf(GUARD_IDS.bahodir) } });
+  assert.equal(await n(), n0 + 1);
+  for (const x of [registrar, cashier, doctor]) assert.equal((await x.get(`/security/alerts/${s.event_id}/thumb`)).status, 403);
+  assert.equal((await t2.get(`/security/alerts/${s.event_id}/thumb`)).status, 404);
+});
+
+test('kalit: kechki smenada (20:00 dan keyin) olingan kalit ertasi kuni 20:00 da muddati o‘tadi; faol bo‘lmagan xona 422; ishdan ketgan xodim kaliti qaytariladi', async () => {
+  const { keyOverdue, keyDueAt } = require('../dist/modules/security.js');
+  const at = (d, hm) => new Date(`${d}T${hm}:00+05:00`);
+  assert.equal(keyOverdue(at('2026-10-17', '10:00'), at('2026-10-17', '19:59')), false);
+  assert.equal(keyOverdue(at('2026-10-17', '10:00'), at('2026-10-17', '20:00')), true);
+  assert.equal(keyOverdue(at('2026-10-17', '21:00'), at('2026-10-17', '23:30')), false, 'kechki smena: shu kecha emas');
+  assert.equal(keyOverdue(at('2026-10-17', '21:00'), at('2026-10-18', '19:00')), false);
+  assert.equal(keyOverdue(at('2026-10-17', '21:00'), at('2026-10-18', '20:00')), true);
+  assert.equal(keyDueAt(at('2026-10-17', '20:00')).toISOString(), at('2026-10-18', '20:00').toISOString());
+  // an inactive room: no key handed out
+  const room = (await guard.get('/security/keys')).body.data.find((k) => !k.out && k.active);
+  assert.equal((await manager.patch(`/rooms/${room.room_id}`, { active: false })).status, 200);
+  const r = await guard.post(`/security/keys/${room.room_id}/out`, { holder_membership_id: M.doctor(0) });
+  assert.equal(r.status, 422); assert.equal(r.body.error.code, 'ROOM_INACTIVE');
+  assert.equal((await manager.patch(`/rooms/${room.room_id}`, { active: true })).status, 200);
+  // the holder leaves the clinic while the key is out: «Qaytdi» still works without choosing another person
+  assert.equal((await guard.post(`/security/keys/${room.room_id}/out`, { holder_membership_id: M.cashier })).status, 201);
+  await pool.query(`UPDATE memberships SET status = 'inactive' WHERE id = $1`, [M.cashier]);
+  try {
+    const k = (await guard.get('/security/keys')).body.data.find((x) => x.room_id === room.room_id);
+    assert.equal(k.holder_inactive, true);
+    assert.equal((await guard.post(`/security/keys/${room.room_id}/in`, {})).status, 201);
+    const last = await one(`SELECT action, holder_membership_id FROM key_events WHERE room_id = $1 ORDER BY at DESC, id DESC LIMIT 1`, [room.room_id]);
+    assert.equal(last.action, 'in'); assert.equal(last.holder_membership_id, M.cashier);
+  } finally { await pool.query(`UPDATE memberships SET status = 'active' WHERE id = $1`, [M.cashier]); }
+});
+
+test('tashrif: 24 soatdan ko‘p «ichkarida» qolgan avtomatik yopiladi (auto_closed), ichkaridagilar soniga kirmaydi', async () => {
+  const v = (await pool.query(`INSERT INTO security_visitors (tenant_id, branch_id, full_name, purpose, in_at, recorded_by, recorded_by_name)
+     VALUES ($1,$2,'Unutilgan Mehmon','repair', demo_now() - interval '30 hours', $3, 'Bahodir Usmonov') RETURNING id`, [SEED_IDS.tenant, BC, GUARD_IDS.bahodir])).rows[0].id;
+  assert.ok(!(await guard.get('/security/visitors?inside=1')).body.data.some((x) => x.id === v), 'ichkaridagilar ro‘yxatida emas');
+  const inside = (await guard.get('/security/visitors?inside=1')).body.data.length;
+  assert.equal((await guard.get('/security/overview')).body.data.counters.visitors_inside, inside, 'hisoblagich = ro‘yxat');
+  const { purgeVisitors } = require('../dist/modules/security.js');
+  await purgeVisitors(pool);
+  const row = await one(`SELECT out_at, out_by, auto_closed, full_name FROM security_visitors WHERE id = $1`, [v]);
+  assert.ok(row.out_at && row.auto_closed && row.out_by === null); assert.equal(row.full_name, 'Unutilgan Mehmon', 'ism hali o‘chmaydi (90 kun)');
+  const c = await pool.connect();
+  try { await c.query('BEGIN'); await assert.rejects(c.query(`UPDATE security_visitors SET auto_closed = false WHERE id = $1`, [v]), /set once/); } finally { await c.query('ROLLBACK'); c.release(); }
+});
+
+test('hujjat raqami hamma qorovul matnida rad etiladi (bo‘sh joy, chiziqcha, №, bo‘lingan JShShIR); redact JShShIRni «[telefon]» ga aylantirmaydi', async () => {
+  for (const bad of ['Ali Valiyev AA 1234567', 'Ali AA-1234567', 'Ali AA № 1234567', 'Ali AB 123 45 67']) assert.equal((await guard.post('/security/visitors', { full_name: bad, purpose: 'delivery' })).status, 422, bad);
+  for (const note of ['JShShIR 3 1234 5678 90123', 'PINFL 31234-56789-0123']) assert.equal((await guard.post('/security/visitors', { full_name: 'Ali Valiyev', purpose: 'delivery', purpose_note: note })).status, 422, note);
+  assert.equal((await guard.post('/security/incidents', { category: 'other', severity: 'low', description: 'Pasporti AA1234567 bo‘lgan odam' })).status, 422);
+  assert.equal((await guard.post('/security/sos', { reason: 'other', note: 'JShShIR 31234567890123' })).status, 422);
+  const room = (await guard.get('/security/keys')).body.data.find((k) => !k.out && k.active);
+  assert.equal((await guard.post(`/security/keys/${room.room_id}/out`, { holder_membership_id: M.doctor(0), note: 'Pasport AA1234567' })).status, 422);
+  const sh = await guard.post('/security/shifts', {});
+  assert.equal((await guard.post(`/security/shifts/${sh.body.data.id}/close`, { handover_note: 'Mehmon JShShIR 31234567890123' })).status, 422);
+  assert.equal((await guard.post(`/security/shifts/${sh.body.data.id}/close`, { handover_note: 'Tel +998 90 123 45 67, hammasi joyida' })).status, 200, 'telefon raqami hujjat emas');
+  const { redact } = require('../dist/ai/redact.js');
+  const out = redact('JShShIR 31234567890123, tel 901234567');
+  assert.equal(out, 'JShShIR [JShShIR], tel [telefon]');
+  assert.equal(redact('JShShIR 3 1234 5678 90123'), 'JShShIR [JShShIR]');
+});
+
+test('kechikish: shifokorning bir kunlik «custom_hours» boshlanishi bilan solishtiriladi', async () => {
+  const p = (await guard.get('/security/presence')).body.data.find((x) => x.specialty && x.planned_start && x.status !== 'in' && x.status !== 'off');
+  assert.ok(p, 'bugun ishlaydigan shifokor');
+  const d = await one(`SELECT id FROM doctors WHERE membership_id = $1`, [p.membership_id]);
+  await pool.query(`DELETE FROM schedule_exceptions WHERE tenant_id = $1 AND doctor_id = $2 AND date = $3`, [SEED_IDS.tenant, d.id, today]);
+  await pool.query(`INSERT INTO schedule_exceptions (tenant_id, doctor_id, date, kind, start_time, end_time, note) VALUES ($1,$2,$3,'custom_hours','06:00','12:00','Sinov')`, [SEED_IDS.tenant, d.id, today]);
+  try {
+    assert.equal((await guard.post('/security/presence', { membership_id: p.membership_id, kind: 'in' })).status, 201);
+    const row = (await guard.get('/security/presence')).body.data.find((x) => x.membership_id === p.membership_id);
+    assert.equal(row.status, 'in');
+    assert.ok(row.late_min >= 60, `06:00 ga nisbatan kechikdi: ${row.late_min}`);
+  } finally { await pool.query(`DELETE FROM schedule_exceptions WHERE tenant_id = $1 AND doctor_id = $2 AND date = $3`, [SEED_IDS.tenant, d.id, today]); }
+});
+
+test('smena topshirig‘i: filialda ikki smena ochiq bo‘lsa — shu smena ochilishidan oldin yopilgan oxirgisi va kim yozgani', async () => {
+  const a = await guard2.post('/security/shifts', {});
+  assert.equal(a.status, 201);
+  const prevBefore = (await guard2.get('/security/shifts/current')).body.data.previous;
+  const b = await guard.post('/security/shifts', {});
+  assert.equal(b.status, 201);
+  // A closes after B opened (a moment later on the business clock)
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal((await guard2.post(`/security/shifts/${a.body.data.id}/close`, { handover_note: 'Ikkinchi qorovul ketdi' })).status, 200);
+  const prev = (await guard.get('/security/shifts/current')).body.data.previous;
+  assert.notEqual(prev.id, a.body.data.id, 'B ochilgandan keyin yopilgan smena B ning «oldingi» topshirig‘i emas');
+  assert.equal(prev.id, prevBefore.id); assert.ok(prev.guard_name);
+  assert.equal((await guard.post(`/security/shifts/${b.body.data.id}/close`, { handover_note: 'Sinov tugadi' })).status, 200);
+  // nobody's shift open now: the latest closed one (A was closed before B)
+  assert.equal((await guard.get('/security/shifts/current')).body.data.previous.id, b.body.data.id);
+});
+
+test('ochiq hodisalar: panel hisoblagichi = «Ochiq» ro‘yxat; filial: boshqa klinika filiali 404, o‘z klinikasining boshqa filiali 403', async () => {
+  const c = (await guard.get('/security/overview')).body.data.counters.open_incidents;
+  assert.equal((await guard.get('/security/incidents?status=open&page_size=1')).body.meta.total, c);
+  assert.equal((await guard.post('/security/incidents', { category: 'other', severity: 'low', description: 'Boshqa klinika', branch_id: SEED_IDS.branchTenant2 })).status, 404);
+  assert.equal((await guard.post('/security/incidents', { category: 'other', severity: 'low', description: 'Boshqa filial', branch_id: BY })).status, 403);
+  assert.equal((await guard.post('/security/sos', { reason: 'other', branch_id: SEED_IDS.branchTenant2 })).status, 404);
+  assert.equal((await guard.post('/security/visitors', { full_name: 'Ali Valiyev', purpose: 'delivery', branch_id: SEED_IDS.branchTenant2 })).status, 404);
+  assert.equal((await guard.post('/security/shifts', { branch_id: SEED_IDS.branchTenant2 })).status, 404);
+  assert.equal((await manager.post('/security/checkpoints', { branch_id: SEED_IDS.branchTenant2, name: 'Begona' })).status, 404);
+});
+
+test('qorovul: /branches va /rooms faqat o‘z filiali; /ai/status namunaviy klinik matnni faqat shifokorga beradi; audit filtri «security.»', async () => {
+  const br = (await guard.get('/branches')).body.data;
+  assert.deepEqual(br.map((b) => b.id), [BC]);
+  const rooms = (await guard.get('/rooms')).body.data;
+  assert.ok(rooms.length && rooms.every((r) => r.branch_id === BC));
+  assert.ok((await manager.get('/branches')).body.data.length >= 2, 'rahbar hamma filialni ko‘radi');
+  for (const s of [guard, manager, registrar, cashier, keeper]) assert.equal((await s.get('/ai/status')).body.data.sample_text, null);
+  assert.ok((await doctor.get('/ai/status')).body.data.sample_text, 'shifokorga namunaviy matn');
+  const au = (await manager.get('/audit?action=security.&page_size=50')).body;
+  assert.ok(au.data.length && au.data.every((a) => a.action.startsWith('security.')));
+});
+
+test('seed: demo kuni (yakshanba) 11:30 da ikki tashrif buyuruvchi ichkarida; bugungi ogohlantirish «Ko‘rilmoqda»; ochiq ro‘yxat sahifalanadi', async () => {
+  const g = db.buildGuard(db.buildSeed('2026-10-18', '11:30'), '2026-10-18', '11:30');
+  assert.equal(g.security_visitors.filter((v) => !v.out_at).length, 2, 'demo 11:30 da ikki mehmon ichkarida');
+  assert.ok(g.security_alert_actions.some((a) => a.action === 'take' && !g.security_alert_actions.some((x) => x.event_id === a.event_id && x.seq === 2)), 'bugungi 09:48 ogohlantirishi olingan');
+  const p1 = (await guard.get('/security/alerts?state=open&page_size=1&page=1')).body;
+  assert.ok(p1.meta.total >= 1);
+  if (p1.meta.total > 1) {
+    const p2 = (await guard.get('/security/alerts?state=open&page_size=1&page=2')).body;
+    assert.notEqual(p1.data[0].id, p2.data[0].id);
+  }
 });

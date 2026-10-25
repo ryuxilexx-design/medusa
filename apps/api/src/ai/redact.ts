@@ -19,7 +19,10 @@ export function redact(text: string, p?: PatientIdentity | null): string {
     }
     if (p.patient_number != null) out = out.replace(new RegExp(`(#|№|ID\\s*)0*${p.patient_number}\\b`, 'gi'), '[bemor ID]');
   }
-  // phone numbers: +998 90 123 45 67, 998901234567, 90-123-45-67, 901234567
-  out = out.replace(/(\+?998[\s-]?)?\(?\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?!\d)/g, (m) => (m.replace(/\D/g, '').length >= 9 ? '[telefon]' : m));
+  // the 14-digit personal number (JShShIR/ПИНФЛ, joined or spaced) first: the phone pattern below would otherwise
+  // eat its tail and leave «31234[telefon]»
+  out = out.replace(/(?<!\d[\s-]?)\d(?:[\s-]?\d){13}(?![\s-]?\d)/g, '[JShShIR]');
+  // phone numbers: +998 90 123 45 67, 998901234567, 90-123-45-67, 901234567 (never the middle of a longer number)
+  out = out.replace(/(?<!\d)(\+?998[\s-]?)?\(?\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}(?!\d)/g, (m) => (m.replace(/\D/g, '').length >= 9 ? '[telefon]' : m));
   return out;
 }

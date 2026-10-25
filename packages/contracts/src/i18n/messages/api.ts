@@ -554,4 +554,9 @@ export const api = {
   'api.sec.noIdDoc': ['Pasport yoki JShShIR raqamini yozmang', 'Не записывайте номер паспорта или ПИНФЛ'],
   'api.sec.passNo': ['Ruxsatnoma raqami: harf, raqam yoki «-», 10 belgigacha', 'Номер пропуска: буквы, цифры или «-», до 10 символов'],
   'api.sec.problemNote': ['Muammoni qisqa yozing', 'Кратко опишите проблему'],
+  // migration 040
+  'api.sec.idemKey': ['Idempotency-Key 8–100 belgidan iborat bo‘lsin', 'Idempotency-Key — от 8 до 100 символов'],
+  'api.sec.roomInactive': ['Bu xona faol emas — kalit berilmaydi', 'Кабинет не активен — ключ не выдаётся'],
+  'api.sec.shiftRequired': ['Obxoddan oldin smenani oching', 'Перед обходом откройте смену'],
+  'api.sec.pointNotInRound': ['Bu nuqta obxod ro‘yxatida yo‘q', 'Этой точки нет в списке обхода'],
 } as const satisfies Catalog;
