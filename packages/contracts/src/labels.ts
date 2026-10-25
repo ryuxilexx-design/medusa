@@ -1,8 +1,8 @@
-export type Role = 'manager' | 'registrar' | 'doctor' | 'cashier' | 'lab' | 'storekeeper';
+export type Role = 'manager' | 'registrar' | 'doctor' | 'cashier' | 'lab' | 'storekeeper' | 'guard';
 /** Every role, in the order lists and demo cards show them. */
-export const ROLES: readonly Role[] = ['manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper'];
+export const ROLES: readonly Role[] = ['manager', 'registrar', 'doctor', 'cashier', 'lab', 'storekeeper', 'guard'];
 export const ROLE_LABEL: Record<Role, string> = {
-  manager: 'Rahbar', registrar: 'Registrator', doctor: 'Shifokor', cashier: 'Kassir', lab: 'Laboratoriya', storekeeper: 'Omborchi',
+  manager: 'Rahbar', registrar: 'Registrator', doctor: 'Shifokor', cashier: 'Kassir', lab: 'Laboratoriya', storekeeper: 'Omborchi', guard: 'Qorovul',
 };
 
 export type AppointmentStatus = 'scheduled' | 'arrived' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';

@@ -65,6 +65,7 @@ export const common = {
   'role.cashier': ['Kassir', 'Кассир'],
   'role.lab': ['Laboratoriya', 'Лаборатория'],
   'role.storekeeper': ['Omborchi', 'Кладовщик (провизор)'],
+  'role.guard': ['Qorovul', 'Охранник'],
 
   // statuses
   'status.appointment.scheduled': ['Rejalashtirilgan', 'Запланирован'],

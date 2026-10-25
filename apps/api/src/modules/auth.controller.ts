@@ -67,7 +67,7 @@ export class AuthController {
       `SELECT m.id AS membership_id, m.user_id, m.tenant_id, t.name AS tenant_name, m.role, m.title, u.full_name
          FROM memberships m JOIN tenants t ON t.id = m.tenant_id JOIN users u ON u.id = m.user_id
         WHERE m.user_id = $1 AND m.status = 'active' AND t.status = 'active'
-        ORDER BY t.name, array_position(ARRAY['manager','doctor','registrar','cashier','lab','storekeeper'], m.role)`, [user.id]) : [];
+        ORDER BY t.name, array_position(ARRAY['manager','doctor','registrar','cashier','lab','storekeeper','guard'], m.role)`, [user.id]) : [];
 
     if (!user || !ok) {
       ipFail(req, login ?? input.login);

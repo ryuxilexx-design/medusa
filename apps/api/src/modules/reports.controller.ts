@@ -101,7 +101,7 @@ export class ReportsController {
               (SELECT array_agg(b.name ORDER BY b.code) FROM branches b WHERE b.id = ANY(m.branch_ids)) AS branch_names,
               d.id AS doctor_id, d.specialty, d.default_share_percent
          FROM memberships m JOIN users u ON u.id = m.user_id LEFT JOIN doctors d ON d.membership_id = m.id
-        WHERE m.tenant_id = $1 ORDER BY m.status, array_position(ARRAY['manager','doctor','registrar','cashier','lab','storekeeper'], m.role), u.full_name`, [ctx.tenantId, ctx.membershipId]);
+        WHERE m.tenant_id = $1 ORDER BY m.status, array_position(ARRAY['manager','doctor','registrar','cashier','lab','storekeeper','guard'], m.role), u.full_name`, [ctx.tenantId, ctx.membershipId]);
     return { data: rows };
   }
 
