@@ -225,7 +225,9 @@ export function buildGuard(data: SeedData, demoDate: string, demoTime?: string):
     for (const slot of slots) {
       const date = s.kind === 'night' && hm(slot) < hm('12:00') ? addDays(s.date, 1) : s.date;
       const start = at(date, hm(slot) + int(-5, 12));
-      if (rnd() < 0.07) continue; // a missed round: the manager's compliance shows it
+      // missed rounds (the manager's compliance shows them): two fixed ones in the last days, a few random ones before
+      const missed = (s.kind === 'night' && s.date === addDays(demoDate, -3) && slot === '04:00') || (s.kind === 'day' && s.date === addDays(demoDate, -5) && slot === '15:00');
+      if (rnd() < 0.07 || missed) continue;
       const skip = rnd() < 0.05 ? int(1, points.length - 1) : -1;
       let t = start;
       const marks: Row[] = [];

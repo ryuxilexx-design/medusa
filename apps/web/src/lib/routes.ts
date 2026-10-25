@@ -19,6 +19,15 @@ export const SECTION_ROLES = {
   '/inventory': ['manager', 'storekeeper'],
   '/materials': ['doctor', 'lab'],
   '/cameras': ['manager'],
+  // the security guard «Qorovul» (docs/SECURITY_GUARD.md): only these sections — never a patient, visit, money or the warehouse
+  '/guard': ['guard'],
+  '/visitors': ['guard'],
+  '/keys': ['guard'],
+  '/patrol': ['guard'],
+  '/incidents': ['guard'],
+  '/on-site': ['guard'],
+  '/post': ['guard'],
+  '/security': ['manager'],
   '/reports': ['manager', 'doctor'],
   '/settings': ['manager'],
 } satisfies Record<string, Role[]>;
@@ -40,6 +49,7 @@ const DETAIL_ROLES: Record<string, Role[]> = {
   '/print/patient/': ['manager', 'registrar', 'doctor'],
   '/print/appointment/': ['manager', 'registrar'],
   '/print/warehouse/': ['storekeeper', 'manager'],
+  '/print/guard-shift/': ['guard', 'manager'],
 };
 
 /** May this role open this path? Unknown paths are allowed (Next shows its own 404). */

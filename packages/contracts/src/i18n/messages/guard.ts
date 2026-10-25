@@ -34,7 +34,7 @@ export const guard = {
   'guard.panel.noShift': ['Smena ochilmagan', 'Смена не открыта'],
   'guard.panel.openShift': ['Smenani ochish', 'Открыть смену'],
   'guard.panel.shiftOpen': ['Smena №{n} · {time} dan', 'Смена №{n} · с {time}'],
-  'guard.stat.openAlerts': ['Ochiq ogohlantirishlar', 'Открытые тревоги'],
+  'guard.stat.openAlerts': ['Ochiq signallar', 'Открытые тревоги'],
   'guard.stat.handledToday': ['Bugun hal qilindi', 'Решено сегодня'],
   'guard.stat.onSite': ['Binoda xodimlar', 'Сотрудники в здании'],
   'guard.stat.visitors': ['Ichkaridagi mehmonlar', 'Посетители внутри'],
@@ -324,7 +324,7 @@ export const guard = {
   'guard.sec.tab.keys': ['Kalitlar', 'Ключи'],
   'guard.sec.tab.patrol': ['Obxod', 'Обход'],
   'guard.sec.tab.shifts': ['Smenalar', 'Смены'],
-  'guard.sec.alerts': ['Ogohlantirishlar', 'Тревоги'],
+  'guard.sec.alerts': ['Signallar', 'Тревоги'],
   'guard.sec.alertsSub': ['Hal qilindi {handled} / {total}', 'Решено {handled} из {total}'],
   'guard.sec.median': ['O‘rtacha javob vaqti', 'Среднее время реакции'],
   'guard.sec.medianSub': ['Mediana; eng uzoq {time}', 'Медиана; дольше всего {time}'],
@@ -364,7 +364,7 @@ export const guard = {
 
   // print: shift report
   'guard.print.title': ['Qorovul smenasi hisoboti', 'Отчёт смены охраны'],
-  'guard.print.number': ['№{n}', '№{n}'],
+  'guard.print.response': ['Javob vaqti', 'Время реакции'],
   'guard.print.guard': ['Qorovul', 'Охранник'],
   'guard.print.opened': ['Ochildi', 'Открыта'],
   'guard.print.closed': ['Yopildi', 'Закрыта'],

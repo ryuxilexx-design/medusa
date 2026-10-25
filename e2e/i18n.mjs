@@ -58,9 +58,10 @@ try {
   // every screen of every role in Russian: no Uzbek interface sentence may remain (data — names, services — may)
   const { MESSAGES } = createRequire(import.meta.url)('../packages/contracts/dist/index.js');
   const uzPhrases = Object.values(MESSAGES).map((e) => e[0]).filter((x) => x.length >= 14 && x.includes(' ') && !x.includes('{') && /[a-z]/.test(x));
-  const ROLES = { 'Руководитель': ['/dashboard', '/patients', '/schedule', '/queue', '/lab', '/cashier', '/finance', '/staff', '/inventory', '/reports', '/settings'],
+  const ROLES = { 'Руководитель': ['/dashboard', '/patients', '/schedule', '/queue', '/lab', '/cashier', '/finance', '/staff', '/inventory', '/security', '/reports', '/settings'],
     'Регистратор': ['/patients', '/schedule', '/queue', '/lab', '/cashier'], 'Кассир': ['/cashier', '/finance', '/queue', '/patients'],
-    'Лаборатория': ['/lab', '/materials'], 'Врач': ['/doctor', '/diagnostics', '/reports', '/schedule', '/patients', '/materials'], 'Кладовщик (провизор)': ['/inventory'] };
+    'Лаборатория': ['/lab', '/materials'], 'Врач': ['/doctor', '/diagnostics', '/reports', '/schedule', '/patients', '/materials'], 'Кладовщик (провизор)': ['/inventory'],
+    'Охранник': ['/guard', '/visitors', '/keys', '/patrol', '/incidents', '/on-site', '/post'] };
   const leaks = [];
   for (const [role, pages] of Object.entries(ROLES)) {
     const r = await newPage(b, errors);
@@ -76,7 +77,7 @@ try {
       }));
       const leafSet = new Set(leaves);
       for (const ph of uzPhrases) if (leafSet.has(ph) || (ph.length >= 30 && body.includes(ph))) leaks.push(`${role} ${path}: «${ph}»`);
-      await shot(r, `i18n-ru${path.replace(/\//g, '-')}-${role === 'Руководитель' ? 'manager' : role === 'Регистратор' ? 'registrar' : role === 'Кассир' ? 'cashier' : role === 'Лаборатория' ? 'lab' : role === 'Кладовщик (провизор)' ? 'storekeeper' : 'doctor'}`);
+      await shot(r, `i18n-ru${path.replace(/\//g, '-')}-${role === 'Руководитель' ? 'manager' : role === 'Регистратор' ? 'registrar' : role === 'Кассир' ? 'cashier' : role === 'Лаборатория' ? 'lab' : role === 'Кладовщик (провизор)' ? 'storekeeper' : role === 'Охранник' ? 'guard' : 'doctor'}`);
     }
     await r.close();
   }
