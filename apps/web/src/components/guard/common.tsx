@@ -1,16 +1,46 @@
 'use client';
 // Shared pieces of the security guard's screens (docs/SECURITY_GUARD.md): the write branch, the staff picker, badges.
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, type MutateOptions, type UseMutationOptions } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, Clock, Eye, Flame, ShieldAlert, Siren } from 'lucide-react';
 import { INCIDENT_SEVERITIES, type IncidentSeverity, type MessageKey } from '@meduza/contracts';
 import { api, qs } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { duration } from '@/lib/format';
+import { duration, fmtDateTime, fmtTime, localDate } from '@/lib/format';
 import { Badge, Chip, Select, type Tone } from '@/components/ui';
 
 export const ic = 'h-4 w-4';
+
+/**
+ * A mutation with a synchronous in-flight guard: a second tap while the first request is on its way does nothing —
+ * no duplicate row, no «already done» error toast. Guard action buttons call `run(vars)` instead of `mutate`.
+ */
+export function useGuardedMutation<TData = unknown, TVars = void>(opts: UseMutationOptions<TData, Error, TVars>) {
+  const m = useMutation(opts);
+  const busy = useRef(false);
+  const { mutateAsync } = m;
+  const run = useCallback((vars: TVars, callOpts?: MutateOptions<TData, Error, TVars>) => {
+    if (busy.current) return;
+    busy.current = true;
+    mutateAsync(vars, callOpts).catch(() => undefined).finally(() => { busy.current = false; });
+  }, [mutateAsync]);
+  return { ...m, run };
+}
+
+/** «Bemor Aliyev Vali», «пациент Иванова Анна»: free text that seems to name a patient (a soft hint, never a block). */
+const PATIENT_NAME_RE = /(?:^|[^\p{L}])(?:[Bb]emor|[Бб]емор|[Пп]ациент(?:ка)?)\s+\p{Lu}[\p{L}‘’'ʻ-]+\s+\p{Lu}[\p{L}‘’'ʻ-]+/u;
+export const looksLikePatientName = (s: string) => PATIENT_NAME_RE.test(s);
+/** The soft warning under a guard's text field when it seems to name a patient. */
+export function NameHint({ text }: { text: string }) {
+  const t = useT();
+  if (!looksLikePatientName(text)) return null;
+  return <p role="status" data-testid="name-hint" className="mt-1 text-small font-semibold text-amber-800">{t('guard.nameWarn')}</p>;
+}
+
+/** A time next to another one: the clock only when both fall on the same local day, else the date too (night shifts). */
+export const fmtWhen = (iso: string | null | undefined, ref: string | null | undefined) =>
+  !iso ? '—' : ref && localDate(iso) === localDate(ref) ? fmtTime(iso) : fmtDateTime(iso);
 
 /** The branch a guard's entry lands in: the selected one, or the person's only branch ('' = ask to pick one). */
 export function useWriteBranch() {

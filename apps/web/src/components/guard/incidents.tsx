@@ -2,15 +2,15 @@
 // The incident log: append-only (an addition or a correction is a new row), the manager marks seen and closes with a
 // resolution. Shared by the guard's «Hodisalar jurnali» and the manager's «Xavfsizlik → Hodisalar».
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ChevronRight, Lock, MapPin, NotebookPen, Siren } from 'lucide-react';
 import { INCIDENT_CATEGORIES, type IncidentCategory, type IncidentSeverity, type MessageKey } from '@meduza/contracts';
-import { api, ApiError, qs } from '@/lib/api';
+import { api, ApiError, newIdempotencyKey, qs } from '@/lib/api';
 import { fmtDateTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Alert, Badge, Button, Chip, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Pagination, Segmented, Select, Skeleton, Textarea, useToast } from '@/components/ui';
-import { ic, SeverityPicker, SeverityBadge, useWriteBranch } from './common';
+import { ic, NameHint, SeverityPicker, SeverityBadge, useGuardedMutation, useWriteBranch } from './common';
 
 type IncidentRow = {
   id: string; number: number; category: IncidentCategory; severity: IncidentSeverity; source: 'manual' | 'alert' | 'sos' | 'patrol'; sos_reason: string | null;
@@ -83,13 +83,18 @@ function IncidentModal({ id, mode, onClose }: { id: string | null; mode: 'guard'
   const [kind, setKind] = useState<'note' | 'correction' | 'close'>('note');
   const [text, setText] = useState('');
   const [err, setErr] = useState<string | undefined>();
-  useEffect(() => { setKind('note'); setText(''); setErr(undefined); }, [id]);
-  const add = useMutation({
+  // the text typed when the incident turned out closed meanwhile (409): shown read-only to copy, never lost silently
+  const [lost, setLost] = useState<string | null>(null);
+  useEffect(() => { setKind('note'); setText(''); setErr(undefined); setLost(null); }, [id]);
+  const add = useGuardedMutation({
     mutationFn: () => api(`/security/incidents/${id}/entries`, { method: 'POST', body: { kind, text: text.trim() } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['security'] }); toast.success(t(kind === 'close' ? 'guard.inc.closeDone' : 'guard.inc.entryAdded')); setText(''); setKind('note'); },
-    onError: (e) => { setErr(e instanceof ApiError ? e.fields?.text : undefined); toast.error(e); },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === 'INCIDENT_CLOSED') { setLost(text.trim()); setText(''); qc.invalidateQueries({ queryKey: ['security'] }); toast.info(t('guard.inc.closedLost')); return; }
+      setErr(e instanceof ApiError ? e.fields?.text : undefined); toast.error(e);
+    },
   });
-  const seen = useMutation({
+  const seen = useGuardedMutation({
     mutationFn: () => api(`/security/incidents/${id}/seen`, { method: 'POST' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['security'] }),
     onError: (e) => toast.error(e),
@@ -101,8 +106,8 @@ function IncidentModal({ id, mode, onClose }: { id: string | null; mode: 'guard'
       footer={i && !i.closed ? (
         <>
           <ModalCancel>{t('common.close')}</ModalCancel>
-          {mode === 'manager' && !i.seen && <Button loading={seen.isPending} onClick={() => seen.mutate()}>{t('guard.inc.markSeen')}</Button>}
-          <Button variant="primary" loading={add.isPending} disabled={text.trim().length < 3} onClick={() => add.mutate()}>{kind === 'close' ? t('guard.inc.closeTitle') : t('guard.inc.addEntry')}</Button>
+          {mode === 'manager' && !i.seen && <Button loading={seen.isPending} onClick={() => seen.run()}>{t('guard.inc.markSeen')}</Button>}
+          <Button variant="primary" loading={add.isPending} disabled={text.trim().length < 3} onClick={() => add.run()}>{kind === 'close' ? t('guard.inc.closeTitle') : t('guard.inc.addEntry')}</Button>
         </>
       ) : <ModalCancel>{t('common.close')}</ModalCancel>}>
       {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : !i ? <Skeleton className="h-40" /> : (
@@ -130,12 +135,19 @@ function IncidentModal({ id, mode, onClose }: { id: string | null; mode: 'guard'
               ))}
             </ol>
           )}
+          {lost && (
+            <div role="status" className="rounded-field border border-amber-300 bg-amber-50 p-3" data-testid="incident-lost">
+              <p className="text-small font-semibold text-amber-900">{t('guard.inc.closedLost')}</p>
+              <p className="mt-1 select-all whitespace-pre-wrap text-body text-slate-900">{lost}</p>
+            </div>
+          )}
           {!i.closed && (
             <div className="space-y-2 border-t border-slate-100 pt-4">
               <Segmented label={t('guard.inc.entries')} value={kind} onChange={setKind} options={kinds} size="compact" />
               <Field label={kind === 'close' ? t('guard.inc.resolution') : t('guard.inc.entryText')} error={err} hint={t('guard.noNames')}>{(fid) => (
                 <Textarea id={fid} rows={3} maxLength={2000} value={text} invalid={!!err} onChange={(e) => setText(e.target.value)} />
               )}</Field>
+              <NameHint text={text} />
             </div>
           )}
         </div>
@@ -153,6 +165,9 @@ export function IncidentFormModal({ open, onClose }: { open: boolean; onClose: (
   const toast = useToast();
   const branchId = useWriteBranch();
   const rooms = useQuery({ queryKey: ['rooms'], queryFn: () => api<{ data: Room[] }>('/rooms').then((r) => r.data), enabled: open, staleTime: 5 * 60_000 });
+  // one key per opened form: a double tap on «Saqlash» returns the first incident
+  const [key, setKey] = useState(() => newIdempotencyKey());
+  useEffect(() => { if (open) setKey(newIdempotencyKey()); }, [open]);
   const [category, setCategory] = useState<IncidentCategory | ''>('');
   const [severity, setSeverity] = useState<IncidentSeverity>('medium');
   const [roomId, setRoomId] = useState('');
@@ -160,8 +175,8 @@ export function IncidentFormModal({ open, onClose }: { open: boolean; onClose: (
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const reset = () => { setCategory(''); setSeverity('medium'); setRoomId(''); setPlace(''); setDescription(''); setErrors({}); };
-  const m = useMutation({
-    mutationFn: () => api<{ data: { number: number } }>('/security/incidents', { method: 'POST', body: {
+  const m = useGuardedMutation({
+    mutationFn: () => api<{ data: { number: number } }>('/security/incidents', { method: 'POST', headers: { 'Idempotency-Key': key }, body: {
       branch_id: branchId || null, category, severity, room_id: roomId || null, place: place.trim() || null, description: description.trim(),
     } }),
     onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['security'] }); toast.success(t('guard.inc.created', { n: r.data.number })); reset(); onClose(); },
@@ -172,7 +187,7 @@ export function IncidentFormModal({ open, onClose }: { open: boolean; onClose: (
     if (!category) err.category = t('api.sec.pickCategory');
     if (description.trim().length < 3) err.description = t('api.sec.describe');
     setErrors(err);
-    if (!Object.keys(err).length) m.mutate();
+    if (!Object.keys(err).length) m.run();
   };
   const branchRooms = (rooms.data ?? []).filter((r) => !branchId || r.branch_id === branchId);
   return (
@@ -203,6 +218,7 @@ export function IncidentFormModal({ open, onClose }: { open: boolean; onClose: (
         <Field label={t('guard.inc.description')} required error={errors.description} hint={t('guard.noNames')}>{(id) => (
           <Textarea id={id} rows={4} maxLength={2000} value={description} invalid={!!errors.description} onChange={(e) => setDescription(e.target.value)} />
         )}</Field>
+        <NameHint text={description} />
       </div>
     </Modal>
   );

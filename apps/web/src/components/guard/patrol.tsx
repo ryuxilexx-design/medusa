@@ -3,17 +3,20 @@
 // filed as an incident at once); the manager keeps the checkpoint list and sees the rounds and the missed ones.
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle2, Flag, Footprints, MapPin, Plus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Flag, Footprints, MapPin, Plus } from 'lucide-react';
 import { INCIDENT_CATEGORIES, type IncidentCategory, type IncidentSeverity, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { fmtDateTime, fmtTime, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
-import { Alert, Badge, Button, Card, Checkbox, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Pagination, Select, Table, Td, Textarea, Th, useToast } from '@/components/ui';
-import { SeverityPicker, since, useNow, useWriteBranch } from './common';
+import { Alert, Badge, Button, Card, Checkbox, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Pagination, Select, Table, Td, Textarea, TextLink, Th, useToast } from '@/components/ui';
+import { fmtWhen, NameHint, SeverityPicker, since, useGuardedMutation, useNow, useWriteBranch } from './common';
 
 type Point = { id: string; name: string; position: number; branch_id: string; result: 'ok' | 'problem' | null; note: string | null; marked_at: string | null };
-type Current = { round: { id: string; branch_name: string; started_at: string; checkpoints_total: number } | null; checkpoints: Point[]; last_finished_at: string | null; interval_hours: number };
+type Current = {
+  round: { id: string; branch_name: string; started_at: string; checkpoints_total: number } | null; checkpoints: Point[]; last_finished_at: string | null; interval_hours: number;
+  next_due_at: string | null; overdue: boolean; shift_open: boolean;
+};
 
 export function useCurrentRound() {
   const { branchId } = useSession();
@@ -29,12 +32,12 @@ export function PatrolCurrent({ q }: { q: ReturnType<typeof useCurrentRound> }) 
   const [problem, setProblem] = useState<Point | null>(null);
   const [confirmFinish, setConfirmFinish] = useState(false);
   const refresh = () => qc.invalidateQueries({ queryKey: ['security'] });
-  const mark = useMutation({
-    mutationFn: (p: Point) => api(`/security/rounds/${q.data!.round!.id}/marks`, { method: 'POST', body: { checkpoint_id: p.id, result: 'ok' } }),
+  const mark = useGuardedMutation<unknown, Point>({
+    mutationFn: (p) => api(`/security/rounds/${q.data!.round!.id}/marks`, { method: 'POST', body: { checkpoint_id: p.id, result: 'ok' } }),
     onSuccess: refresh,
     onError: (e) => { toast.error(e); if (e instanceof ApiError && e.status === 409) refresh(); },
   });
-  const finish = useMutation({
+  const finish = useGuardedMutation({
     mutationFn: () => api<{ data: { marked: number; total: number } }>(`/security/rounds/${q.data!.round!.id}/finish`, { method: 'POST' }),
     onSuccess: (r) => { refresh(); setConfirmFinish(false); toast.success(t('guard.pat.finished', { marked: r.data.marked, total: r.data.total })); },
     onError: (e) => { toast.error(e); if (e instanceof ApiError && e.status === 409) refresh(); },
@@ -45,10 +48,18 @@ export function PatrolCurrent({ q }: { q: ReturnType<typeof useCurrentRound> }) 
   if (!checkpoints.length) return <EmptyState compact icon={<MapPin />} title={t('guard.pat.noPoints')} />;
   const marked = checkpoints.filter((p) => p.result).length;
   if (!round) {
+    const { next_due_at: due, overdue } = q.data;
     return (
       <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
         <Footprints className="h-8 w-8 text-brand-600" aria-hidden="true" />
         <p className="text-base font-semibold text-slate-900">{q.data.last_finished_at ? t('guard.pat.lastDone', { time: t('guard.ago', { time: since(q.data.last_finished_at, now) }) }) : t('guard.pat.never')}</p>
+        {/* when the next round is due: a plain cue, red once the time has passed */}
+        {due && (
+          <p data-testid="patrol-due" className={cx('inline-flex items-center gap-1.5 text-body font-semibold', overdue ? 'text-red-700' : 'text-slate-700')}>
+            <Clock className="h-5 w-5" aria-hidden="true" />{overdue ? t('guard.pat.overdueSince', { time: fmtWhen(due, now.toISOString()) }) : t('guard.pat.nextDue', { time: fmtWhen(due, now.toISOString()) })}
+          </p>
+        )}
+        {!q.data.shift_open && <p className="text-body text-slate-700">{t('guard.pat.needShift')} · <TextLink href="/post">{t('nav.post')}</TextLink></p>}
         <p className="text-sm text-slate-600">{checkpoints.map((p) => p.name).join(' · ')}</p>
       </div>
     );
@@ -77,7 +88,7 @@ export function PatrolCurrent({ q }: { q: ReturnType<typeof useCurrentRound> }) 
             </div>
             {!p.result && (
               <div className="flex w-full gap-2 sm:w-auto">
-                <Button variant="success" className="flex-1 sm:flex-none" icon={<CheckCircle2 className="h-5 w-5" />} loading={mark.isPending && mark.variables?.id === p.id} onClick={() => mark.mutate(p)}>{t('guard.pat.ok')}</Button>
+                <Button variant="success" className="flex-1 sm:flex-none" icon={<CheckCircle2 className="h-5 w-5" />} loading={mark.isPending && mark.variables?.id === p.id} onClick={() => mark.run(p)}>{t('guard.pat.ok')}</Button>
                 <Button className="flex-1 sm:flex-none" icon={<AlertTriangle className="h-5 w-5" />} onClick={() => setProblem(p)}>{t('guard.pat.problem')}</Button>
               </div>
             )}
@@ -85,11 +96,11 @@ export function PatrolCurrent({ q }: { q: ReturnType<typeof useCurrentRound> }) 
         ))}
       </ol>
       <div className="flex justify-end border-t border-slate-100 px-5 py-3">
-        <Button icon={<Flag className="h-5 w-5" />} className="w-full sm:w-auto" loading={finish.isPending} onClick={() => (marked < checkpoints.length ? setConfirmFinish(true) : finish.mutate())}>{t('guard.pat.finish')}</Button>
+        <Button icon={<Flag className="h-5 w-5" />} className="w-full sm:w-auto" loading={finish.isPending} onClick={() => (marked < checkpoints.length ? setConfirmFinish(true) : finish.run())}>{t('guard.pat.finish')}</Button>
       </div>
       <ProblemModal point={problem} roundId={round.id} onClose={() => setProblem(null)} />
       <Modal open={confirmFinish} onClose={() => setConfirmFinish(false)} title={t('guard.pat.finish')}
-        footer={<><ModalCancel /><Button variant="primary" loading={finish.isPending} onClick={() => finish.mutate()}>{t('guard.pat.finish')}</Button></>}>
+        footer={<><ModalCancel /><Button variant="primary" loading={finish.isPending} onClick={() => finish.run()}>{t('guard.pat.finish')}</Button></>}>
         <p className="text-body text-slate-800">{t('guard.pat.finishConfirm', { n: checkpoints.length - marked })}</p>
       </Modal>
     </>
@@ -106,7 +117,7 @@ function ProblemModal({ point, roundId, onClose }: { point: Point | null; roundI
   const [severity, setSeverity] = useState<IncidentSeverity>('medium');
   const [err, setErr] = useState<string | undefined>();
   const close = () => { setNote(''); setAsIncident(false); setErr(undefined); onClose(); };
-  const m = useMutation({
+  const m = useGuardedMutation({
     mutationFn: () => api<{ data: { incident: { number: number } | null } }>(`/security/rounds/${roundId}/marks`, { method: 'POST', body: {
       checkpoint_id: point!.id, result: 'problem', note: note.trim(), incident: asIncident ? { category, severity } : undefined,
     } }),
@@ -115,9 +126,12 @@ function ProblemModal({ point, roundId, onClose }: { point: Point | null; roundI
   });
   return (
     <Modal open={!!point} onClose={close} dirty={!!note} title={point ? t('guard.pat.problemTitle', { name: point.name }) : ''}
-      footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} onClick={() => { if (note.trim().length < 3) { setErr(t('api.sec.problemNote')); return; } m.mutate(); }}>{t('common.save')}</Button></>}>
+      footer={<><ModalCancel /><Button variant="primary" loading={m.isPending} onClick={() => { if (note.trim().length < 3) { setErr(t('api.sec.problemNote')); return; } m.run(); }}>{t('common.save')}</Button></>}>
       <div className="space-y-4">
-        <Field label={t('guard.pat.problemNote')} required error={err} hint={t('guard.noNames')}>{(id) => <Textarea id={id} rows={3} maxLength={500} value={note} invalid={!!err} onChange={(e) => setNote(e.target.value)} />}</Field>
+        <div>
+          <Field label={t('guard.pat.problemNote')} required error={err} hint={t('guard.noNames')}>{(id) => <Textarea id={id} rows={3} maxLength={500} value={note} invalid={!!err} onChange={(e) => setNote(e.target.value)} />}</Field>
+          <NameHint text={note} />
+        </div>
         <Checkbox checked={asIncident} onChange={(e) => setAsIncident(e.target.checked)} label={t('guard.pat.asIncident')} rowClassName="font-semibold" />
         {asIncident && (
           <div className="space-y-3">
@@ -153,7 +167,7 @@ export function RoundsHistory({ from, to, page, onPage }: { from: string; to: st
         <thead><tr><Th>{t('guard.col.time')}</Th><Th className="hidden sm:table-cell">{t('guard.col.by')}</Th><Th right>{t('guard.col.points')}</Th><Th className="hidden md:table-cell">{t('guard.pat.problem')}</Th></tr></thead>
         <tbody>{q.data.data.map((r) => (
           <tr key={r.id}>
-            <Td className="whitespace-nowrap tabular-nums">{localDate(r.started_at) === me.today ? fmtTime(r.started_at) : fmtDateTime(r.started_at)}{r.finished_at ? `–${fmtTime(r.finished_at)}` : ''}
+            <Td className="whitespace-nowrap tabular-nums">{localDate(r.started_at) === me.today ? fmtTime(r.started_at) : fmtDateTime(r.started_at)}{r.finished_at ? `–${fmtWhen(r.finished_at, r.started_at)}` : ''}
               <div className="text-small text-slate-600 sm:hidden">{r.guard_name}</div>
               {!r.finished_at && <div><Badge tone="blue">{t('guard.pat.inProgress')}</Badge></div>}</Td>
             <Td className="hidden sm:table-cell">{r.guard_name}</Td>

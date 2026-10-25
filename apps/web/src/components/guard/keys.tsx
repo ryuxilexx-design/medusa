@@ -2,7 +2,7 @@
 // The key log: every room of the branch with its key — in place, or with whom since when (red when not back by the
 // end of the day). Handing out and taking back are new rows; two guards on the same key collide (409 «refresh»).
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, KeyRound, Undo2 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
@@ -10,9 +10,12 @@ import { fmtDateTime, fmtTime, localDate } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Badge, Button, cx, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, Pagination, Table, Td, Th, useToast } from '@/components/ui';
-import { ic, StaffSelect } from './common';
+import { ic, StaffSelect, useGuardedMutation } from './common';
 
-export type KeyRow = { room_id: string; room_name: string; purpose: string | null; branch_name: string; out: boolean; overdue: boolean; holder_membership_id: string | null; holder_name: string | null; at: string | null; by_name: string | null };
+export type KeyRow = {
+  room_id: string; room_name: string; purpose: string | null; active: boolean; branch_name: string; out: boolean; overdue: boolean; holder_membership_id: string | null; holder_name: string | null;
+  holder_inactive: boolean; at: string | null; by_name: string | null;
+};
 
 export function useKeys() {
   const { branchId } = useSession();
@@ -48,6 +51,7 @@ export function KeysNow({ readOnly }: { readOnly?: boolean }) {
                   <span className={cx('font-semibold', k.overdue ? 'text-red-700' : 'text-amber-900')}>
                     {t('guard.keys.outTo', { name: k.holder_name ?? '—', time: localDate(k.at!) === me.today ? fmtTime(k.at) : fmtDateTime(k.at) })}
                     {k.overdue && <Badge tone="red" className="ml-2">{t('guard.keys.overdue')}</Badge>}
+                    {k.holder_inactive && <Badge tone="gray" className="ml-2">{t('guard.keys.holderInactive')}</Badge>}
                   </span>
                 )}
               </div>
@@ -72,8 +76,9 @@ function KeyModal({ row, mode, onClose }: { row: KeyRow | null; mode: 'out' | 'i
   const [note, setNote] = useState('');
   const [err, setErr] = useState<string | undefined>();
   const close = () => { setHolder(''); setNote(''); setErr(undefined); onClose(); };
-  const who = holder || (mode === 'in' ? row?.holder_membership_id ?? '' : '');
-  const m = useMutation({
+  // «Qaytdi»: by default the person who took it (empty = them, even if they no longer work here); another person is a choice
+  const who = holder;
+  const m = useGuardedMutation({
     mutationFn: () => api(`/security/keys/${row!.room_id}/${mode}`, { method: 'POST', body: { holder_membership_id: who || null, note: note.trim() || null } }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['security'] }); toast.success(t(mode === 'out' ? 'guard.keys.given' : 'guard.keys.returned')); close(); },
     onError: (e) => { setErr(e instanceof ApiError ? e.fields?.holder_membership_id : undefined); toast.error(e); if (e instanceof ApiError && e.status === 409) { qc.invalidateQueries({ queryKey: ['security'] }); close(); } },
@@ -81,9 +86,11 @@ function KeyModal({ row, mode, onClose }: { row: KeyRow | null; mode: 'out' | 'i
   return (
     <Modal open={!!row} onClose={close} title={row ? t(mode === 'out' ? 'guard.keys.giveTitle' : 'guard.keys.backTitle', { room: row.room_name }) : ''}
       footer={<><ModalCancel /><Button variant="primary" icon={mode === 'out' ? <KeyRound className="h-5 w-5" /> : <Undo2 className="h-5 w-5" />} loading={m.isPending}
-        onClick={() => { if (mode === 'out' && !who) { setErr(t('guard.staffPick')); return; } m.mutate(); }}>{t(mode === 'out' ? 'guard.keys.give' : 'guard.keys.back')}</Button></>}>
+        onClick={() => { if (mode === 'out' && !who) { setErr(t('guard.staffPick')); return; } m.run(); }}>{t(mode === 'out' ? 'guard.keys.give' : 'guard.keys.back')}</Button></>}>
       <div className="space-y-4">
-        <Field label={t(mode === 'out' ? 'guard.keys.who' : 'guard.keys.whoBack')} required={mode === 'out'} error={err}>{(id) => <StaffSelect id={id} value={who} onChange={setHolder} invalid={!!err} />}</Field>
+        <Field label={t(mode === 'out' ? 'guard.keys.who' : 'guard.keys.whoBack')} required={mode === 'out'} error={err}>{(id) => mode === 'out'
+          ? <StaffSelect id={id} value={who} onChange={setHolder} invalid={!!err} />
+          : <StaffSelect id={id} value={who === row?.holder_membership_id ? '' : who} onChange={setHolder} invalid={!!err} allowNone noneLabel={t('guard.keys.holderSelf', { name: row?.holder_name ?? '—' })} />}</Field>
         <Field label={t('guard.noteOptional')}>{(id) => <Input id={id} maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />}</Field>
       </div>
     </Modal>

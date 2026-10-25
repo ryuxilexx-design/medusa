@@ -181,6 +181,17 @@ export function buildGuard(data: SeedData, demoDate: string, demoTime?: string):
     }
   }
 
+  // ---- this morning's alert at the operating-block door: the day guard took it a few minutes ago («Ko‘rilmoqda»).
+  //      Yesterday's late alert at the store stays untouched — «Kechikkan» on the panel and in the manager's alarm.
+  const orToday = alerts.find((e) => String(e.dedupe_key).includes('mrk-or:0:09:48'));
+  if (orToday && !acked.has(orToday.id)) {
+    const take = plus(NOW, -8);
+    const sh = shiftAt(take);
+    if (sh && take.getTime() >= plus(orToday.occurred_at, 2).getTime())
+      g.security_alert_actions.push({ id: sid(`g:act:${orToday.id}:1`), tenant_id: T, event_id: orToday.id, branch_id: BC, seq: 1, action: 'take', outcome: null, note: null, incident_id: null,
+        actor_membership_id: sh.guard_membership_id, actor_name: sh.guard_name, actor_role: 'guard', acted_at: take });
+  }
+
   // ---- the incident log
   const i1 = incident('queue', { when: day(19, '10:20'), category: 'conflict', severity: 'medium', place: 'Qabulxona', by: onDuty(day(19, '10:20')),
     description: 'Navbat sababli ikki kishi o‘rtasida tortishuv bo‘ldi. Tinchlantirildi, registrator navbat tartibini tushuntirdi.' });
@@ -241,7 +252,7 @@ export function buildGuard(data: SeedData, demoDate: string, demoTime?: string):
       const finished = plus(t, int(1, 3));
       if (!past(finished)) continue; // never an unfinished seeded round
       g.patrol_rounds.push({ id: rid, tenant_id: T, branch_id: BC, shift_id: s.id, guard_membership_id: s.guard_membership_id, guard_name: s.guard_name,
-        checkpoints_total: points.length, started_at: start, finished_at: finished });
+        checkpoints_total: points.length, checkpoint_ids: points.map((p) => p.id), started_at: start, finished_at: finished });
       g.patrol_marks.push(...marks);
     }
   }
@@ -265,7 +276,9 @@ export function buildGuard(data: SeedData, demoDate: string, demoTime?: string):
   for (let back = HISTORY_DAYS - 1; back >= 0; back--) {
     const date = addDays(demoDate, -back);
     const wd = new Date(date + 'T00:00:00Z').getUTCDay();
-    const n = wd === 0 ? int(0, 1) : int(2, 5);
+    // the demo day (a Sunday in the seed) still has its two visitors inside at the demo time (docs/SECURITY_GUARD.md)
+    const n0 = wd === 0 ? int(0, 1) : int(2, 5);
+    const n = back === 0 ? Math.max(2, n0) : n0;
     for (let k = 0; k < n; k++) {
       const v = pick(VISITS);
       let inAt = at(date, int(hm('08:40'), hm('17:00')));

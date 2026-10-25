@@ -1,13 +1,14 @@
-// The security guard «Qorovul» and the manager's «Xavfsizlik» section (migration 038, docs/SECURITY_GUARD.md).
+// The security guard «Qorovul» and the manager's «Xavfsizlik» section (migrations 038 and 040, docs/SECURITY_GUARD.md).
 // Privacy boundary: nothing here returns a patient's name, number, phone, appointment or anything clinical or
 // financial. A patient recognised by a camera is «Bemor» (no code); patient flow is counts only.
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import type { PoolClient } from 'pg';
 import {
-  ALERT_OUTCOMES, alertResolveSchema, alertTakeSchema, checkpointCreateSchema, checkpointPatchSchema, guardShiftCloseSchema, guardShiftOpenSchema,
-  INCIDENT_CATEGORIES, incidentCreateSchema, incidentEntrySchema, keyInSchema, keyOutSchema, PATROL_INTERVAL_HOURS, presenceMarkSchema, roundMarkSchema,
-  roundStartSchema, SOS_CATEGORY, sosSchema, translate, VISITOR_RETENTION_DAYS, visitorCreateSchema, type MessageKey,
+  ALERT_NEW_OVERDUE_MIN, ALERT_OUTCOMES, ALERT_TAKEN_OVERDUE_MIN, alertResolveSchema, alertTakeSchema, checkpointCreateSchema, checkpointPatchSchema, GUARD_SHIFT_STALE_HOURS,
+  guardShiftCloseSchema, guardShiftForceCloseSchema, guardShiftOpenSchema, INCIDENT_CATEGORIES, incidentCreateSchema, incidentEntrySchema, keyInSchema, keyOutSchema,
+  PATROL_INTERVAL_HOURS, presenceMarkSchema, roundMarkSchema, roundStartSchema, SOS_CATEGORY, SOS_DEDUPE_SECONDS, sosSchema, translate, VISITOR_RETENTION_DAYS,
+  visitorCreateSchema, type MessageKey,
 } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
@@ -19,12 +20,37 @@ import { assertBranch, branchScope } from '../core/scope';
 import { csvPeriod, csvTime, sendCsv } from '../core/csv';
 import { redact } from '../ai/redact';
 import { SECURITY_KINDS, SNAPSHOT_DAYS } from '../cameras/ingest';
-import { ALERT_JOINS_SQL, ALERT_KINDS_SQL, ALERT_STATE_SQL, GUARD_ROLES, keyOverdue, nextNumber, staffPresence, writeBranch } from './security';
+import {
+  ALERT_JOINS_SQL, ALERT_KINDS_SQL, ALERT_OPEN_SQL, ALERT_OVERDUE_SQL, ALERT_STATE_SQL, GUARD_ROLES, INCIDENT_CLOSED_SQL, INCIDENT_OPEN_SQL, keyOverdue, nextNumber,
+  staffPresence, VISITOR_INSIDE_SQL, writeBranch,
+} from './security';
 
 const G = GUARD_ROLES;
 /** Free text written by the guard: phone numbers are removed (the same helper as before any AI call); names are a UI hint. */
 const clean = (s: string | null | undefined) => (s == null ? null : redact(s));
 const stale = (msg = 'Holat boshqa foydalanuvchi tomonidan o‘zgartirilgan. Sahifani yangilang.') => conflict('STALE_STATE', msg);
+/** An optional Idempotency-Key (8–100 characters): a retried write returns the first row instead of a second one. */
+const idemKey = (key: string | undefined) => {
+  if (key == null || key === '') return null;
+  if (key.length < 8 || key.length > 100) throw new AppError(422, 'IDEMPOTENCY_KEY_INVALID', 'Idempotency-Key 8–100 belgidan iborat bo‘lsin');
+  return key;
+};
+/** A post shift open longer than GUARD_SHIFT_STALE_HOURS is abandoned («stale»): shown to the guard and the manager. */
+const STALE_SHIFT_SQL = `(s.closed_at IS NULL AND s.opened_at < (SELECT demo_now()) - make_interval(hours => ${GUARD_SHIFT_STALE_HOURS}))`;
+
+type OpenItems = {
+  at: string; alerts_open: number; incidents_open: number;
+  incidents: { id: string; number: number; category: string; severity: string; reported_at: string }[];
+  keys_out: { room_id: string; room_name: string; holder_name: string; at: string; overdue?: boolean }[];
+  visitors_inside_count: number;
+  visitors_inside: { id: string; purpose: string; host_name?: string; in_at: string; full_name?: string; organisation?: string }[];
+};
+/** Keys of a list of open items get «overdue» as of the list's own instant (a snapshot keeps its hand-over time). */
+const withOverdue = (o: OpenItems): OpenItems => ({ ...o, keys_out: o.keys_out.map((k) => ({ ...k, overdue: keyOverdue(new Date(k.at), new Date(o.at)) })) });
+/** What is open at the post at `at`: the database's `guard_open_items` (migration 040) — the one definition for all. */
+async function openItemsAt(q: Q, tenantId: string, branches: string[], at: Date, withNames: boolean): Promise<OpenItems> {
+  return withOverdue((await q.query(`SELECT guard_open_items($1, $2::uuid[], $3, $4) AS o`, [tenantId, branches, at, withNames])).rows[0].o);
+}
 
 /** Inclusive local date range (default: the last 7 days), at most `maxDays`. */
 function period(q: Record<string, unknown>, defaultDays = 7, maxDays = 366) {
@@ -46,7 +72,7 @@ async function staffMember(q: Q, ctx: Ctx, membershipId: string) {
 
 async function insertIncident(c: Q, ctx: Ctx, v: {
   branchId: string; category: string; severity: string; description: string; roomId?: string | null; place?: string | null;
-  source: 'manual' | 'alert' | 'sos' | 'patrol'; sosReason?: string | null; alertEventId?: string | null;
+  source: 'manual' | 'alert' | 'sos' | 'patrol'; sosReason?: string | null; alertEventId?: string | null; idempotencyKey?: string | null;
 }) {
   if (v.roomId) {
     const r = (await c.query(`SELECT branch_id FROM rooms WHERE id = $1 AND tenant_id = $2`, [v.roomId, ctx.tenantId])).rows[0];
@@ -57,13 +83,22 @@ async function insertIncident(c: Q, ctx: Ctx, v: {
   const number = await nextNumber(c, ctx.tenantId, 'incident');
   const row = (await c.query(
     `INSERT INTO security_incidents (tenant_id, branch_id, number, category, severity, room_id, place, description, source, sos_reason, alert_event_id, shift_id,
-                                     reported_by, reported_by_name, reported_by_role, reported_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, number`,
+                                     reported_by, reported_by_name, reported_by_role, reported_at, idempotency_key)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id, number`,
     [ctx.tenantId, v.branchId, number, v.category, v.severity, v.roomId ?? null, clean(v.place ?? null), clean(v.description), v.source, v.sosReason ?? null,
-      v.alertEventId ?? null, shift?.id ?? null, ctx.membershipId, ctx.name, ctx.role, now()])).rows[0];
+      v.alertEventId ?? null, shift?.id ?? null, ctx.membershipId, ctx.name, ctx.role, now(), v.idempotencyKey ?? null])).rows[0];
   await audit(c, ctx, v.source === 'sos' ? 'security.sos' : 'security.incident_create', 'security_incident', row.id,
     `Hodisa №${row.number}: ${v.category}, ${v.severity}${v.source !== 'manual' ? ` (${v.source})` : ''}`, v.branchId);
   return row as { id: string; number: number };
+}
+
+/** The incident an earlier request with this Idempotency-Key created (by the same person), or null. */
+async function incidentByKey(c: Q, ctx: Ctx, key: string | null) {
+  if (!key) return null;
+  const r = (await c.query(`SELECT id, number, reported_by FROM security_incidents WHERE tenant_id = $1 AND idempotency_key = $2`, [ctx.tenantId, key])).rows[0];
+  if (!r) return null;
+  if (r.reported_by !== ctx.membershipId) throw new AppError(422, 'IDEMPOTENCY_MISMATCH', 'Bu kalit boshqa amal uchun ishlatilgan');
+  return { id: r.id as string, number: r.number as number };
 }
 
 @Controller('security')
@@ -77,21 +112,17 @@ export class SecurityController {
   async overview(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
     const branches = branchScope(ctx, q.branch_id);
     const day = today(), from = dayStart(day), to = dayStart(addDays(day, 1));
-    const counts = (await this.db.one(
+    const extra = (await this.db.one(
       `SELECT
          (SELECT count(*)::int FROM camera_events e ${ALERT_JOINS_SQL}
-           WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_STATE_SQL} <> 'resolved') AS open_alerts,
+           WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_OVERDUE_SQL}) AS overdue_alerts,
          (SELECT count(DISTINCT a.event_id)::int FROM security_alert_actions a
            WHERE a.tenant_id = $1 AND a.branch_id = ANY($2) AND a.action = 'resolve' AND a.acted_at >= $3 AND a.acted_at < $4) AS handled_today,
          (SELECT coalesce(sum(e.enter_count), 0)::int FROM camera_events e
-           WHERE e.tenant_id = $1 AND e.kind = 'people_count' AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4) AS people_today,
-         (SELECT count(*)::int FROM security_visitors v WHERE v.tenant_id = $1 AND v.branch_id = ANY($2) AND v.out_at IS NULL) AS visitors_inside,
-         (SELECT count(*)::int FROM rooms r JOIN LATERAL (SELECT action FROM key_events k WHERE k.tenant_id = r.tenant_id AND k.room_id = r.id ORDER BY k.at DESC LIMIT 1) lk ON true
-           WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND lk.action = 'out') AS keys_out,
-         (SELECT count(*)::int FROM security_incidents i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2)
-             AND i.reported_at >= (SELECT demo_now()) - interval '30 days'
-             AND NOT EXISTS (SELECT 1 FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind = 'close')) AS open_incidents`,
+           WHERE e.tenant_id = $1 AND e.kind = 'people_count' AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4) AS people_today`,
       [ctx.tenantId, branches, from, to]))!;
+    // the open counters: the same definition as the handover checklist and the shift's snapshot
+    const open = await openItemsAt(this.db.pool, ctx.tenantId, branches, now(), false);
     // expected patient arrivals per hour today: counts only, never a name or a time slot of a person
     const arrivals = await this.db.rows(
       `SELECT extract(hour FROM a.starts_at AT TIME ZONE 'Asia/Tashkent')::int AS hour, count(*)::int AS n,
@@ -102,7 +133,7 @@ export class SecurityController {
       `SELECT c.id, c.name, c.location, b.name AS branch_name, c.status, c.purposes, greatest(c.last_seen_at, c.last_event_at) AS last_seen_at,
               EXISTS (SELECT 1 FROM camera_events e ${ALERT_JOINS_SQL}
                        WHERE e.tenant_id = c.tenant_id AND e.camera_id = c.id AND e.alert AND e.kind = 'tamper' AND e.occurred_at >= (SELECT demo_now()) - interval '7 days'
-                         AND ${ALERT_STATE_SQL} <> 'resolved') AS tamper
+                         AND ${ALERT_OPEN_SQL}) AS tamper
          FROM cameras c JOIN branches b ON b.id = c.branch_id
         WHERE c.tenant_id = $1 AND c.branch_id = ANY($2) ORDER BY b.name, c.name LIMIT 100`, [ctx.tenantId, branches]);
     const t = now().getTime();
@@ -125,7 +156,10 @@ export class SecurityController {
     const presence = await staffPresence(this.db.pool, ctx.tenantId, branches);
     return {
       data: {
-        counters: { ...counts, staff_on_site: presence.filter((p) => p.status === 'in').length, expected_today: arrivals.reduce((s, r) => s + r.n, 0) },
+        counters: {
+          ...extra, open_alerts: open.alerts_open, open_incidents: open.incidents_open, keys_out: open.keys_out.length, visitors_inside: open.visitors_inside_count,
+          staff_on_site: presence.filter((p) => p.status === 'in').length, expected_today: arrivals.reduce((s, r) => s + r.n, 0),
+        },
         arrivals_by_hour: arrivals,
         cameras: cams,
         recent_faces: faces.map((f) => (f.subject_type === 'staff'
@@ -147,7 +181,7 @@ export class SecurityController {
 
   // ================================================================ alerts
 
-  /** Security alerts: every open one (whatever its date) first, then the period's handled ones. */
+  /** Security alerts: every open one (within SECURITY_OPEN_DAYS) first — overdue ones on top — then the period's handled ones. */
   @Roles(...G) @Get('alerts')
   async alerts(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
     const branches = branchScope(ctx, q.branch_id);
@@ -156,20 +190,35 @@ export class SecurityController {
     const base = `FROM camera_events e JOIN cameras c ON c.id = e.camera_id JOIN branches b ON b.id = e.branch_id ${ALERT_JOINS_SQL}
       LEFT JOIN camera_snapshots s ON s.event_id = e.id LEFT JOIN memberships km ON km.id = k.acked_by LEFT JOIN users ku ON ku.id = km.user_id
       WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2)`;
-    const scope = `((e.occurred_at >= $3 AND e.occurred_at < $4) OR ${ALERT_STATE_SQL} <> 'resolved')`;
-    const filter = q.state === 'open' ? `${ALERT_STATE_SQL} <> 'resolved'` : q.state === 'resolved' ? `${ALERT_STATE_SQL} = 'resolved'` : 'true';
+    const scope = `((e.occurred_at >= $3 AND e.occurred_at < $4) OR ${ALERT_OPEN_SQL})`;
+    const filter = q.state === 'open' ? ALERT_OPEN_SQL : q.state === 'resolved' ? `${ALERT_STATE_SQL} = 'resolved'` : 'true';
     const rows = await this.db.rows(
       `SELECT e.id, e.kind, e.occurred_at, e.target, e.branch_id, b.name AS branch_name, c.id AS camera_id, c.name AS camera_name, c.location, c.security_mode,
               (s.event_id IS NOT NULL AND s.created_at >= (SELECT demo_now()) - make_interval(days => ${SNAPSHOT_DAYS})) AS has_snapshot,
               coalesce(la.seq, 0) AS seq, la.action AS last_action, la.outcome, la.note, la.actor_name, la.actor_role, la.acted_at, la.incident_id,
-              ${ALERT_STATE_SQL} AS state,
+              ${ALERT_STATE_SQL} AS state, ${ALERT_OVERDUE_SQL} AS overdue,
               extract(epoch FROM coalesce(fa.acted_at, k.acked_at) - e.occurred_at)::int AS response_sec,
               k.acked_at, ku.full_name AS acked_by_name
        ${base} AND ${scope} AND ${filter}
-       ORDER BY (${ALERT_STATE_SQL} <> 'resolved') DESC, e.occurred_at DESC LIMIT $5 OFFSET $6`,
+       ORDER BY ${ALERT_OPEN_SQL} DESC, ${ALERT_OVERDUE_SQL} DESC, e.occurred_at DESC LIMIT $5 OFFSET $6`,
       [ctx.tenantId, branches, fromTs, toTs, pageSize, offset]);
     const total = (await this.db.one(`SELECT count(*)::int AS n ${base} AND ${scope} AND ${filter}`, [ctx.tenantId, branches, fromTs, toTs]))!.n;
-    return { data: rows, meta: { from, to, page, page_size: pageSize, total, snapshot_days: SNAPSHOT_DAYS } };
+    return { data: rows, meta: { from, to, page, page_size: pageSize, total, snapshot_days: SNAPSHOT_DAYS, overdue_new_min: ALERT_NEW_OVERDUE_MIN, overdue_taken_min: ALERT_TAKEN_OVERDUE_MIN } };
+  }
+
+  /**
+   * The guard shell's pulse (every page, polled in the background): open / new / overdue alerts of the branches and
+   * the time of the newest new one — the badge and the beep. Counts only.
+   */
+  @Roles(...G) @Get('pulse')
+  async pulse(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
+    const branches = branchScope(ctx, q.branch_id);
+    const r = (await this.db.one(
+      `SELECT count(*)::int AS open, count(*) FILTER (WHERE ${ALERT_STATE_SQL} = 'new')::int AS new, count(*) FILTER (WHERE ${ALERT_OVERDUE_SQL})::int AS overdue,
+              max(e.occurred_at) FILTER (WHERE ${ALERT_STATE_SQL} = 'new') AS newest_at
+         FROM camera_events e ${ALERT_JOINS_SQL}
+        WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_OPEN_SQL}`, [ctx.tenantId, branches]))!;
+    return { data: r };
   }
 
   /**
@@ -178,6 +227,21 @@ export class SecurityController {
    */
   @Roles(...G) @Get('alerts/:id/snapshot')
   async snapshot(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Res() res: Response) {
+    const s = await this.alertPicture(ctx, id);
+    await audit(this.db.pool, ctx, 'security.snapshot_view', 'camera_event', id, 'Ogohlantirish surati ko‘rildi', s.branch_id);
+    this.sendPicture(res, s);
+  }
+
+  /**
+   * The feed's thumbnail of the same picture (shown small and blurred, the list refreshes every 30 s): not audited per
+   * load — opening the picture (`/snapshot`) is. Same rules: a security alert, own branch, ≤ SNAPSHOT_DAYS.
+   */
+  @Roles(...G) @Get('alerts/:id/thumb')
+  async thumb(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Res() res: Response) {
+    this.sendPicture(res, await this.alertPicture(ctx, id));
+  }
+
+  private async alertPicture(ctx: Ctx, id: string) {
     if (!isUuid(id)) throw notFound('Surat');
     const s = await this.db.one(
       `SELECT s.content_type, s.bytes, e.branch_id FROM camera_snapshots s JOIN camera_events e ON e.id = s.event_id
@@ -185,7 +249,10 @@ export class SecurityController {
       [id, ctx.tenantId, SECURITY_KINDS, SNAPSHOT_DAYS]);
     if (!s) throw notFound('Surat');
     assertBranch(ctx, s.branch_id);
-    await audit(this.db.pool, ctx, 'security.snapshot_view', 'camera_event', id, 'Ogohlantirish surati ko‘rildi', s.branch_id);
+    return s as { content_type: string; bytes: Buffer; branch_id: string };
+  }
+
+  private sendPicture(res: Response, s: { content_type: string; bytes: Buffer }) {
     res.setHeader('Content-Type', s.content_type);
     res.setHeader('Cache-Control', 'private, max-age=600');
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -254,21 +321,20 @@ export class SecurityController {
     const branches = branchScope(ctx, q.branch_id);
     const { from, to, fromTs, toTs } = period(q, 30);
     const { page, pageSize, offset } = pageParams(q);
-    const closed = `EXISTS (SELECT 1 FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind = 'close')`;
-    // an open incident stays on the list whatever its date
-    const where = `i.tenant_id = $1 AND i.branch_id = ANY($2) AND ((i.reported_at >= $3 AND i.reported_at < $4) OR NOT ${closed})
-      AND ($5::text IS NULL OR ($5 = 'open' AND NOT ${closed}) OR ($5 = 'closed' AND ${closed}))
+    // an open incident (within SECURITY_OPEN_DAYS — the panel's counter uses the same rule) stays on the list whatever its date
+    const where = `i.tenant_id = $1 AND i.branch_id = ANY($2) AND ((i.reported_at >= $3 AND i.reported_at < $4) OR ${INCIDENT_OPEN_SQL})
+      AND ($5::text IS NULL OR ($5 = 'open' AND ${INCIDENT_OPEN_SQL}) OR ($5 = 'closed' AND ${INCIDENT_CLOSED_SQL}))
       AND ($6::text IS NULL OR i.category = $6) AND ($7::text IS NULL OR i.source = $7)`;
     const params = [ctx.tenantId, branches, fromTs, toTs, ['open', 'closed'].includes(q.status) ? q.status : null,
       (INCIDENT_CATEGORIES as readonly string[]).includes(q.category) ? q.category : null, ['manual', 'alert', 'sos', 'patrol'].includes(q.source) ? q.source : null];
     const rows = await this.db.rows(
       `SELECT i.id, i.number, i.category, i.severity, i.source, i.sos_reason, i.place, i.description, i.reported_at, i.reported_by_name, i.reported_by_role,
-              i.alert_event_id, b.name AS branch_name, r.name AS room_name, ${closed} AS closed,
+              i.alert_event_id, b.name AS branch_name, r.name AS room_name, ${INCIDENT_CLOSED_SQL} AS closed,
               EXISTS (SELECT 1 FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind = 'seen') AS seen,
               (SELECT count(*)::int FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind IN ('note', 'correction')) AS entries
          FROM security_incidents i JOIN branches b ON b.id = i.branch_id LEFT JOIN rooms r ON r.id = i.room_id
         WHERE ${where}
-        ORDER BY (NOT ${closed}) DESC, CASE i.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, i.reported_at DESC
+        ORDER BY (NOT ${INCIDENT_CLOSED_SQL}) DESC, CASE i.severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, i.reported_at DESC
         LIMIT $8 OFFSET $9`, [...params, pageSize, offset]);
     const total = (await this.db.one(`SELECT count(*)::int AS n FROM security_incidents i WHERE ${where}`, params))!.n;
     return { data: rows, meta: { from, to, page, page_size: pageSize, total } };
@@ -291,15 +357,23 @@ export class SecurityController {
       [i.branch_id, i.room_id, i.alert_event_id]);
     const entries = await this.db.rows(
       `SELECT id, kind, text, author_name, author_role, created_at FROM security_incident_entries WHERE incident_id = $1 ORDER BY created_at, id LIMIT 200`, [id]);
-    const { tenant_id: _t, ...rest } = i;
+    const { tenant_id: _t, idempotency_key: _k, ...rest } = i;
     return { data: { ...rest, ...extra, closed: entries.some((e) => e.kind === 'close'), seen: entries.some((e) => e.kind === 'seen'), entries } };
   }
 
-  @Roles(...G) @Post('incidents') @HttpCode(201)
-  async createIncident(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+  /** «Hodisa yozish». An Idempotency-Key header makes a retried (double-tapped) save return the first incident (200). */
+  @Roles(...G) @Post('incidents')
+  async createIncident(@CurrentCtx() ctx: Ctx, @Body() body: unknown, @Headers('idempotency-key') rawKey: string | undefined, @Res({ passthrough: true }) res: Response) {
     const input = parse(incidentCreateSchema, body);
-    const branchId = writeBranch(ctx, input.branch_id);
-    return this.db.tx(async (c) => ({ data: await insertIncident(c, ctx, { branchId, ...input, roomId: input.room_id, source: 'manual' }) }));
+    const key = idemKey(rawKey);
+    return this.db.tx(async (c) => {
+      const branchId = await writeBranch(c, ctx, input.branch_id);
+      await c.query(`SELECT id FROM memberships WHERE id = $1 FOR UPDATE`, [ctx.membershipId]); // one write at a time per person (the key check below)
+      const prev = await incidentByKey(c, ctx, key);
+      if (prev) { res.status(200); return { data: { ...prev, duplicate: true } }; }
+      res.status(201);
+      return { data: await insertIncident(c, ctx, { branchId, ...input, roomId: input.room_id, source: 'manual', idempotencyKey: key }) };
+    });
   }
 
   /** An addition or a correction (a new row — the first text is never edited); closing with a resolution is the manager's. */
@@ -333,18 +407,37 @@ export class SecurityController {
     });
   }
 
-  /** «Rahbarga xabar»: a critical incident with a preset reason; the manager's shell shows a banner until it is seen. */
-  @Roles('guard') @Post('sos') @HttpCode(201)
-  async sos(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+  /**
+   * «Rahbarga xabar»: a critical incident with a preset reason; the manager's shell shows a banner until it is seen.
+   * A double tap never files two: the same guard, branch and reason within SOS_DEDUPE_SECONDS — or the same
+   * Idempotency-Key — returns the first call (200, `duplicate: true`).
+   */
+  @Roles('guard') @Post('sos')
+  async sos(@CurrentCtx() ctx: Ctx, @Body() body: unknown, @Headers('idempotency-key') rawKey: string | undefined, @Res({ passthrough: true }) res: Response) {
     const input = parse(sosSchema, body);
-    const branchId = writeBranch(ctx, input.branch_id);
+    const key = idemKey(rawKey);
     const label = translate('uz', `guard.sos.reason.${input.reason}` as MessageKey);
-    return this.db.tx(async (c) => ({ data: await insertIncident(c, ctx, {
-      branchId, category: SOS_CATEGORY[input.reason], severity: 'critical', description: input.note ? `${label}. ${input.note}` : label, source: 'sos', sosReason: input.reason,
-    }) }));
+    return this.db.tx(async (c) => {
+      const branchId = await writeBranch(c, ctx, input.branch_id);
+      await c.query(`SELECT id FROM memberships WHERE id = $1 FOR UPDATE`, [ctx.membershipId]); // two taps of one guard queue up here
+      const prev = (await incidentByKey(c, ctx, key)) ?? (await c.query(
+        `SELECT id, number FROM security_incidents WHERE tenant_id = $1 AND source = 'sos' AND reported_by = $2 AND branch_id = $3 AND sos_reason = $4
+            AND reported_at >= $5::timestamptz - make_interval(secs => $6) ORDER BY reported_at DESC LIMIT 1`,
+        [ctx.tenantId, ctx.membershipId, branchId, input.reason, now(), SOS_DEDUPE_SECONDS])).rows[0];
+      if (prev) { res.status(200); return { data: { id: prev.id as string, number: prev.number as number, duplicate: true } }; }
+      res.status(201);
+      return { data: await insertIncident(c, ctx, {
+        branchId, category: SOS_CATEGORY[input.reason], severity: 'critical', description: input.note ? `${label}. ${input.note}` : label, source: 'sos', sosReason: input.reason,
+        idempotencyKey: key,
+      }) };
+    });
   }
 
-  /** The manager's alarm banner: unseen SOS calls of the last day and alerts the guard escalated. Polled by the shell. */
+  /**
+   * The manager's alarm banner, polled by the shell: unseen SOS calls of the last day, alerts the guard escalated, and
+   * overdue («Kechikkan») alerts of the last day — nobody took them in ALERT_NEW_OVERDUE_MIN, or taken and still not
+   * closed after ALERT_TAKEN_OVERDUE_MIN.
+   */
   @Roles('manager') @Get('alarms')
   async alarms(@CurrentCtx() ctx: Ctx) {
     const sos = await this.db.rows(
@@ -356,9 +449,15 @@ export class SecurityController {
     const escalated = await this.db.rows(
       `SELECT e.id, e.kind, e.occurred_at, c.name AS camera_name, b.name AS branch_name, la.actor_name, la.acted_at, la.seq
          FROM camera_events e JOIN cameras c ON c.id = e.camera_id JOIN branches b ON b.id = e.branch_id ${ALERT_JOINS_SQL}
-        WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_STATE_SQL} = 'escalated'
+        WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_OPEN_SQL} AND ${ALERT_STATE_SQL} = 'escalated'
         ORDER BY la.acted_at DESC LIMIT 10`, [ctx.tenantId, ctx.branchIds]);
-    return { data: { sos, escalated } };
+    const overdue = await this.db.rows(
+      `SELECT e.id, e.kind, e.occurred_at, c.name AS camera_name, b.name AS branch_name, ${ALERT_STATE_SQL} AS state, la.actor_name, la.acted_at
+         FROM camera_events e JOIN cameras c ON c.id = e.camera_id JOIN branches b ON b.id = e.branch_id ${ALERT_JOINS_SQL}
+        WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_OVERDUE_SQL}
+          AND e.occurred_at >= (SELECT demo_now()) - interval '24 hours'
+        ORDER BY e.occurred_at DESC LIMIT 10`, [ctx.tenantId, ctx.branchIds]);
+    return { data: { sos, escalated, overdue } };
   }
 
   // ================================================================ visitors
@@ -366,26 +465,27 @@ export class SecurityController {
   @Roles(...G) @Get('visitors')
   async visitors(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
     const branches = branchScope(ctx, q.branch_id);
-    const cols = `v.id, v.branch_id, b.name AS branch_name, v.full_name, v.organisation, v.purpose, v.purpose_note, v.host_name, v.pass_no, v.in_at, v.out_at, v.recorded_by_name, v.purged_at`;
+    const cols = `v.id, v.branch_id, b.name AS branch_name, v.full_name, v.organisation, v.purpose, v.purpose_note, v.host_name, v.pass_no, v.in_at, v.out_at,
+      v.auto_closed, v.recorded_by_name, v.purged_at`;
     if (q.inside === '1') {
       return { data: await this.db.rows(
         `SELECT ${cols} FROM security_visitors v JOIN branches b ON b.id = v.branch_id
-          WHERE v.tenant_id = $1 AND v.branch_id = ANY($2) AND v.out_at IS NULL ORDER BY v.in_at LIMIT 200`, [ctx.tenantId, branches]) };
+          WHERE v.tenant_id = $1 AND v.branch_id = ANY($2) AND ${VISITOR_INSIDE_SQL} ORDER BY v.in_at LIMIT 200`, [ctx.tenantId, branches]) };
     }
     const { from, to, fromTs, toTs } = period(q, 1);
     const { page, pageSize, offset } = pageParams(q);
     const where = `v.tenant_id = $1 AND v.branch_id = ANY($2) AND v.in_at >= $3 AND v.in_at < $4`;
     const rows = await this.db.rows(`SELECT ${cols} FROM security_visitors v JOIN branches b ON b.id = v.branch_id WHERE ${where} ORDER BY v.in_at DESC LIMIT $5 OFFSET $6`,
       [ctx.tenantId, branches, fromTs, toTs, pageSize, offset]);
-    const m = (await this.db.one(`SELECT count(*)::int AS total, count(*) FILTER (WHERE v.out_at IS NULL)::int AS inside FROM security_visitors v WHERE ${where}`, [ctx.tenantId, branches, fromTs, toTs]))!;
+    const m = (await this.db.one(`SELECT count(*)::int AS total, count(*) FILTER (WHERE ${VISITOR_INSIDE_SQL})::int AS inside FROM security_visitors v WHERE ${where}`, [ctx.tenantId, branches, fromTs, toTs]))!;
     return { data: rows, meta: { from, to, page, page_size: pageSize, total: m.total, inside: m.inside, retention_days: VISITOR_RETENTION_DAYS } };
   }
 
   @Roles(...G) @Post('visitors') @HttpCode(201)
   async addVisitor(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(visitorCreateSchema, body);
-    const branchId = writeBranch(ctx, input.branch_id);
     return this.db.tx(async (c) => {
+      const branchId = await writeBranch(c, ctx, input.branch_id);
       const host = input.host_membership_id ? await staffMember(c, ctx, input.host_membership_id) : null;
       const r = (await c.query(
         `INSERT INTO security_visitors (tenant_id, branch_id, full_name, organisation, purpose, purpose_note, host_membership_id, host_name, pass_no, in_at, recorded_by, recorded_by_name)
@@ -419,12 +519,14 @@ export class SecurityController {
   async keys(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
     const branches = branchScope(ctx, q.branch_id);
     const rows = await this.db.rows(
-      `SELECT r.id AS room_id, r.name AS room_name, r.purpose, r.branch_id, b.name AS branch_name, lk.action, lk.holder_membership_id, lk.holder_name, lk.at, lk.by_name
+      `SELECT r.id AS room_id, r.name AS room_name, r.purpose, r.active, r.branch_id, b.name AS branch_name, lk.action, lk.holder_membership_id, lk.holder_name, lk.at, lk.by_name,
+              (hm.status IS DISTINCT FROM 'active') AS holder_inactive
          FROM rooms r JOIN branches b ON b.id = r.branch_id
          LEFT JOIN LATERAL (SELECT k.action, k.holder_membership_id, k.holder_name, k.at, k.by_name FROM key_events k
                              WHERE k.tenant_id = r.tenant_id AND k.room_id = r.id ORDER BY k.at DESC, k.id DESC LIMIT 1) lk ON true
+         LEFT JOIN memberships hm ON hm.id = lk.holder_membership_id
         WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND (r.active OR lk.action = 'out') ORDER BY b.name, r.name LIMIT 300`, [ctx.tenantId, branches]);
-    return { data: rows.map((r) => ({ ...r, out: r.action === 'out', overdue: r.action === 'out' && keyOverdue(new Date(r.at)) })) };
+    return { data: rows.map((r) => ({ ...r, out: r.action === 'out', overdue: r.action === 'out' && keyOverdue(new Date(r.at)), holder_inactive: r.action === 'out' && r.holder_inactive })) };
   }
 
   @Roles(...G) @Get('keys/log')
@@ -443,10 +545,10 @@ export class SecurityController {
   /** Locks the room row: two guards handing the same key collide here, the second gets 409. */
   private async lockRoom(c: Q, ctx: Ctx, roomId: string) {
     if (!isUuid(roomId)) throw notFound('Xona');
-    const r = (await c.query(`SELECT id, branch_id, name FROM rooms WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [roomId, ctx.tenantId])).rows[0];
+    const r = (await c.query(`SELECT id, branch_id, name, active FROM rooms WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [roomId, ctx.tenantId])).rows[0];
     if (!r) throw notFound('Xona');
     assertBranch(ctx, r.branch_id);
-    const last = (await c.query(`SELECT action, holder_membership_id FROM key_events WHERE tenant_id = $1 AND room_id = $2 ORDER BY at DESC, id DESC LIMIT 1`, [ctx.tenantId, roomId])).rows[0];
+    const last = (await c.query(`SELECT action, holder_membership_id, holder_name FROM key_events WHERE tenant_id = $1 AND room_id = $2 ORDER BY at DESC, id DESC LIMIT 1`, [ctx.tenantId, roomId])).rows[0];
     return { room: r, last };
   }
 
@@ -455,6 +557,7 @@ export class SecurityController {
     const input = parse(keyOutSchema, body);
     return this.db.tx(async (c) => {
       const { room, last } = await this.lockRoom(c, ctx, roomId);
+      if (!room.active) throw new AppError(422, 'ROOM_INACTIVE', 'Bu xona faol emas — kalit berilmaydi');
       if (last?.action === 'out') throw stale('Bu kalit allaqachon berilgan. Sahifani yangilang.');
       const holder = await staffMember(c, ctx, input.holder_membership_id);
       await c.query(
@@ -465,13 +568,14 @@ export class SecurityController {
     });
   }
 
+  /** «Qaytdi»: by default the person who took it brings it back — even if they were deactivated meanwhile. */
   @Roles(...G) @Post('keys/:roomId/in') @HttpCode(201)
   async keyIn(@CurrentCtx() ctx: Ctx, @Param('roomId') roomId: string, @Body() body: unknown) {
     const input = parse(keyInSchema, body);
     return this.db.tx(async (c) => {
       const { room, last } = await this.lockRoom(c, ctx, roomId);
       if (last?.action !== 'out') throw stale('Bu kalit allaqachon joyida. Sahifani yangilang.');
-      const holder = await staffMember(c, ctx, input.holder_membership_id ?? last.holder_membership_id);
+      const holder = input.holder_membership_id ? await staffMember(c, ctx, input.holder_membership_id) : { id: last.holder_membership_id as string, full_name: last.holder_name as string };
       await c.query(
         `INSERT INTO key_events (tenant_id, branch_id, room_id, action, holder_membership_id, holder_name, note, by_membership_id, by_name, at)
          VALUES ($1,$2,$3,'in',$4,$5,$6,$7,$8,$9)`, [ctx.tenantId, room.branch_id, room.id, holder.id, holder.full_name, clean(input.note), ctx.membershipId, ctx.name, now()]);
@@ -494,8 +598,8 @@ export class SecurityController {
   @Roles('manager') @Post('checkpoints') @HttpCode(201)
   async addCheckpoint(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(checkpointCreateSchema, body);
-    assertBranch(ctx, input.branch_id);
     return this.db.tx(async (c) => {
+      await writeBranch(c, ctx, input.branch_id);
       const pos = input.position ?? (await c.query(`SELECT coalesce(max(position), 0) + 1 AS n FROM patrol_checkpoints WHERE tenant_id = $1 AND branch_id = $2`, [ctx.tenantId, input.branch_id])).rows[0].n;
       const r = (await c.query(`INSERT INTO patrol_checkpoints (tenant_id, branch_id, name, position, created_at) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
         [ctx.tenantId, input.branch_id, input.name, Math.min(999, pos), now()])).rows[0];
@@ -518,22 +622,34 @@ export class SecurityController {
     });
   }
 
-  /** The guard's own open round (with the checkpoints and their marks), or the active checkpoints to start one. */
+  /**
+   * The guard's own open round with its checkpoints — the list frozen when it started (a point switched off later
+   * stays, a new one is not added) — or the active checkpoints to start one, plus when the next round is due.
+   */
   @Roles(...G) @Get('rounds/current')
   async currentRound(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
     const round = await this.db.one(
-      `SELECT r.id, r.branch_id, b.name AS branch_name, r.started_at, r.checkpoints_total FROM patrol_rounds r JOIN branches b ON b.id = r.branch_id
+      `SELECT r.id, r.branch_id, b.name AS branch_name, r.started_at, r.checkpoints_total, r.checkpoint_ids FROM patrol_rounds r JOIN branches b ON b.id = r.branch_id
         WHERE r.tenant_id = $1 AND r.guard_membership_id = $2 AND r.finished_at IS NULL`, [ctx.tenantId, ctx.membershipId]);
     const branches = round ? [round.branch_id] : branchScope(ctx, q.branch_id);
     const points = await this.db.rows(
       `SELECT p.id, p.name, p.position, p.branch_id, m.result, m.note, m.marked_at, m.incident_id
          FROM patrol_checkpoints p LEFT JOIN patrol_marks m ON m.checkpoint_id = p.id AND m.round_id = $3
-        WHERE p.tenant_id = $1 AND p.branch_id = ANY($2) AND (p.active OR m.id IS NOT NULL) ORDER BY p.position, p.name LIMIT 200`,
-      [ctx.tenantId, branches, round?.id ?? null]);
+        WHERE p.tenant_id = $1 AND p.branch_id = ANY($2)
+          AND (CASE WHEN $4::uuid[] IS NOT NULL THEN p.id = ANY($4::uuid[]) ELSE p.active OR m.id IS NOT NULL END)
+        ORDER BY p.position, p.name LIMIT 200`,
+      [ctx.tenantId, branches, round?.id ?? null, round?.checkpoint_ids ?? null]);
     const last = await this.db.one(
       `SELECT r.finished_at, r.guard_name FROM patrol_rounds r WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND r.finished_at IS NOT NULL ORDER BY r.finished_at DESC LIMIT 1`,
       [ctx.tenantId, branches]);
-    return { data: { round: round ?? null, checkpoints: points, last_finished_at: last?.finished_at ?? null, interval_hours: PATROL_INTERVAL_HOURS } };
+    const shift = await this.db.one(
+      `SELECT s.id FROM guard_shifts s WHERE s.tenant_id = $1 AND s.guard_membership_id = $2 AND s.closed_at IS NULL AND s.branch_id = ANY($3)`, [ctx.tenantId, ctx.membershipId, branches]);
+    const { checkpoint_ids: _ids, ...r } = round ?? {};
+    const dueAt = last?.finished_at ? new Date(new Date(last.finished_at).getTime() + PATROL_INTERVAL_HOURS * 3600_000) : null;
+    return { data: {
+      round: round ? r : null, checkpoints: points, last_finished_at: last?.finished_at ?? null, interval_hours: PATROL_INTERVAL_HOURS,
+      next_due_at: dueAt?.toISOString() ?? null, overdue: !!dueAt && dueAt.getTime() <= now().getTime(), shift_open: !!shift,
+    } };
   }
 
   @Roles(...G) @Get('rounds')
@@ -554,21 +670,23 @@ export class SecurityController {
     return { data: rows, meta: { from, to, page, page_size: pageSize, total } };
   }
 
+  /** Starts a round over the branch's active checkpoints (frozen on the round); the guard's post shift must be open. */
   @Roles('guard') @Post('rounds') @HttpCode(201)
   async startRound(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(roundStartSchema, body);
-    const branchId = writeBranch(ctx, input.branch_id);
     return this.db.tx(async (c) => {
+      const branchId = await writeBranch(c, ctx, input.branch_id);
       await c.query(`SELECT id FROM memberships WHERE id = $1 FOR UPDATE`, [ctx.membershipId]); // one start at a time per guard
       if ((await c.query(`SELECT 1 FROM patrol_rounds WHERE tenant_id = $1 AND guard_membership_id = $2 AND finished_at IS NULL`, [ctx.tenantId, ctx.membershipId])).rowCount)
         throw conflict('ROUND_OPEN', 'Tugallanmagan obxodingiz bor. Sahifani yangilang.');
-      const n = (await c.query(`SELECT count(*)::int AS n FROM patrol_checkpoints WHERE tenant_id = $1 AND branch_id = $2 AND active`, [ctx.tenantId, branchId])).rows[0].n;
-      if (!n) throw new AppError(422, 'NO_CHECKPOINTS', 'Bu filialda nazorat nuqtalari yo‘q — ularni rahbar qo‘shadi');
       const shift = (await c.query(`SELECT id FROM guard_shifts WHERE tenant_id = $1 AND guard_membership_id = $2 AND branch_id = $3 AND closed_at IS NULL`, [ctx.tenantId, ctx.membershipId, branchId])).rows[0];
+      if (!shift) throw conflict('SHIFT_REQUIRED', 'Obxoddan oldin smenani oching');
+      const ids = (await c.query(`SELECT id FROM patrol_checkpoints WHERE tenant_id = $1 AND branch_id = $2 AND active ORDER BY position, name LIMIT 200`, [ctx.tenantId, branchId])).rows.map((r) => r.id as string);
+      if (!ids.length) throw new AppError(422, 'NO_CHECKPOINTS', 'Bu filialda nazorat nuqtalari yo‘q — ularni rahbar qo‘shadi');
       const r = (await c.query(
-        `INSERT INTO patrol_rounds (tenant_id, branch_id, shift_id, guard_membership_id, guard_name, checkpoints_total, started_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-        [ctx.tenantId, branchId, shift?.id ?? null, ctx.membershipId, ctx.name, n, now()])).rows[0];
-      await audit(c, ctx, 'security.round_start', 'patrol_round', r.id, `Obxod boshlandi (${n} ta nuqta)`, branchId);
+        `INSERT INTO patrol_rounds (tenant_id, branch_id, shift_id, guard_membership_id, guard_name, checkpoints_total, checkpoint_ids, started_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+        [ctx.tenantId, branchId, shift.id, ctx.membershipId, ctx.name, ids.length, ids, now()])).rows[0];
+      await audit(c, ctx, 'security.round_start', 'patrol_round', r.id, `Obxod boshlandi (${ids.length} ta nuqta)`, branchId);
       return { data: { id: r.id } };
     });
   }
@@ -590,6 +708,8 @@ export class SecurityController {
       const r = await this.lockOwnRound(c, ctx, id);
       const p = (await c.query(`SELECT id, name FROM patrol_checkpoints WHERE id = $1 AND tenant_id = $2 AND branch_id = $3`, [input.checkpoint_id, ctx.tenantId, r.branch_id])).rows[0];
       if (!p) throw invalid({ checkpoint_id: 'Nazorat nuqtasi topilmadi' });
+      // only the points frozen when the round started (a point added later belongs to the next round)
+      if (r.checkpoint_ids && !(r.checkpoint_ids as string[]).includes(p.id)) throw invalid({ checkpoint_id: 'Bu nuqta obxod ro‘yxatida yo‘q' });
       if ((await c.query(`SELECT 1 FROM patrol_marks WHERE round_id = $1 AND checkpoint_id = $2`, [id, p.id])).rowCount)
         throw stale('Bu nuqta allaqachon belgilangan. Sahifani yangilang.');
       let incident: { id: string; number: number } | null = null;
@@ -615,35 +735,26 @@ export class SecurityController {
 
   // ================================================================ post shift and handover
 
-  /** What is still open at the post: alerts, incidents, keys out, visitors inside (the handover checklist). */
-  private async openItems(branches: string[], tenantId: string) {
-    const alerts = (await this.db.one(
-      `SELECT count(*)::int AS n FROM camera_events e ${ALERT_JOINS_SQL} WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND ${ALERT_STATE_SQL} <> 'resolved'`,
-      [tenantId, branches]))!.n;
-    const incidents = await this.db.rows(
-      `SELECT i.id, i.number, i.category, i.severity, i.reported_at FROM security_incidents i
-        WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.reported_at >= (SELECT demo_now()) - interval '30 days'
-          AND NOT EXISTS (SELECT 1 FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind = 'close') ORDER BY i.reported_at DESC LIMIT 20`, [tenantId, branches]);
-    const keys = (await this.db.rows(
-      `SELECT r.id AS room_id, r.name AS room_name, lk.holder_name, lk.at FROM rooms r
-         JOIN LATERAL (SELECT action, holder_name, at FROM key_events k WHERE k.tenant_id = r.tenant_id AND k.room_id = r.id ORDER BY k.at DESC, k.id DESC LIMIT 1) lk ON true
-        WHERE r.tenant_id = $1 AND r.branch_id = ANY($2) AND lk.action = 'out' ORDER BY lk.at LIMIT 50`, [tenantId, branches])).map((k) => ({ ...k, overdue: keyOverdue(new Date(k.at)) }));
-    const visitors = await this.db.rows(
-      `SELECT v.id, v.full_name, v.organisation, v.purpose, v.host_name, v.in_at FROM security_visitors v
-        WHERE v.tenant_id = $1 AND v.branch_id = ANY($2) AND v.out_at IS NULL ORDER BY v.in_at LIMIT 50`, [tenantId, branches]);
-    return { alerts_open: alerts, incidents, keys_out: keys, visitors_inside: visitors };
+  /**
+   * The previous guard's hand-over for a post: the latest shift of the branch closed before `before` (this guard's
+   * shift opening; with two shifts open in a branch the note still belongs to the one this guard took over).
+   */
+  private async previousShift(branches: string[], tenantId: string, before: Date | null) {
+    return this.db.one(
+      `SELECT s.id, s.number, s.guard_name, s.opened_at, s.closed_at, s.handover_note, s.forced, s.force_reason, b.name AS branch_name, cu.full_name AS closed_by_name
+         FROM guard_shifts s JOIN branches b ON b.id = s.branch_id LEFT JOIN memberships cm ON cm.id = s.closed_by LEFT JOIN users cu ON cu.id = cm.user_id
+        WHERE s.tenant_id = $1 AND s.branch_id = ANY($2) AND s.closed_at IS NOT NULL AND ($3::timestamptz IS NULL OR s.closed_at <= $3)
+        ORDER BY s.closed_at DESC LIMIT 1`, [tenantId, branches, before]);
   }
 
   @Roles(...G) @Get('shifts/current')
   async currentShift(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>) {
-    const shift = await this.db.one(
-      `SELECT s.id, s.number, s.branch_id, b.name AS branch_name, s.opened_at FROM guard_shifts s JOIN branches b ON b.id = s.branch_id
+    const s = await this.db.one(
+      `SELECT s.id, s.number, s.branch_id, b.name AS branch_name, s.opened_at, ${STALE_SHIFT_SQL} AS stale FROM guard_shifts s JOIN branches b ON b.id = s.branch_id
         WHERE s.tenant_id = $1 AND s.guard_membership_id = $2 AND s.closed_at IS NULL`, [ctx.tenantId, ctx.membershipId]);
-    const branches = shift ? [shift.branch_id] : branchScope(ctx, q.branch_id);
-    const previous = await this.db.one(
-      `SELECT s.id, s.number, s.guard_name, s.opened_at, s.closed_at, s.handover_note, b.name AS branch_name FROM guard_shifts s JOIN branches b ON b.id = s.branch_id
-        WHERE s.tenant_id = $1 AND s.branch_id = ANY($2) AND s.closed_at IS NOT NULL ORDER BY s.closed_at DESC LIMIT 1`, [ctx.tenantId, branches]);
-    return { data: { shift: shift ?? null, previous: previous ?? null, open_items: await this.openItems(branches, ctx.tenantId) } };
+    const branches = s ? [s.branch_id] : branchScope(ctx, q.branch_id);
+    const previous = await this.previousShift(branches, ctx.tenantId, s ? new Date(s.opened_at) : null);
+    return { data: { shift: s ?? null, previous: previous ?? null, open_items: await openItemsAt(this.db.pool, ctx.tenantId, branches, now(), true), stale_hours: GUARD_SHIFT_STALE_HOURS } };
   }
 
   @Roles(...G) @Get('shifts')
@@ -654,18 +765,20 @@ export class SecurityController {
     const where = `s.tenant_id = $1 AND s.branch_id = ANY($2) AND s.opened_at < $4 AND coalesce(s.closed_at, (SELECT demo_now())) >= $3`;
     const rows = await this.db.rows(
       `SELECT s.id, s.number, s.branch_id, b.name AS branch_name, s.guard_name, s.opened_at, s.closed_at, (s.handover_note IS NOT NULL) AS has_handover,
+              s.forced, ${STALE_SHIFT_SQL} AS stale,
               (SELECT count(*)::int FROM patrol_rounds r WHERE r.shift_id = s.id AND r.finished_at IS NOT NULL) AS rounds
-         FROM guard_shifts s JOIN branches b ON b.id = s.branch_id WHERE ${where} ORDER BY s.opened_at DESC LIMIT $5 OFFSET $6`,
+         FROM guard_shifts s JOIN branches b ON b.id = s.branch_id WHERE ${where} ORDER BY ${STALE_SHIFT_SQL} DESC, s.opened_at DESC LIMIT $5 OFFSET $6`,
       [ctx.tenantId, branches, fromTs, toTs, pageSize, offset]);
     const total = (await this.db.one(`SELECT count(*)::int AS n FROM guard_shifts s WHERE ${where}`, [ctx.tenantId, branches, fromTs, toTs]))!.n;
-    return { data: rows, meta: { from, to, page, page_size: pageSize, total } };
+    // (a shift still open overlaps every period up to today, so an abandoned one is always listed — first)
+    return { data: rows, meta: { from, to, page, page_size: pageSize, total, stale_hours: GUARD_SHIFT_STALE_HOURS } };
   }
 
   @Roles('guard') @Post('shifts') @HttpCode(201)
   async openShift(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(guardShiftOpenSchema, body);
-    const branchId = writeBranch(ctx, input.branch_id);
     return this.db.tx(async (c) => {
+      const branchId = await writeBranch(c, ctx, input.branch_id);
       await c.query(`SELECT id FROM memberships WHERE id = $1 FOR UPDATE`, [ctx.membershipId]);
       if ((await c.query(`SELECT 1 FROM guard_shifts WHERE tenant_id = $1 AND guard_membership_id = $2 AND closed_at IS NULL`, [ctx.tenantId, ctx.membershipId])).rowCount)
         throw conflict('SHIFT_OPEN', 'Smenangiz allaqachon ochiq. Sahifani yangilang.');
@@ -677,31 +790,58 @@ export class SecurityController {
     });
   }
 
+  /** Locks an open shift of the clinic (own branch) and ends the guard's open round (its missing points stay missing). */
+  private async lockOpenShift(c: Q, ctx: Ctx, id: string) {
+    if (!isUuid(id)) throw notFound('Qorovul smenasi');
+    const s = (await c.query(`SELECT * FROM guard_shifts WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
+    if (!s) throw notFound('Qorovul smenasi');
+    assertBranch(ctx, s.branch_id);
+    return s;
+  }
+
   @Roles('guard') @Post('shifts/:id/close') @HttpCode(200)
   async closeShift(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     const input = parse(guardShiftCloseSchema, body);
-    if (!isUuid(id)) throw notFound('Qorovul smenasi');
     return this.db.tx(async (c) => {
-      const s = (await c.query(`SELECT * FROM guard_shifts WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
-      if (!s) throw notFound('Qorovul smenasi');
-      assertBranch(ctx, s.branch_id);
+      const s = await this.lockOpenShift(c, ctx, id);
       if (s.guard_membership_id !== ctx.membershipId) throw forbidden('Bu smena sizniki emas');
       if (s.closed_at) throw stale('Smena allaqachon yopilgan. Sahifani yangilang.');
-      // an open patrol round of this guard ends with the shift (its missing points stay missing)
-      await c.query(`UPDATE patrol_rounds SET finished_at = $3 WHERE tenant_id = $1 AND guard_membership_id = $2 AND finished_at IS NULL`, [ctx.tenantId, ctx.membershipId, now()]);
-      await c.query(`UPDATE guard_shifts SET closed_at = $2, closed_by = $3, handover_note = $4 WHERE id = $1`, [id, now(), ctx.membershipId, clean(input.handover_note)]);
+      await c.query(`UPDATE patrol_rounds SET finished_at = $3 WHERE tenant_id = $1 AND guard_membership_id = $2 AND finished_at IS NULL`, [ctx.tenantId, s.guard_membership_id, now()]);
+      // what was open at hand-over is frozen on the shift (the A4 report prints it, not «now»)
+      await c.query(`UPDATE guard_shifts SET closed_at = $2, closed_by = $3, handover_note = $4, open_items = guard_open_items($5, ARRAY[$6]::uuid[], $2, false) WHERE id = $1`,
+        [id, now(), ctx.membershipId, clean(input.handover_note), ctx.tenantId, s.branch_id]);
       await audit(c, ctx, 'security.shift_close', 'guard_shift', id, `Qorovul smenasi №${s.number} yopildi`, s.branch_id);
       return { data: { id } };
     });
   }
 
-  /** The A4 shift report: the post's open items at hand-over time plus everything recorded during the shift. */
+  /**
+   * The manager closes a shift the guard left open (went home, phone lost): a reason is required — kept on the shift
+   * for the report, never in the audit trail. The guard's open round ends with it; the snapshot is taken as usual.
+   */
+  @Roles('manager') @Post('shifts/:id/force-close') @HttpCode(200)
+  async forceCloseShift(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    const input = parse(guardShiftForceCloseSchema, body);
+    return this.db.tx(async (c) => {
+      const s = await this.lockOpenShift(c, ctx, id);
+      if (s.closed_at) throw stale('Smena allaqachon yopilgan. Sahifani yangilang.');
+      await c.query(`UPDATE patrol_rounds SET finished_at = $3 WHERE tenant_id = $1 AND guard_membership_id = $2 AND finished_at IS NULL`, [ctx.tenantId, s.guard_membership_id, now()]);
+      await c.query(`UPDATE guard_shifts SET closed_at = $2, closed_by = $3, forced = true, force_reason = $4, open_items = guard_open_items($5, ARRAY[$6]::uuid[], $2, false) WHERE id = $1`,
+        [id, now(), ctx.membershipId, clean(input.reason), ctx.tenantId, s.branch_id]);
+      await audit(c, ctx, 'security.shift_force_close', 'guard_shift', id, `Qorovul smenasi №${s.number} rahbar tomonidan yopildi`, s.branch_id);
+      return { data: { id } };
+    });
+  }
+
+  /** The A4 shift report: what was open at hand-over (the stored snapshot) plus everything recorded during the shift. */
   @Roles(...G) @Get('shifts/:id')
   async shiftReport(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     if (!isUuid(id)) throw notFound('Qorovul smenasi');
     const s = await this.db.one(
-      `SELECT s.id, s.number, s.branch_id, b.name AS branch_name, s.guard_name, s.opened_at, s.closed_at, s.handover_note
-         FROM guard_shifts s JOIN branches b ON b.id = s.branch_id WHERE s.id = $1 AND s.tenant_id = $2`, [id, ctx.tenantId]);
+      `SELECT s.id, s.number, s.branch_id, b.name AS branch_name, s.guard_name, s.opened_at, s.closed_at, s.handover_note, s.forced, s.force_reason, s.open_items,
+              ${STALE_SHIFT_SQL} AS stale, cu.full_name AS closed_by_name
+         FROM guard_shifts s JOIN branches b ON b.id = s.branch_id LEFT JOIN memberships cm ON cm.id = s.closed_by LEFT JOIN users cu ON cu.id = cm.user_id
+        WHERE s.id = $1 AND s.tenant_id = $2`, [id, ctx.tenantId]);
     if (!s) throw notFound('Qorovul smenasi');
     assertBranch(ctx, s.branch_id);
     const p = [ctx.tenantId, s.branch_id, s.opened_at, s.closed_at ?? now()];
@@ -715,7 +855,7 @@ export class SecurityController {
          FROM security_incidents i LEFT JOIN rooms r ON r.id = i.room_id
         WHERE i.tenant_id = $1 AND i.branch_id = $2 AND i.reported_at >= $3 AND i.reported_at < $4 ORDER BY i.reported_at LIMIT 200`, p);
     const visitors = await this.db.rows(
-      `SELECT v.full_name, v.organisation, v.purpose, v.host_name, v.pass_no, v.in_at, v.out_at FROM security_visitors v
+      `SELECT v.full_name, v.organisation, v.purpose, v.host_name, v.pass_no, v.in_at, v.out_at, v.auto_closed FROM security_visitors v
         WHERE v.tenant_id = $1 AND v.branch_id = $2 AND v.in_at < $4 AND (v.out_at IS NULL OR v.out_at >= $3) ORDER BY v.in_at LIMIT 300`, p);
     const keys = await this.db.rows(
       `SELECT k.action, r.name AS room_name, k.holder_name, k.by_name, k.at FROM key_events k JOIN rooms r ON r.id = k.room_id
@@ -725,7 +865,10 @@ export class SecurityController {
               (SELECT count(*)::int FROM patrol_marks m WHERE m.round_id = r.id) AS marked,
               (SELECT count(*)::int FROM patrol_marks m WHERE m.round_id = r.id AND m.result = 'problem') AS problems
          FROM patrol_rounds r WHERE r.tenant_id = $1 AND r.branch_id = $2 AND r.started_at >= $3 AND r.started_at < $4 ORDER BY r.started_at LIMIT 100`, p);
-    return { data: { ...s, alerts, incidents, visitors, keys, rounds, open_items: await this.openItems([s.branch_id], ctx.tenantId) } };
+    // a closed shift prints its stored snapshot (null: closed before migration 040 and not reconstructible); an open one, «now»
+    const openItems = s.closed_at ? (s.open_items ? withOverdue(s.open_items) : null) : await openItemsAt(this.db.pool, ctx.tenantId, [s.branch_id], now(), false);
+    const { open_items: _o, ...shift } = s;
+    return { data: { ...shift, alerts, incidents, visitors, keys, rounds, open_items: openItems } };
   }
 
   // ================================================================ staff on site
@@ -740,8 +883,8 @@ export class SecurityController {
   @Roles(...G) @Post('presence') @HttpCode(201)
   async markPresence(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
     const input = parse(presenceMarkSchema, body);
-    const branchId = writeBranch(ctx, input.branch_id);
     return this.db.tx(async (c) => {
+      const branchId = await writeBranch(c, ctx, input.branch_id);
       const m = await staffMember(c, ctx, input.membership_id);
       await c.query(`INSERT INTO staff_presence_marks (tenant_id, branch_id, membership_id, kind, by_membership_id, by_name, at) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [ctx.tenantId, branchId, m.id, input.kind, ctx.membershipId, ctx.name, now()]);
@@ -776,22 +919,23 @@ export class SecurityController {
                 WHERE e.tenant_id = $1 AND e.alert AND ${ALERT_KINDS_SQL} AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4) x`, p))!;
     const incidents = await this.db.rows(
       `SELECT i.category, i.severity, i.source, count(*)::int AS n,
-              count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind = 'close'))::int AS open
+              count(*) FILTER (WHERE NOT ${INCIDENT_CLOSED_SQL})::int AS open
          FROM security_incidents i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.reported_at >= $3 AND i.reported_at < $4 GROUP BY 1, 2, 3`, p);
     const visitors = (await this.db.one(
-      `SELECT count(*)::int AS total, round(avg(extract(epoch FROM v.out_at - v.in_at)) / 60)::int AS avg_minutes
+      `SELECT count(*)::int AS total, round(avg(extract(epoch FROM v.out_at - v.in_at)) FILTER (WHERE NOT v.auto_closed) / 60)::int AS avg_minutes
          FROM security_visitors v WHERE v.tenant_id = $1 AND v.branch_id = ANY($2) AND v.in_at >= $3 AND v.in_at < $4`, p))!;
     const keyRows = await this.db.rows(
       `SELECT o.at AS out_at, (SELECT min(i.at) FROM key_events i WHERE i.room_id = o.room_id AND i.action = 'in' AND i.at > o.at) AS in_at
          FROM key_events o WHERE o.tenant_id = $1 AND o.branch_id = ANY($2) AND o.action = 'out' AND o.at >= $3 AND o.at < $4 LIMIT 5000`, p);
     const keys = {
       issued: keyRows.length,
-      late: keyRows.filter((k) => (k.in_at ? keyOverdue(new Date(k.out_at), new Date(k.in_at)) : keyOverdue(new Date(k.out_at)))).length,
+      late: keyRows.filter((k) => keyOverdue(new Date(k.out_at), k.in_at ? new Date(k.in_at) : now())).length,
       out_now: keyRows.filter((k) => !k.in_at).length,
     };
-    // patrol compliance: one finished round expected per PATROL_INTERVAL_HOURS of every post shift
+    // patrol compliance: one finished round expected per PATROL_INTERVAL_HOURS of every post shift — counted only up to
+    // GUARD_SHIFT_STALE_HOURS (an abandoned or force-closed shift does not keep «expecting» rounds nobody walks)
     const shifts = await this.db.rows(
-      `SELECT s.id, s.number, s.guard_name, s.opened_at, s.closed_at, b.name AS branch_name,
+      `SELECT s.id, s.number, s.guard_name, s.opened_at, s.closed_at, s.forced, ${STALE_SHIFT_SQL} AS stale, b.name AS branch_name,
               (SELECT count(*)::int FROM patrol_rounds r WHERE r.shift_id = s.id AND r.finished_at IS NOT NULL) AS done,
               (SELECT count(*)::int FROM patrol_rounds r WHERE r.shift_id = s.id AND r.finished_at IS NOT NULL
                   AND (SELECT count(*) FROM patrol_marks m WHERE m.round_id = r.id) < r.checkpoints_total) AS incomplete,
@@ -800,7 +944,9 @@ export class SecurityController {
         WHERE s.tenant_id = $1 AND s.branch_id = ANY($2) AND s.opened_at >= $3 AND s.opened_at < $4 ORDER BY s.opened_at DESC LIMIT 400`, p);
     const t = now().getTime();
     const patrol = shifts.map((s) => {
-      const hours = ((s.closed_at ? new Date(s.closed_at).getTime() : t) - new Date(s.opened_at).getTime()) / 3600_000;
+      const opened = new Date(s.opened_at).getTime();
+      const end = Math.min(s.closed_at ? new Date(s.closed_at).getTime() : t, opened + GUARD_SHIFT_STALE_HOURS * 3600_000);
+      const hours = (end - opened) / 3600_000;
       const expected = Math.max(s.closed_at ? 1 : 0, Math.floor(hours / PATROL_INTERVAL_HOURS));
       return { ...s, hours: Math.round(hours * 10) / 10, expected, missed: Math.max(0, expected - s.done) };
     });
@@ -808,7 +954,7 @@ export class SecurityController {
     return { data: {
       alerts, incidents, visitors, keys,
       patrol: { shifts: patrol, expected: sum('expected'), done: sum('done'), missed: sum('missed'), incomplete: sum('incomplete'), problems: sum('problems') },
-    }, meta: { from, to, interval_hours: PATROL_INTERVAL_HOURS } };
+    }, meta: { from, to, interval_hours: PATROL_INTERVAL_HOURS, stale_hours: GUARD_SHIFT_STALE_HOURS } };
   }
 
   private async exportAudit(ctx: Ctx, what: string, from: string, to: string) {
@@ -840,15 +986,17 @@ export class SecurityController {
     const { from, to } = csvPeriod(q);
     const branches = branchScope(ctx, q.branch_id);
     const rows = await this.db.rows(
-      `SELECT v.in_at, v.out_at, b.name AS branch_name, v.full_name, v.organisation, v.purpose, v.purpose_note, v.host_name, v.pass_no, v.recorded_by_name, v.purged_at
+      `SELECT v.in_at, v.out_at, v.auto_closed, b.name AS branch_name, v.full_name, v.organisation, v.purpose, v.purpose_note, v.host_name, v.pass_no, v.recorded_by_name, v.purged_at
          FROM security_visitors v JOIN branches b ON b.id = v.branch_id
         WHERE v.tenant_id = $1 AND v.branch_id = ANY($2) AND v.in_at >= $3 AND v.in_at < $4 ORDER BY v.in_at LIMIT 20000`,
       [ctx.tenantId, branches, dayStart(from), dayStart(addDays(to, 1))]);
     const L = ctx.locale, h = (k: string) => translate(L, `guard.csv.${k}` as MessageKey);
     const purged = translate(L, 'guard.vis.purged');
+    const auto = translate(L, 'guard.vis.autoClosed');
     await this.exportAudit(ctx, 'tashriflar', from, to);
     sendCsv(res, `tashriflar-${from}-${to}.csv`, [h('in'), h('out'), h('branch'), h('visitor'), h('organisation'), h('purpose'), h('note'), h('host'), h('pass'), h('recordedBy')], [
-      ...rows.map((r) => [csvTime(r.in_at), csvTime(r.out_at), r.branch_name, r.full_name ?? purged, r.organisation ?? '', translate(L, `guard.purpose.${r.purpose}` as MessageKey), r.purpose_note ?? '', r.host_name ?? '', r.pass_no ?? '', r.recorded_by_name]),
+      ...rows.map((r) => [csvTime(r.in_at), r.auto_closed ? `${csvTime(r.out_at)} (${auto})` : csvTime(r.out_at), r.branch_name, r.full_name ?? purged, r.organisation ?? '',
+        translate(L, `guard.purpose.${r.purpose}` as MessageKey), r.purpose_note ?? '', r.host_name ?? '', r.pass_no ?? '', r.recorded_by_name]),
       [h('total'), `${h('inside')}: ${rows.filter((r) => !r.out_at).length}`, '', `${h('count')}: ${rows.length}`, '', '', '', '', '', ''],
     ]);
   }
@@ -875,4 +1023,3 @@ export class SecurityController {
     ]);
   }
 }
-

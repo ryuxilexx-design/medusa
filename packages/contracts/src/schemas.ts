@@ -716,9 +716,28 @@ export const VISITOR_RETENTION_DAYS = 90;
 export const KEY_DUE_HOUR = 20;
 /** The manager expects one finished patrol round per this many hours of an open post shift. */
 export const PATROL_INTERVAL_HOURS = 3;
-/** An Uzbek passport (AA1234567) or a 14-digit personal number (JShShIR/ПИНФЛ): the visitor log never keeps either. */
-export const ID_DOCUMENT_RE = /(?<![\p{L}\d])[\p{L}]{2}\s?\d{7}(?!\d)|(?<!\d)\d{14}(?!\d)/u;
-const noIdDoc = (s: string | null | undefined) => !s || !ID_DOCUMENT_RE.test(s);
+/** A guard's post shift still open after this many hours is «stale» (abandoned): the manager may force-close it. */
+export const GUARD_SHIFT_STALE_HOURS = 26;
+/** Open alerts and open incidents are looked for within this many days (counters, lists, handover, alarms). */
+export const SECURITY_OPEN_DAYS = 30;
+/** An alert nobody took for this many minutes, or taken but not closed for ALERT_TAKEN_OVERDUE_MIN, is «Kechikkan». */
+export const ALERT_NEW_OVERDUE_MIN = 10;
+export const ALERT_TAKEN_OVERDUE_MIN = 30;
+/** A visitor still «inside» after this many hours is closed automatically by the hourly purge (forgotten «Chiqdi»). */
+export const VISITOR_AUTO_CLOSE_HOURS = 24;
+/** The same SOS (guard, branch, reason) pressed again within this many seconds returns the first one. */
+export const SOS_DEDUPE_SECONDS = 60;
+/**
+ * An identity document: an Uzbek passport / ID card (AA1234567, «AA 123 45 67», «AA-1234567», «AA № 1234567») or a
+ * 14-digit personal number JShShIR/ПИНФЛ, joined or spaced («3 1234 5678 90123»). Guard texts never keep either.
+ */
+export const ID_DOCUMENT_RE = /(?<![\p{L}\d])\p{L}{2}[\s\-№#.]*\d(?:[\s-]?\d){6}(?![\s-]?\d)|(?<!\d[\s-]?)\d(?:[\s-]?\d){13}(?![\s-]?\d)/u;
+export const hasIdDocument = (s: string | null | undefined) => !!s && ID_DOCUMENT_RE.test(s);
+const noIdDoc = (s: string | null | undefined) => !hasIdDocument(s);
+const NO_ID_DOC = 'Pasport yoki JShShIR raqamini yozmang';
+/** Free text of the guard's logs: trimmed, and never an identity document number. */
+const guardText = (min: number, max: number, label: string) => trimmed(min, max, label).refine(noIdDoc, NO_ID_DOC);
+const guardOptional = (max: number) => optionalText(max).refine(noIdDoc, NO_ID_DOC);
 
 const optionalUuid = z.string().uuid('Noto‘g‘ri identifikator').optional().nullable().transform((v) => v ?? null);
 /** «seq» = how many handling steps the client saw: a stale screen collides with the newer step (409). */
@@ -727,40 +746,40 @@ export const alertTakeSchema = z.object({ seq: alertSeq });
 export const incidentCoreSchema = z.object({
   category: z.enum(INCIDENT_CATEGORIES, { errorMap: () => ({ message: 'Hodisa turini tanlang' }) }),
   severity: z.enum(INCIDENT_SEVERITIES, { errorMap: () => ({ message: 'Darajasini tanlang' }) }),
-  description: trimmed(3, 2000, 'Tavsif'),
+  description: guardText(3, 2000, 'Tavsif'),
 });
 export const alertResolveSchema = z.object({
   seq: alertSeq,
   outcome: z.enum(ALERT_OUTCOMES, { errorMap: () => ({ message: 'Natijani tanlang' }) }),
-  note: optionalText(500),
+  note: guardOptional(500),
   incident: incidentCoreSchema.optional(),
 }).refine((d) => d.outcome !== 'incident' || !!d.incident, { message: 'Hodisani tavsiflang', path: ['incident.description'] });
 export const incidentCreateSchema = incidentCoreSchema.extend({
   branch_id: optionalUuid,
   room_id: optionalUuid,
-  place: optionalText(120),
+  place: guardOptional(120),
 });
 export const incidentEntrySchema = z.object({
   kind: z.enum(['note', 'correction', 'close'], { errorMap: () => ({ message: 'Turini tanlang' }) }),
-  text: trimmed(3, 2000, 'Matn'),
+  text: guardText(3, 2000, 'Matn'),
 });
 export const sosSchema = z.object({
   branch_id: optionalUuid,
   reason: z.enum(SOS_REASONS, { errorMap: () => ({ message: 'Sababni tanlang' }) }),
-  note: optionalText(500),
+  note: guardOptional(500),
 });
 export const visitorCreateSchema = z.object({
   branch_id: optionalUuid,
-  full_name: trimmed(2, 120, 'F.I.Sh.').refine(noIdDoc, 'Pasport yoki JShShIR raqamini yozmang'),
-  organisation: optionalText(120).refine(noIdDoc, 'Pasport yoki JShShIR raqamini yozmang'),
+  full_name: guardText(2, 120, 'F.I.Sh.'),
+  organisation: guardOptional(120),
   purpose: z.enum(VISITOR_PURPOSES, { errorMap: () => ({ message: 'Maqsadni tanlang' }) }),
-  purpose_note: optionalText(200).refine(noIdDoc, 'Pasport yoki JShShIR raqamini yozmang'),
+  purpose_note: guardOptional(200),
   host_membership_id: optionalUuid,
   // a temporary pass printed by the clinic («12», «B-07»), never an identity document
-  pass_no: optionalText(10).refine((s) => !s || /^[\p{L}\d-]{1,10}$/u.test(s), 'Ruxsatnoma raqami: harf, raqam yoki «-», 10 belgigacha'),
+  pass_no: optionalText(10).refine((s) => !s || /^[\p{L}\d-]{1,10}$/u.test(s), 'Ruxsatnoma raqami: harf, raqam yoki «-», 10 belgigacha').refine(noIdDoc, NO_ID_DOC),
 });
-export const keyOutSchema = z.object({ holder_membership_id: z.string({ required_error: 'Xodimni tanlang' }).uuid('Xodimni tanlang'), note: optionalText(200) });
-export const keyInSchema = z.object({ holder_membership_id: optionalUuid, note: optionalText(200) });
+export const keyOutSchema = z.object({ holder_membership_id: z.string({ required_error: 'Xodimni tanlang' }).uuid('Xodimni tanlang'), note: guardOptional(200) });
+export const keyInSchema = z.object({ holder_membership_id: optionalUuid, note: guardOptional(200) });
 export const checkpointCreateSchema = z.object({
   branch_id: z.string({ required_error: 'Filialni tanlang' }).uuid('Filialni tanlang'),
   name: trimmed(2, 80, 'Nomi'),
@@ -775,12 +794,14 @@ export const roundStartSchema = z.object({ branch_id: optionalUuid });
 export const roundMarkSchema = z.object({
   checkpoint_id: z.string().uuid('Noto‘g‘ri identifikator'),
   result: z.enum(['ok', 'problem'], { errorMap: () => ({ message: 'Natijani tanlang' }) }),
-  note: optionalText(500),
+  note: guardOptional(500),
   /** a problem can be filed as an incident of the patrol at once */
   incident: incidentCoreSchema.pick({ category: true, severity: true }).optional(),
 }).refine((d) => d.result === 'ok' || (d.note != null && d.note.length >= 3), { message: 'Muammoni qisqa yozing', path: ['note'] });
 export const guardShiftOpenSchema = z.object({ branch_id: optionalUuid });
-export const guardShiftCloseSchema = z.object({ handover_note: trimmed(3, 2000, 'Topshirish izohi') });
+export const guardShiftCloseSchema = z.object({ handover_note: guardText(3, 2000, 'Topshirish izohi') });
+/** The manager closes an abandoned shift: a reason is required (kept on the shift, never in the audit trail). */
+export const guardShiftForceCloseSchema = z.object({ reason: guardText(3, 500, 'Sabab') });
 export const presenceMarkSchema = z.object({
   branch_id: optionalUuid,
   membership_id: z.string({ required_error: 'Xodimni tanlang' }).uuid('Xodimni tanlang'),

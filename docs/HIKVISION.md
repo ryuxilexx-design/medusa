@@ -86,8 +86,10 @@ rasm dalil sifatida saqlanadi:
   qachon** (tanilgan odam — biometrik ma’lumot);
 - bitta hodisaga bitta rasm, 1 MB gacha (JPEG/PNG/WebP; haqiqiy rasm ekani bayt belgilaridan tekshiriladi);
 - **30 kun** saqlanadi, keyin server o‘zi o‘chiradi; o‘zgartirib bo‘lmaydi;
-- faqat rahbar, o‘z filiallari doirasida ko‘radi (`GET /api/v1/cameras/security/<id>/snapshot`, brauzer keshi
-  «private»); Xavfsizlik jadvalida kichik kadr, bosilganda katta oyna va shu yerda «Ko‘rib chiqildi».
+- faqat rahbar va qorovul (o‘z filiali) ko‘radi: rahbar — `GET /api/v1/cameras/security/<id>/snapshot`, qorovul —
+  `GET /api/v1/security/alerts/<id>/snapshot` (bosqinni tekshirish uning ishi); katta surat har ko‘rilganda audit
+  jurnaliga yoziladi, qorovul ro‘yxatidagi xiralashtirilgan kichik kadr (`…/thumb`) har yuklanishda yozilmaydi;
+  brauzer keshi «private»; Xavfsizlik jadvalida kichik kadr, bosilganda katta oyna va shu yerda «Ko‘rib chiqildi».
 
 Kamerada buning uchun *Event → Linkage → Upload to Surveillance Center* (yoki *Notify Surveillance Center*) bilan
 birga **«Capture picture»/«Upload picture»** yoqilgan bo‘lishi kerak — shunda HTTP listening xabari multipart
@@ -117,8 +119,8 @@ quyidagilarni ko‘radi. «Surat» ustuni — kadr saqlanadimi (faqat ogohlantir
 | 14 | Kamera jim qoldi (tok, tarmoq, o‘chirilgan) | hodisa yo‘q, `last_seen_at` eskiradi | bosh sahifada «Kamera javob bermayapti», Qurilmalar’da sariq | ✗ | texnikni chaqiradi | «Yunusobod kirish» kamerasi |
 | 15 | Bir odam bir daqiqada bir necha hodisa yubordi | takror hodisalar | bitta yozuv (dedupe), ro‘yxat to‘lib ketmaydi | — | — | test |
 
-Surat 30 kundan keyin o‘chadi, hodisa yozuvi qoladi. Kadrlarda yuz ko‘rinadi — shuning uchun suratni faqat rahbar
-ko‘radi va u ogohlantirishdan boshqa hech qanday hodisada saqlanmaydi.
+Surat 30 kundan keyin o‘chadi, hodisa yozuvi qoladi. Kadrlarda yuz ko‘rinadi — shuning uchun suratni faqat rahbar va qorovul
+(o‘z filiali) ko‘radi va u ogohlantirishdan boshqa hech qanday hodisada saqlanmaydi.
 
 Texnik tafsilotlar, namunaviy ISAPI xabarlari va manbalar: `docs/HIKVISION_ISAPI_RESEARCH.md`.
 Kod: `apps/api/src/cameras/` (`isapi.ts` — xabarni o‘qish, `ingest.ts` — qoidalar, `cameras.controller.ts` — API,

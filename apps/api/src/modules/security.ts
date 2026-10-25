@@ -1,11 +1,10 @@
 // The security guard's domain (migration 038, docs/SECURITY_GUARD.md): shared helpers of security.controller.ts —
 // alert state from the append-only handling rows, staff on site, document numbers and the visitor retention purge.
-import { KEY_DUE_HOUR, VISITOR_RETENTION_DAYS } from '@meduza/contracts';
+import { ALERT_NEW_OVERDUE_MIN, ALERT_TAKEN_OVERDUE_MIN, KEY_DUE_HOUR, SECURITY_OPEN_DAYS, VISITOR_AUTO_CLOSE_HOURS, VISITOR_RETENTION_DAYS } from '@meduza/contracts';
 import { Q } from '../core/db';
 import { Ctx } from '../core/context';
-import { invalid } from '../core/errors';
-import { addDays, dayStart, localDate, localTime, now, today, toMinutes, weekday } from '../core/clock';
-import { assertBranch } from '../core/scope';
+import { forbidden, invalid, notFound } from '../core/errors';
+import { addDays, dayStart, localDate, localToUtc, now, today, toMinutes, weekday } from '../core/clock';
 import { dayException } from './booking';
 
 export const GUARD_ROLES = ['guard', 'manager'] as const;
@@ -24,6 +23,20 @@ export const ALERT_STATE_SQL = `CASE
     WHEN la.outcome = 'escalated' THEN 'escalated'
     WHEN la.action = 'take' THEN 'taken'
     ELSE 'new' END`;
+/** An open alert: not resolved, and within SECURITY_OPEN_DAYS (every open-alert scan uses the same bound and index). */
+export const ALERT_OPEN_SQL = `(${ALERT_STATE_SQL} <> 'resolved' AND e.occurred_at >= (SELECT demo_now()) - make_interval(days => ${SECURITY_OPEN_DAYS}))`;
+/**
+ * «Kechikkan»: nobody took it for ALERT_NEW_OVERDUE_MIN, or it was taken and is still not closed after
+ * ALERT_TAKEN_OVERDUE_MIN (an escalated alert waits for the manager — never overdue for the guard).
+ */
+export const ALERT_OVERDUE_SQL = `(${ALERT_OPEN_SQL} AND ((${ALERT_STATE_SQL} = 'new' AND e.occurred_at < (SELECT demo_now()) - make_interval(mins => ${ALERT_NEW_OVERDUE_MIN}))
+    OR (${ALERT_STATE_SQL} = 'taken' AND la.acted_at < (SELECT demo_now()) - make_interval(mins => ${ALERT_TAKEN_OVERDUE_MIN}))))`;
+/** An open incident: no closing entry, reported within SECURITY_OPEN_DAYS (the panel's counter and the «Ochiq» list agree). */
+export const INCIDENT_CLOSED_SQL = `EXISTS (SELECT 1 FROM security_incident_entries x WHERE x.incident_id = i.id AND x.kind = 'close')`;
+export const INCIDENT_OPEN_SQL = `(NOT ${INCIDENT_CLOSED_SQL} AND i.reported_at >= (SELECT demo_now()) - make_interval(days => ${SECURITY_OPEN_DAYS}))`;
+/** A visitor inside: no «Chiqdi» yet and in for less than VISITOR_AUTO_CLOSE_HOURS (older ones are auto-closed hourly). */
+export const VISITOR_INSIDE_SQL = `(v.out_at IS NULL AND v.in_at > (SELECT demo_now()) - make_interval(hours => ${VISITOR_AUTO_CLOSE_HOURS}))`;
+
 /** FROM-clause joins for ALERT_STATE_SQL: the latest action (la), the first action (fa, response time) and the ack (k). */
 export const ALERT_JOINS_SQL = `
   LEFT JOIN LATERAL (SELECT a.seq, a.action, a.outcome, a.note, a.actor_name, a.actor_role, a.acted_at, a.incident_id
@@ -31,9 +44,17 @@ export const ALERT_JOINS_SQL = `
   LEFT JOIN LATERAL (SELECT a.acted_at FROM security_alert_actions a WHERE a.event_id = e.id ORDER BY a.seq LIMIT 1) fa ON true
   LEFT JOIN camera_event_acks k ON k.event_id = e.id`;
 
-/** The branch a write lands in: the one asked for (inside the session scope), or the person's only branch. */
-export function writeBranch(ctx: Ctx, requested: string | null | undefined): string {
-  if (requested) { assertBranch(ctx, requested); return requested; }
+/**
+ * The branch a write lands in: the one asked for (inside the session scope), or the person's only branch.
+ * A branch of this clinic outside the scope → 403; another clinic's (or a made-up) id → 404, like every other id.
+ */
+export async function writeBranch(q: Q, ctx: Ctx, requested: string | null | undefined): Promise<string> {
+  if (requested) {
+    if (ctx.branchIds.includes(requested)) return requested;
+    const own = (await q.query(`SELECT 1 FROM branches WHERE id = $1 AND tenant_id = $2`, [requested, ctx.tenantId])).rowCount;
+    if (!own) throw notFound('Filial');
+    throw forbidden('Bu filial ma’lumotlariga ruxsat yo‘q');
+  }
   if (ctx.branchIds.length === 1) return ctx.branchIds[0];
   throw invalid({ branch_id: 'Filialni tanlang' });
 }
@@ -45,11 +66,18 @@ export async function nextNumber(q: Q, tenantId: string, kind: 'incident' | 'shi
      ON CONFLICT (tenant_id, kind) DO UPDATE SET last = security_counters.last + 1 RETURNING last`, [tenantId, kind])).rows[0].last;
 }
 
-/** A key taken on `day` (local) is overdue once that day reaches KEY_DUE_HOUR, or any later day. */
-export function keyOverdue(outAt: Date, at: Date = now()): boolean {
+/**
+ * When a key handed out at `outAt` is due back: KEY_DUE_HOUR of that local day, or — when it was taken at or after
+ * that hour (an evening shift) — KEY_DUE_HOUR of the next day.
+ */
+export function keyDueAt(outAt: Date): Date {
   const day = localDate(outAt);
-  if (localDate(at) > day) return true;
-  return toMinutes(localTime(at)) >= KEY_DUE_HOUR * 60;
+  const due = localToUtc(day, `${String(KEY_DUE_HOUR).padStart(2, '0')}:00`);
+  return outAt.getTime() >= due.getTime() ? localToUtc(addDays(day, 1), `${String(KEY_DUE_HOUR).padStart(2, '0')}:00`) : due;
+}
+/** A key still out (or returned) at `at` is overdue once its due time has passed. */
+export function keyOverdue(outAt: Date, at: Date = now()): boolean {
+  return at.getTime() >= keyDueAt(outAt).getTime();
 }
 
 export type Presence = {
@@ -107,8 +135,13 @@ export async function staffPresence(q: Q, tenantId: string, branches: string[]):
     }
     let late: number | null = null;
     if (first && plan) {
-      const diff = Math.round((first.getTime() - (dayStart(day).getTime() + toMinutes(plan.start_time) * 60_000)) / 60_000);
-      late = diff > LATE_GRACE_MIN ? diff : 0;
+      // a one-day «custom_hours» exception moves the start the doctor is compared with
+      const exc = await dayException(q, tenantId, s.doctor_id, day, plan.branch_id);
+      if (!exc || exc.kind === 'custom_hours') {
+        const start = exc?.kind === 'custom_hours' && exc.start ? exc.start : plan.start_time;
+        const diff = Math.round((first.getTime() - (dayStart(day).getTime() + toMinutes(start) * 60_000)) / 60_000);
+        late = diff > LATE_GRACE_MIN ? diff : 0;
+      }
     }
     out.push({
       membership_id: s.membership_id, full_name: s.full_name, title: s.title, role: s.role, specialty: s.specialty, status,
@@ -122,8 +155,15 @@ export async function staffPresence(q: Q, tenantId: string, branches: string[]):
   return out.sort((a, b) => order[a.status] - order[b.status] || a.full_name.localeCompare(b.full_name));
 }
 
-/** Clears the personal fields of visitor records older than VISITOR_RETENTION_DAYS (called hourly by the API). */
+/**
+ * The hourly visitor housekeeping (called by the API): first a visitor nobody marked «Chiqdi» for
+ * VISITOR_AUTO_CLOSE_HOURS is closed automatically (out_at = now, auto_closed, no «who»), then the personal fields of
+ * records older than VISITOR_RETENTION_DAYS are cleared. Returns the number of purged records.
+ */
 export async function purgeVisitors(q: Q): Promise<number> {
+  await q.query(
+    `UPDATE security_visitors SET out_at = (SELECT demo_now()), auto_closed = true
+      WHERE out_at IS NULL AND in_at <= (SELECT demo_now()) - make_interval(hours => $1)`, [VISITOR_AUTO_CLOSE_HOURS]);
   const r = await q.query(
     `UPDATE security_visitors SET full_name = NULL, organisation = NULL, purpose_note = NULL, pass_no = NULL, purged_at = (SELECT demo_now())
       WHERE purged_at IS NULL AND in_at < (SELECT demo_now()) - make_interval(days => $1)`, [VISITOR_RETENTION_DAYS]);
