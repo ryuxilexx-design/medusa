@@ -35,7 +35,9 @@ export function RequestsList({ mine = false }: { mine?: boolean }) {
             <tbody>{rows.map((r) => (
               <tr key={r.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setSel(r.id)}>
                 <Td className="whitespace-nowrap"><TextLink tone="ink" onClick={(e) => { e.stopPropagation(); setSel(r.id); }}>T-{r.number}</TextLink>
-                  <div className="text-small text-slate-600">{fmtDateTime(r.created_at)}</div><div className="text-small text-slate-800 sm:hidden">{r.requester_name}</div></Td>
+                  <div className="text-small text-slate-600">{fmtDateTime(r.created_at)}</div><div className="text-small text-slate-800 sm:hidden">{r.requester_name}</div>
+                  {/* phone / tablet: what was asked for stays visible without a sideways scroll */}
+                  <div className="max-w-[16rem] whitespace-normal text-small text-slate-700 lg:hidden">{r.lines.slice(0, 2).map((l: any) => `${l.name} × ${qty(l.qty)}`).join('; ')}{r.lines.length > 2 ? ` +${r.lines.length - 2}` : ''}</div></Td>
                 <Td className="hidden min-w-[9rem] sm:table-cell">{r.requester_name}<div className="text-small text-slate-600">{r.department}</div></Td>
                 <Td className="hidden max-w-[18rem] text-body md:table-cell"><PurposeText r={r} /></Td>
                 <Td className="hidden text-body lg:table-cell">{r.lines.slice(0, 2).map((l: any) => `${l.name} × ${qty(l.qty)}`).join('; ')}{r.lines.length > 2 ? ` +${r.lines.length - 2}` : ''}</Td>
@@ -73,8 +75,11 @@ export function RequestDetail({ id, onClose }: { id: string; onClose: () => void
   const keeper = me.role === 'storekeeper' || me.role === 'manager';
   const own = r.requester_membership_id === me.membership_id;
   const openStatus = ['submitted', 'partially_issued'].includes(r.status);
+  // one rule with the server: a signature is needed when the request had or now has a controlled item; whoever asked
+  // for it or signed it never hands it out
   const needSign = r.needs_approval && !r.approved_at;
-  const canIssue = keeper && openStatus && !(needSign && r.lines.some((l: any) => l.controlled)) && !(r.needs_approval && r.approved_by_name === me.name);
+  const ownSign = r.needs_approval && (r.approved_by === me.membership_id || own);
+  const canIssue = keeper && openStatus && !needSign && !ownSign;
   const left = (l: any) => Number(l.qty) - Number(l.issued_qty);
   const issue = () => {
     const lines = r.lines.filter((l: any) => left(l) > 0).map((l: any) => ({ line_id: l.id, qty: give[l.id] === undefined ? left(l) : parseQty(give[l.id]) }));
@@ -89,7 +94,7 @@ export function RequestDetail({ id, onClose }: { id: string; onClose: () => void
         {own && r.status === 'draft' && <Button onClick={() => act.mutate({ path: 'submit' }, { onSuccess: done('wh.req.submitted') })}>{t('wh.req.send')}</Button>}
         {own && ['draft', 'submitted'].includes(r.status) && <Button onClick={() => act.mutate({ path: 'cancel' }, { onSuccess: () => { done('wh.req.cancelled')(); onClose(); } })}>{t('wh.req.cancel')}</Button>}
         {keeper && openStatus && <Button onClick={() => setRejecting(true)}>{r.status === 'submitted' ? t('wh.req.reject') : t('wh.req.closeRest')}</Button>}
-        {me.role === 'manager' && needSign && r.status === 'submitted' && <Button variant="primary" icon={<PenLine className="h-4 w-4" />} loading={act.isPending} onClick={() => act.mutate({ path: 'approve' }, { onSuccess: done('wh.req.approved') })}>{t('wh.req.approve')}</Button>}
+        {me.role === 'manager' && needSign && openStatus && !own && <Button variant="primary" icon={<PenLine className="h-4 w-4" />} loading={act.isPending} onClick={() => act.mutate({ path: 'approve' }, { onSuccess: done('wh.req.approved') })}>{t('wh.req.approve')}</Button>}
         {canIssue && <Button variant="primary" loading={act.isPending} onClick={issue}>{t('wh.req.issue')}</Button>}
       </>}>
       <div className="space-y-4">
@@ -102,6 +107,7 @@ export function RequestDetail({ id, onClose }: { id: string; onClose: () => void
           {r.note && <KeyVal k={t('wh.req.note')} v={r.note} />}
         </div>
         {needSign && openStatus && <Alert tone="blue">{me.role === 'manager' ? t('wh.req.signHint') : t('wh.req.waitsApproval')}</Alert>}
+        {keeper && openStatus && !needSign && ownSign && <Alert tone="blue">{t('wh.req.ownSign')}</Alert>}
         <Table>
           <thead><tr><Th>{t('wh.col.item')}</Th><Th right>{t('wh.col.asked')}</Th><Th right>{t('wh.col.issued')}</Th>{canIssue && <Th right>{t('wh.col.giveNow')}</Th>}</tr></thead>
           <tbody>{r.lines.map((l: any) => (

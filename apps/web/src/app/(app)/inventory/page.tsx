@@ -10,7 +10,7 @@ import { useSession } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { Badge, Button, Card, Checkbox, cx, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Money, PageHeader, scrollBehavior, Select, StatCard, Table, Tabs, Td, TextLink, Th, Toolbar, useToast } from '@/components/ui';
 import { MoneyInput } from '@/components/money-input';
-import { CATEGORIES, ControlledBadge, Expiry, qty, STORAGE } from '@/components/warehouse/common';
+import { CATEGORIES, ControlledBadge, Expiry, isLow, qty, STORAGE } from '@/components/warehouse/common';
 import { RequestModal } from '@/components/warehouse/request-modal';
 import { RequestsList } from '@/components/warehouse/requests';
 import { CountsTab, CountStartModal, ReceiptModal, ReceiptsTab, useDocBranch, WriteoffModal, WriteoffsTab } from '@/components/warehouse/docs';
@@ -21,7 +21,6 @@ export default function WarehousePage() { return <Suspense><Warehouse /></Suspen
 const TABS = ['stock', 'requests', 'receipts', 'movements', 'writeoffs', 'counts', 'controlled', 'expiring', 'reorder', 'fridge', 'reports'] as const;
 type Tab = (typeof TABS)[number];
 type Dialog = null | 'item' | 'receipt' | 'issue' | 'writeoff' | 'count' | 'fridge';
-const isLow = (i: any) => i.active && Number(i.qty) < Number(i.minimum_qty);
 
 function Warehouse() {
   const t = useT();
@@ -148,7 +147,7 @@ function ItemDetail({ id, onClose, onReceipt, onIssue }: { id: string; onClose: 
   if (q.isLoading) return <div ref={top} className="scroll-mt-24 border-t border-slate-100 2xl:border-l 2xl:border-t-0"><LoadingRows /></div>;
   if (q.isError) return <div ref={top} className="scroll-mt-24 border-t border-slate-100 2xl:border-l 2xl:border-t-0"><ErrorState error={q.error} onRetry={() => q.refetch()} /></div>;
   const it = q.data;
-  const low = Number(it.qty) < Number(it.minimum_qty);
+  const low = isLow(it);
   return (
     <div ref={top} className="min-w-0 scroll-mt-24 border-t border-slate-100 2xl:border-l 2xl:border-t-0">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">

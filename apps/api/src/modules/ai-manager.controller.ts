@@ -78,7 +78,7 @@ export class ManagerAiController {
 
   private async regenLeft(tenantId: string) {
     const r = await this.db.one(
-      `SELECT count(*)::int AS n FROM ai_digest_runs WHERE tenant_id = $1
+      `SELECT count(*)::int AS n FROM ai_digest_runs WHERE tenant_id = $1 AND kind = 'digest'
           AND created_at >= date_trunc('day', (SELECT demo_now()) AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent'`, [tenantId]);
     return Math.max(0, DIGEST_REGEN_PER_DAY - (r?.n ?? 0));
   }
@@ -107,7 +107,7 @@ export class ManagerAiController {
       // the limit counts attempts (a failed model call costs too); the row is written before the call
       const ok = await this.db.tx(async (c) => {
         await c.query(`SELECT pg_advisory_xact_lock(hashtext('ai_digest_runs:' || $1))`, [ctx.tenantId]);
-        const n = (await c.query(`SELECT count(*)::int AS n FROM ai_digest_runs WHERE tenant_id = $1
+        const n = (await c.query(`SELECT count(*)::int AS n FROM ai_digest_runs WHERE tenant_id = $1 AND kind = 'digest'
             AND created_at >= date_trunc('day', (SELECT demo_now()) AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent'`, [ctx.tenantId])).rows[0].n;
         if (n >= DIGEST_REGEN_PER_DAY) return false;
         await c.query(`INSERT INTO ai_digest_runs (tenant_id, membership_id) VALUES ($1, $2)`, [ctx.tenantId, ctx.membershipId]);

@@ -310,14 +310,6 @@ export const inventoryItemCreateSchema = z.object({
 export const inventoryItemPatchSchema = inventoryItemCreateSchema.omit({ opening_qty: true }).partial();
 export const clinicPatchSchema = z.object({ name: trimmed(2, 120, 'Klinika nomi') });
 
-export const inventoryMovementSchema = z.object({
-  type: z.enum(['in', 'out']),
-  quantity: z.number().positive('Miqdor 0 dan katta bo‘lsin').max(1_000_000, 'Miqdor juda katta')
-    .refine((q) => Math.abs(q * 1000 - Math.round(q * 1000)) < 1e-6, 'Ko‘pi bilan 3 ta kasr xona'),
-  reason: trimmed(3, 200, 'Sabab'),
-  date: isoDate.optional(),
-});
-
 // ---------- Warehouse (migration 030, docs/WAREHOUSE.md) ----------
 /** A positive quantity with at most two decimals (the ledger stores numeric(12,2)). */
 const whQty = z.number({ invalid_type_error: 'Miqdorni kiriting' }).positive('Miqdor 0 dan katta bo‘lsin').max(1_000_000, 'Miqdor juda katta')
@@ -362,24 +354,51 @@ export const whIssueSchema = z.object({
 export const whRejectSchema = z.object({ reason: trimmed(3, 300, 'Sabab') });
 export const whReturnSchema = z.object({ qty: whQty, reason: trimmed(3, 200, 'Sabab') });
 export const whVoidSchema = z.object({ reason: trimmed(5, 300, 'Sabab') });
+/** A commission member's name compared without case, spaces or apostrophe variants (B13: three different people). */
+export const memberKey = (s: string) => s.normalize('NFKC').toLowerCase().replace(/[‘’ʻʼ'`]/g, '').replace(/\s+/g, ' ').trim();
+const distinctMembers = (l: string[]) => new Set(l.map(memberKey)).size === l.length;
 export const whWriteoffSchema = z.object({
   branch_id: uuid,
   reason: z.enum(['expired', 'damaged', 'lost', 'other'], { errorMap: () => ({ message: 'Sababni tanlang' }) }),
   note: trimmed(3, 300, 'Izoh'),
-  commission: z.array(trimmed(3, 120, 'Komissiya a’zosi')).min(3, 'Komissiyada kamida 3 kishi bo‘lsin').max(5, 'Komissiya 5 kishidan oshmasin'),
+  commission: z.array(trimmed(3, 120, 'Komissiya a’zosi')).min(3, 'Komissiyada kamida 3 kishi bo‘lsin').max(5, 'Komissiya 5 kishidan oshmasin')
+    .refine(distinctMembers, 'Komissiya a’zolari har xil odamlar bo‘lsin'),
   lines: z.array(z.object({ batch_id: uuid, qty: whQty })).min(1, 'Kamida bitta qator kiriting').max(100, 'Qatorlar 100 tadan oshmasin')
     .refine((l) => new Set(l.map((x) => x.batch_id)).size === l.length, 'Bir partiya ikki marta yozilgan'),
 });
 export const whDecisionSchema = z.object({ approve: z.boolean(), note: optionalText(300) });
-export const whCountStartSchema = z.object({ branch_id: uuid, scope: z.enum(['all', 'controlled']).default('all'), commission: z.array(trimmed(3, 120, 'Komissiya a’zosi')).max(5).default([]) });
+/** The manager's decision on a count: a reason for every difference the counter did not explain (the count is blind). */
+export const whCountDecisionSchema = whDecisionSchema.extend({
+  reasons: z.array(z.object({ line_id: uuid, reason: trimmed(3, 200, 'Sabab') })).max(5000).default([]),
+});
+export const whCountStartSchema = z.object({ branch_id: uuid, scope: z.enum(['all', 'controlled']).default('all'),
+  commission: z.array(trimmed(3, 120, 'Komissiya a’zosi')).max(5).default([]).refine(distinctMembers, 'Komissiya a’zolari har xil odamlar bo‘lsin') });
 export const whCountLinesSchema = z.object({
   lines: z.array(z.object({ line_id: uuid, counted_qty: z.number().min(0, 'Miqdor manfiy bo‘lmasin').max(1_000_000, 'Miqdor juda katta').nullable(), reason: optionalText(200) })).min(1).max(1000),
 });
+/** A temperature reading of one cold-chain device; outside the device's range the action taken is required (server). */
 export const whFridgeSchema = z.object({
-  branch_id: uuid,
-  fridge: trimmed(1, 60, 'Muzlatkich'),
+  device_id: uuid,
   temperature: z.number({ invalid_type_error: 'Haroratni kiriting' }).min(-40, 'Harorat −40…+40 °C oralig‘ida').max(40, 'Harorat −40…+40 °C oralig‘ida'),
   note: optionalText(200),
+});
+export const COLD_DEVICE_KINDS = ['fridge', 'freezer', 'room'] as const;
+/** Default allowed range of a device kind (°C): fridge +2…+8, freezer −25…−15, room +15…+25. */
+export const COLD_DEVICE_RANGE: Record<(typeof COLD_DEVICE_KINDS)[number], [number, number]> = { fridge: [2, 8], freezer: [-25, -15], room: [15, 25] };
+const temp = z.number({ invalid_type_error: 'Haroratni kiriting' }).min(-40, 'Harorat −40…+40 °C oralig‘ida').max(40, 'Harorat −40…+40 °C oralig‘ida')
+  .refine((v) => Math.abs(v * 10 - Math.round(v * 10)) < 1e-6, 'Ko‘pi bilan 1 ta kasr xona');
+export const whColdDeviceSchema = z.object({
+  branch_id: uuid,
+  name: trimmed(2, 60, 'Qurilma nomi'),
+  kind: z.enum(COLD_DEVICE_KINDS, { errorMap: () => ({ message: 'Turini tanlang' }) }),
+  min_temp: temp.optional(),
+  max_temp: temp.optional(),
+}).refine((d) => d.min_temp === undefined || d.max_temp === undefined || d.min_temp < d.max_temp, { message: 'Eng past harorat eng yuqoridan kichik bo‘lsin', path: ['min_temp'] });
+export const whColdDevicePatchSchema = z.object({
+  name: trimmed(2, 60, 'Qurilma nomi').optional(),
+  min_temp: temp.optional(),
+  max_temp: temp.optional(),
+  active: z.boolean().optional(),
 });
 
 export const uziReportSchema = z.object({

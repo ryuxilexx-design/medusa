@@ -7,6 +7,7 @@ import { addDays, dayStart, today, toMinutes, weekday } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { NET_LINE } from './billing';
 import { cameraAttention } from '../cameras/cameras.controller';
+import { USABLE_SQL } from './warehouse';
 
 export function range(q: any) {
   const t = today();
@@ -79,7 +80,7 @@ export class DashboardController {
       `SELECT count(*) FILTER (WHERE status = 'draft_result')::int AS draft, count(*) FILTER (WHERE status IN ('ordered','sample_collected'))::int AS waiting
          FROM service_orders WHERE tenant_id = $1 AND branch_id = ANY($2) AND category = 'lab'`, [ctx.tenantId, branches]))!;
     const lowStock = await this.db.rows(
-      `SELECT * FROM (SELECT i.id, i.name, i.unit, i.minimum_qty, coalesce((SELECT sum(b.qty) FROM inventory_batches b WHERE b.item_id = i.id),0) AS qty
+      `SELECT * FROM (SELECT i.id, i.name, i.unit, i.minimum_qty, ${USABLE_SQL('i')} AS qty
          FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active) x WHERE qty < minimum_qty ORDER BY name LIMIT 100`, [ctx.tenantId, branches]);
     const cancelledWithPayments = (await this.db.one(
       `SELECT count(DISTINCT a.id)::int AS n FROM appointments a JOIN invoices i ON i.appointment_id = a.id

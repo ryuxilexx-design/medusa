@@ -123,7 +123,10 @@ export class ReportsController {
          FROM service_orders o JOIN invoice_items it ON it.order_id = o.id JOIN invoices i ON i.id = it.invoice_id JOIN patients p ON p.id = o.patient_id
         WHERE o.performer_doctor_id = $1 AND o.performed_at >= $2 AND o.performed_at < $3 AND ${PERFORMED} AND o.branch_id = ANY($4)
         ORDER BY o.performed_at DESC`, [id, r.start, r.end, ctx.branchIds]);
-    return { data: { doctor: d, schedule, services: services.map((s) => ({ ...s, line_total: Number(s.line_total), share: Number(s.share) })) }, meta: { from: r.from, to: r.to } };
+    // share percentages are the manager's (audit 2026-10-25, B20): a doctor sees own amounts, never the percent behind them
+    const manager = ctx.role === 'manager';
+    return { data: { doctor: manager ? d : { ...d, default_share_percent: null }, schedule,
+      services: services.map((s) => ({ ...s, line_total: Number(s.line_total), share: Number(s.share), ...(manager ? {} : { share_percent_snapshot: null }) })) }, meta: { from: r.from, to: r.to } };
   }
 
   @Roles('manager') @Get('audit')

@@ -4,7 +4,7 @@
 import { Q } from '../core/db';
 import { Ctx } from '../core/context';
 import { conflict, forbidden, invalid, notFound } from '../core/errors';
-import { now, today } from '../core/clock';
+import { addDays, dayStart, now, today } from '../core/clock';
 
 /** numeric(12,2) ⇄ integer hundredths: never add quantities in floating point. */
 export const toC = (v: unknown) => Math.round(Number(v ?? 0) * 100);
@@ -40,6 +40,22 @@ export async function lockItems(c: Q, ctx: Ctx, branchId: string, itemIds: strin
   return byId;
 }
 
+/**
+ * B1 (audit 2026-10-25): while an inventory count is open its batches are being counted — any quantity change of a
+ * counted item (receipt, issue, return, write-off, void) would make «counted − expected» wrong, so it waits (409). Call it
+ * after the items are locked: a count that starts later locks the same rows first (startCount), so the two serialise.
+ */
+export async function assertNotCounting(c: Q, tenantId: string, itemIds: string[]) {
+  if (!itemIds.length) return;
+  const hit = (await c.query(
+    `SELECT c.number, i.name FROM inventory_counts c JOIN inventory_count_lines l ON l.count_id = c.id JOIN inventory_batches b ON b.id = l.batch_id JOIN inventory_items i ON i.id = b.item_id
+      WHERE c.tenant_id = $1 AND c.status = 'open' AND b.item_id = ANY($2::uuid[]) LIMIT 1`, [tenantId, [...new Set(itemIds)]])).rows[0];
+  if (hit) throw conflict('COUNT_IN_PROGRESS', `Inventarizatsiya I-${hit.number} davom etmoqda: «${hit.name}» sanalguncha harakat qilinmaydi`, { count_number: hit.number });
+}
+
+/** B16: a doctor asks for a patient's materials only for a recent visit (older visits are closed for the warehouse). */
+export const REQUEST_VISIT_DAYS = 7;
+
 export interface Purpose {
   purpose: 'patient' | 'procedure' | 'department';
   department: string;
@@ -52,8 +68,9 @@ export interface Purpose {
 
 /**
  * Resolves what the items are for. A patient purpose names a visit of this branch; a procedure purpose names a
- * procedure order of a patient. The ICD-10 codes come from the visit's note (codes only, never note text); only when
- * the note has none yet are the given codes used — every one must exist in icd10_codes. A doctor may name only own visits.
+ * procedure order of a patient — both only by the treating doctor, for a visit of the last REQUEST_VISIT_DAYS days. The
+ * ICD-10 codes come from the visit's note (codes only, never note text); only when the note has none yet are the
+ * doctor's given codes used — every one must exist in icd10_codes.
  */
 export async function resolvePurpose(c: Q, ctx: Ctx, branchId: string, input: { purpose: string; department: string; encounter_id?: string | null; order_id?: string | null; icd_codes: string[] }): Promise<Purpose> {
   const p: Purpose = { purpose: input.purpose as Purpose['purpose'], department: input.department, patientId: null, encounterId: null, orderId: null, icdCodes: [] };
@@ -62,17 +79,21 @@ export async function resolvePurpose(c: Q, ctx: Ctx, branchId: string, input: { 
     return p;
   }
   if (ctx.role === 'lab') throw forbidden('Laboratoriya faqat bo‘lim uchun so‘raydi');
+  // B4: a patient's materials are asked for by the treating doctor (codes from the visit), never typed in by the warehouse
+  if (ctx.role !== 'doctor') throw forbidden('Bemor uchun materialni davolovchi shifokor so‘raydi');
+  const oldest = dayStart(addDays(today(), -REQUEST_VISIT_DAYS));
   let encounterId: string | null = null;
   if (p.purpose === 'procedure') {
     if (!input.order_id) throw invalid({ order_id: 'Muolaja buyurtmasini tanlang' });
     const o = (await c.query(
-      `SELECT o.id, o.patient_id, o.encounter_id, o.branch_id, o.category, o.status, o.doctor_id, o.performer_doctor_id FROM service_orders o WHERE o.id = $1 AND o.tenant_id = $2`,
+      `SELECT o.id, o.patient_id, o.encounter_id, o.branch_id, o.category, o.status, o.doctor_id, o.performer_doctor_id, o.ordered_at FROM service_orders o WHERE o.id = $1 AND o.tenant_id = $2`,
       [input.order_id, ctx.tenantId])).rows[0];
     if (!o) throw notFound('Buyurtma');
     if (o.category !== 'procedure') throw invalid({ order_id: 'Bu muolaja buyurtmasi emas' });
     if (o.status === 'cancelled') throw invalid({ order_id: 'Buyurtma bekor qilingan' });
     if (o.branch_id !== branchId) throw invalid({ order_id: 'Buyurtma boshqa filialda' });
-    if (ctx.role === 'doctor' && o.doctor_id !== ctx.doctorId && o.performer_doctor_id !== ctx.doctorId) throw forbidden('Bu buyurtma sizniki emas');
+    if (o.doctor_id !== ctx.doctorId && o.performer_doctor_id !== ctx.doctorId) throw forbidden('Bu buyurtma sizniki emas');
+    if (!o.encounter_id && new Date(o.ordered_at) < oldest) throw invalid({ order_id: `Buyurtma ${REQUEST_VISIT_DAYS} kundan eski — material so‘rab bo‘lmaydi` });
     p.orderId = o.id; p.patientId = o.patient_id; encounterId = o.encounter_id;
     if (input.encounter_id && input.encounter_id !== o.encounter_id) throw invalid({ encounter_id: 'Buyurtma boshqa qabulga tegishli' });
   } else {
@@ -81,10 +102,11 @@ export async function resolvePurpose(c: Q, ctx: Ctx, branchId: string, input: { 
     encounterId = input.encounter_id;
   }
   if (encounterId) {
-    const e = (await c.query(`SELECT id, patient_id, branch_id, doctor_id FROM encounters WHERE id = $1 AND tenant_id = $2`, [encounterId, ctx.tenantId])).rows[0];
+    const e = (await c.query(`SELECT id, patient_id, branch_id, doctor_id, started_at FROM encounters WHERE id = $1 AND tenant_id = $2`, [encounterId, ctx.tenantId])).rows[0];
     if (!e) throw notFound('Qabul yozuvi');
     if (e.branch_id !== branchId) throw invalid({ encounter_id: 'Qabul boshqa filialda' });
-    if (ctx.role === 'doctor' && e.doctor_id !== ctx.doctorId && p.purpose === 'patient') throw forbidden('Bu qabul sizniki emas');
+    if (e.doctor_id !== ctx.doctorId && p.purpose === 'patient') throw forbidden('Bu qabul sizniki emas');
+    if (new Date(e.started_at) < oldest) throw invalid({ encounter_id: `Qabul ${REQUEST_VISIT_DAYS} kundan eski — material so‘rab bo‘lmaydi` });
     if (p.patientId && p.patientId !== e.patient_id) throw invalid({ order_id: 'Buyurtma boshqa qabulga tegishli' });
     p.encounterId = e.id; p.patientId = e.patient_id;
     // codes only — the note text is never read here

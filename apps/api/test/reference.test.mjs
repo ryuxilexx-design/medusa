@@ -176,7 +176,7 @@ test('ombor: tovar yaratish va o‘zgartirish, nom takrori 409, harakatlar o‘z
   assert.equal((await manager.post('/inventory', { name: 'Paxta', unit: 'kg', branch_id: SEED_IDS.branchTenant2 })).status, 403, 'boshqa klinika filiali');
   assert.equal((await manager.post('/inventory', { name: 'P', unit: '', branch_id: SEED_IDS.branchCentral, minimum_qty: -1 })).status, 422);
 
-  assert.equal((await manager.post(`/inventory/${S.itemId}/movements`, { type: 'out', quantity: 20.5, reason: 'Bo‘limga berildi' })).status, 201);
+  assert.equal((await manager.post('/warehouse/issues', { branch_id: SEED_IDS.branchCentral, purpose: 'department', department: 'Bo‘limga berildi', receiver_membership_id: M.doctor(0), lines: [{ item_id: S.itemId, qty: 20.5 }] })).status, 201);
   const p = await manager.patch(`/inventory/${S.itemId}`, { name: 'Shprits 5 ml (uch qismli)', minimum_qty: 60, unit: 'dona', active: false });
   assert.equal(p.status, 200, JSON.stringify(p.body));
   const after = (await manager.get(`/inventory/${S.itemId}`)).body.data;
@@ -224,7 +224,8 @@ test('audit: har bir yaratish va o‘zgartirish uchun yozuv bor (klinik matnsiz)
   const br = await actions('branch.');
   assert.ok(br.includes('branch.create') && br.includes('branch.update'), br.join());
   const inv = await actions('inventory.');
-  assert.ok(inv.includes('inventory.create') && inv.includes('inventory.update') && inv.includes('inventory.out'), inv.join());
+  assert.ok(inv.includes('inventory.create') && inv.includes('inventory.update'), inv.join());
+  assert.ok((await actions('warehouse.issue')).includes('warehouse.issue_direct'), 'chiqim — hujjat bilan');
   const rows = (await manager.get('/audit?action=branch.create&page_size=5')).body.data;
   assert.ok(rows.some((r) => r.resource_id === S.branchId && r.summary.includes('Chilonzor filiali') && r.actor_role === 'manager'));
   // an unchanged PATCH writes nothing

@@ -28,7 +28,7 @@ export default function PrintWarehouse({ params }: { params: Promise<{ kind: str
   const t = useT();
   const me = useMeQuery();
   const q = useQuery({ queryKey: ['print', 'warehouse', kind, id, sp.toString()], enabled: !!URL[kind],
-    queryFn: () => api(URL[kind](id, qs(kind === 'reorder' ? { horizon: sp.get('horizon') ?? undefined } : { from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined }))).then((r) => r.data) });
+    queryFn: () => api(URL[kind](id, qs(kind === 'reorder' ? { horizon: sp.get('horizon') ?? undefined } : kind === 'count' ? { all: 1 } : { from: sp.get('from') ?? undefined, to: sp.get('to') ?? undefined }))).then((r) => r.data) });
   if (!URL[kind]) return null;
   if (!q.data) return <PrintState q={q} />;
   const d = q.data;
@@ -50,11 +50,13 @@ export default function PrintWarehouse({ params }: { params: Promise<{ kind: str
   }
   if (kind === 'receipt') return (
     <PrintDoc title={t('wh.print.receipt')} number={`K-${d.number}`} date={d.received_at} branch={d.branch_name} patient={null} responsible={d.received_by_name} status=""
-      info={[[t('wh.rc.supplier'), d.supplier], [t('wh.rc.invoice'), `${d.invoice_no}, ${fmtDate(d.invoice_date)}`], [t('wh.print.receivedBy'), d.received_by_name], [t('wh.col.sum'), formatSom(d.total)]]}
+      info={[[t('wh.rc.supplier'), d.supplier], [t('wh.rc.invoice'), `${d.invoice_no}, ${fmtDate(d.invoice_date)}`], [t('wh.print.receivedBy'), d.received_by_name], [t('wh.col.sum'), formatSom(d.total)],
+        ...(d.voided_lines ? [[t('wh.rc.voidedLine'), t('wh.rc.voidedLines', { n: d.voided_lines })] as [string, string]] : [])]}
       footer={footer([{ label: t('wh.print.handedOver') }, { label: t('wh.print.receivedBy'), name: d.received_by_name }])}>
+      {d.voided_lines > 0 && <p className="mb-2 text-[0.75rem] font-semibold">{t('wh.rc.hasVoided')}</p>}
       <table className="w-full border-collapse text-[0.75rem]">
         <thead><tr><th className={cell}>№</th><th className={`${cell} text-left`}>{t('wh.col.item')}</th><th className={cell}>{t('wh.col.batch')}</th><th className={cell}>{t('wh.col.expiry')}</th><th className={`${cell} text-right`}>{t('wh.col.qty')}</th><th className={`${cell} text-right`}>{t('wh.col.unitCost')}</th><th className={`${cell} text-right`}>{t('wh.col.sum')}</th></tr></thead>
-        <tbody>{d.lines.map((l: any, i: number) => <tr key={l.id}><td className={cell}>{i + 1}</td><td className={cell}>{l.name}</td><td className={cell}>{l.batch_no}</td><td className={cell}>{fmtDate(l.expiry_date)}</td><td className={`${cell} text-right`}>{qty(l.qty)} {l.unit}</td><td className={`${cell} text-right`}>{formatSom(l.unit_cost)}</td><td className={`${cell} text-right`}>{formatSom(l.sum)}</td></tr>)}</tbody>
+        <tbody>{d.lines.map((l: any, i: number) => <tr key={l.id} className={l.voided_at ? 'text-slate-500 line-through' : ''}><td className={cell}>{i + 1}</td><td className={cell}>{l.name}{l.voided_at && <span className="block no-underline">{t('wh.rc.voidedLine')}: {l.void_reason}</span>}</td><td className={cell}>{l.batch_no}</td><td className={cell}>{fmtDate(l.expiry_date)}</td><td className={`${cell} text-right`}>{qty(l.qty)} {l.unit}</td><td className={`${cell} text-right`}>{formatSom(l.unit_cost)}</td><td className={`${cell} text-right`}>{formatSom(l.sum)}</td></tr>)}</tbody>
       </table>
     </PrintDoc>
   );
@@ -88,15 +90,17 @@ export default function PrintWarehouse({ params }: { params: Promise<{ kind: str
       info={[[t('wh.cnt.scope'), t(`wh.cnt.scope.${d.scope}` as MessageKey)], [t('admin.inv.colState'), t(`wh.status.${d.status}` as MessageKey)], [t('wh.print.startedBy'), d.started_by_name], [t('wh.wo.decided'), d.decided_by_name ?? '—']]}
       footer={footer([...(d.commission.length ? d.commission : [d.started_by_name]).map((name: string) => ({ label: t('wh.print.member'), name })), { label: t('wh.print.approvedHead'), name: d.decided_by_name ?? '' }])}>
       <table className="w-full border-collapse text-[0.75rem]">
-        <thead><tr><th className={cell}>№</th><th className={`${cell} text-left`}>{t('wh.col.item')}</th><th className={cell}>{t('wh.col.batch')}</th><th className={`${cell} text-right`}>{t('wh.cnt.expected')}</th><th className={`${cell} text-right`}>{t('wh.cnt.counted')}</th><th className={`${cell} text-right`}>{t('wh.cnt.diff')}</th><th className={`${cell} text-left`}>{t('admin.inv.reason')}</th></tr></thead>
-        <tbody>{d.lines.map((l: any, i: number) => <tr key={l.id}><td className={cell}>{i + 1}</td><td className={cell}>{l.name}</td><td className={cell}>{l.batch_no ?? '—'}</td><td className={`${cell} text-right`}>{qty(l.expected_qty)} {l.unit}</td>
-          <td className={`${cell} text-right`}>{l.counted_qty == null ? '' : qty(l.counted_qty)}</td><td className={`${cell} text-right`}>{l.counted_qty == null ? '' : qty(Number(l.counted_qty) - Number(l.expected_qty))}</td><td className={cell}>{l.reason ?? ''}</td></tr>)}</tbody>
+        {/* a blind count sheet (open, or anyone but the manager) has no «expected» and «difference» columns */}
+        <thead><tr><th className={cell}>№</th><th className={`${cell} text-left`}>{t('wh.col.item')}</th><th className={cell}>{t('wh.col.batch')}</th>{d.sees_expected && <th className={`${cell} text-right`}>{t('wh.cnt.expected')}</th>}<th className={`${cell} text-right`}>{t('wh.cnt.counted')}</th>{d.sees_expected && <th className={`${cell} text-right`}>{t('wh.cnt.diff')}</th>}<th className={`${cell} text-left`}>{t('admin.inv.reason')}</th></tr></thead>
+        <tbody>{d.lines.map((l: any, i: number) => <tr key={l.id}><td className={cell}>{i + 1}</td><td className={cell}>{l.name}</td><td className={cell}>{l.batch_no ?? '—'}</td>{d.sees_expected && <td className={`${cell} text-right`}>{qty(l.expected_qty)} {l.unit}</td>}
+          <td className={`${cell} text-right`}>{l.counted_qty == null ? '' : `${qty(l.counted_qty)} ${l.unit}`}</td>{d.sees_expected && <td className={`${cell} text-right`}>{l.counted_qty == null ? '' : qty(Number(l.counted_qty) - Number(l.expected_qty))}</td>}<td className={cell}>{l.reason ?? ''}</td></tr>)}</tbody>
       </table>
     </PrintDoc>
   );
   return (
     <PrintDoc title={t('wh.print.controlled')} number={`${fmtDate(d.from)}–${fmtDate(d.to)}`} date={me.data?.now ?? d.to} branch={d.item.branch_name} patient={null} responsible="" status=""
-      info={[[t('wh.col.item'), `${d.item.name}, ${d.item.unit}`], [t('wh.print.period'), `${fmtDate(d.from)} — ${fmtDate(d.to)}`], [t('wh.ctl.balance'), qty(d.item.qty)], [t('wh.print.opening'), qty(d.item.opening_qty)]]}
+      info={[[t('wh.col.item'), `${d.item.name}, ${d.item.unit}`], [t('wh.print.period'), `${fmtDate(d.from)} — ${fmtDate(d.to)}`], [t('wh.ctl.opening'), qty(d.opening_balance)],
+        [t('wh.ctl.turnover', { in: qty(d.period_in), out: qty(d.period_out) }), ''], [t('wh.ctl.closing'), qty(d.closing_balance)]]}
       footer={footer([{ label: t('wh.print.keeperSign') }, { label: t('wh.print.approvedHead') }])}>
       <JournalTable entries={d.entries} print />
     </PrintDoc>

@@ -48,9 +48,12 @@ test('ombor: qoldiq = boshlang‘ich + kirim − chiqim; qoldiqdan ko‘p chiqim
   assert.equal(low.length, 4);
   const all = (await manager.get('/inventory')).body.data;
   for (const i of all) assert.equal(Number(i.qty), Number(i.opening_qty) + Number(i.in_qty) - Number(i.out_qty));
-  const it = all[0];
-  assert.equal((await manager.post(`/inventory/${it.id}/movements`, { type: 'out', quantity: Number(it.qty) + 1, reason: 'Sinov chiqimi' })).status, 422);
-  assert.equal((await manager.post(`/inventory/${it.id}/movements`, { type: 'in', quantity: 5, reason: 'Sinov kirimi' })).status, 201);
+  const it = all.find((x) => x.branch_id === SEED_IDS.branchCentral && x.active);
+  // stock changes only through documents (audit 2026-10-25): an issue beyond the usable stock is refused, a receipt adds
+  const out = await manager.post('/warehouse/issues', { branch_id: it.branch_id, purpose: 'department', department: 'Sinov', receiver_membership_id: M.doctor(0), lines: [{ item_id: it.id, qty: Number(it.qty) + 1 }] });
+  assert.equal(out.status, 409); assert.equal(out.body.error.code, 'INSUFFICIENT_STOCK');
+  assert.equal((await manager.post('/warehouse/receipts', { branch_id: it.branch_id, supplier: 'Sinov ta’minot', invoice_no: 'P1-1', invoice_date: (await manager.get('/me')).body.data.today,
+    lines: [{ item_id: it.id, batch_no: 'P1', qty: 5, unit_cost: 100 }] }, { 'Idempotency-Key': randomUUID() })).status, 201);
   const after = (await manager.get(`/inventory/${it.id}`)).body.data;
   assert.equal(Number(after.qty), Number(it.qty) + 5);
 });
@@ -95,6 +98,9 @@ test('shifokor ulushi = Σ(qiymat × foiz snapshot); shifokor faqat o‘zini ko�
   assert.equal(mine.length, 1);
   const det = (await doctor.get(`/staff/doctors/${SEED_IDS.doctor(0)}?period=30d`)).body.data;
   assert.equal(mine[0].share, det.services.reduce((a, s) => a + s.share, 0));
-  for (const s of det.services) assert.equal(s.share, Math.round(s.line_total * Number(s.share_percent_snapshot) / 100));
+  // the percent behind the amount is the manager's (audit 2026-10-25, B20)
+  assert.ok(det.services.every((s) => s.share_percent_snapshot === null) && det.doctor.default_share_percent === null);
+  const full = (await manager.get(`/staff/doctors/${SEED_IDS.doctor(0)}?period=30d`)).body.data;
+  for (const s of full.services) assert.equal(s.share, Math.round(s.line_total * Number(s.share_percent_snapshot) / 100));
   assert.equal((await doctor.get(`/staff/doctors/${SEED_IDS.doctor(1)}`)).status, 403);
 });
