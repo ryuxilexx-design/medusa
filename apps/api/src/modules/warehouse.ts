@@ -53,8 +53,8 @@ export async function assertNotCounting(c: Q, tenantId: string, itemIds: string[
   if (hit) throw conflict('COUNT_IN_PROGRESS', `Inventarizatsiya I-${hit.number} davom etmoqda: «${hit.name}» sanalguncha harakat qilinmaydi`, { count_number: hit.number });
 }
 
-/** True while an open inventory count covers this item. */
-export const COUNTING_SQL = (alias = 'i') => `EXISTS (SELECT 1 FROM inventory_counts c JOIN inventory_count_lines l ON l.count_id = c.id JOIN inventory_batches b ON b.id = l.batch_id WHERE c.status = 'open' AND b.item_id = ${alias}.id)`;
+/** True while an open inventory count covers this item (`itemId` = the SQL expression of the item's id). */
+export const COUNTING_SQL = (alias = 'i', itemId = `${alias}.id`) => `EXISTS (SELECT 1 FROM inventory_counts c JOIN inventory_count_lines l ON l.count_id = c.id JOIN inventory_batches b ON b.id = l.batch_id WHERE c.status = 'open' AND b.item_id = ${itemId})`;
 
 /**
  * A blind count must stay blind: while an item is being counted, nobody but the manager reads its live quantities from

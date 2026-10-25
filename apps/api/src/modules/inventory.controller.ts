@@ -128,6 +128,9 @@ export class InventoryController {
     const { page, pageSize, offset } = pageParams(q);
     const item = await this.db.one(`SELECT id FROM inventory_items i WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!item) throw notFound('Material');
+    // blind count: while the item is counted only the manager reads its history (it sums to the expected balance)
+    if (ctx.role !== 'manager' && (await this.db.one(`SELECT ${COUNTING_SQL('i')} AS counting FROM inventory_items i WHERE i.id = $1`, [id]))!.counting)
+      return { data: [], meta: { page, page_size: pageSize, total: 0, counting: true } };
     const total = (await this.db.one(`SELECT count(*)::int AS n FROM inventory_movements WHERE item_id = $1`, [id]))!.n;
     const rows = await this.db.rows(`SELECT ${MOVE_COLS} FROM inventory_movements m WHERE item_id = $1 ORDER BY occurred_at DESC, seq DESC LIMIT $2 OFFSET $3`, [id, pageSize, offset]);
     return { data: rows, meta: { page, page_size: pageSize, total } };

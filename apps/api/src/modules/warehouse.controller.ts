@@ -470,6 +470,8 @@ export class WarehouseController {
     const where = ['m.tenant_id = $1', 'm.branch_id = ANY($2)', 'm.occurred_at >= $3', 'm.occurred_at < $4'];
     if (['receipt', 'issue', 'return', 'writeoff', 'adjust', 'void', 'legacy'].includes(q.kind)) { params.push(q.kind); where.push(`m.kind = $${params.length}`); }
     if (isUuid(q.item_id)) { params.push(q.item_id); where.push(`m.item_id = $${params.length}`); }
+    // blind count: the history of an item being counted is the manager's only (summing it would give the expected balance)
+    if (ctx.role !== 'manager') where.push(`NOT ${COUNTING_SQL('m', 'm.item_id')}`);
     return { params, where, from, to };
   }
   private static MOVE_SELECT = `SELECT m.id, m.seq, m.kind, m.type, m.quantity, m.item_id, i.name AS item_name, i.unit, i.controlled, x.batch_no, x.expiry_date, m.unit_cost, m.value, m.reason,
@@ -695,8 +697,7 @@ export class WarehouseController {
         WHERE m.item_id = $1 AND m.occurred_at < $3) t WHERE occurred_at >= $2 ORDER BY occurred_at, seq LIMIT 2000`, [itemId, start, end, item.opening_qty]);
     // a blind count of this item is open: only the manager reads its balances (the entries' running balance too)
     if (ctx.role !== 'manager' && (await this.db.one(`SELECT ${COUNTING_SQL()} AS counting FROM inventory_items i WHERE i.id = $1`, [itemId]))!.counting)
-      return { data: { item: { ...item, qty: null }, from, to, opening_balance: null, closing_balance: null, period_in: bal.period_in, period_out: bal.period_out, counting: true,
-        entries: rows.map((r: Record<string, unknown>) => ({ ...r, balance: null })) } };
+      return { data: { item: { ...item, qty: null, opening_qty: null }, from, to, opening_balance: null, closing_balance: null, period_in: null, period_out: null, counting: true, entries: [] } };
     return { data: { item, from, to, opening_balance: bal.opening, closing_balance: bal.closing, period_in: bal.period_in, period_out: bal.period_out, entries: rows } };
   }
 
