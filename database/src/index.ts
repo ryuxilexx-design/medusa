@@ -87,7 +87,7 @@ const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'note_addenda', 'medical_documents', 'patient_summaries',
   'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'refunds', 'patient_deposits', 'expenses',
   'inventory_items', 'inventory_receipts', 'inventory_batches', 'inventory_requests', 'inventory_request_lines', 'inventory_movements',
-  'inventory_writeoffs', 'inventory_writeoff_lines', 'inventory_doc_counters', 'fridge_temperature_log', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions', 'camera_snapshots',
+  'inventory_writeoffs', 'inventory_writeoff_lines', 'inventory_doc_counters', 'cold_devices', 'fridge_temperature_log', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions', 'camera_snapshots',
 ];
 
 export class ResetInProgressError extends Error {
@@ -315,7 +315,14 @@ export async function backfillSeedWarehouse(q: Pick<PoolClient, 'query'>, demoDa
   await insertRows(q as PoolClient, 'inventory_request_lines', seed.inventory_request_lines.filter((l) => requestIds.has(l.request_id)));
   await insertRows(q as PoolClient, 'inventory_movements', moves);
   const fridgeHas = (await q.query('SELECT 1 FROM fridge_temperature_log WHERE tenant_id = $1 LIMIT 1', [SEED_IDS.tenant])).rowCount;
-  if (!fridgeHas) await insertRows(q as PoolClient, 'fridge_temperature_log', seed.fridge_temperature_log);
+  if (!fridgeHas) {
+    // the seed's cold-chain devices (migration 039) unless a device of that name exists; the log only for devices that are there
+    for (const dv of seed.cold_devices)
+      await q.query(`INSERT INTO cold_devices (id, tenant_id, branch_id, name, kind, min_temp, max_temp, active, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+        [dv.id, dv.tenant_id, dv.branch_id, dv.name, dv.kind, dv.min_temp, dv.max_temp, dv.active, dv.created_at]);
+    const have = new Set((await q.query('SELECT id FROM cold_devices WHERE tenant_id = $1', [SEED_IDS.tenant])).rows.map((r) => r.id));
+    await insertRows(q as PoolClient, 'fridge_temperature_log', seed.fridge_temperature_log.filter((f) => have.has(f.device_id)));
+  }
   for (const c of seed.inventory_doc_counters)
     await q.query(`INSERT INTO inventory_doc_counters (tenant_id, kind, last) VALUES ($1,$2,$3) ON CONFLICT (tenant_id, kind) DO UPDATE SET last = GREATEST(inventory_doc_counters.last, EXCLUDED.last)`, [c.tenant_id, c.kind, c.last]);
   return keepers.length;

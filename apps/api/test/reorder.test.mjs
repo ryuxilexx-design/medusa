@@ -158,8 +158,35 @@ test('CSV: davr 7–180 kun; faqat buyurtma qatorlari; formula-xavfsiz; chegaral
   assert.match(lines[0], /^"Material";"Birlik";"Filial"/);
   const x = lines.find((l) => l.includes(NAME_X));
   assert.ok(x && x.includes('"60.00"') && x.includes('"5"') && x.includes('"90000.00"'), x);
-  assert.ok(lines.slice(1).every((l) => l.split(';')[10] !== '"0.00"'), 'nol buyurtma eksport qilinmaydi');
-  assert.ok(lines.length - 1 <= require('../dist/modules/reorder.controller.js').REORDER_EXPORT_MAX);
+  const body = lines.slice(1, -1);
+  assert.ok(body.every((l) => l.split(';')[11] !== '"0.00"'), 'nol buyurtma eksport qilinmaydi');
+  assert.ok(body.length <= require('../dist/modules/reorder.controller.js').REORDER_EXPORT_MAX);
+  // B7: the totals row closes the file — rows counted, the estimated cost summed in whole tiyin
+  const total = lines.at(-1).split(';');
+  assert.equal(total[1], `"${body.length}"`);
+  const cost = body.reduce((a, l) => a + Math.round(Number(l.split(';')[13].replace(/"/g, '')) * 100), 0);
+  assert.equal(total[13], `"${(cost / 100).toFixed(2)}"`);
+  // more rows than an export may hold is refused (narrow the scope), never cut silently
+  process.env.CSV_MAX_ROWS = '1';
+  try { assert.equal((await keeper.get('/warehouse/reorder.csv?horizon=60')).status, 422); } finally { delete process.env.CSV_MAX_ROWS; }
+});
+
+test('B22: ochiq (tasdiqlangan, hali berilmagan) talabnomalar miqdori yaroqli qoldiqdan ayriladi', async () => {
+  const before = rowOf((await keeper.get('/warehouse/reorder?horizon=60')).body.data, X);
+  assert.equal(before.reserved, '0.00');
+  const r = await manager.post('/warehouse/requests', { branch_id: BC, purpose: 'department', department: 'Muolaja xonasi', lines: [{ item_id: X, qty: 30 }] });
+  assert.equal(r.status, 201, r.text);
+  const after = rowOf((await keeper.get('/warehouse/reorder?horizon=60')).body.data, X);
+  assert.equal(after.reserved, '30.00');
+  // 1.8 × 60 + 10 − (80 − 10.2 − 30) = 78.2 → 7 packs of 12
+  assert.equal(after.suggested, '84.00'); assert.equal(after.packs, 7);
+  assert.equal(after.days_left, 22, '(80 − 10.2 − 30) / 1.8');
+  // half issued: only the rest is still promised; cancelled / rejected requests promise nothing
+  const line = (await keeper.get(`/warehouse/requests/${r.body.data.id}`)).body.data.lines[0];
+  assert.equal((await keeper.post(`/warehouse/requests/${r.body.data.id}/issue`, { lines: [{ line_id: line.id, qty: 10 }] })).status, 200);
+  assert.equal(rowOf((await keeper.get('/warehouse/reorder?horizon=60')).body.data, X).reserved, '20.00');
+  assert.equal((await keeper.post(`/warehouse/requests/${r.body.data.id}/reject`, { reason: 'Qolgani kerak emas' })).status, 200);
+  assert.equal(rowOf((await keeper.get('/warehouse/reorder?horizon=60')).body.data, X).reserved, '0.00');
 });
 
 test('qadoq hajmi: API orqali o‘zgartiriladi va tozalanadi', async () => {
@@ -197,8 +224,19 @@ test('AI xulosa: faktdagi raqamlar o‘tadi, to‘qilgani tashlanadi; namunaviy/
     assert.equal((await keeper.post('/warehouse/reorder/brief', { horizon: 500 })).status, 422);
     // nothing survives → the template
     claude.answer = () => ({ bullets: [{ text: 'Buyurtma 77 dona.', fact_keys: ['horizon.days'] }] });
-    const t = (await keeper.post('/warehouse/reorder/brief', { branch_id: BC })).body.data;
-    assert.equal(t.source, 'template'); assert.equal(t.dropped, 1);
+    // B17: the same brief again the same day comes from the cache — no model call
+    const before = claude.calls.length;
+    const cached = (await keeper.post('/warehouse/reorder/brief', { branch_id: BC })).body.data;
+    assert.equal(cached.cached, true); assert.equal(cached.source, 'model'); assert.equal(claude.calls.length, before);
+    const t = (await keeper.post('/warehouse/reorder/brief', { branch_id: BC, regenerate: true })).body.data;
+    assert.equal(t.source, 'template'); assert.equal(t.dropped, 1); assert.equal(t.cached, false);
+    assert.equal(t.runs_left, 3, '5 tadan 2 tasi ishlatildi');
+    // at most 5 model calls per clinic and day: the 6th is refused (429), the cached brief still opens
+    for (let i = 0; i < 3; i++) assert.equal((await keeper.post('/warehouse/reorder/brief', { branch_id: BC, regenerate: true })).status, 200);
+    const over = await keeper.post('/warehouse/reorder/brief', { branch_id: BC, regenerate: true });
+    assert.equal(over.status, 429); assert.equal(over.body.error.code, 'AI_BRIEF_LIMIT');
+    assert.equal((await manager.post('/warehouse/reorder/brief', { horizon: 14, branch_id: BC })).status, 429, 'limit butun klinika uchun');
+    assert.equal((await keeper.post('/warehouse/reorder/brief', { branch_id: BC })).body.data.cached, true);
     assert.ok(t.bullets.some((b) => b.text.startsWith('Tugagan:') && b.text.includes(NAME_Y)));
     // Gemini free tier: never a real clinic's numbers — for the seed demo clinic on a demo server it is allowed (manager rule)
     const calls = claude.calls.length;

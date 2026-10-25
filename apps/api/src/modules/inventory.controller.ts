@@ -1,13 +1,13 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
-import { inventoryItemCreateSchema, inventoryItemPatchSchema, inventoryMovementSchema } from '@meduza/contracts';
+import { inventoryItemCreateSchema, inventoryItemPatchSchema } from '@meduza/contracts';
 import { Db } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { conflict, forbidden, invalid, notFound } from '../core/errors';
+import { AppError, conflict, forbidden, invalid, notFound } from '../core/errors';
 import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
-import { localToUtc, now, today } from '../core/clock';
+import { now, today } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
-import { fromC, insertMove, STOCK_SQL, takeFefo, toC } from './warehouse';
+import { fromC, STOCK_SQL, toC, USABLE_SQL } from './warehouse';
 
 // stock = Σ batch balances (migration 030); the ledger keeps opening_qty + Σ in − Σ out equal to it
 const QTY = STOCK_SQL('i');
@@ -24,9 +24,9 @@ export class InventoryController {
       `SELECT * FROM (SELECT i.id, i.name, i.unit, i.opening_qty, i.minimum_qty, i.active, i.branch_id, b.name AS branch_name, ${ITEM_FIELDS},
               coalesce((SELECT sum(quantity) FROM inventory_movements m WHERE m.item_id = i.id AND m.type = 'in'),0) AS in_qty,
               coalesce((SELECT sum(quantity) FROM inventory_movements m WHERE m.item_id = i.id AND m.type = 'out'),0) AS out_qty,
-              ${QTY} AS qty
+              ${QTY} AS qty, ${USABLE_SQL('i')} AS usable_qty
          FROM inventory_items i JOIN branches b ON b.id = i.branch_id WHERE i.tenant_id = $1 AND i.branch_id = ANY($2)) x
-        WHERE ($3::boolean IS NOT TRUE OR (active AND qty < minimum_qty)) ORDER BY active DESC, (qty < minimum_qty) DESC, name LIMIT 1000`,
+        WHERE ($3::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty)) ORDER BY active DESC, (usable_qty < minimum_qty) DESC, name LIMIT 1000`,
       [ctx.tenantId, branchScope(ctx, q.branch_id), q.low === '1']);
     return { data: rows };
   }
@@ -86,7 +86,11 @@ export class InventoryController {
       }
       if (input.purchase_price !== undefined && input.purchase_price !== Number(it.purchase_price)) changes.push(`narx: ${input.purchase_price}`);
       if (input.drug_id !== undefined && input.drug_id !== it.drug_id) changes.push('dori bog‘landi');
-      if (input.unit !== undefined && input.unit !== it.unit) changes.push(`birlik: ${input.unit}`);
+      if (input.unit !== undefined && input.unit !== it.unit) {
+        // B11: the ledger and the batches count in the old unit — a new unit would silently rescale every balance
+        if ((await c.query(`SELECT 1 FROM inventory_batches WHERE item_id = $1 AND qty > 0`, [id])).rowCount) throw conflict('HAS_STOCK_UNIT', 'Qoldig‘i bor materialning o‘lchov birligini o‘zgartirib bo‘lmaydi');
+        changes.push(`birlik: ${input.unit}`);
+      }
       if (input.minimum_qty !== undefined && input.minimum_qty !== Number(it.minimum_qty)) changes.push(`minimum: ${input.minimum_qty}`);
       if (input.active !== undefined && input.active !== it.active) changes.push(input.active ? 'faol qilindi' : 'nofaol qilindi');
       if (input.pack_size !== undefined && (input.pack_size ?? null) !== (it.pack_size == null ? null : Number(it.pack_size))) changes.push(`qadoq: ${input.pack_size ?? '—'}`);
@@ -103,7 +107,7 @@ export class InventoryController {
   @Roles('manager', 'storekeeper') @Get(':id')
   async get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     if (!isUuid(id)) throw notFound('Material');
-    const item = await this.db.one(`SELECT i.*, b.name AS branch_name, ${QTY} AS qty FROM inventory_items i JOIN branches b ON b.id = i.branch_id
+    const item = await this.db.one(`SELECT i.*, b.name AS branch_name, ${QTY} AS qty, ${USABLE_SQL('i')} AS usable_qty FROM inventory_items i JOIN branches b ON b.id = i.branch_id
       WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!item) throw notFound('Material');
     // the card shows the latest 100 movements; older ones come page by page from /inventory/:id/movements
@@ -125,32 +129,14 @@ export class InventoryController {
     return { data: rows, meta: { page, page_size: pageSize, total } };
   }
 
+  /**
+   * B3 (audit 2026-10-25): the old quick «kirim/chiqim» from the item card bypassed every warehouse rule (no request
+   * document, back-dating, stock without supplier/series/expiry). Stock now changes only through the documents:
+   * «Kirim» (POST /warehouse/receipts), a request (POST /warehouse/requests → issue) or an urgent issue to a
+   * department (POST /warehouse/issues), a write-off act or an inventory count.
+   */
   @Roles('manager', 'storekeeper') @Post(':id/movements')
-  async move(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
-    const input = parse(inventoryMovementSchema, body);
-    if (!isUuid(id)) throw notFound('Material');
-    if (input.date && input.date > today()) throw invalid({ date: 'Kelajak sanasi mumkin emas' });
-    return this.db.tx(async (c) => {
-      // lock first, then count: a quantity computed inside the locking SELECT would come from the snapshot before the wait
-      const locked = (await c.query(`SELECT i.id FROM inventory_items i WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3) FOR UPDATE`, [id, ctx.tenantId, ctx.branchIds])).rows[0];
-      if (!locked) throw notFound('Material');
-      const item = (await c.query(`SELECT i.*, ${QTY} AS qty FROM inventory_items i WHERE i.id = $1`, [id])).rows[0];
-      if (input.type === 'out' && input.quantity > Number(item.qty)) throw invalid({ quantity: `Mavjud qoldiqdan (${item.qty} ${item.unit}) ko‘p chiqim qilib bo‘lmaydi` });
-      if (input.type === 'out' && item.controlled) throw conflict('CONTROLLED_TWO_SIGNATURES', 'Nazoratdagi dori faqat talabnoma orqali, rahbar tasdig‘i bilan beriladi');
-      const at = input.date && input.date !== today() ? localToUtc(input.date, '12:00') : now();
-      const qtyC = toC(input.quantity);
-      // quick entry from the item card: «in» is a batch without a series; «out» is a FEFO issue to a department, taken by the person entering it
-      if (input.type === 'in') {
-        const batchId = (await c.query(`INSERT INTO inventory_batches (id, tenant_id, item_id, qty, received_qty, unit_cost, received_at) VALUES (gen_random_uuid(), $1,$2,$3,$3,$4,$5) RETURNING id`,
-          [ctx.tenantId, id, fromC(qtyC), item.purchase_price, at])).rows[0].id;
-        await insertMove(c, { tenantId: ctx.tenantId, itemId: id, branchId: item.branch_id, batchId, type: 'in', kind: 'receipt', qtyC, unitCost: item.purchase_price, reason: input.reason, actor: ctx, at, docNo: '' });
-      } else {
-        for (const part of await takeFefo(c, item, qtyC))
-          await insertMove(c, { tenantId: ctx.tenantId, itemId: id, branchId: item.branch_id, batchId: part.batchId, type: 'out', kind: 'issue', qtyC: part.qtyC, unitCost: part.unitCost, reason: input.reason,
-            actor: ctx, at, docNo: '', receiver: { id: ctx.membershipId, name: ctx.name }, purpose: { purpose: 'department', department: input.reason, patientId: null, encounterId: null, orderId: null, icdCodes: [] } });
-      }
-      await audit(c, ctx, `inventory.${input.type}`, 'inventory_item', id, `${item.name}: ${input.type === 'in' ? 'kirim' : 'chiqim'} ${input.quantity} ${item.unit}`, item.branch_id);
-      return { data: { ok: true } };
-    });
+  move() {
+    throw new AppError(410, 'MOVEMENT_ENDPOINT_REMOVED', 'Qoldiq faqat hujjat orqali o‘zgaradi: kirim — «Kirim», chiqim — talabnoma yoki «Tezkor berish»');
   }
 }

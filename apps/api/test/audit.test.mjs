@@ -49,10 +49,13 @@ test('NEG-01: parallel cash expenses never take a drawer below zero', async () =
 
 test('NEG-02: parallel stock-outs never oversell', async () => {
   const item = (await pool.query(`SELECT id FROM inventory_items WHERE tenant_id = $1 AND branch_id = $2 ORDER BY name LIMIT 1`, [SEED_IDS.tenant, BC])).rows[0];
-  const qty = Number((await manager.get(`/inventory/${item.id}`)).body.data.qty);
+  const qty = Number((await manager.get(`/inventory/${item.id}`)).body.data.usable_qty);
   const take = Math.max(1, Math.floor(qty / 3));
-  const rs = await Promise.all(Array.from({ length: 12 }, () => manager.post(`/inventory/${item.id}/movements`, { type: 'out', quantity: take, reason: 'poyga sinovi' })));
-  const ok = rs.filter((r) => r.status === 200).length;
+  // the old quick «chiqim» is gone (audit 2026-10-25): the race goes through the urgent issue to a department
+  const body = { branch_id: BC, purpose: 'department', department: 'Poyga sinovi', receiver_membership_id: M.doctor(0), lines: [{ item_id: item.id, qty: take }] };
+  const rs = await Promise.all(Array.from({ length: 12 }, () => manager.post('/warehouse/issues', body)));
+  assert.ok(rs.every((r) => r.status === 201 || (r.status === 409 && r.body.error.code === 'INSUFFICIENT_STOCK')), JSON.stringify(rs.map((r) => r.status)));
+  const ok = rs.filter((r) => r.status === 201).length;
   assert.ok(ok <= Math.floor(qty / take), `${ok} × ${take} > ${qty}`);
   assert.ok(Number((await manager.get(`/inventory/${item.id}`)).body.data.qty) >= 0);
 });
@@ -79,7 +82,7 @@ test('NEG-05 / NEG-09 / NEG-11: invisible characters are removed, impossible dat
   for (const d of ['2027-02-30', '0001-01-01', '9999-12-31', '1899-12-31']) assert.equal((await registrar.post('/patients', { last_name: 'Sana', first_name: 'Sinov', birth_date: d })).status, 422, d);
   assert.equal((await manager.get('/dashboard?from=2026-02-30&to=2026-03-01')).status, 422);
   const item = (await pool.query(`SELECT id FROM inventory_items WHERE tenant_id = $1 LIMIT 1`, [SEED_IDS.tenant])).rows[0];
-  for (const q of [0.0001, 1e11]) assert.equal((await manager.post(`/inventory/${item.id}/movements`, { type: 'in', quantity: q, reason: 'sinov' })).status, 422, String(q));
+  for (const q of [0.0001, 1e11]) assert.equal((await manager.post('/warehouse/issues', { branch_id: BC, purpose: 'department', department: 'Sinov', receiver_membership_id: M.doctor(0), lines: [{ item_id: item.id, qty: q }] })).status, 422, String(q));
 });
 
 test('NEG-06: one Idempotency-Key cannot book two different patients', async () => {

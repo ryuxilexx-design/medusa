@@ -4,10 +4,13 @@ import { addDays, TZ_OFFSET_MS } from './clock';
 import { invalid } from './errors';
 import { isDate } from './validate';
 
-/** A cell starting with = + - @ or a tab/CR would be executed by a spreadsheet: it gets a leading apostrophe. */
+/**
+ * A cell starting with = + - @ or a tab/CR would be executed by a spreadsheet: it gets a leading apostrophe. A plain
+ * negative number («-12.50», a quantity out or a refund) is not a formula and stays a number (B7, audit 2026-10-25).
+ */
 export const csvCell = (v: unknown) => {
   let s = v == null ? '' : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  if (/^[=+\-@\t\r]/.test(s) && !/^-\d+(\.\d+)?$/.test(s)) s = "'" + s;
   return `"${s.replace(/"/g, '""')}"`;
 };
 /** «2026-10-18 14:05» in Asia/Tashkent. */
@@ -16,11 +19,25 @@ export const csvDate = (d: Date | string | null | undefined) => (d ? new Date(ne
 /** Tiyin → «1234.50» (a number cell, never grouped). */
 export const csvSom = (tiyin: unknown) => (Number(tiyin ?? 0) / 100).toFixed(2);
 
+/** The longest period of a report or an export, in calendar days counting both ends (a leap year fits). */
+export const MAX_PERIOD_DAYS = 366;
+/** from ≤ to and at most MAX_PERIOD_DAYS days from the first to the last day, both included. */
+export const periodFits = (from: string, to: string) => from <= to && to <= addDays(from, MAX_PERIOD_DAYS - 1);
+
 /** An export is built in memory: «all time» would stall the server for everyone, so a period of at most a year is required. */
 export function csvPeriod(q: any): { from: string; to: string } {
   if (!isDate(q.from) || !isDate(q.to)) throw invalid({ from: 'Davrni tanlang' });
-  if (q.from > q.to || addDays(q.from, 366) < q.to) throw invalid({ from: 'Eksport davri 1 yildan oshmasin' });
+  if (!periodFits(q.from, q.to)) throw invalid({ from: 'Eksport davri 1 yildan oshmasin' });
   return { from: q.from, to: q.to };
+}
+
+/**
+ * Most rows one export may hold. More rows are refused (422: «narrow the period») instead of being cut silently —
+ * a truncated ledger looks complete. `CSV_MAX_ROWS` lowers it (tests).
+ */
+export const csvMaxRows = () => Number(process.env.CSV_MAX_ROWS) || 100_000;
+export function assertCsvRows(n: number, max = csvMaxRows()) {
+  if (n > Math.min(max, csvMaxRows())) throw invalid({ from: `Eksportda ${Math.min(max, csvMaxRows())} qatordan ko‘p bo‘ladi — davrni qisqartiring` });
 }
 
 export function sendCsv(res: Response, filename: string, header: string[], rows: unknown[][]) {

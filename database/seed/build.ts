@@ -31,7 +31,7 @@ export interface SeedData {
   service_orders: Row[]; lab_results: Row[]; diagnostic_reports: Row[]; invoices: Row[]; invoice_items: Row[];
   payments: Row[]; expenses: Row[]; inventory_items: Row[]; inventory_movements: Row[]; audit_logs: Row[]; cash_shifts: Row[];
   inventory_receipts: Row[]; inventory_batches: Row[]; inventory_requests: Row[]; inventory_request_lines: Row[]; inventory_writeoffs: Row[];
-  inventory_writeoff_lines: Row[]; inventory_doc_counters: Row[]; fridge_temperature_log: Row[];
+  inventory_writeoff_lines: Row[]; inventory_doc_counters: Row[]; cold_devices: Row[]; fridge_temperature_log: Row[];
   patient_consents: Row[];
   medical_documents: Row[]; note_addenda: Row[]; patient_summaries: Row[]; patient_allergies: Row[]; schedule_exceptions: Row[]; patient_deposits: Row[]; refunds: Row[];
   cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[]; camera_snapshots: Row[];
@@ -107,7 +107,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     encounters: [], clinical_notes: [], service_orders: [], lab_results: [], diagnostic_reports: [], invoices: [],
     invoice_items: [], payments: [], expenses: [], inventory_items: [], inventory_movements: [], audit_logs: [], cash_shifts: [],
     inventory_receipts: [], inventory_batches: [], inventory_requests: [], inventory_request_lines: [], inventory_writeoffs: [], inventory_writeoff_lines: [],
-    inventory_doc_counters: [], fridge_temperature_log: [],
+    inventory_doc_counters: [], cold_devices: [], fridge_temperature_log: [],
     patient_consents: [],
     medical_documents: [], note_addenda: [], patient_summaries: [], patient_allergies: [], schedule_exceptions: [], patient_deposits: [], refunds: [],
     cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [], camera_snapshots: [],

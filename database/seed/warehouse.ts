@@ -20,7 +20,7 @@ export const seedDrugLinks = (): [string, string][] =>
  * The demo warehouse. Existing items get their balance split into batches (series, expiry: one lot near expiry, one
  * expired); six medicines arrive with two supplier receipts; doctors' requests are issued FEFO with patient, visit and
  * ICD-10 code; tramadol (controlled) has its register with two signatures and a return; a write-off act waits for the
- * manager; the fridge has a twice-daily log. Deterministic and RNG-free (the seeded KPIs do not move).
+ * manager; the cold chain has three devices with their own ranges and a daily log. Deterministic and RNG-free (the seeded KPIs do not move).
  * Invariant: opening_qty + Σ ledger = Σ batch balances.
  */
 export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: string) {
@@ -208,11 +208,26 @@ export function buildWarehouse(data: SeedData, demoDate: string, demoTime?: stri
   data.inventory_movements = data.inventory_movements.map((m) => (m.kind ? m : move({ ...m, kind: 'legacy', batch_id: null, actor_membership_id: null, unit_cost: 0, value: 0, doc_no: null })));
   data.inventory_doc_counters.push({ tenant_id: T, kind: 'receipt', last: RECEIPTS.length + RESTOCK.length }, { tenant_id: T, kind: 'request', last: reqN }, { tenant_id: T, kind: 'writeoff', last: expired ? 1 : 0 });
 
-  // ---- fridge log, twice a day; one reading out of range three days ago
-  for (let d = -6; d <= 0; d++) for (const [t, base] of [[hm('08:00'), 4.2], [hm('18:00'), 5.1]] as const) {
-    if (d === 0 && t > demoNowMin) continue;
-    const temp = d === -3 && t === hm('18:00') ? 9.1 : Number((base + ((((d + 7) * 3 + (t === hm('08:00') ? 0 : 1)) % 5) * 0.4)).toFixed(1));
-    data.fridge_temperature_log.push({ id: sid(`fridge:${d}:${t}`), tenant_id: T, branch_id: BC, fridge: 'Muzlatkich №1 (dorilar)', recorded_at: day(d, t), temperature: temp,
-      recorded_by: KEEPER.id, recorded_by_name: KEEPER.name, note: temp > 8 ? 'Eshik ochiq qolgan, yopildi; 30 daqiqadan keyin 6,0 °C' : null });
+  // ---- cold chain (migration 039): three devices with their own ranges; the drug fridge twice a day (one reading out
+  //      of range three days ago, with the action taken), the reagent freezer and the drug room once a day
+  const DEVICES = [
+    { key: 'fridge1', name: 'Muzlatkich №1 (dorilar)', kind: 'fridge', min: 2, max: 8 },
+    { key: 'freezer1', name: 'Muzlatgich (reagentlar)', kind: 'freezer', min: -25, max: -15 },
+    { key: 'room1', name: 'Dori xonasi', kind: 'room', min: 15, max: 25 },
+  ];
+  for (const dv of DEVICES) data.cold_devices.push({ id: sid(`colddev:${dv.key}`), tenant_id: T, branch_id: BC, name: dv.name, kind: dv.kind, min_temp: dv.min, max_temp: dv.max,
+    active: true, created_at: day(-60, hm('09:00')) });
+  const reading = (dv: (typeof DEVICES)[number], d: number, t: number, temp: number, note: string | null, id: string) => data.fridge_temperature_log.push({
+    id, tenant_id: T, branch_id: BC, fridge: dv.name, device_id: sid(`colddev:${dv.key}`), recorded_at: day(d, t), temperature: temp, min_allowed: dv.min, max_allowed: dv.max,
+    recorded_by: KEEPER.id, recorded_by_name: KEEPER.name, note });
+  for (let d = -6; d <= 0; d++) {
+    for (const [t, base] of [[hm('08:00'), 4.2], [hm('18:00'), 5.1]] as const) {
+      if (d === 0 && t > demoNowMin) continue;
+      const temp = d === -3 && t === hm('18:00') ? 9.1 : Number((base + ((((d + 7) * 3 + (t === hm('08:00') ? 0 : 1)) % 5) * 0.4)).toFixed(1));
+      reading(DEVICES[0], d, t, temp, temp > 8 ? 'Eshik ochiq qolgan, yopildi; 30 daqiqadan keyin 6,0 °C' : null, sid(`fridge:${d}:${t}`));
+    }
+    if (d === 0 && hm('08:10') > demoNowMin) continue;
+    reading(DEVICES[1], d, hm('08:10'), Number((-19.5 + ((d + 7) % 4) * 0.6).toFixed(1)), null, sid(`fridge:freezer:${d}`));
+    reading(DEVICES[2], d, hm('08:15'), Number((21.0 + ((d + 7) % 3) * 0.8).toFixed(1)), null, sid(`fridge:room:${d}`));
   }
 }

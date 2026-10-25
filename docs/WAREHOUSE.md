@@ -110,8 +110,9 @@ o‘tkazildi. Invariant (testda tekshiriladi): `opening_qty + Σ kirim − Σ ch
   (berilgan − qaytarilgan, bekor qilinganlarsiz), qiymat butun tiyin; tashxis bo‘yicha guruh qabulning **birinchi**
   (asosiy) kodi bo‘yicha — shuning uchun guruhlar yig‘indisi jamiga teng. Daftar `GET /movements` (sahifalab) va
   `GET /movements.csv` (davr ≤ 1 yil). Nazoratdagi jurnal `GET /controlled/:itemId`.
-- Eski `/inventory` API saqlanib qoldi (rahbar + omborchi): «kirim» seriyasiz partiya yaratadi, «chiqim» FEFO bo‘yicha
-  bo‘limga beriladi (oluvchi — yozayotgan xodim, bo‘lim — sabab matni); nazoratdagi dori uchun 409.
+- Eski `POST /inventory/:id/movements` (tezkor kirim/chiqim) **yopilgan — 410** `MOVEMENT_ENDPOINT_REMOVED`: qoldiq
+  faqat hujjat orqali o‘zgaradi (kirim, talabnoma, tezkor berish, akt, inventarizatsiya). `/inventory` — material
+  kartasi (yaratish, tahrir, ko‘rish).
 
 **Buyurtma taklifi** (`GET /warehouse/reorder?branch_id&horizon&only=order`, `GET /warehouse/reorder.csv`,
 `POST /warehouse/reorder/brief`; omborchi va rahbar, boshqalar 403; migratsiya `037_reorder.sql`). Faqat hisob, AI shart
@@ -131,6 +132,43 @@ emas (`modules/reorder.ts`):
 bo‘yicha; qayd matni, natijalar, hisob-kitob yo‘q). Rahbar: hammasi, shu jumladan bemor bo‘yicha material qiymati.
 Shifokor: katalog (nom, yaroqli qoldiq), o‘z talabnomalari va o‘z qabulining materiallari; narx ko‘rinmaydi.
 Laboratoriya: reagent/sarf katalogi va o‘z talabnomalari. Registrator va kassir: ombor yo‘q (403).
+
+## 3a. Audit 2026-10-25 — tuzatishlar (migratsiya `039_warehouse_fixes.sql`, testlar `test/warehouse-audit.test.mjs`)
+
+- **B1 inventarizatsiya va harakatlar.** Tanlangan yo‘l — *muzlatish*: inventarizatsiya **ochiq** turganda uning
+  partiyalaridagi materiallarga kirim, berish, qaytarish, hisobdan chiqarish, bekor qilish **409 `COUNT_IN_PROGRESS`**
+  (`assertNotCounting()`, material qatori qulflangandan keyin). Boshlash qamrovdagi materiallarni `FOR UPDATE` qulflab
+  surat oladi — parallel berish yo suratdan oldin tugaydi yo keyin 409 oladi. Topshirilgach ombor yana ishlaydi;
+  tasdiqlashda «sanalgan − kutilgan» bugungi qoldiqqa qo‘llanadi (ochiq paytda harakat bo‘lmagani uchun ikki marta
+  ayrilmaydi). Nega muzlatish: «sanalgan vaqt»ga tuzatish odam qachon sanaganini emas, qachon yozganini biladi.
+- **B2 ko‘r sanash.** Ochiq hisobda `expected_qty`, farqlar va narx hech kimga qaytmaydi; omborchiga hech qachon;
+  rahbarga — topshirilgandan keyin. Farq sababi endi topshirishda emas, **tasdiqlashda** majburiy (sanovchi izohi yoki
+  rahbarning `reasons`). Chop etilgan varaq ham ko‘r.
+- **B15** qatorlar sahifalab (`?page&page_size&q&only=uncounted|diff`, chop etish `?all=1`), UI faqat o‘zgargan
+  qatorlarni 500 tadan saqlaydi; «Sanaldi X / Y». O‘zi boshlagan/sanagan/topshirgan rahbarga «Tasdiqlash» ko‘rinmaydi.
+- **B4/B8 bemor ma’lumoti.** Bemor/muolaja uchun talabnoma — **faqat davolovchi shifokor** (rahbar, omborchi 403),
+  MKB kodlari qabuldan; tezkor berish (`POST /issues`) **faqat bo‘lim uchun**, oluvchi ≠ beruvchi. `GET /visits` —
+  faqat shifokorning **o‘z** qabullari (7 kun); `GET /encounters/:id` — shifokor va rahbar. Sarf hisoboti bemor /
+  tashxis / shifokor / muolaja bo‘yicha — faqat rahbar; omborchi — material va bo‘lim bo‘yicha (miqdorlar bilan, CSV).
+- **B16** 7 kundan eski qabul yoki buyurtma uchun so‘rov 422.
+- **B5/B12 nazoratdagi dori.** Tasdiq kerak = talabnoma yozilganda **yoki hozir** nazoratdagi material bor (approve va
+  issue bir qoida). Bermaydi: so‘ragan ham, tasdiqlagan ham (409 `SECOND_SIGNATURE`).
+- **B6 sovuq zanjir.** `cold_devices` (nom, tur muzlatkich/muzlatgich/xona, filial, min/max, faol). Standart me’yor:
+  +2…+8, −25…−15, +15…+25 °C. Eski matnli nomlar qurilmaga aylantirildi. Me’yordan tashqari o‘lchovda chora matni
+  majburiy (API 422 + bazada CHECK). Me’yorni faqat rahbar o‘zgartiradi.
+- **B7 CSV.** Harakatlar, buyurtma taklifi, sarf — oxirida jami qatori; chiqim manfiy son, apostrofsiz (`csvCell`
+  faqat formulaga o‘xshash satrni neytrallaydi); chegaradan oshsa jim kesilmaydi — 422 «davrni qisqartiring».
+- **B9** berish bekor qilinsa talabnoma qayta ochiladi (submitted / partially_issued). **B21** kirim qatori bekor
+  qilinsa hujjat jami kamayadi, qator va chop etish «bekor qilingan» belgisi bilan.
+- **B10** kirim: `Idempotency-Key` majburiy, bir nakladnaya (yetkazib beruvchi + № + sana) ikki marta — 409
+  `DUPLICATE_RECEIPT`. **B11** qoldig‘i bor materialning birligi o‘zgarmaydi (409). **B13** komissiya a’zolari har xil
+  (harf, bo‘shliq, apostrof farq qilmaydi). **B14** «kam qolgan» — yaroqli (muddati o‘tmagan) qoldiq bo‘yicha.
+- **B17** buyurtma taklifi xulosasi kun davomida saqlanadi (`ai_digests`), model chaqiruvi klinikaga kuniga 5 ta
+  (429 `AI_BRIEF_LIMIT`). **B18** nazoratdagi jurnal: tanlangan davr boshidagi/oxiridagi qoldiq. **B19** davr ≤ 366 kun
+  (ikki chekka bilan, `periodFits`). **B20** ulush foizlari faqat rahbarga. **B22** taklif ochiq talabnomalarda
+  kutilayotgan miqdorni (`reserved`) yaroqli qoldiqdan ayiradi.
+- Interfeys: materiallar va partiyalar qidiruvli tanlagich (`ItemPicker`); 390 px da harakatlar, talabnomalar,
+  inventarizatsiya qatorlari miqdor/oluvchi/summa bilan yon aylantirishsiz.
 
 **Bemorga avtomatik hisob qo‘yilmaydi** (material narxi hisob-fakturaga tushmaydi) — keyingi bosqich varianti:
 muolaja xizmati narxiga materiallar normasini bog‘lash yoki alohida «material» qatori.

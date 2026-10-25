@@ -10,7 +10,7 @@ import { addDays, dayStart, today } from '../core/clock';
 import { isDate, isUuid } from '../core/validate';
 import { NET_LINE } from '../modules/billing';
 import { AGE_BUCKETS } from '../modules/invoices.controller';
-import { STOCK_SQL } from '../modules/warehouse';
+import { USABLE_SQL } from '../modules/warehouse';
 import { som, type Facts, type FactUnit } from './manager-facts';
 
 export type ColType = 'text' | 'date' | 'month' | 'hour' | 'money' | 'count' | 'qty' | 'min';
@@ -163,7 +163,7 @@ export const TEMPLATES: Record<string, Template> = {
       if (r.kind === 'low') {
         const cols: Col[] = [{ key: 'label', type: 'text' }, { key: 'qty', type: 'qty' }, { key: 'minimum', type: 'qty' }, { key: 'unit', type: 'text' }];
         const rows = await db.rows(
-          `SELECT * FROM (SELECT i.name AS label, i.unit, i.minimum_qty AS minimum, ${STOCK_SQL('i')} AS qty FROM inventory_items i
+          `SELECT * FROM (SELECT i.name AS label, i.unit, i.minimum_qty AS minimum, ${USABLE_SQL('i')} AS qty FROM inventory_items i
              WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active) x WHERE qty < minimum ORDER BY label LIMIT $3`, [r.tenantId, r.branches, r.limit]);
         return { columns: cols, rows: num(rows, cols) };
       }

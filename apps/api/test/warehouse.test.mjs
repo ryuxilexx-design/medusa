@@ -6,6 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 import { bootTestApp, db } from './_helpers.mjs';
 const require = createRequire(import.meta.url);
 const { SEED_IDS } = db;
@@ -15,13 +16,15 @@ let app, base, pool;
 
 function session() {
   let cookie = '';
-  const req = async (method, path, body) => {
-    const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const req = async (method, path, body, headers = {}) => {
+    const r = await fetch(base + path, { method, headers: { 'content-type': 'application/json', cookie, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
     const sc = r.headers.get('set-cookie'); if (sc) cookie = sc.split(';')[0];
     const t = await r.text(); let j; try { j = JSON.parse(t); } catch { j = t; }
     return { status: r.status, body: j, text: t, type: r.headers.get('content-type') };
   };
-  return { get: (p) => req('GET', p), post: (p, b = {}) => req('POST', p, b), put: (p, b) => req('PUT', p, b), patch: (p, b) => req('PATCH', p, b), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }) };
+  return { get: (p) => req('GET', p), post: (p, b = {}, h) => req('POST', p, b, h), put: (p, b) => req('PUT', p, b), patch: (p, b) => req('PATCH', p, b), demo: (mid) => req('POST', '/demo/login', { membership_id: mid }),
+    /** a receipt needs an Idempotency-Key (migration 039) */
+    receipt: (b) => req('POST', '/warehouse/receipts', b, { 'Idempotency-Key': randomUUID() }) };
 }
 
 let keeper, manager, doctor, doctor2, registrar, cashier, lab, t2;
@@ -79,7 +82,7 @@ test('seed: omborchi kartasi, partiyalar = daftar, muddati o‘tgan va yaqin par
 });
 
 test('rol matritsasi: omborchi faqat omborda; shifokor/laboratoriya so‘raydi; kassir/registrator yo‘q; boshqa klinika 404', async () => {
-  for (const p of ['/warehouse/stock', '/warehouse/summary', '/inventory', '/warehouse/receipts', '/warehouse/requests', '/warehouse/movements', '/warehouse/writeoffs', '/warehouse/counts', '/warehouse/fridge', '/warehouse/reports/consumption?group=patient'])
+  for (const p of ['/warehouse/stock', '/warehouse/summary', '/inventory', '/warehouse/receipts', '/warehouse/requests', '/warehouse/movements', '/warehouse/writeoffs', '/warehouse/counts', '/warehouse/fridge', '/warehouse/fridge/devices', '/warehouse/reports/consumption?group=item'])
     assert.equal((await keeper.get(p)).status, 200, p);
   for (const p of ['/patients', '/dashboard', `/appointments?date=${today}`, '/invoices', '/cash-shifts/current', `/encounters/${openEnc}`, `/patients/${openPatient}`, '/staff', '/reports/doctors'])
     assert.equal((await keeper.get(p)).status, 403, `omborchi: ${p}`);
@@ -111,7 +114,7 @@ test('rol matritsasi: omborchi faqat omborda; shifokor/laboratoriya so‘raydi; 
 test('kirim → partiyalar (seriya, muddat, narx); muddati o‘tgan partiya qabul qilinmaydi; yangi material maydonlari', async () => {
   const cr = await keeper.post('/inventory', { name: 'Sinov dori A', unit: 'ampula', branch_id: BC, category: 'medicine', storage: 'fridge', minimum_qty: 2, purchase_price: 500000 });
   assert.equal(cr.status, 201); item.a = cr.body.data.id;
-  const r = await keeper.post('/warehouse/receipts', { branch_id: BC, supplier: 'Sinov ta’minot', invoice_no: 'NK-1', invoice_date: today,
+  const r = await keeper.receipt({ branch_id: BC, supplier: 'Sinov ta’minot', invoice_no: 'NK-1', invoice_date: today,
     lines: [{ item_id: item.a, batch_no: 'L2', expiry_date: '2027-06-30', qty: 5, unit_cost: 600000 }, { item_id: item.a, batch_no: 'L1', expiry_date: '2027-01-31', qty: 3, unit_cost: 500000 }] });
   assert.equal(r.status, 201);
   const doc = (await keeper.get(`/warehouse/receipts/${r.body.data.id}`)).body.data;
@@ -119,12 +122,12 @@ test('kirim → partiyalar (seriya, muddat, narx); muddati o‘tgan partiya qabu
   assert.equal(await stock(item.a), 8);
   const it = (await keeper.get(`/inventory/${item.a}`)).body.data;
   assert.equal(it.category, 'medicine'); assert.equal(it.storage, 'fridge'); assert.equal(it.batches[0].batch_no, 'L1', 'birinchi — eng erta muddat');
-  assert.equal((await keeper.post('/warehouse/receipts', { branch_id: BC, supplier: 'X tamin', invoice_no: '1', invoice_date: today, lines: [{ item_id: item.a, batch_no: 'Z', expiry_date: '2020-01-01', qty: 1, unit_cost: 1 }] })).status, 422);
-  assert.equal((await keeper.post('/warehouse/receipts', { branch_id: BY, supplier: 'X tamin', invoice_no: '1', invoice_date: today, lines: [{ item_id: item.a, batch_no: 'Z', qty: 1, unit_cost: 1 }] })).status, 422, 'boshqa filial materiali');
+  assert.equal((await keeper.receipt({ branch_id: BC, supplier: 'X tamin', invoice_no: '1', invoice_date: today, lines: [{ item_id: item.a, batch_no: 'Z', expiry_date: '2020-01-01', qty: 1, unit_cost: 1 }] })).status, 422);
+  assert.equal((await keeper.receipt({ branch_id: BY, supplier: 'X tamin', invoice_no: '1', invoice_date: today, lines: [{ item_id: item.a, batch_no: 'Z', qty: 1, unit_cost: 1 }] })).status, 422, 'boshqa filial materiali');
   await ledgerMatchesBatches();
 });
 
-test('FEFO: eng erta muddatli partiyadan; muddati o‘tgan partiya hech qachon berilmaydi; maqsad/oluvchi/MKB majburiy', async () => {
+test('FEFO: eng erta muddatli partiyadan; muddati o‘tgan partiya hech qachon berilmaydi; maqsad/oluvchi majburiy; bemor uchun — faqat shifokor talabnomasi', async () => {
   // an expired lot with the most units: it must never be touched
   const expired = (await pool.query(`INSERT INTO inventory_batches (id, tenant_id, item_id, batch_no, expiry_date, qty, received_qty, unit_cost, received_at)
     VALUES (gen_random_uuid(), $1, $2, 'OLD', '2026-01-01', 50, 50, 1, now()) RETURNING id`, [SEED_IDS.tenant, item.a])).rows[0].id;
@@ -141,14 +144,14 @@ test('FEFO: eng erta muddatli partiyadan; muddati o‘tgan partiya hech qachon b
   // mandatory fields
   assert.equal((await keeper.post('/warehouse/issues', { ...base, receiver_membership_id: undefined, lines: [{ item_id: item.a, qty: 1 }] })).status, 422, 'kim oldi');
   assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: undefined, lines: [{ item_id: item.a, qty: 1 }] })).status, 422, 'maqsad');
-  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'patient', lines: [{ item_id: item.a, qty: 1 }] })).status, 422, 'qabul');
-  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'patient', encounter_id: openEnc, lines: [{ item_id: item.a, qty: 1 }] })).status, 422, 'MKB-10 kodi');
-  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'patient', encounter_id: openEnc, icd_codes: ['Z99.99'], lines: [{ item_id: item.a, qty: 1 }] })).status, 422, 'ro‘yxatda yo‘q kod');
-  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'department', encounter_id: openEnc, lines: [{ item_id: item.a, qty: 1 }] })).status, 422);
+  // B4: a patient's materials never leave by a direct issue (codes typed by the warehouse) — only by the doctor's request
   const pat = await keeper.post('/warehouse/issues', { ...base, purpose: 'patient', encounter_id: openEnc, icd_codes: ['I10'], lines: [{ item_id: item.a, qty: 1 }] });
-  assert.equal(pat.status, 201);
-  const m = (await pool.query(`SELECT patient_id, encounter_id, icd_codes FROM inventory_movements WHERE request_id = $1`, [pat.body.data.id])).rows[0];
-  assert.equal(m.patient_id, openPatient); assert.equal(m.encounter_id, openEnc); assert.deepEqual(m.icd_codes, ['I10']);
+  assert.equal(pat.status, 422); assert.ok(pat.body.error.fields.purpose);
+  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'procedure', encounter_id: openEnc, icd_codes: ['I10'], lines: [{ item_id: item.a, qty: 1 }] })).status, 422);
+  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'department', encounter_id: openEnc, lines: [{ item_id: item.a, qty: 1 }] })).status, 422);
+  // the person who takes the items is never the one who hands them out
+  const self = await keeper.post('/warehouse/issues', { ...base, receiver_membership_id: M.storekeeper, lines: [{ item_id: item.a, qty: 1 }] });
+  assert.equal(self.status, 422); assert.ok(self.body.error.fields.receiver_membership_id);
   // the database refuses an issue without a person or purpose even if the API were bypassed
   await assert.rejects(pool.query(`INSERT INTO inventory_movements (id, tenant_id, item_id, type, quantity, reason, actor_name, occurred_at, kind, batch_id, branch_id)
     VALUES (gen_random_uuid(), $1, $2, 'out', 1, 'x', 'x', now(), 'issue', $3, $4)`, [SEED_IDS.tenant, item.a, expired, BC]));
@@ -230,8 +233,8 @@ test('hisobdan chiqarish: komissiya ≥ 3; omborchi tuzadi, rahbar tasdiqlaydi; 
 
 test('nazoratdagi dori: rahbar tasdig‘i + omborchi berishi (ikki imzo), to‘g‘ridan-to‘g‘ri berib bo‘lmaydi, jurnal o‘zgarmas', async () => {
   const base = { branch_id: BC, purpose: 'patient', department: 'Muolaja xonasi', encounter_id: openEnc, icd_codes: ['M54.5'], lines: [{ item_id: item.tramadol, qty: 1 }] };
-  assert.equal((await keeper.post('/warehouse/issues', { ...base, receiver_membership_id: M.doctor(0) })).status, 409);
-  assert.equal((await keeper.post(`/inventory/${item.tramadol}/movements`, { type: 'out', quantity: 1, reason: 'Tezkor chiqim' })).status, 409);
+  assert.equal((await keeper.post('/warehouse/issues', { ...base, purpose: 'department', encounter_id: undefined, icd_codes: undefined, receiver_membership_id: M.doctor(0) })).status, 409);
+  assert.equal((await keeper.post(`/inventory/${item.tramadol}/movements`, { type: 'out', quantity: 1, reason: 'Tezkor chiqim' })).status, 410, 'eski tezkor chiqim yopilgan');
   // the storekeeper cannot lift the special regime to skip the second signature
   assert.equal((await keeper.patch(`/inventory/${item.tramadol}`, { controlled: false })).status, 403, 'nazoratni faqat rahbar o‘zgartiradi');
   // a manager who asks for a controlled drug cannot approve their own request
@@ -285,17 +288,20 @@ test('inventarizatsiya: kutilgan → sanalgan → farq sababi → rahbar tasdig�
   assert.equal((await keeper.post('/warehouse/counts', { branch_id: BC })).status, 409, 'bitta ochiq inventarizatsiya');
   const c = (await keeper.get(`/warehouse/counts/${s.body.data.id}`)).body.data;
   assert.ok(c.lines.length && c.lines.every((l) => l.controlled));
+  assert.ok(c.lines.every((l) => l.expected_qty === null), 'ko‘r sanash: omborchi hisobdagi miqdorni ko‘rmaydi');
+  // the expected quantity (the counter does not see it) is taken from the database here
+  const exp = new Map((await pool.query(`SELECT id, expected_qty FROM inventory_count_lines WHERE count_id = $1`, [c.id])).rows.map((r) => [r.id, Number(r.expected_qty)]));
   assert.equal((await keeper.post(`/warehouse/counts/${c.id}/submit`)).status, 422, 'sanalmagan qatorlar');
-  const lines = c.lines.map((l, i) => ({ line_id: l.id, counted_qty: i === 0 ? Number(l.expected_qty) - 1 : Number(l.expected_qty), reason: null }));
+  const lines = c.lines.map((l, i) => ({ line_id: l.id, counted_qty: i === 0 ? exp.get(l.id) - 1 : exp.get(l.id), reason: null }));
   assert.equal((await keeper.put(`/warehouse/counts/${c.id}/lines`, { lines })).status, 200);
-  assert.equal((await keeper.post(`/warehouse/counts/${c.id}/submit`)).status, 422, 'farq sababi');
-  lines[0].reason = 'Singan ampula, akt tuziladi';
-  await keeper.put(`/warehouse/counts/${c.id}/lines`, { lines });
-  assert.equal((await keeper.post(`/warehouse/counts/${c.id}/submit`)).status, 200);
+  assert.equal((await keeper.post(`/warehouse/counts/${c.id}/submit`)).status, 200, 'sabab — rahbar ko‘rib chiqqanda');
   const q0 = await batchQty(c.lines[0].batch_id);
   assert.equal((await keeper.post(`/warehouse/counts/${c.id}/decide`, { approve: true })).status, 403);
-  const d = await manager.post(`/warehouse/counts/${c.id}/decide`, { approve: true });
-  assert.equal(d.status, 200); assert.equal(d.body.data.adjusted, 1);
+  assert.equal((await manager.post(`/warehouse/counts/${c.id}/decide`, { approve: true })).status, 422, 'farq sababi kerak');
+  const review = (await manager.get(`/warehouse/counts/${c.id}?only=diff`)).body.data;
+  assert.equal(review.differences, 1); assert.equal(review.lines.length, 1); assert.equal(Number(review.lines[0].expected_qty), exp.get(c.lines[0].id));
+  const d = await manager.post(`/warehouse/counts/${c.id}/decide`, { approve: true, reasons: [{ line_id: c.lines[0].id, reason: 'Singan ampula, akt tuziladi' }] });
+  assert.equal(d.status, 200, d.text); assert.equal(d.body.data.adjusted, 1);
   assert.equal(await batchQty(c.lines[0].batch_id), q0 - 1);
   const adj = (await pool.query(`SELECT kind, type, quantity FROM inventory_movements WHERE count_id = $1`, [c.id])).rows;
   assert.deepEqual(adj.map((x) => [x.kind, x.type, Number(x.quantity)]), [['adjust', 'out', 1]]);
@@ -303,7 +309,8 @@ test('inventarizatsiya: kutilgan → sanalgan → farq sababi → rahbar tasdig�
   const s2 = await keeper.post('/warehouse/counts', { branch_id: BC, scope: 'controlled', commission: ['Sherzod Qodirov', 'Dilnoza Karimova', 'Feruza Mirzayeva'] });
   assert.equal(s2.status, 201, s2.text);
   const c2 = (await keeper.get(`/warehouse/counts/${s2.body.data.id}`)).body.data;
-  const lines2 = c2.lines.map((l) => ({ line_id: l.id, counted_qty: Number(l.expected_qty), reason: null }));
+  const exp2 = new Map((await pool.query(`SELECT id, expected_qty FROM inventory_count_lines WHERE count_id = $1`, [c2.id])).rows.map((r) => [r.id, Number(r.expected_qty)]));
+  const lines2 = c2.lines.map((l) => ({ line_id: l.id, counted_qty: exp2.get(l.id), reason: null }));
   assert.equal((await manager.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2.slice(0, 1) })).status, 200);
   // the storekeeper then re-enters every line (including the manager's): the manager stays a counter
   await keeper.put(`/warehouse/counts/${c2.id}/lines`, { lines: lines2 });
@@ -323,8 +330,13 @@ test('hisobotlar: har bir guruh yig‘indisi = jami = daftar (berilgan − qayta
     assert.equal(r.total, ledger, g);
     assert.equal(r.rows.reduce((a, x) => a + x.value, 0), ledger, `${g}: guruhlar yig‘indisi`);
   }
-  const byPatient = (await keeper.get(`/warehouse/reports/consumption?group=patient&from=${from}&to=${today}`)).body.data.rows;
+  const byPatient = (await manager.get(`/warehouse/reports/consumption?group=patient&from=${from}&to=${today}`)).body.data.rows;
   assert.ok(byPatient.some((x) => x.label && x.key));
+  // B8: by patient / diagnosis / doctor / procedure is the manager's; the storekeeper sees items and departments
+  for (const g of ['patient', 'icd', 'doctor', 'service']) assert.equal((await keeper.get(`/warehouse/reports/consumption?group=${g}&from=${from}&to=${today}`)).status, 403, g);
+  const byItem = (await keeper.get(`/warehouse/reports/consumption?group=item&from=${from}&to=${today}`)).body.data;
+  assert.equal(byItem.total, ledger);
+  assert.ok(byItem.rows.every((r) => r.patients === null && r.qty !== null && r.items.length === 1), 'material bo‘yicha: miqdor, bemorlar soni yo‘q');
   assert.equal((await manager.get(`/warehouse/reports/consumption?from=2024-01-01&to=${today}`)).status, 422, 'davr ≤ 1 yil');
 });
 
@@ -340,11 +352,12 @@ test('CSV: davr majburiy va ≤ 1 yil; Excel uchun BOM; rollar', async () => {
 });
 
 test('muzlatkich jurnali: me’yordan tashqari belgisi, faqat qo‘shiladi; audit yozuvlari', async () => {
-  const r = await keeper.post('/warehouse/fridge', { branch_id: BC, fridge: 'Muzlatkich №1 (dorilar)', temperature: 9.5 });
+  const fridge = (await keeper.get('/warehouse/fridge/devices')).body.data.find((d) => d.kind === 'fridge');
+  const r = await keeper.post('/warehouse/fridge', { device_id: fridge.id, temperature: 9.5, note: 'Eshik yopildi' });
   assert.equal(r.status, 201); assert.equal(r.body.data.out_of_range, true);
-  assert.equal((await keeper.post('/warehouse/fridge', { branch_id: BC, fridge: 'Muzlatkich №1', temperature: 5 })).body.data.out_of_range, false);
+  assert.equal((await keeper.post('/warehouse/fridge', { device_id: fridge.id, temperature: 5 })).body.data.out_of_range, false);
   await assert.rejects(pool.query(`UPDATE fridge_temperature_log SET temperature = 5 WHERE id = $1`, [r.body.data.id]));
-  assert.equal((await doctor.post('/warehouse/fridge', { branch_id: BC, fridge: 'x', temperature: 5 })).status, 403);
+  assert.equal((await doctor.post('/warehouse/fridge', { device_id: fridge.id, temperature: 5 })).status, 403);
   const actions = (await pool.query(`SELECT DISTINCT action FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'warehouse.%'`, [SEED_IDS.tenant])).rows.map((x) => x.action);
   for (const a of ['warehouse.receipt', 'warehouse.request', 'warehouse.issue', 'warehouse.issue_direct', 'warehouse.return', 'warehouse.writeoff', 'warehouse.writeoff_approve', 'warehouse.request_approve', 'warehouse.void', 'warehouse.count_approve', 'warehouse.fridge'])
     assert.ok(actions.includes(a), a);

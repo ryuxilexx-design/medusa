@@ -1,8 +1,23 @@
 // Warehouse in the browser: the storekeeper sees only «Ombor» (stock, the request queue, expiring lots, the
 // controlled register and its print), issues a doctor's request; the doctor asks for materials from the visit page
 // (ICD-10 code required) and sees it under «Mening talabnomalarim»; the manager approves the pending write-off act;
-// the cashier has no access; the phone width has no sideways scroll.
+// the cashier has no access; the phone width has no sideways scroll. Audit fixes 2026-10-25: searchable item pickers,
+// the ledger on a phone (quantity, receiver, sum in the row), cold-chain devices with their own range, the blind
+// count with its progress, the consumption report by item with quantities.
 import { launch, newPage, login, shot, settle, clickText, check, waitText, fill, sleep, BASE } from './lib.mjs';
+/** Picks the first branch in the dialog's «Filial» select (a person with several branches and «all branches» in the header). */
+async function pickBranch(p) {
+  await p.evaluate(() => { const s = [...document.querySelectorAll('[role=dialog] select')].find((x) => x.options[0]?.text === '—'); if (s) { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, s.options[1].value); s.dispatchEvent(new Event('change', { bubbles: true })); } });
+  await settle(p);
+}
+/** Types into the dialog's n-th searchable picker and clicks the option whose name starts with `name`. */
+async function pickItem(p, name, n = 0) {
+  const inputs = await p.$$('[role=dialog] input[role=combobox]');
+  await inputs[n].click(); await inputs[n].type(name.slice(0, 6)); await sleep(250);
+  const ok = await p.evaluate((name) => { const o = [...document.querySelectorAll('[role=dialog] [role=option]')].find((x) => x.textContent.startsWith(name)); o?.click(); return !!o; }, name);
+  if (!ok) throw new Error('pickItem: ' + name);
+  await sleep(150);
+}
 const errors = [];
 const b = await launch();
 const text = (p) => p.evaluate(() => document.body.innerText);
@@ -45,11 +60,40 @@ try {
   check((await text(pr)).includes('Nazoratdagi dorilar hisobi jurnali'), 'Jurnal chop etish sahifasi');
   await shot(pr, 'wh-06-print-journal');
 
+  // receipt: the item is found by typing (type-ahead picker), the dialog is closed without saving
+  await k.goto(BASE + '/inventory?tab=receipts', { waitUntil: 'networkidle0' }); await settle(k);
+  await clickText(k, 'Kirim qilish', 'button'); await k.waitForSelector('[role=dialog]'); await settle(k);
+  await pickBranch(k);
+  await pickItem(k, 'Seftriakson');
+  check(await k.evaluate(() => document.querySelector('[role=dialog] input[role=combobox]').value.startsWith('Seftriakson')), 'Kirim: material yozib qidiriladi va tanlanadi');
+  await shot(k, 'wh-06b-receipt-picker');
+  await k.click('[role=dialog] [data-close]'); await sleep(200);
+  await clickText(k, 'Yopish', '[role=dialog] button'); await sleep(300);
+
+  // cold chain: devices with their own ranges; a freezer at +5 °C asks for the action taken
+  await k.goto(BASE + '/inventory?tab=fridge', { waitUntil: 'networkidle0' }); await settle(k);
+  check((await text(k)).includes('Muzlatgich (reagentlar)') && (await text(k)).includes('−25') === false && (await text(k)).includes('-25'), 'Harorat: qurilmalar o‘z me’yori bilan');
+  await clickText(k, 'Harorat yozish', 'button'); await k.waitForSelector('[role=dialog]'); await settle(k);
+  await fill(k, 'Qurilma', 'Muzlatgich (reagentlar)', '[role=dialog]');
+  await fill(k, 'Harorat, °C', '5', '[role=dialog]');
+  await waitText(k, 'Ko‘rilgan chora');
+  check(await k.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find((b) => b.textContent.trim() === 'Saqlash').disabled), 'Me’yordan tashqari: chora yozilmaguncha saqlanmaydi');
+  await shot(k, 'wh-06c-fridge-out');
+  await fill(k, 'Ko‘rilgan chora', 'Eshik yopildi, 30 daqiqadan keyin qayta o‘lchanadi', '[role=dialog]');
+  await clickText(k, 'Saqlash', '[role=dialog] button');
+  await waitText(k, 'me’yordan tashqari'); await settle(k);
+  check(true, 'Muzlatgich: me’yordan tashqari harorat chora bilan yozildi');
+
   // phone width, Russian
   await k.setViewport({ width: 390, height: 844 });
   await k.goto(BASE + '/inventory', { waitUntil: 'networkidle0' }); await settle(k);
   check(await noSideScroll(k), '390 px: yon tomonga aylantirish yo‘q (uz)');
   await shot(k, 'wh-07-phone');
+  await k.goto(BASE + '/inventory?tab=movements', { waitUntil: 'networkidle0' }); await settle(k);
+  check(await noSideScroll(k), '390 px: harakatlar — yon tomonga aylantirish yo‘q');
+  check(await k.evaluate(() => { const tb = document.querySelector('table'); return !!tb && tb.scrollWidth <= tb.parentElement.clientWidth + 1; }), '390 px: harakatlar jadvali sig‘adi (miqdor, oluvchi, summa qatorda)');
+  check(await k.evaluate(() => [...document.querySelectorAll('tbody tr')].some((r) => r.innerText.includes('Akmal Rasulov') && /so‘m/.test(r.innerText))), '390 px: oluvchi va summa ko‘rinadi');
+  await shot(k, 'wh-07b-phone-movements');
   await k.evaluate(async () => { await fetch('/api/v1/me/preferences', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ locale: 'ru' }) }); });
   await k.goto(BASE + '/inventory?tab=requests', { waitUntil: 'networkidle0' }); await settle(k);
   check((await text(k)).includes('Требования'), 'Rus tilida: «Требования»');
@@ -65,7 +109,7 @@ try {
   await clickText(d, 'Material so‘rash', 'button');
   await d.waitForSelector('[role=dialog]'); await settle(d);
   await fill(d, 'Bo‘lim / xona', 'Muolaja xonasi', '[role=dialog]');
-  await d.evaluate(() => { const s = document.querySelector('[role=dialog] select[aria-label="Material"]'); const o = [...s.options].find((x) => x.text.startsWith('Seftriakson')); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, o.value); s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await pickItem(d, 'Seftriakson');
   await d.evaluate(() => { const i = document.querySelector('[role=dialog] input[inputmode="decimal"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, '2'); i.dispatchEvent(new Event('input', { bubbles: true })); });
   const hasIcdField = await d.evaluate(() => [...document.querySelectorAll('[role=dialog] label')].some((l) => l.textContent.startsWith('MKB-10 kodi')));
   if (hasIcdField) {
@@ -99,7 +143,33 @@ try {
   await m.evaluate(() => { const s = document.querySelector('select[aria-label="Guruhlash"]'); Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(s, 'icd'); s.dispatchEvent(new Event('change', { bubbles: true })); });
   await settle(m);
   check((await text(m)).includes('Jami'), 'Tashxis bo‘yicha sarf hisoboti');
+  check((await text(m)).includes(' × '), 'Hisobot qatorida material miqdorlari');
   await shot(m, 'wh-12-report-icd');
+
+  // ---------------- blind count: the storekeeper counts without the expected quantity, sees the progress
+  await k.setViewport({ width: 1366, height: 768 });
+  await k.evaluate(async () => { await fetch('/api/v1/me/preferences', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ locale: 'uz' }) }); });
+  await k.goto(BASE + '/inventory?tab=counts', { waitUntil: 'networkidle0' }); await settle(k);
+  await clickText(k, 'Inventarizatsiyani boshlash', 'button'); await k.waitForSelector('[role=dialog]'); await settle(k);
+  await pickBranch(k);
+  await fill(k, 'Nimani sanaymiz', 'controlled', '[role=dialog]');
+  await clickText(k, 'Inventarizatsiyani boshlash', '[role=dialog] button');
+  await waitText(k, 'boshlandi'); await settle(k);
+  await k.evaluate(() => [...document.querySelectorAll('tbody tr button')].find((x) => x.textContent.startsWith('I-'))?.click());
+  await k.waitForSelector('[role=dialog]'); await settle(k);
+  await waitText(k, 'Sanaldi: 0 /');
+  check(await k.evaluate(() => ![...document.querySelectorAll('[role=dialog] th')].some((th) => th.textContent.includes('Hisobda'))), 'Ko‘r sanash: «Hisobda» ustuni yo‘q');
+  await k.evaluate(() => { const i = document.querySelector('[role=dialog] input[inputmode="decimal"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, '1'); i.dispatchEvent(new Event('input', { bubbles: true })); });
+  await clickText(k, 'Saqlash', '[role=dialog] button');
+  await waitText(k, 'Sanaldi: 1 /'); await settle(k);
+  check(true, 'Inventarizatsiya: sanash jarayoni (X / Y) ko‘rinadi');
+  await shot(k, 'wh-13-count-blind');
+  // while it is open the counted (controlled) items do not move
+  check((await (await k.evaluate(async () => (await fetch('/api/v1/warehouse/counts')).json())).data[0].status) === 'open', 'Inventarizatsiya ochiq');
+  // the store keeper sees items and departments only in the report
+  await k.keyboard.press('Escape'); await sleep(300);
+  await k.goto(BASE + '/inventory?tab=reports', { waitUntil: 'networkidle0' }); await settle(k);
+  check(await k.evaluate(() => [...document.querySelector('select[aria-label="Guruhlash"]').options].map((o) => o.value).join() === 'item,department'), 'Omborchi: hisobot faqat material va bo‘lim bo‘yicha');
 
   // ---------------- cashier: no warehouse
   const c = await newPage(b, errors);

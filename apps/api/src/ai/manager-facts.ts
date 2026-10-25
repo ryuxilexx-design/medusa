@@ -8,7 +8,7 @@ import type { Db } from '../core/db';
 import { addDays, dayStart, today } from '../core/clock';
 import { DEBT_SQL, REVENUE_SQL } from '../modules/dashboard.controller';
 import { NET_LINE } from '../modules/billing';
-import { STOCK_SQL } from '../modules/warehouse';
+import { USABLE_SQL } from '../modules/warehouse';
 import { cameraAttention } from '../cameras/cameras.controller';
 
 export type FactUnit = 'som' | 'count' | 'pct' | 'qty' | 'min';
@@ -61,7 +61,7 @@ export async function buildFacts(db: Db, tenantId: string, branches: string[], d
   const [debt, stock, wh, lab, cancelledOpen, delivery, fiscal, cams] = await Promise.all([
     db.one(DEBT_SQL, P),
     db.one(
-      `SELECT (SELECT count(*)::int FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active AND ${STOCK_SQL('i')} < i.minimum_qty) AS low,
+      `SELECT (SELECT count(*)::int FROM inventory_items i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.active AND ${USABLE_SQL('i')} < i.minimum_qty) AS low,
               (SELECT count(*)::int FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id
                 WHERE b.tenant_id = $1 AND i.branch_id = ANY($2) AND b.qty > 0 AND b.expiry_date >= $3::date AND b.expiry_date <= $3::date + 30) AS expiring,
               (SELECT count(*)::int FROM inventory_batches b JOIN inventory_items i ON i.id = b.item_id

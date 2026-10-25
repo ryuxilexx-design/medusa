@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2 } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
@@ -9,15 +9,17 @@ import { useDebounced } from '@/lib/hooks';
 import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { Alert, Button, cx, Field, Input, Modal, ModalCancel, Radio, Select, useToast } from '@/components/ui';
-import { parseQty, qty, useCatalog } from './common';
+import { ItemPicker, parseQty, qty, useCatalog } from './common';
 
 type Purpose = 'patient' | 'procedure' | 'department';
 type Line = { item_id: string; qty: string };
-export type VisitContext = { encounter_id: string; icd_codes: string[]; procedures: { id: string; service_name: string }[]; label?: string; doctor_membership_id?: string };
+export type VisitContext = { encounter_id: string; icd_codes: string[]; procedures: { id: string; service_name: string }[]; label?: string };
 
 /**
- * A material request (talabnoma) or — for the storekeeper — a direct issue. Always says who takes the items and for
- * what: a patient visit (ICD-10 codes come from the visit), a procedure order, or a department.
+ * A material request (talabnoma) or — for the storekeeper — an urgent direct issue. Always says who takes the items and
+ * for what: a patient visit (ICD-10 codes come from the visit), a procedure order, or a department. A patient's
+ * materials are asked for by the treating doctor only (their own visits); the direct issue is for a department and is
+ * never taken by the person who hands it out (audit 2026-10-25).
  */
 export function RequestModal({ open, onClose, branchId, visit, direct = false, allowPatient = true, presetItem, icdDraft, onDone }: {
   open: boolean; onClose: () => void; branchId: string; visit?: VisitContext | null; direct?: boolean; allowPatient?: boolean; presetItem?: string;
@@ -33,7 +35,8 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
   const catalog = useCatalog(open && br ? br : undefined);
   const [picked, setPicked] = useState<VisitContext | null>(visit ?? null);
   const ctx = visit ?? picked;
-  const [purpose, setPurpose] = useState<Purpose>(ctx && allowPatient ? 'patient' : 'department');
+  const doctorPicks = allowPatient && !direct && !visit && me.role === 'doctor';
+  const [purpose, setPurpose] = useState<Purpose>(ctx && allowPatient && !direct ? 'patient' : 'department');
   const [department, setDepartment] = useState('');
   const [orderId, setOrderId] = useState('');
   const [icd, setIcd] = useState((icdDraft ?? []).join(', '));
@@ -42,8 +45,7 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
   const [lines, setLines] = useState<Line[]>([{ item_id: presetItem ?? '', qty: '' }]);
   const [err, setErr] = useState<Record<string, string>>({});
   const [tried, setTried] = useState(false);
-  useEffect(() => { if (ctx?.doctor_membership_id && !receiver) setReceiver(ctx.doctor_membership_id); }, [ctx?.doctor_membership_id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const staff = useQuery({ queryKey: ['warehouse', 'staff', br], enabled: open && direct && !!br, queryFn: () => api(`/warehouse/staff?branch_id=${br}`).then((r) => r.data as any[]) });
+  const staff = useQuery({ queryKey: ['warehouse', 'staff', br], enabled: open && direct && !!br, queryFn: () => api(`/warehouse/staff?branch_id=${br}`).then((r) => (r.data as any[]).filter((s) => s.id !== me.membership_id)) });
   const items = catalog.data ?? [];
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
   const needIcd = purpose !== 'department' && !(ctx?.icd_codes?.length);
@@ -89,7 +91,7 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
   });
   const submit = () => { setTried(true); setErr({}); if (valid()) m.mutate(); };
   const set = (i: number, p: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)));
-  const purposes: Purpose[] = allowPatient && (ctx || direct) ? ['patient', 'procedure', 'department'] : ['department'];
+  const purposes: Purpose[] = allowPatient && !direct && (ctx || doctorPicks) ? ['patient', 'procedure', 'department'] : ['department'];
   const controlled = lines.some((l) => byId.get(l.item_id)?.controlled);
   return (
     <Modal open={open} onClose={onClose} width="max-w-2xl" dirty={lines.some((l) => l.item_id || l.qty) || !!department}
@@ -109,7 +111,8 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
           <Select id={id} value={br} invalid={tried && !br} onChange={(e) => { setBr(e.target.value); setLines([{ item_id: '', qty: '' }]); setPicked(null); }}>
             <option value="">—</option>{me.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>)}</Field>}
-        {direct && br && purpose !== 'department' && !visit && <VisitPicker branchId={br} value={picked} onChange={(v) => { setPicked(v); setReceiver(v?.doctor_membership_id ?? ''); }} error={local.encounter_id ?? err.encounter_id} />}
+        {direct && <Alert tone="blue">{t('wh.req.directDept')}</Alert>}
+        {doctorPicks && br && purpose !== 'department' && <VisitPicker branchId={br} value={picked} onChange={(v) => { setPicked(v); setOrderId(''); }} error={local.encounter_id ?? err.encounter_id} />}
         {ctx && purpose !== 'department' && ctx.label && <p className="text-body text-slate-800">{ctx.label}</p>}
         {purpose === 'procedure' && ctx && (
           <Field label={t('wh.req.procedure')} required error={local.order_id ?? err.order_id}>{(id) => (
@@ -134,10 +137,10 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
             const it = byId.get(l.item_id);
             return (
               <div key={i} className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
-                <Select aria-label={t('wh.col.item')} className="min-w-0 flex-1 basis-full sm:basis-0" value={l.item_id} invalid={!!e && !l.item_id} onChange={(ev) => set(i, { item_id: ev.target.value })}>
-                  <option value="">{catalog.isLoading ? t('common.loading') : '—'}</option>
-                  {items.map((c) => <option key={c.id} value={c.id} disabled={Number(c.available) <= 0}>{c.name} · {qty(c.available)} {c.unit}</option>)}
-                </Select>
+                <div className="min-w-0 flex-1 basis-full sm:basis-0">
+                  <ItemPicker ariaLabel={t('wh.col.item')} value={l.item_id} invalid={!!e && !l.item_id} loading={catalog.isLoading} disabled={!br} placeholder={!br ? t('settings.rooms.errBranch') : undefined} onChange={(id) => set(i, { item_id: id })}
+                    options={items.filter((c) => c.id === l.item_id || !lines.some((x) => x.item_id === c.id)).map((c) => ({ id: c.id, label: c.name, sub: `${qty(c.available)} ${c.unit}`, disabled: Number(c.available) <= 0 }))} />
+                </div>
                 <Input aria-label={t('admin.inv.qty', { unit: it?.unit ?? '' })} inputMode="decimal" className="w-28" value={l.qty} invalid={!!e && !!l.item_id} onChange={(ev) => set(i, { qty: ev.target.value })} placeholder={it?.unit ?? ''} />
                 <Button variant="ghost" className="!px-3" aria-label={t('wh.req.removeLine')} disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}><Trash2 className="h-5 w-5" /></Button>
                 {e && <p className="basis-full text-sm font-medium text-red-700" role="alert">{e}</p>}
@@ -154,23 +157,22 @@ export function RequestModal({ open, onClose, branchId, visit, direct = false, a
   );
 }
 
-/** Storekeeper: find a recent visit of the branch (patient surname or number) — the visit carries the doctor and ICD-10 codes. */
+/** Doctor: one of their own visits of the last 7 days (patient surname or number) — the visit carries the ICD-10 codes. */
 function VisitPicker({ branchId, value, onChange, error }: { branchId: string; value: VisitContext | null; onChange: (v: VisitContext | null) => void; error?: string }) {
   const t = useT();
   const [q, setQ] = useState('');
   const dq = useDebounced(q, 300);
   const visits = useQuery({ queryKey: ['warehouse', 'visits', branchId, dq], queryFn: () => api(`/warehouse/visits${qs({ branch_id: branchId, q: dq || undefined })}`).then((r) => r.data as any[]) });
   return (
-    <Field label={t('wh.req.visit')} required error={error}>{(id) => (
+    <Field label={t('wh.req.visit')} required hint={t('wh.req.visitOwn')} error={error}>{(id) => (
       <div className="space-y-2">
         <Input id={id} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('wh.req.visitSearch')} />
         <Select aria-label={t('wh.req.visit')} value={value?.encounter_id ?? ''} invalid={!!error} onChange={(e) => {
           const v = (visits.data ?? []).find((x) => x.encounter_id === e.target.value);
-          onChange(v ? { encounter_id: v.encounter_id, icd_codes: v.icd_codes, procedures: v.procedures, doctor_membership_id: v.doctor_membership_id,
-            label: `${v.last_name} ${v.first_name} #${v.patient_number} · ${v.doctor_name}` } : null);
+          onChange(v ? { encounter_id: v.encounter_id, icd_codes: v.icd_codes, procedures: v.procedures, label: `${v.last_name} ${v.first_name} #${v.patient_number}` } : null);
         }}>
           <option value="">—</option>
-          {(visits.data ?? []).map((v) => <option key={v.encounter_id} value={v.encounter_id}>{fmtDateTime(v.started_at)} · {v.last_name} {v.first_name} #{v.patient_number} · {v.doctor_name}</option>)}
+          {(visits.data ?? []).map((v) => <option key={v.encounter_id} value={v.encounter_id}>{fmtDateTime(v.started_at)} · {v.last_name} {v.first_name} #{v.patient_number}</option>)}
         </Select>
       </div>
     )}</Field>
