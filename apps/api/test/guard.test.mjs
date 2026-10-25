@@ -505,13 +505,18 @@ test('ogohlantirish: «Kechikkan» (10 daqiqa olinmagan / 30 daqiqa yopilmagan) 
   assert.equal((await guard.get('/security/pulse')).body.data.open, before);
 });
 
-test('surat: ro‘yxatdagi kichik rasm (thumb) har yuklanishda auditga yozilmaydi, katta surat yoziladi', async () => {
+test('surat: kichik rasm (thumb) auditga kuniga bir marta yoziladi (har yuklanishda emas), katta surat — har safar', async () => {
   const s = await one(`SELECT s.event_id FROM camera_snapshots s JOIN camera_events e ON e.id = s.event_id WHERE e.tenant_id = $1 AND e.branch_id = $2 AND e.alert LIMIT 1`, [SEED_IDS.tenant, BC]);
   const n = async () => (await one(`SELECT count(*)::int AS n FROM audit_logs WHERE action = 'security.snapshot_view' AND resource_id = $1`, [s.event_id])).n;
   const n0 = await n();
+  const nt = async () => (await one(`SELECT count(*)::int AS n FROM audit_logs WHERE action = 'security.snapshot_thumb' AND resource_id = $1 AND actor_membership_id = $2`, [s.event_id, GUARD_IDS.bahodir])).n;
+  const t0 = await nt();
   const th = await fetch(`${base}/security/alerts/${s.event_id}/thumb`, { headers: { cookie: await cookieOf(GUARD_IDS.bahodir) } });
   assert.equal(th.status, 200); assert.equal(th.headers.get('content-type'), 'image/jpeg');
-  assert.equal(await n(), n0, 'thumb auditga yozilmaydi');
+  assert.equal(await n(), n0, 'thumb «katta surat» deb yozilmaydi');
+  assert.equal(await nt(), Math.max(t0, 1), 'kim qaysi suratni ko‘rgani yoziladi (24 soatda bir marta)');
+  await fetch(`${base}/security/alerts/${s.event_id}/thumb`, { headers: { cookie: await cookieOf(GUARD_IDS.bahodir) } });
+  assert.equal(await nt(), Math.max(t0, 1), 'qayta yuklash yangi qator qo‘shmaydi');
   await fetch(`${base}/security/alerts/${s.event_id}/snapshot`, { headers: { cookie: await cookieOf(GUARD_IDS.bahodir) } });
   assert.equal(await n(), n0 + 1);
   for (const x of [registrar, cashier, doctor]) assert.equal((await x.get(`/security/alerts/${s.event_id}/thumb`)).status, 403);

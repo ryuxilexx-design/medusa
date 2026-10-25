@@ -50,7 +50,7 @@ clinical note only to doctors.
 - **Snapshots** — policy: «rahbar va qorovul (o‘z filiali)» (verifying an intrusion is the guard's job). Only for an
   alert of a security kind, only ≤ `SNAPSHOT_DAYS` (30) old, own branches. The full picture
   (`GET /security/alerts/:id/snapshot`) is audited on every view (`security.snapshot_view`); the feed's thumbnail
-  (`…/thumb`, shown small and blurred) is not audited per load. Never for a face match or a count (they never have one).
+  (`…/thumb`, shown small and blurred) is audited once per person and alert in 24 h (`security.snapshot_thumb`), not on every refresh. Never for a face match or a count (they never have one).
 
 ## 3. Incidents, SOS
 

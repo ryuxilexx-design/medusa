@@ -88,7 +88,7 @@ rasm dalil sifatida saqlanadi:
 - **30 kun** saqlanadi, keyin server o‘zi o‘chiradi; o‘zgartirib bo‘lmaydi;
 - faqat rahbar va qorovul (o‘z filiali) ko‘radi: rahbar — `GET /api/v1/cameras/security/<id>/snapshot`, qorovul —
   `GET /api/v1/security/alerts/<id>/snapshot` (bosqinni tekshirish uning ishi); katta surat har ko‘rilganda audit
-  jurnaliga yoziladi, qorovul ro‘yxatidagi xiralashtirilgan kichik kadr (`…/thumb`) har yuklanishda yozilmaydi;
+  jurnaliga yoziladi, qorovul ro‘yxatidagi xiralashtirilgan kichik kadr (`…/thumb`) esa bir kishi uchun har bir ogohlantirishda 24 soatda bir marta yoziladi (`security.snapshot_thumb`);
   brauzer keshi «private»; Xavfsizlik jadvalida kichik kadr, bosilganda katta oyna va shu yerda «Ko‘rib chiqildi».
 
 Kamerada buning uchun *Event → Linkage → Upload to Surveillance Center* (yoki *Notify Surveillance Center*) bilan

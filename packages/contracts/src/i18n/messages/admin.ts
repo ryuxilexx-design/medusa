@@ -460,6 +460,7 @@ export const admin = {
   'admin.audit.security.alert_resolve': ['Ogohlantirish yopildi', 'Тревога закрыта'],
   'admin.audit.security.alert_escalate': ['Ogohlantirish rahbarga yuborildi', 'Тревога передана руководителю'],
   'admin.audit.security.snapshot_view': ['Ogohlantirish surati ko‘rildi', 'Просмотрен снимок тревоги'],
+  'admin.audit.security.snapshot_thumb': ['Ogohlantirish surati (kichik) ko‘rildi', 'Просмотрена миниатюра снимка тревоги'],
   'admin.audit.security.incident_create': ['Hodisa yozildi', 'Записано происшествие'],
   'admin.audit.security.incident_entry': ['Hodisaga qo‘shimcha', 'Дополнение к происшествию'],
   'admin.audit.security.incident_close': ['Hodisa yopildi', 'Происшествие закрыто'],

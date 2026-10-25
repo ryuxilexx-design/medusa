@@ -509,6 +509,7 @@ export const api = {
   'api.wh.deviceDuplicate': ['Bu filialda shu nomli qurilma bor', 'В этом филиале уже есть устройство с таким названием'],
   'api.wh.rangeOrder': ['Eng past harorat eng yuqoridan kichik bo‘lsin', 'Минимальная температура должна быть ниже максимальной'],
   'api.wh.rangeManager': ['Harorat me’yorini faqat rahbar o‘zgartiradi', 'Норму температуры меняет только руководитель'],
+  'api.wh.deviceRetireManager': ['Qurilmani faqat rahbar o‘chiradi', 'Отключить устройство может только руководитель'],
   'api.wh.deviceInactive': ['Qurilma nofaol', 'Устройство неактивно'],
   'api.wh.actionRequired': ['Me’yordan tashqari: ko‘rilgan chorani yozing', 'Вне нормы: опишите принятые меры'],
   'api.wh.csvTooMany': ['Eksportda {n} qatordan ko‘p bo‘ladi — davrni qisqartiring', 'В выгрузке будет больше {n} строк — сократите период'],

@@ -233,12 +233,19 @@ export class SecurityController {
   }
 
   /**
-   * The feed's thumbnail of the same picture (shown small and blurred, the list refreshes every 30 s): not audited per
-   * load — opening the picture (`/snapshot`) is. Same rules: a security alert, own branch, ≤ SNAPSHOT_DAYS.
+   * The feed's thumbnail of the same picture (shown small and blurred, the list refreshes every 30 s). The bytes are the
+   * original picture, so it is audited too — once per person and alert in 24 h (`security.snapshot_thumb`), so the
+   * log keeps «who saw which picture» without a row per refresh; opening the picture (`/snapshot`) is audited every time.
+   * Same rules: a security alert, own branch, ≤ SNAPSHOT_DAYS.
    */
   @Roles(...G) @Get('alerts/:id/thumb')
   async thumb(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Res() res: Response) {
-    this.sendPicture(res, await this.alertPicture(ctx, id));
+    const s = await this.alertPicture(ctx, id);
+    const seen = await this.db.one(
+      `SELECT 1 AS x FROM audit_logs WHERE tenant_id = $1 AND action = 'security.snapshot_thumb' AND resource_id = $2 AND actor_membership_id = $3 AND occurred_at >= (SELECT demo_now()) - interval '1 day'`,
+      [ctx.tenantId, id, ctx.membershipId]);
+    if (!seen) await audit(this.db.pool, ctx, 'security.snapshot_thumb', 'camera_event', id, 'Ogohlantirish surati (kichik) ko‘rildi', s.branch_id);
+    this.sendPicture(res, s);
   }
 
   private async alertPicture(ctx: Ctx, id: string) {
