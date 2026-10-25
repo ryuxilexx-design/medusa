@@ -53,6 +53,18 @@ export async function assertNotCounting(c: Q, tenantId: string, itemIds: string[
   if (hit) throw conflict('COUNT_IN_PROGRESS', `Inventarizatsiya I-${hit.number} davom etmoqda: «${hit.name}» sanalguncha harakat qilinmaydi`, { count_number: hit.number });
 }
 
+/** True while an open inventory count covers this item. */
+export const COUNTING_SQL = (alias = 'i') => `EXISTS (SELECT 1 FROM inventory_counts c JOIN inventory_count_lines l ON l.count_id = c.id JOIN inventory_batches b ON b.id = l.batch_id WHERE c.status = 'open' AND b.item_id = ${alias}.id)`;
+
+/**
+ * A blind count must stay blind: while an item is being counted, nobody but the manager reads its live quantities from
+ * any list (stock, batches, catalog, journal) — otherwise the counter could copy «Hisobda» from another screen.
+ */
+export function maskCounting<T extends Record<string, unknown>>(ctx: Ctx, rows: T[], fields: (keyof T)[]): T[] {
+  if (ctx.role === 'manager') return rows;
+  return rows.map((r) => (r.counting ? { ...r, ...Object.fromEntries(fields.map((f) => [f, null])) } : r));
+}
+
 /** B16: a doctor asks for a patient's materials only for a recent visit (older visits are closed for the warehouse). */
 export const REQUEST_VISIT_DAYS = 7;
 

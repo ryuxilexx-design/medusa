@@ -7,7 +7,7 @@ import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { now, today } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
-import { fromC, STOCK_SQL, toC, USABLE_SQL } from './warehouse';
+import { COUNTING_SQL, fromC, maskCounting, STOCK_SQL, toC, USABLE_SQL } from './warehouse';
 
 // stock = Σ batch balances (migration 030); the ledger keeps opening_qty + Σ in − Σ out equal to it
 const QTY = STOCK_SQL('i');
@@ -24,11 +24,11 @@ export class InventoryController {
       `SELECT * FROM (SELECT i.id, i.name, i.unit, i.opening_qty, i.minimum_qty, i.active, i.branch_id, b.name AS branch_name, ${ITEM_FIELDS},
               coalesce((SELECT sum(quantity) FROM inventory_movements m WHERE m.item_id = i.id AND m.type = 'in'),0) AS in_qty,
               coalesce((SELECT sum(quantity) FROM inventory_movements m WHERE m.item_id = i.id AND m.type = 'out'),0) AS out_qty,
-              ${QTY} AS qty, ${USABLE_SQL('i')} AS usable_qty
+              ${QTY} AS qty, ${USABLE_SQL('i')} AS usable_qty, ${COUNTING_SQL('i')} AS counting
          FROM inventory_items i JOIN branches b ON b.id = i.branch_id WHERE i.tenant_id = $1 AND i.branch_id = ANY($2)) x
         WHERE ($3::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty)) ORDER BY active DESC, (usable_qty < minimum_qty) DESC, name LIMIT 1000`,
       [ctx.tenantId, branchScope(ctx, q.branch_id), q.low === '1']);
-    return { data: rows };
+    return { data: maskCounting(ctx, rows, ['qty', 'usable_qty', 'in_qty', 'out_qty', 'opening_qty']) };
   }
 
   @Roles('manager', 'storekeeper') @Post()
@@ -115,7 +115,11 @@ export class InventoryController {
     const total = (await this.db.one(`SELECT count(*)::int AS n FROM inventory_movements WHERE item_id = $1`, [id]))!.n;
     const batches = await this.db.rows(`SELECT id, batch_no, expiry_date, qty, received_qty, unit_cost, supplier, invoice_no, received_at, (expiry_date < $2::date) AS expired
       FROM inventory_batches WHERE item_id = $1 AND qty > 0 ORDER BY expiry_date NULLS LAST, received_at LIMIT 200`, [id, today()]);
-    return { data: { ...item, purchase_price: Number(item.purchase_price), movements, movements_total: total, batches: batches.map((b) => ({ ...b, unit_cost: Number(b.unit_cost) })) } };
+    const data = { ...item, purchase_price: Number(item.purchase_price), movements, movements_total: total, batches: batches.map((b) => ({ ...b, unit_cost: Number(b.unit_cost) })) };
+    // a blind count of this item is open: the storekeeper does not read its live balance here either
+    if (ctx.role !== 'manager' && (await this.db.one(`SELECT ${COUNTING_SQL('i')} AS counting FROM inventory_items i WHERE i.id = $1`, [id]))!.counting)
+      return { data: { ...data, counting: true, qty: null, usable_qty: null, opening_qty: null, movements: [], movements_total: 0, batches: data.batches.map((b: Record<string, unknown>) => ({ ...b, qty: null })) } };
+    return { data };
   }
 
   @Roles('manager', 'storekeeper') @Get(':id/movements')

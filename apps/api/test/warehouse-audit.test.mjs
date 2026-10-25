@@ -102,6 +102,16 @@ test('B2: ko‘r sanash — sanovchi hisobdagi miqdorni ko‘rmaydi; rahbar faqa
     assert.ok(c.lines.length > 0 && c.lines.every((l) => l.expected_qty === null && l.unit_cost === null), 'ochiq hisobda hech kim ko‘rmaydi');
     assert.equal(c.sees_expected, false); assert.equal(c.differences, null);
   }
+  // the count stays blind on every other screen too: while it is open only the manager reads live quantities
+  const st = (await keeper.get('/warehouse/stock')).body.data.filter((r) => r.counting);
+  assert.ok(st.length > 0 && st.every((r) => r.qty === null && r.usable_qty === null && r.value === null), 'ombor qoldig‘i yashirin');
+  assert.ok((await manager.get('/warehouse/stock')).body.data.filter((r) => r.counting).every((r) => r.qty !== null), 'rahbar ko‘radi');
+  const inv = (await keeper.get('/inventory')).body.data.filter((r) => r.counting);
+  assert.ok(inv.length > 0 && inv.every((r) => r.qty === null && r.in_qty === null && r.opening_qty === null));
+  assert.ok((await keeper.get('/warehouse/batches')).body.data.filter((r) => r.counting).every((r) => r.qty === null));
+  const card = (await keeper.get(`/inventory/${inv[0].id}`)).body.data;
+  assert.equal(card.qty, null); assert.equal(card.movements.length, 0); assert.ok(card.batches.every((b) => b.qty === null));
+  assert.ok((await doctor.get(`/warehouse/catalog?branch_id=${BC}`)).body.data.filter((r) => r.counting).every((r) => r.available === null));
   const page = await keeper.get(`/warehouse/counts/${id}?page=2&page_size=10`);
   assert.equal(page.body.data.lines.length, 10); assert.ok(page.body.meta.total > 10);
   assert.equal(page.body.data.lines_total, page.body.meta.total); assert.equal(page.body.data.lines_counted, 0);
@@ -171,7 +181,9 @@ test('B6: sovuq zanjir — qurilma ma’lumotnomasi, har qurilmaning o‘z me’
   const dev = (await keeper.get('/warehouse/fridge/devices')).body.data.find((d) => d.id === c.body.data.id);
   assert.deepEqual([dev.min_temp, dev.max_temp], [-25, -15], 'turi bo‘yicha standart');
   assert.equal((await keeper.post('/warehouse/fridge/devices', { branch_id: BC, name: 'muzlatgich №2', kind: 'fridge' })).status, 409, 'nom takrori');
-  assert.equal((await keeper.post('/warehouse/fridge/devices', { branch_id: BC, name: 'Xato', kind: 'room', min_temp: 25, max_temp: 15 })).status, 422);
+  assert.equal((await manager.post('/warehouse/fridge/devices', { branch_id: BC, name: 'Xato', kind: 'room', min_temp: 25, max_temp: 15 })).status, 422);
+  // a storekeeper cannot add a device with a wider range than its kind's (that would hide alerts)
+  assert.equal((await keeper.post('/warehouse/fridge/devices', { branch_id: BC, name: 'Keng', kind: 'fridge', min_temp: -10, max_temp: 30 })).status, 403);
   // a freezer at +5 °C is out of range (the old fixed 2–8 rule would have called it fine)
   const noNote = await keeper.post('/warehouse/fridge', { device_id: dev.id, temperature: 5 });
   assert.equal(noNote.status, 422); assert.ok(noNote.body.error.fields.note);
@@ -185,6 +197,7 @@ test('B6: sovuq zanjir — qurilma ma’lumotnomasi, har qurilmaning o‘z me’
   assert.equal((await keeper.patch(`/warehouse/fridge/devices/${dev.id}`, { max_temp: 10 })).status, 403);
   assert.equal((await keeper.patch(`/warehouse/fridge/devices/${dev.id}`, { name: 'Muzlatgich №2 (zaxira)' })).status, 200);
   assert.equal((await manager.patch(`/warehouse/fridge/devices/${dev.id}`, { min_temp: -30, max_temp: -18 })).status, 200);
+  assert.equal((await keeper.patch(`/warehouse/fridge/devices/${dev.id}`, { active: false })).status, 403, 'qurilmani faqat rahbar o‘chiradi');
   assert.equal((await manager.patch(`/warehouse/fridge/devices/${dev.id}`, { active: false })).status, 200);
   assert.equal((await keeper.post('/warehouse/fridge', { device_id: dev.id, temperature: -20 })).status, 422, 'nofaol qurilma');
   for (const s of [doctor, cashier, registrar]) assert.equal((await s.get('/warehouse/fridge/devices')).status, 403);

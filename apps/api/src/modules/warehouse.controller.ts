@@ -14,7 +14,7 @@ import { addDays, dayStart, now, today } from '../core/clock';
 import { assertBranch, branchScope } from '../core/scope';
 import { assertCsvRows, csvDate, csvMaxRows, csvPeriod, csvSom, csvTime, periodFits, sendCsv } from '../core/csv';
 import {
-  assertNotCounting, DOC_PREFIX, fromC, insertMove, loadReceiver, lockItems, nextNumber, Purpose, putBack, REQUEST_VISIT_DAYS, resolvePurpose, STOCK_SQL, takeBatch, takeFefo,
+  assertNotCounting, COUNTING_SQL, DOC_PREFIX, maskCounting, fromC, insertMove, loadReceiver, lockItems, nextNumber, Purpose, putBack, REQUEST_VISIT_DAYS, resolvePurpose, STOCK_SQL, takeBatch, takeFefo,
   toC, USABLE_SQL,
 } from './warehouse';
 
@@ -72,14 +72,14 @@ export class WarehouseController {
     if (typeof q.q === 'string' && q.q.trim()) { params.push(`%${q.q.trim().toLowerCase().replace(/[%_\\]/g, '\\$&')}%`); where.push(`lower(i.name) LIKE $${params.length}`); }
     const rows = await this.db.rows(
       `SELECT * FROM (SELECT i.id, i.name, i.unit, i.category, i.storage, i.controlled, i.minimum_qty, i.active, i.branch_id, br.name AS branch_name, i.purchase_price, i.drug_id,
-              ${STOCK_SQL()} AS qty, ${USABLE_SQL()} AS usable_qty,
+              ${STOCK_SQL()} AS qty, ${USABLE_SQL()} AS usable_qty, ${COUNTING_SQL()} AS counting,
               (SELECT coalesce(sum(round(b.qty * b.unit_cost)),0)::bigint FROM inventory_batches b WHERE b.item_id = i.id) AS value,
               (SELECT min(b.expiry_date) FROM inventory_batches b WHERE b.item_id = i.id AND b.qty > 0) AS next_expiry,
               (SELECT count(*)::int FROM inventory_batches b WHERE b.item_id = i.id AND b.qty > 0) AS batches
          FROM inventory_items i JOIN branches br ON br.id = i.branch_id WHERE ${where.join(' AND ')}) x
         WHERE ($${params.length + 1}::boolean IS NOT TRUE OR (active AND usable_qty < minimum_qty))
         ORDER BY active DESC, (usable_qty < minimum_qty) DESC, name LIMIT 1000`, [...params, q.low === '1']);
-    return { data: rows.map((r) => ({ ...r, value: Number(r.value) })) };
+    return { data: maskCounting(ctx, rows.map((r) => ({ ...r, value: Number(r.value) })), ['qty', 'usable_qty', 'value', 'batches']) };
   }
 
   /** What a requester can pick: active items of the branch and how much is usable now. */
@@ -88,10 +88,10 @@ export class WarehouseController {
     if (!isUuid(q.branch_id)) throw invalid({ branch_id: 'Filialni tanlang' });
     assertBranch(ctx, q.branch_id);
     const rows = await this.db.rows(
-      `SELECT i.id, i.name, i.unit, i.category, i.controlled, ${USABLE_SQL()} AS available FROM inventory_items i
+      `SELECT i.id, i.name, i.unit, i.category, i.controlled, ${USABLE_SQL()} AS available, ${COUNTING_SQL()} AS counting FROM inventory_items i
         WHERE i.tenant_id = $1 AND i.branch_id = $2 AND i.active ${ctx.role === 'lab' ? `AND i.category IN ('reagent','consumable','other')` : ''} ORDER BY i.name LIMIT 1000`,
       [ctx.tenantId, q.branch_id]);
-    return { data: rows };
+    return { data: maskCounting(ctx, rows, ['available']) };
   }
 
   /** Staff of a branch who may take items (the «oldi» person of a direct issue). */
@@ -664,10 +664,10 @@ export class WarehouseController {
     if (isUuid(q.item_id)) { params.push(q.item_id); where.push(`x.item_id = $${params.length}`); }
     const rows = await this.db.rows(
       `SELECT x.id, x.item_id, i.name, i.unit, i.controlled, i.category, x.batch_no, x.expiry_date, x.qty, x.unit_cost, round(x.qty * x.unit_cost)::bigint AS value, x.supplier, x.received_at,
-              (x.expiry_date < $3::date) AS expired, (x.expiry_date - $3::date) AS days_left, b.name AS branch_name
+              (x.expiry_date < $3::date) AS expired, (x.expiry_date - $3::date) AS days_left, b.name AS branch_name, ${COUNTING_SQL()} AS counting
          FROM inventory_batches x JOIN inventory_items i ON i.id = x.item_id JOIN branches b ON b.id = i.branch_id
         WHERE ${where.join(' AND ')} ORDER BY x.expiry_date NULLS LAST, i.name LIMIT 1000`, params);
-    return { data: rows.map((r) => ({ ...r, unit_cost: Number(r.unit_cost), value: Number(r.value) })) };
+    return { data: maskCounting(ctx, rows.map((r) => ({ ...r, unit_cost: Number(r.unit_cost), value: Number(r.value) })), ['qty', 'value']) };
   }
 
   // ------------------------------------------------------------------ controlled-substance journal
@@ -693,6 +693,10 @@ export class WarehouseController {
               $4::numeric + sum(CASE WHEN m.type = 'in' THEN m.quantity ELSE -m.quantity END) OVER (ORDER BY m.occurred_at, m.seq) AS balance
          FROM inventory_movements m LEFT JOIN inventory_batches x ON x.id = m.batch_id LEFT JOIN patients p ON p.id = m.patient_id
         WHERE m.item_id = $1 AND m.occurred_at < $3) t WHERE occurred_at >= $2 ORDER BY occurred_at, seq LIMIT 2000`, [itemId, start, end, item.opening_qty]);
+    // a blind count of this item is open: only the manager reads its balances (the entries' running balance too)
+    if (ctx.role !== 'manager' && (await this.db.one(`SELECT ${COUNTING_SQL()} AS counting FROM inventory_items i WHERE i.id = $1`, [itemId]))!.counting)
+      return { data: { item: { ...item, qty: null }, from, to, opening_balance: null, closing_balance: null, period_in: bal.period_in, period_out: bal.period_out, counting: true,
+        entries: rows.map((r: Record<string, unknown>) => ({ ...r, balance: null })) } };
     return { data: { item, from, to, opening_balance: bal.opening, closing_balance: bal.closing, period_in: bal.period_in, period_out: bal.period_out, entries: rows } };
   }
 
@@ -872,6 +876,8 @@ export class WarehouseController {
     assertBranch(ctx, input.branch_id);
     const [dMin, dMax] = COLD_DEVICE_RANGE[input.kind];
     const min = input.min_temp ?? dMin, max = input.max_temp ?? dMax;
+    // the allowed range is the manager's decision, also on a new device (a storekeeper could otherwise add a wide one to hide alerts)
+    if ((min !== dMin || max !== dMax) && ctx.role !== 'manager') throw forbidden('Harorat me’yorini faqat rahbar o‘zgartiradi');
     if (min >= max) throw invalid({ min_temp: 'Eng past harorat eng yuqoridan kichik bo‘lsin' });
     return this.db.tx(async (c) => {
       if ((await c.query(`SELECT 1 FROM cold_devices WHERE tenant_id = $1 AND branch_id = $2 AND lower(name) = lower($3)`, [ctx.tenantId, input.branch_id, input.name])).rowCount)
@@ -893,6 +899,8 @@ export class WarehouseController {
       if (!d) throw notFound('Qurilma');
       const min = input.min_temp ?? Number(d.min_temp), max = input.max_temp ?? Number(d.max_temp);
       if ((min !== Number(d.min_temp) || max !== Number(d.max_temp)) && ctx.role !== 'manager') throw forbidden('Harorat me’yorini faqat rahbar o‘zgartiradi');
+      // retiring a device stops its readings — also the manager's decision
+      if (input.active === false && d.active && ctx.role !== 'manager') throw forbidden('Qurilmani faqat rahbar o‘chiradi');
       if (min >= max) throw invalid({ min_temp: 'Eng past harorat eng yuqoridan kichik bo‘lsin' });
       const name = input.name ?? d.name;
       if (name.toLowerCase() !== String(d.name).toLowerCase()

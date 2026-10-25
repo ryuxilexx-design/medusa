@@ -9,7 +9,8 @@ import { useT } from '@/lib/i18n';
 import { Badge, cx, Input, type Tone } from '@/components/ui';
 
 /** Quantities: grouped digits, decimals only when there are any («12», «2,5»). */
-export const qty = (v: unknown) => Number(v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 }).replace(/ /g, ' ');
+/** A quantity; `null` = hidden while a blind count of the item is open. */
+export const qty = (v: unknown) => v === null ? '—' : Number(v ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 }).replace(/ /g, ' ');
 /** Parses a typed quantity («2,5» or «2.5»); NaN when it is not a number. */
 export const parseQty = (s: string) => (s.trim() === '' ? NaN : Number(s.replace(/\s/g, '').replace(',', '.')));
 
@@ -62,7 +63,7 @@ export const CATEGORIES = ['medicine', 'consumable', 'reagent', 'instrument', 'o
 export const STORAGE = ['room', 'fridge', 'freezer'] as const;
 
 /** Low stock: the usable (not expired) quantity is under the minimum — an expired lot never hides a shortage. */
-export const isLow = (i: { active: boolean; usable_qty?: unknown; qty: unknown; minimum_qty: unknown }) => i.active && Number(i.usable_qty ?? i.qty) < Number(i.minimum_qty);
+export const isLow = (i: { active: boolean; usable_qty?: unknown; qty: unknown; minimum_qty: unknown }) => i.active && i.qty !== null && Number(i.usable_qty ?? i.qty) < Number(i.minimum_qty);
 
 export type PickOption = { id: string; label: string; sub?: string; disabled?: boolean };
 /**
