@@ -233,6 +233,6 @@ test('reset: boshlang‘ich seed tiklanadi, parallel reset bloklanadi', async ()
   assert.equal((await manager.get('/patients?page_size=1')).body.meta.total, 103); // + 3 MedPlus demo patients
   assert.equal((await manager.get(`/patients/${state.patientId}`)).status, 404);
   const inv = (await cashier.get('/invoices?page_size=1')).body.meta.total;
-  assert.equal(inv, 195); // 180 in the last 30 days + 13 older visits of the patients followed over months + 2 MedPlus demo invoices
+  assert.equal(inv, 219); // 180 in the last 30 days + 13 older visits of the patients followed over months + 2 MedPlus demo invoices + 24 discount/company bills (seed/discounts.ts)
   assert.equal((await manager.get('/me')).status, 200, 'sessiya resetdan keyin saqlanadi');
 });

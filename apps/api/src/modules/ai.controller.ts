@@ -273,7 +273,7 @@ export class AiController {
       text = rows.length ? translate(L, 'api.report.topServices', { list: rows.map((r, i) => `${i + 1}) ${r.service_name} — ${som(Number(r.v))}`).join('; ') }) : translate(L, 'api.report.noServices');
       link = `/reports?period=30d`;
     } else {
-      const r = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(total - paid_amount),0)::bigint AS s FROM invoices WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`, [ctx.tenantId, branches]))!;
+      const r = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(total - company_share_amount - (paid_amount - company_paid_amount)),0)::bigint AS s FROM invoices WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND (total - company_share_amount - (paid_amount - company_paid_amount)) > 0`, [ctx.tenantId, branches]))!;
       facts = { invoices: r.n, debt: Number(r.s) };
       text = r.n ? translate(L, 'api.report.debt', { n: r.n, sum: som(Number(r.s)) }) : translate(L, 'api.report.noDebt');
       link = `/cashier?debt=1`;

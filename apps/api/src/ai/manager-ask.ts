@@ -8,7 +8,7 @@ import type { Db } from '../core/db';
 import type { Ctx } from '../core/context';
 import { addDays, dayStart, today } from '../core/clock';
 import { isDate, isUuid } from '../core/validate';
-import { NET_LINE } from '../modules/billing';
+import { NET_LINE, PATIENT_DUE } from '../modules/billing';
 import { AGE_BUCKETS } from '../modules/invoices.controller';
 import { USABLE_SQL } from '../modules/warehouse';
 import { som, type Facts, type FactUnit } from './manager-facts';
@@ -107,8 +107,8 @@ export const TEMPLATES: Record<string, Template> = {
     async run(db, r) {
       const cols: Col[] = [{ key: 'label', type: 'text' }, { key: 'invoices', type: 'count', sum: true }, { key: 'debt', type: 'money', sum: true }];
       const a = (await db.one(
-        `SELECT ${Object.entries(AGE_BUCKETS).map(([, w], i) => `count(*) FILTER (WHERE ${w})::int AS n${i}, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${w}),0)::bigint AS s${i}`).join(', ')}
-           FROM invoices i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.status IN ('unpaid','partially_paid') AND i.total > i.paid_amount`, [r.tenantId, r.branches]))!;
+        `SELECT ${Object.entries(AGE_BUCKETS).map(([, w], i) => `count(*) FILTER (WHERE ${w})::int AS n${i}, coalesce(sum(${PATIENT_DUE()}) FILTER (WHERE ${w}),0)::bigint AS s${i}`).join(', ')}
+           FROM invoices i WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.status IN ('unpaid','partially_paid') AND ${PATIENT_DUE()} > 0`, [r.tenantId, r.branches]))!;
       const rows = Object.keys(AGE_BUCKETS).map((b, i) => ({ label: tr(r.locale, `mgrai.age.${b}`), invoices: a[`n${i}`], debt: a[`s${i}`] }));
       return { columns: cols, rows: num(rows, cols) };
     },

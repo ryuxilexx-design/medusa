@@ -99,7 +99,7 @@ export function RefundModal({ inv, onClose }: { inv: any; onClose: () => void })
               </Field>
         )}
         <Field label={t('cash.colReason')} required>
-          {(id) => <Select id={id} value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>{Object.keys(REFUND_REASON_LABEL).map((k) => <option key={k} value={k}>{t(`cash.refundReason.${k}` as MessageKey)}</option>)}</Select>}
+          {(id) => <Select id={id} value={reasonCode} onChange={(e) => setReasonCode(e.target.value)}>{Object.keys(REFUND_REASON_LABEL).filter((k) => k !== 'company_payment_void').map((k) => <option key={k} value={k}>{t(`cash.refundReason.${k}` as MessageKey)}</option>)}</Select>}
         </Field>
         <Field label={t('cash.note')} required error={errors.reason}>{(id) => <Textarea id={id} rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t('cash.refundNotePlaceholder')} />}</Field>
         {!ready && <p className="text-sm text-slate-600">{t('cash.fillRequired')}</p>}

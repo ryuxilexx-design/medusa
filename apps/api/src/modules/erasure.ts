@@ -44,7 +44,7 @@ export async function patientCard(q: Q, ctx: Ctx, patientId: string) {
       [patientId, ctx.tenantId, ctx.branchIds])).rows,
     summary: (await q.query(
       `SELECT count(*)::int AS count, coalesce(sum(total),0)::bigint AS total, coalesce(sum(paid_amount),0)::bigint AS paid,
-              coalesce(sum(total - paid_amount) FILTER (WHERE status IN ('unpaid','partially_paid')),0)::bigint AS due
+              coalesce(sum(total - company_share_amount - (paid_amount - company_paid_amount)) FILTER (WHERE status IN ('unpaid','partially_paid')),0)::bigint AS due
          FROM invoices WHERE patient_id = $1 AND tenant_id = $2 AND status <> 'void' AND branch_id = ANY($3)`, [patientId, ctx.tenantId, ctx.branchIds])).rows[0],
   };
   return { patient, consents, visits, invoices, generated_at: now() };
@@ -168,7 +168,7 @@ export async function anonymisePatient(c: Q, ctx: Ctx, patientId: string, input:
   if (!p) throw new AppError(404, 'NOT_FOUND', 'Bemor topilmadi');
   if (p.anonymised_at) throw coded(409, 'ALREADY_ANONYMISED', 'api.erasure.already');
   const at = now();
-  const debt = Number((await c.query(`SELECT coalesce(sum(total - paid_amount),0)::bigint AS n FROM invoices WHERE patient_id = $1 AND tenant_id = $2 AND status IN ('unpaid','partially_paid')`, [patientId, ctx.tenantId])).rows[0].n);
+  const debt = Number((await c.query(`SELECT coalesce(sum(total - company_share_amount - (paid_amount - company_paid_amount)),0)::bigint AS n FROM invoices WHERE patient_id = $1 AND tenant_id = $2 AND status IN ('unpaid','partially_paid')`, [patientId, ctx.tenantId])).rows[0].n);
   const deposit = Number((await c.query(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS n FROM patient_deposits WHERE patient_id = $1 AND tenant_id = $2`, [patientId, ctx.tenantId])).rows[0].n);
   const future = (await c.query(
     `SELECT a.id, a.starts_at, d.display_name AS doctor_name FROM appointments a JOIN doctors d ON d.id = a.doctor_id
@@ -189,6 +189,7 @@ export async function anonymisePatient(c: Q, ctx: Ctx, patientId: string, input:
   await c.query(
     `UPDATE patients SET last_name = $3, first_name = '#' || patient_number, middle_name = NULL, birth_date = $4, sex = 'unspecified',
             phone = NULL, contact_name = NULL, contact_phone = NULL, address = NULL, note = NULL, pinfl = NULL, id_document = NULL,
+            benefit_note = NULL, company_member_no = NULL, -- a certificate or policy number identifies the person too
             anonymised_at = $5, erasure_reason = $6, updated_at = $5
       WHERE id = $1 AND tenant_id = $2`, [patientId, ctx.tenantId, ANON_LAST_NAME, ANON_BIRTH_DATE, at, input.reason]);
   await stripDhpForPatient(c, ctx.tenantId, patientId); // queued platform bundles lose the identity too

@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, Banknote, DoorOpen, Download, HandCoins, PiggyBank, Printer, ReceiptText, Scale, Undo2, Wallet } from 'lucide-react';
+import { BadgePercent, Ban, Banknote, Building2, DoorOpen, Download, HandCoins, PiggyBank, Printer, ReceiptText, Scale, Undo2, Wallet } from 'lucide-react';
 import { EXPENSE_CATEGORIES, EXPENSE_PAID_FROM_LABEL, type MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, parseSomToTiyin, pid } from '@/lib/format';
@@ -64,7 +64,9 @@ export function FootRow({ cells }: { cells: { span?: number; value?: React.React
 
 type Summary = { payments: { total: number; count: number }; refunds: { total: number; count: number }; net_revenue: number; expenses: { total: number }; net_result: number;
   /** referral partner payouts: an outflow next to expenses, never a reduction of revenue (docs/REFERRALS.md) */
-  partner_payouts?: { total: number; count: number }; fiscal?: { missing: number }; deposits: { in: number; out: number; applied: number; balance: number } };
+  partner_payouts?: { total: number; count: number }; fiscal?: { missing: number }; deposits: { in: number; out: number; applied: number; balance: number };
+  /** discounts given on the period's bills (not revenue, not an expense) and the companies' receivable now (docs/DISCOUNTS_COMPANIES.md) */
+  discounts?: { total: number; invoices: number }; companies?: { received: number; receivable: number; receivable_invoices: number } };
 
 /** Manager: cash-basis result for the period. Net revenue = payments − refunds; net result = net revenue − expenses. */
 export function FinanceStats({ from, to, branchId }: { from: string; to: string; branchId: string }) {
@@ -86,18 +88,23 @@ export function FinanceStats({ from, to, branchId }: { from: string; to: string;
 }
 
 /** Manager: who owes (by age of the debt) and what the clinic holds for patients (deposits are a liability, not revenue). */
-export function DebtorsDepositsRow({ from, to, branchId, onDebtors }: { from: string; to: string; branchId: string; onDebtors: () => void }) {
+export function DebtorsDepositsRow({ from, to, branchId, onDebtors, onCompanies }: { from: string; to: string; branchId: string; onDebtors: () => void; onCompanies?: () => void }) {
   const t = useT();
   const sum = useQuery({ queryKey: ['finance-summary', from, to, branchId], queryFn: () => api<{ data: Summary }>(`/finance/summary${qs({ from, to, branch_id: branchId })}`).then((r) => r.data) });
   const debt = useQuery({ queryKey: ['invoices', 'debts', 'ageing', branchId], queryFn: () => api(`/invoices${qs({ debt: 1, branch_id: branchId, page_size: 1 })}`).then((r) => r.meta) });
   const a = debt.data?.ageing;
   const d = sum.data?.deposits;
   return (
-    <StatRow cols={2} label={t('cash.debtors')}>
+    <StatRow cols={4} label={t('cash.debtors')}>
       <button type="button" onClick={onDebtors} className={cx('rounded-surface text-left', FOCUS_RING)}>
         <StatCard icon={<HandCoins />} label={t('cash.debtors')} loading={!debt.data} tone={debt.data?.sums.due ? 'danger' : 'default'} value={debt.data && <StatMoney tiyin={debt.data.sums.due} />}
           sub={a && t('cash.debtorsSub', { a: formatSom(a['0-7'].sum, false), b: formatSom(a['8-30'].sum, false), c: formatSom(a['31+'].sum, false) })} />
       </button>
+      <button type="button" onClick={onCompanies} className={cx('rounded-surface text-left', FOCUS_RING)} data-testid="company-receivable-card">
+        <StatCard icon={<Building2 />} label={t('comp.receivableCard')} loading={!sum.data} value={sum.data && <StatMoney tiyin={sum.data.companies?.receivable ?? 0} />}
+          sub={sum.data && t('comp.receivableSub', { n: sum.data.companies?.receivable_invoices ?? 0 })} />
+      </button>
+      <StatCard icon={<BadgePercent />} label={t('comp.discountsCard')} loading={!sum.data} value={sum.data && <StatMoney tiyin={sum.data.discounts?.total ?? 0} />} sub={sum.data && t('disc.nInvoices', { n: sum.data.discounts?.invoices ?? 0 })} />
       <StatCard icon={<PiggyBank />} label={t('cash.depositsCard')} loading={!d} value={d && <StatMoney tiyin={d.balance} />} sub={d && t('cash.depositsSub', { inflow: formatSom(d.in, false), applied: formatSom(d.applied, false) })} />
     </StatRow>
   );

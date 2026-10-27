@@ -72,17 +72,18 @@ function ServicesTable({ q }: { q: any }) {
   if (!rows.length) return <EmptyState compact title={t('clinical.noServicesInPeriod')} />;
   return (
     <Table className="max-sm:[&_td]:px-2 max-sm:[&_th]:px-2 sm:[&_td:first-child]:pl-5 sm:[&_th:first-child]:pl-5 sm:[&_td:last-child]:pr-5 sm:[&_th:last-child]:pr-5 max-sm:[&_th:last-child]:!whitespace-normal">
-      <thead><tr><Th>{t('clinical.rep.service')}</Th><Th right>{t('clinical.rep.count')}</Th><Th right className="hidden sm:table-cell">{t('clinical.rep.discount')}</Th><Th right>{t('clinical.rep.value')}</Th></tr></thead>
+      <thead><tr><Th>{t('clinical.rep.service')}</Th><Th right>{t('clinical.rep.count')}</Th><Th right className="hidden md:table-cell">{t('disc.colGross')}</Th><Th right className="hidden sm:table-cell">{t('clinical.rep.discount')}</Th><Th right>{t('clinical.rep.value')}</Th></tr></thead>
       <tbody>
         {rows.map((r) => (
           <tr key={r.service_id}>
             <Td><div className="font-semibold text-slate-900">{r.service_name}</div><div className="text-small text-slate-600">{t(`service.${r.category}` as MessageKey)}</div></Td>
             <Td right>{r.count}</Td>
+            <Td right className="hidden md:table-cell">{formatSom(Number(r.gross))}</Td>
             <Td right className="hidden text-slate-600 sm:table-cell">{Number(r.discount) ? `−${formatSom(Number(r.discount))}` : '—'}</Td>
             <Td right className="font-semibold text-slate-900">{formatSom(Number(r.value))}</Td>
           </tr>
         ))}
-        <tr className="bg-slate-50"><Td className="font-bold text-slate-900">{t('clinical.rep.total')}</Td><Td right className="font-bold">{sumInt(rows, 'count')}</Td><Td className="hidden sm:table-cell" /><Td right className="font-bold text-slate-900">{formatSom(Number(q.data.meta.total))}</Td></tr>
+        <tr className="bg-slate-50"><Td className="font-bold text-slate-900">{t('clinical.rep.total')}</Td><Td right className="font-bold">{sumInt(rows, 'count')}</Td><Td right className="hidden font-bold md:table-cell">{formatSom(sumTiyin(rows, 'gross'))}</Td><Td right className="hidden font-bold text-slate-700 sm:table-cell">{sumTiyin(rows, 'discount') ? `−${formatSom(sumTiyin(rows, 'discount'))}` : '—'}</Td><Td right className="font-bold text-slate-900">{formatSom(Number(q.data.meta.total))}</Td></tr>
       </tbody>
     </Table>
   );

@@ -5,7 +5,7 @@ import { invalid } from '../core/errors';
 import { isDate } from '../core/validate';
 import { addDays, dayStart, today, toMinutes, weekday } from '../core/clock';
 import { branchScope } from '../core/scope';
-import { NET_LINE } from './billing';
+import { COMPANY_DUE, NET_LINE, PATIENT_DUE } from './billing';
 import { cameraAttention } from '../cameras/cameras.controller';
 import { USABLE_SQL } from './warehouse';
 import { NEW_PATIENTS_SQL } from './referrals';
@@ -33,9 +33,15 @@ export const REVENUE_SQL =
           (SELECT count(*) FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4)::int AS payments,
           coalesce((SELECT sum(amount) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4),0)::bigint AS refunds,
           (SELECT count(*) FROM refunds WHERE tenant_id = $1 AND branch_id = ANY($2) AND refunded_at >= $3 AND refunded_at < $4)::int AS refund_count`;
-/** Open debt now (unpaid and partially paid invoices) in tenant $1 / branches $2. */
-export const DEBT_SQL = `SELECT coalesce(sum(total - paid_amount),0)::bigint AS debt, count(*)::int AS invoices FROM invoices
-        WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`;
+/**
+ * Open PATIENT debt now (unpaid and partially paid invoices) in tenant $1 / branches $2. A company's part of a bill is
+ * the company's receivable (COMPANY_DEBT_SQL), never patient debt: «Joriy qarz» keeps its meaning.
+ */
+export const DEBT_SQL = `SELECT coalesce(sum(${PATIENT_DUE('i')}),0)::bigint AS debt, count(*)::int AS invoices FROM invoices i
+        WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.status IN ('unpaid','partially_paid') AND ${PATIENT_DUE('i')} > 0`;
+/** Companies' receivables now (their part of bills not yet paid) in tenant $1 / branches $2. */
+export const COMPANY_DEBT_SQL = `SELECT coalesce(sum(${COMPANY_DUE('i')}),0)::bigint AS debt, count(*)::int AS invoices FROM invoices i
+        WHERE i.tenant_id = $1 AND i.branch_id = ANY($2) AND i.status <> 'void' AND i.company_id IS NOT NULL AND ${COMPANY_DUE('i')} > 0`;
 
 /** Every number here is computed from the stored records for the same filter; nothing is cached or hardcoded. */
 @Controller()
@@ -57,6 +63,7 @@ export class DashboardController {
     // revenue is cash basis and net of refunds made in the same period
     const rev = (await this.db.one(REVENUE_SQL, P))!;
     const debt = (await this.db.one(DEBT_SQL, [ctx.tenantId, branches]))!;
+    const companyDebt = (await this.db.one(COMPANY_DEBT_SQL, [ctx.tenantId, branches]))!;
     const daily = await this.db.rows(
       // one indexed range scan per table, grouped by local day (not a subquery per day)
       `WITH pay AS (SELECT (paid_at AT TIME ZONE 'Asia/Tashkent')::date AS day, sum(amount) AS s, count(*) AS n FROM payments
@@ -94,14 +101,15 @@ export class DashboardController {
     return {
       data: {
         range: { from: r.from, to: r.to, branch_ids: branches },
-        kpi: { ...appt, revenue: Number(rev.revenue), payments: rev.payments, refunds: Number(rev.refunds), debt: Number(debt.debt), debt_invoices: debt.invoices },
+        kpi: { ...appt, revenue: Number(rev.revenue), payments: rev.payments, refunds: Number(rev.refunds), debt: Number(debt.debt), debt_invoices: debt.invoices,
+          company_receivable: Number(companyDebt.debt), company_receivable_invoices: companyDebt.invoices },
         daily: daily.map((d) => ({ ...d, revenue: Number(d.revenue) })),
         by_service: byService.map((s) => ({ ...s, value: Number(s.value) })),
         doctors,
         recent_payments: recentPayments,
         new_patient_sources: sources,
         attention: { unpaid_invoices: debt.invoices, unpaid_sum: Number(debt.debt), lab_draft: labPending.draft, lab_waiting: labPending.waiting, low_stock: lowStock, cancelled_with_invoice: cancelledWithPayments,
-          camera_alerts: cams.open_alerts, silent_cameras: cams.silent_cameras },
+          camera_alerts: cams.open_alerts, silent_cameras: cams.silent_cameras, company_receivable: Number(companyDebt.debt), company_receivable_invoices: companyDebt.invoices },
       },
     };
   }

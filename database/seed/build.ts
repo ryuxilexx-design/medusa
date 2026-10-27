@@ -13,6 +13,7 @@ import * as path from 'path';
 import { buildWarehouse } from './warehouse';
 import { buildHistory } from './history';
 import { applyReferrals } from './referrals';
+import { applyDiscounts } from './discounts';
 import { fitTemplate, icdSnap, labValues, NOTE_TEMPLATES, profilesOf, uziVariant, type NoteTpl } from './clinical';
 
 export const DEMO_TIMEZONE_OFFSET_HOURS = 5; // Asia/Tashkent, no DST
@@ -37,6 +38,7 @@ export interface SeedData {
   medical_documents: Row[]; note_addenda: Row[]; patient_summaries: Row[]; patient_allergies: Row[]; schedule_exceptions: Row[]; patient_deposits: Row[]; refunds: Row[];
   cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[]; camera_snapshots: Row[];
   lead_sources: Row[]; referral_partners: Row[]; referral_partner_services: Row[]; partner_payouts: Row[];
+  discount_rules: Row[]; benefit_categories: Row[]; companies: Row[]; company_payments: Row[]; company_payment_allocations: Row[];
 }
 
 export function sid(key: string): string {
@@ -114,6 +116,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     medical_documents: [], note_addenda: [], patient_summaries: [], patient_allergies: [], schedule_exceptions: [], patient_deposits: [], refunds: [],
     cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [], camera_snapshots: [],
     lead_sources: [], referral_partners: [], referral_partner_services: [], partner_payouts: [],
+    discount_rules: [], benefit_categories: [], companies: [], company_payments: [], company_payment_allocations: [],
   };
 
   // ---------- tenant, branches ----------
@@ -1003,6 +1006,9 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
 
   // ---------- referral partners and lead sources (referrals.ts, migration 041): a post-pass with its own PRNG ----------
   applyReferrals(data, demoDate);
+
+  // ---------- discounts, benefit categories and companies (discounts.ts, migration 043): a post-pass with its own PRNG ----------
+  applyDiscounts(data, demoDate);
 
   return data;
 }

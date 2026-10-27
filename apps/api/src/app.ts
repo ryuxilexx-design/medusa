@@ -4,7 +4,7 @@ import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { randomUUID } from 'crypto';
-import { backfillSeedCameras, backfillSeedConsents, backfillSeedGuard, backfillSeedReferrals, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureLeadSources, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, backfillSeedDiscounts, backfillSeedGuard, backfillSeedReferrals, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureLeadSources, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { purgeSnapshots } from './cameras/ingest';
 import { purgeVisitors } from './modules/security';
 import { config } from './core/config';
@@ -59,6 +59,8 @@ export async function createApp(): Promise<INestApplication> {
     if (guards) console.log(`Qorovul demo: qorovullar, smenalar, obxod va jurnallar qo‘shildi (migratsiya 038 dan oldingi baza)`);
     const partners = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedReferrals(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
     if (partners) console.log(`Hamkorlar demo: ${partners} ta yo‘llovchi hamkor, manbalar va to‘lovlar qo‘shildi (migratsiya 041 dan oldingi baza)`);
+    const discounts = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedDiscounts(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    if (discounts) console.log(`Chegirmalar demo: ${discounts} ta chegirma qoidasi, imtiyoz toifalari va kompaniyalar qo‘shildi (migratsiya 043 dan oldingi baza)`);
     if (snaps) console.log(`Demo: ${snaps} ta kamera ogohlantirish surati qo‘shildi (migratsiya 016 dan oldingi baza)`);
   } else if (await readDemoClock(pool)) {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than

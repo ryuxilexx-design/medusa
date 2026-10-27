@@ -33,6 +33,8 @@ import { DocumentsController } from './modules/documents.controller';
 import { PatientSummaryController } from './modules/patient-summary.controller';
 import { CashController } from './modules/cash.controller';
 import { ReferralsController } from './modules/referrals.controller';
+import { DiscountsController } from './modules/discounts.controller';
+import { CompaniesController } from './modules/companies.controller';
 import { DepositsController } from './modules/deposits.controller';
 import { NoteTemplatesController, QuickPhrasesController } from './modules/templates.controller';
 import { CamerasController } from './cameras/cameras.controller';
@@ -73,7 +75,7 @@ function requestLog(req: any, res: any) {
 @Module({
   controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, LabCommentaryController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, ReorderController, SecurityController, DiagnosticsController, AiController, ManagerAiController,
-    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, PatientSummaryController, DrugsController, AllergiesController, CashController, DepositsController, ReferralsController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController, IntegrationsController],
+    AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, PatientSummaryController, DrugsController, AllergiesController, CashController, DepositsController, ReferralsController, DiscountsController, CompaniesController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController, IntegrationsController],
   providers: [Db, BotEngine, BotFaq, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
 })
 export class AppModule implements NestModule {

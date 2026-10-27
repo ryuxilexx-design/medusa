@@ -276,6 +276,11 @@ test('faqat o‘qish: ko‘chirilgan hisob, to‘lov, bemor va qabulni o‘zgart
   assert.match(pay.body.error.message, /MedPlus/);
   assert.equal((await manager.post(`/invoices/${invoice1}/discount`, { type: 'percent', value: 10, reason: 'sinov sababi' })).body.error.code, 'MIRRORED_RECORD');
   assert.equal((await manager.post(`/invoices/${invoice1}/void`, { reason: 'sinov sababi' })).body.error.code, 'MIRRORED_RECORD');
+  // discounts and the company payer (migration 043) are refused on a mirrored bill too
+  const rule = (await manager.get('/discount-rules')).body.data[0];
+  assert.equal((await manager.post(`/invoices/${invoice1}/apply-discount`, { rule_id: rule.id, reason: 'sinov sababi' })).body.error.code, 'MIRRORED_RECORD');
+  const company = (await manager.get('/companies')).body.data[0];
+  assert.equal((await manager.post(`/invoices/${invoice1}/company`, { company_id: company.id })).body.error.code, 'MIRRORED_RECORD');
   const ref = await manager.post(`/invoices/${invoice1}/refunds`, { payment_id: payment1, amount: 100, method: 'card', reason_code: 'other', reason: 'sinov sababi' }, key());
   assert.equal(ref.body.error.code, 'MIRRORED_RECORD');
   const ed = await registrar.patch(`/patients/${patient1}`, { last_name: 'Boshqa' });

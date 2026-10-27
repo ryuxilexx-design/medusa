@@ -6,14 +6,14 @@ import { createHash } from 'crypto';
 import { expenseCreateSchema, expenseVoidSchema, PAYMENT_METHOD_LABEL, REFUND_REASON_LABEL, refundCreateSchema, shiftCloseSchema, shiftOpenSchema } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError, conflict, forbidden, invalid, mirroredRecord, notFound } from '../core/errors';
+import { AppError, coded, conflict, forbidden, invalid, mirroredRecord, notFound } from '../core/errors';
 import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { localToUtc, now, today } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
 import { invoiceStatus } from './billing';
-import { range } from './dashboard.controller';
+import { COMPANY_DEBT_SQL, range } from './dashboard.controller';
 import { FISCAL_JSON, FISCAL_JSON_REFUND, FISCAL_MISSING, shiftIsStale } from './invoices.controller';
 import { recordFiscal } from '../fiscal/provider';
 
@@ -232,8 +232,10 @@ export class CashController {
         return { data: { refund: prev, replayed: true } };
       }
       if (inv.status === 'void') throw conflict('INVOICE_VOID', 'Bekor qilingan hisob bo‘yicha qaytarish yo‘q');
-      const pay = (await c.query(`SELECT id, amount, method FROM payments WHERE id = $1 AND invoice_id = $2`, [input.payment_id, id])).rows[0];
+      const pay = (await c.query(`SELECT id, amount, method, company_payment_id FROM payments WHERE id = $1 AND invoice_id = $2`, [input.payment_id, id])).rows[0];
       if (!pay) throw invalid({ payment_id: 'To‘lov shu hisobga tegishli emas' });
+      // a company's bank transfer is corrected by voiding the company payment (Kompaniyalar), never refunded to the patient
+      if (pay.company_payment_id) throw coded(409, 'COMPANY_PAYMENT', 'api.comp.noRefund');
       const already = Number((await c.query(`SELECT coalesce(sum(amount),0)::bigint AS s FROM refunds WHERE payment_id = $1`, [pay.id])).rows[0].s);
       const refundable = Math.min(Number(pay.amount) - already, Number(inv.paid_amount));
       if (refundable <= 0) throw conflict('NOTHING_TO_REFUND', 'Bu to‘lov to‘liq qaytarilgan');
@@ -381,6 +383,12 @@ export class CashController {
     // referral partner payouts: an outflow next to expenses, never a reduction of revenue (docs/REFERRALS.md)
     const ppo = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum, coalesce(sum(amount) FILTER (WHERE method = 'cash'),0)::bigint AS cash
         FROM partner_payouts WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4 AND status = 'active'`, P))!;
+    // discounts given on bills of the period: not an expense and not part of the cash basis — shown next to revenue
+    const disc = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(discount_amount),0)::bigint AS sum FROM invoices
+        WHERE tenant_id = $1 AND branch_id = ANY($2) AND created_at >= $3 AND created_at < $4 AND status <> 'void' AND discount_amount > 0`, P))!;
+    // companies: their payments received in the period (already inside «payments») and what they owe now
+    const comp = (await this.db.one(`SELECT coalesce(sum(amount),0)::bigint AS received FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4 AND company_payment_id IS NOT NULL`, P))!;
+    const compDue = (await this.db.one(COMPANY_DEBT_SQL, [P[0], P[1]]))!;
     const gross = pay.reduce((a, b) => a + Number(b.sum), 0), refunds = Number(ref.sum), expenses = exp.reduce((a, b) => a + Number(b.sum), 0), partnerOut = Number(ppo.sum);
     const fiscal = (await this.db.one(`SELECT count(*)::int AS n FROM payments pm WHERE pm.tenant_id = $1 AND pm.branch_id = ANY($2) AND pm.paid_at >= $3 AND pm.paid_at < $4 AND ${FISCAL_MISSING}`, P))!;
     return { data: {
@@ -392,6 +400,8 @@ export class CashController {
       expenses: { total: expenses, by_category: exp.map((x) => ({ category: x.category, count: x.n, sum: Number(x.sum) })) },
       partner_payouts: { total: partnerOut, count: ppo.n, cash: Number(ppo.cash) },
       net_result: gross - refunds - expenses - partnerOut,
+      discounts: { total: Number(disc.sum), invoices: disc.n },
+      companies: { received: Number(comp.received), receivable: Number(compDue.debt), receivable_invoices: compDue.invoices },
       deposits: { in: Number(dep.inflow), out: Number(dep.outflow), applied: Number(dep.applied), balance: Number(liability.balance) },
     } };
   }

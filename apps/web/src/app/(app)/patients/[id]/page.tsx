@@ -157,6 +157,8 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
     pt.address !== undefined && { k: t('registrar.address'), v: pt.address || '—' },
     pt.note !== undefined && { k: t('registrar.note'), v: pt.note || '—' },
     pt.lead_source_id !== undefined && { k: t('ref.source'), v: pt.lead_source_name || '—' },
+    pt.benefit_category_id !== undefined && { k: t('comp.cardBenefit'), v: pt.benefit_category_name ? `${pt.benefit_category_name}${pt.benefit_note ? ` · ${pt.benefit_note}` : ''}` : '—' },
+    pt.company_id !== undefined && { k: t('comp.cardCompany'), v: pt.company_name ? `${pt.company_name}${pt.company_member_no ? ` · ${pt.company_member_no}` : ''}` : '—' },
   ].filter(Boolean) as { k: string; v: string }[];
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">

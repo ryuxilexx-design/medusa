@@ -32,7 +32,7 @@ export const ALLERGY_LABEL: Record<string, string> = {
 };
 
 export const REFUND_REASON_LABEL: Record<string, string> = {
-  service_not_provided: 'Xizmat ko‘rsatilmadi', appointment_cancelled: 'Qabul bekor qilindi', patient_complaint: 'Bemor shikoyati', other: 'Boshqa sabab',
+  service_not_provided: 'Xizmat ko‘rsatilmadi', appointment_cancelled: 'Qabul bekor qilindi', patient_complaint: 'Bemor shikoyati', other: 'Boshqa sabab', company_payment_void: 'Kompaniya to‘lovi bekor qilindi',
 };
 export const EXPENSE_CATEGORIES = ['Ijara', 'Maosh', 'Kommunal', 'Reagentlar', 'Tibbiy sarf materiallari', 'Xo‘jalik', 'Ta’mirlash', 'IT xizmatlari', 'Marketing', 'Soliq va to‘lovlar', 'Boshqa'] as const;
 export const EXPENSE_PAID_FROM_LABEL: Record<string, string> = { cash_drawer: 'Kassadan (naqd)', bank: 'Bank hisobidan', card: 'Korporativ karta', other: 'Boshqa' };
