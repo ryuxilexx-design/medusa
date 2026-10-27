@@ -6,7 +6,7 @@ import { createHash } from 'crypto';
 import { expenseCreateSchema, expenseVoidSchema, PAYMENT_METHOD_LABEL, REFUND_REASON_LABEL, refundCreateSchema, shiftCloseSchema, shiftOpenSchema } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError, conflict, forbidden, invalid, notFound } from '../core/errors';
+import { AppError, conflict, forbidden, invalid, mirroredRecord, notFound } from '../core/errors';
 import { isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { localToUtc, now, today } from '../core/clock';
@@ -94,7 +94,7 @@ export class CashController {
   }
 
   /** Shifts of a period as CSV (a cashier: their own), one row per shift and a totals row. */
-  @Roles('cashier', 'manager') @Get('cash-shifts/export.csv')
+  @Roles('cashier', 'manager') @Get(['cash-shifts/export.csv', 'cash-shifts/export.xlsx'])
   async shiftsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const period = csvPeriod(q);
     const r = range(q);
@@ -214,6 +214,7 @@ export class CashController {
     return this.db.tx(async (c) => {
       const inv = (await c.query(`SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
       if (!inv || !ctx.branchIds.includes(inv.branch_id)) throw notFound('Hisob');
+      if (inv.external_source_id) throw mirroredRecord(); // a MedPlus refund happens in MedPlus and arrives with the sync
       const prev = (await c.query(`SELECT * FROM refunds WHERE tenant_id = $1 AND idempotency_key = $2`, [ctx.tenantId, key])).rows[0];
       if (prev) {
         const same = fp(prev.invoice_id, prev.payment_id, prev.amount, prev.method, prev.order_id) === fingerprint;
@@ -276,7 +277,7 @@ export class CashController {
         WHERE rf.tenant_id = $1 AND rf.branch_id = ANY($2) AND rf.refunded_at >= $3 AND rf.refunded_at < $4`;
 
   /** Refunds of a period as CSV (bounded ≤ 1 year), with a totals row. */
-  @Roles('manager') @Get('refunds/export.csv')
+  @Roles('manager') @Get(['refunds/export.csv', 'refunds/export.xlsx'])
   async refundsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const period = csvPeriod(q);
     const r = range(q);

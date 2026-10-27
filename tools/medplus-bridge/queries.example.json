@@ -1,0 +1,49 @@
+{
+  "_": "TEMPLATE — MedPlus's real table and column names are not known yet. Run `node bridge.mjs --probe`, then replace the table/column names below (docs/MEDPLUS_SYNC.md «Writing queries»). Every query: one SELECT, ORDER BY the cursor columns, LIMIT :limit, and :last_<column> for each cursor column. Money columns listed in `money` are so‘m in MedPlus and are sent as tiyin.",
+
+  "branch": {
+    "sql": "SELECT id, name FROM branches WHERE id > :last_id ORDER BY id LIMIT :limit",
+    "cursor": ["id"],
+    "map": { "external_id": "id", "name": "name" }
+  },
+  "staff": {
+    "sql": "SELECT id, fio FROM users WHERE id > :last_id ORDER BY id LIMIT :limit",
+    "cursor": ["id"],
+    "map": { "external_id": "id", "name": "fio" }
+  },
+  "doctor": {
+    "sql": "SELECT id, fio, speciality, percent FROM doctors WHERE id > :last_id ORDER BY id LIMIT :limit",
+    "cursor": ["id"],
+    "map": { "external_id": "id", "name": "fio", "specialty": "speciality", "percent": "percent" }
+  },
+  "service": {
+    "sql": "SELECT id, name FROM services WHERE id > :last_id ORDER BY id LIMIT :limit",
+    "cursor": ["id"],
+    "map": { "external_id": "id", "name": "name" }
+  },
+  "patient": {
+    "sql": "SELECT id, fio, birthday, sex, mobile, phone, address, updated_at FROM patients WHERE (updated_at > :last_updated_at OR (updated_at = :last_updated_at AND id > :last_id)) ORDER BY updated_at, id LIMIT :limit",
+    "cursor": ["updated_at", "id"],
+    "updated_at": "updated_at",
+    "map": { "external_id": "id", "full_name": "fio", "birth_date": "birthday", "sex": "sex", "phone": "mobile", "phone2": "phone", "address": "address" }
+  },
+  "order": {
+    "sql": "SELECT s.id, s.patient_id, s.service_id, sv.name AS service_name, s.doctor_id, s.price, s.discount, s.doctor_percent, s.created_at, s.filial_id FROM patient_services s JOIN services sv ON sv.id = s.service_id WHERE s.id > :last_id ORDER BY s.id LIMIT :limit",
+    "cursor": ["id"],
+    "money": ["price", "discount"],
+    "map": { "external_id": "id", "patient_id": "patient_id", "service_id": "service_id", "service_name": "service_name", "doctor_id": "doctor_id", "price": "price", "discount": "discount", "doctor_percent": "doctor_percent", "ordered_at": "created_at", "branch_id": "filial_id" }
+  },
+  "payment": {
+    "sql": "SELECT k.id, k.patient_id, k.summa, k.pay_type, k.user_id, k.filial_id, k.comment, k.created_at FROM kassa k WHERE k.id > :last_id ORDER BY k.id LIMIT :limit",
+    "cursor": ["id"],
+    "money": ["amount"],
+    "map": { "external_id": "id", "patient_id": "patient_id", "amount": "summa", "method": "pay_type", "cashier_id": "user_id", "branch_id": "filial_id", "comment": "comment", "paid_at": "created_at" }
+  },
+  "daily_totals": {
+    "sql": "SELECT DATE(k.created_at) AS day, k.filial_id, SUM(k.summa) AS total, SUM(k.summa > 0) AS cnt FROM kassa k WHERE DATE(k.created_at) >= :last_day GROUP BY DATE(k.created_at), k.filial_id ORDER BY day, k.filial_id LIMIT :limit",
+    "cursor": ["day"],
+    "start": { "day": "2026-01-01" },
+    "money": ["payments_sum"],
+    "map": { "external_id": "day", "date": "day", "branch_id": "filial_id", "payments_sum": "total", "payments_count": "cnt" }
+  }
+}

@@ -89,7 +89,8 @@ test('CSV eksport formula in’ektsiyasidan himoyalangan va filtrga mos', async 
   assert.equal(csv.status, 200);
   const lines = csv.text.trim().split('\r\n');
   const meta = (await manager.get('/payments?from=2026-10-01&to=2026-10-18&page_size=1')).body.meta;
-  assert.equal(lines.length - 1, meta.total);
+  assert.equal(lines.length - 2, meta.total); // header + rows + the totals row
+  assert.match(lines[lines.length - 1], /^"Jami";/);
   assert.ok(lines.slice(1).every((l) => !/;"[=+\-@]/.test(l)));
 });
 

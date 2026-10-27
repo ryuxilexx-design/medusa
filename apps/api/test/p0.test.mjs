@@ -53,9 +53,9 @@ test('5 rol serverdagi sessiya bilan kiradi, ruxsatsiz so‘rov 401', async () =
   assert.equal((await new Client().get('/patients')).status, 401);
 });
 
-test('seed: 100 bemor, bugungi jadval va navbat bo‘sh emas', async () => {
+test('seed: 100 bemor (+3 MedPlus demo), bugungi jadval va navbat bo‘sh emas', async () => {
   const p = await manager.get('/patients?page_size=1');
-  assert.equal(p.body.meta.total, 100);
+  assert.equal(p.body.meta.total, 103); // 100 seed patients + 3 mirrored by the demo MedPlus connection (sync/demo.ts)
   const a = await registrar.get(`/appointments?date=${me.today}`);
   assert.equal(a.body.data.length, 30);
   const q = await registrar.get('/queue');
@@ -230,9 +230,9 @@ test('reset: boshlang‘ich seed tiklanadi, parallel reset bloklanadi', async ()
   const [a, b] = await Promise.all([manager.post('/demo/reset'), manager.post('/demo/reset')]);
   assert.ok([a.status, b.status].includes(200));
   assert.ok([a.status, b.status].every((s) => s === 200 || s === 409));
-  assert.equal((await manager.get('/patients?page_size=1')).body.meta.total, 100);
+  assert.equal((await manager.get('/patients?page_size=1')).body.meta.total, 103); // + 3 MedPlus demo patients
   assert.equal((await manager.get(`/patients/${state.patientId}`)).status, 404);
   const inv = (await cashier.get('/invoices?page_size=1')).body.meta.total;
-  assert.equal(inv, 193); // 180 in the last 30 days + 13 older visits of the patients followed over months
+  assert.equal(inv, 195); // 180 in the last 30 days + 13 older visits of the patients followed over months + 2 MedPlus demo invoices
   assert.equal((await manager.get('/me')).status, 200, 'sessiya resetdan keyin saqlanadi');
 });

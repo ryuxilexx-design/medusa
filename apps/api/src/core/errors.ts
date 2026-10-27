@@ -20,6 +20,8 @@ export const notFound = (what = 'Obyekt') => new AppError(404, 'NOT_FOUND', `${w
 export const forbidden = (msg = 'Bu amal uchun ruxsat yo‘q') => new AppError(403, 'FORBIDDEN', msg);
 export const conflict = (code: string, msg: string, extra?: Record<string, unknown>) => new AppError(409, code, msg, undefined, extra);
 export const invalid = (fields: Record<string, string>, msg = 'Maydonlarni tekshiring') => new AppError(422, 'VALIDATION', msg, fields);
+/** A row mirrored from MedPlus (or another external system) is changed only there (docs/MEDPLUS_SYNC.md). */
+export const mirroredRecord = () => coded(409, 'MIRRORED_RECORD', 'api.sync.mirrored', { mp: 'MedPlus' });
 export const staleState = () => conflict('STALE_STATE', 'Holat boshqa foydalanuvchi tomonidan o‘zgartirilgan. Sahifani yangilang.');
 
 @Catch()
@@ -45,6 +47,9 @@ export class ErrorFilter implements ExceptionFilter {
       message = String(err.constraint).includes('room') ? 'Xona bu vaqtda band. Boshqa vaqtni tanlang.' : 'Shifokor bu vaqtda band. Boshqa vaqtni tanlang.';
     } else if (err?.code === '23505') {
       status = 409; code = 'DUPLICATE'; message = 'Bu yozuv allaqachon mavjud.';
+    } else if (err?.code === 'MR409') {
+      // the database refused a write to a mirrored row (migration 042): only the sync writes them
+      status = 409; code = 'MIRRORED_RECORD'; key = 'api.sync.mirrored'; params = { mp: 'MedPlus' }; message = translate('uz', key, params);
     } else if (err?.code === 'P0001') {
       status = 409; code = 'IMMUTABLE'; message = 'Tasdiqlangan yozuvni o‘zgartirib bo‘lmaydi.';
     } else if (['22P02', '22007', '22008', '22001', '22003', '22021', '22P05', '23514', '2201W', '2201X'].includes(err?.code)) {

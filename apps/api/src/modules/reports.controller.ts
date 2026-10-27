@@ -37,7 +37,7 @@ export class ReportsController {
   }
 
   /** Doctor shares of a period as CSV (manager; bounded ≤ 1 year), with a totals row. */
-  @Roles('manager') @Get('reports/doctors/export.csv')
+  @Roles('manager') @Get(['reports/doctors/export.csv', 'reports/doctors/export.xlsx'])
   async doctorsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const period = csvPeriod(q);
     const rows = await this.doctorRows(ctx, q, range(q));
@@ -67,7 +67,7 @@ export class ReportsController {
         WHERE e.tenant_id = $1 AND e.branch_id = ANY($2) AND e.occurred_at >= $3 AND e.occurred_at < $4`;
 
   /** Expenses of a period as CSV (bounded ≤ 1 year); the totals row counts active expenses only. */
-  @Roles('manager') @Get('expenses/export.csv')
+  @Roles('manager') @Get(['expenses/export.csv', 'expenses/export.xlsx'])
   async expensesCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const period = csvPeriod(q);
     const r = range(q);

@@ -8,6 +8,7 @@ import { reasonText } from './ai.controller';
 import { assertDatabaseName, RealTenantsPresentError, resetDemo, ResetInProgressError, SEED_IDS } from '@meduza/db';
 import { fiscalProviderName } from '../fiscal/provider';
 import { Db } from '../core/db';
+import { ensureDemoMirror } from '../sync/demo';
 import { config } from '../core/config';
 import { AllowDuringPasswordChange, Ctx, CurrentCtx, LANG_COOKIE, Public, Roles, SESSION_COOKIE } from '../core/context';
 import { AppError, conflict, forbidden } from '../core/errors';
@@ -119,6 +120,7 @@ export class SessionController {
     try {
       const { counts, clock } = await resetDemo(this.db.pool, config.demoDate, config.demoTime);
       syncClock(clock.demo_anchor);
+      await ensureDemoMirror(this.db, config.demoDate); // the MedPlus demo connection and its mirrored records
       await audit(this.db.pool, ctx, 'demo.reset', 'tenant', ctx.tenantId, 'Demo ma’lumotlari boshlang‘ich holatga tiklandi');
       return { data: { ok: true, counts } };
     } catch (e) {

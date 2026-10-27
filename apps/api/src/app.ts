@@ -11,6 +11,8 @@ import { config } from './core/config';
 import { syncClock } from './core/clock';
 import { rawBody } from './cameras/hik.controller';
 import { AppModule } from './app.module';
+import { SYNC_BODY_LIMIT } from './sync/sync.controller';
+import { ensureDemoMirror } from './sync/demo';
 import { Db } from './core/db';
 
 /** Body limit of POST /cameras/face-codes/:id/photo (a phone JPEG; base64 adds a third). */
@@ -26,6 +28,9 @@ export async function createApp(): Promise<INestApplication> {
   // (wrapped: Nest looks for a middleware named «jsonParser» in the stack and would skip its own default parser if it saw this one)
   const facePhotoJson = json({ limit: FACE_PHOTO_BODY_LIMIT });
   app.use('/api/v1/cameras/face-codes', (req: any, res: any, next: (e?: unknown) => void) => facePhotoJson(req, res, next));
+  // a MedPlus bridge batch (up to 1000 records) may be a few MB of JSON: a larger limit on that one route only
+  const syncJson = json({ limit: SYNC_BODY_LIMIT });
+  app.use('/api/v1/integrations', (req: any, res: any, next: (e?: unknown) => void) => (req.method === 'POST' && /^\/[^/]+\/batch\/?$/.test(req.path) ? syncJson(req, res, next) : next()));
   app.use(cookieParser());
   app.setGlobalPrefix('api/v1');
   (app.getHttpAdapter().getInstance() as any).disable('x-powered-by');
@@ -64,6 +69,11 @@ export async function createApp(): Promise<INestApplication> {
     if (n) console.log(`${n} ta boshlang‘ich qayd shabloni qo‘shildi (klinika ${t.id})`);
   }
   syncClock((await pool.query('SELECT demo_now() AS n')).rows[0].n);
+  // the demo clinic's MedPlus mirror (docs/MEDPLUS_SYNC.md): a few past records through the real sync path, once
+  if (config.demoEnabled) {
+    const mirrored = await ensureDemoMirror(app.get(Db), config.demoDate);
+    if (mirrored) console.log(`Demo: MedPlus integratsiyasi va ${mirrored} ta ko‘chirilgan yozuv qo‘shildi`);
+  }
   // expired sessions, old alert snapshots and old visitor names are removed hourly (they would only make the tables grow)
   if (config.workers) {
     const purge = () => Promise.all([

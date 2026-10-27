@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 import { discountSchema, paymentSchema, promiseSchema, voidSchema, PAYMENT_METHOD_LABEL } from '@meduza/contracts';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
-import { AppError, conflict, invalid, notFound } from '../core/errors';
+import { AppError, conflict, invalid, mirroredRecord, notFound } from '../core/errors';
 import { isDate, isUuid, pageParams, parse } from '../core/validate';
 import { audit } from '../core/audit';
 import { addDays, dayStart, localDate, now, today } from '../core/clock';
@@ -36,6 +36,8 @@ async function lockInvoice(q: Q, ctx: Ctx, id: string) {
   if (!isUuid(id)) throw notFound('Hisob');
   const inv = (await q.query(`SELECT * FROM invoices WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
   if (!inv || !ctx.branchIds.includes(inv.branch_id)) throw notFound('Hisob');
+  // a MedPlus invoice is a mirror: its payments, discounts and refunds happen in MedPlus (docs/MEDPLUS_SYNC.md)
+  if (inv.external_source_id) throw mirroredRecord();
   return inv;
 }
 
@@ -83,7 +85,7 @@ export class InvoicesController {
   }
 
   /** Debtors list as CSV (a snapshot, so no period; at most 10 000 rows, oldest debt first; a totals row at the end). */
-  @Roles('manager', 'cashier') @Get('debtors.csv')
+  @Roles('manager', 'cashier') @Get(['debtors.csv', 'debtors.xlsx'])
   async debtorsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const params: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id)];
     const where = [`i.tenant_id = $1`, `i.branch_id = ANY($2)`, `i.status IN ('unpaid','partially_paid')`, `i.total > i.paid_amount`];
@@ -117,7 +119,7 @@ export class InvoicesController {
     const dep = await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE patient_id = $1 AND tenant_id = $2`, [inv.patient_id, ctx.tenantId]);
     (inv as any).deposit_balance = Number(dep?.balance ?? 0);
     const payments = await this.db.rows(
-      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, ${FISCAL_JSON} AS fiscal,
+      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, ${FISCAL_JSON} AS fiscal, pm.external_source_id IS NOT NULL AS mirrored,
               (pm.amount - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.payment_id = pm.id), 0))::bigint AS refundable
          FROM payments pm WHERE pm.invoice_id = $1 ORDER BY pm.paid_at`, [id]);
     const refunds = await this.db.rows(
@@ -259,7 +261,7 @@ export class PaymentsController {
     const byMethod = await this.db.rows(`SELECT pm.method, count(*)::int AS n, sum(pm.amount)::bigint AS sum FROM payments pm WHERE ${where} GROUP BY 1 ORDER BY 1`, params);
     params.push(pageSize, offset);
     const rows = await this.db.rows(
-      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, pm.invoice_id, i.invoice_number, b.name AS branch_name,
+      `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, pm.invoice_id, i.invoice_number, b.name AS branch_name, pm.external_source_id IS NOT NULL AS mirrored,
               p.id AS patient_id, p.patient_number, p.last_name, p.first_name, ${FISCAL_JSON} AS fiscal
          FROM payments pm JOIN invoices i ON i.id = pm.invoice_id JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = pm.branch_id
         WHERE ${where} ORDER BY pm.paid_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
@@ -268,13 +270,13 @@ export class PaymentsController {
   }
 
   /** CSV export of the filtered register. Cells starting with = + - @ are neutralised against formula injection. */
-  @Roles('manager', 'cashier') @Get('export.csv')
+  @Roles('manager', 'cashier') @Get(['export.csv', 'export.xlsx'])
   async csv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     // a bounded period: one export is built in memory, so «all time» would stall the server for everyone
     const period = csvPeriod(q);
     const { params, where } = this.filters(ctx, q);
     const rows = await this.db.rows(
-      `SELECT pm.receipt_number, pm.paid_at, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, i.invoice_number, pm.method, pm.amount, pm.cashier_name, pm.note,
+      `SELECT pm.receipt_number, pm.paid_at, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, i.invoice_number, pm.method, pm.amount, pm.cashier_name, pm.note, pm.external_source_id,
               (SELECT json_agg(json_build_object('ikpu', s.ikpu_code, 'vat_percent', s.vat_percent, 'vat_exempt', s.vat_exempt) ORDER BY it.position)
                  FROM invoice_items it LEFT JOIN services s ON s.id = it.service_id WHERE it.invoice_id = i.id) AS lines,
               ${FISCAL_JSON} AS fiscal
@@ -287,8 +289,9 @@ export class PaymentsController {
     const FISCAL_LABEL: Record<string, string> = { pending: 'kiritilmagan', issued: 'kiritilgan', failed: 'xato', skipped: 'talab qilinmaydi' };
     sendCsv(res, `meduzai-tolovlar-${period.from}-${period.to}.csv`,
       ['Qayd №', 'Sana (Toshkent)', 'Filial', 'Bemor ID', 'Bemor', 'Hisob №', 'Usul', 'Summa (so‘m)', 'Kassir', 'Izoh', 'IKPU', 'QQS', 'Fiskal chek №', 'Fiskal holati', 'Fiskal belgi', 'Terminal'],
-      rows.map((r) => [r.receipt_number, csvTime(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], csvSom(r.amount), r.cashier_name, r.note,
-        ikpu(r.lines), vat(r.lines), r.fiscal?.receipt_number, r.fiscal ? FISCAL_LABEL[r.fiscal.status] ?? r.fiscal.status : '', r.fiscal?.fiscal_sign, r.fiscal?.terminal_id]));
+      [...rows.map((r) => [r.receipt_number, csvTime(r.paid_at), r.branch, r.patient_number, r.patient, r.invoice_number, PAYMENT_METHOD_LABEL[r.method], csvSom(r.amount), r.cashier_name, r.note,
+        ikpu(r.lines), vat(r.lines), r.fiscal?.receipt_number, r.fiscal ? FISCAL_LABEL[r.fiscal.status] ?? r.fiscal.status : r.external_source_id ? 'MedPlus' : '', r.fiscal?.fiscal_sign, r.fiscal?.terminal_id]),
+        ['Jami', '', '', '', `${rows.length} ta to‘lov`, '', '', csvSom(rows.reduce((a, r) => a + BigInt(r.amount), 0n)), '', '', '', '', '', '', '', '']]);
   }
 
   @Roles('manager', 'cashier') @Get(':id')

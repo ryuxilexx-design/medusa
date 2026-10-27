@@ -17,6 +17,9 @@ const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_n
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
            WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked,
   ${NOTICE_CHANNEL_SQL} AS notice_channel`;
+/** A card mirrored from MedPlus: {kind, external_id} for the badge (docs/MEDPLUS_SYNC.md), NULL for our own cards. */
+const MIRROR_SQL = `(SELECT json_build_object('kind', s.kind, 'external_id', x.external_id) FROM external_refs x JOIN external_sources s ON s.id = x.source_id
+  WHERE x.our_id = p.id AND x.kind = 'patient' AND p.external_source_id IS NOT NULL LIMIT 1)`;
 const MIN_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.anonymised_at`;
 
 /** Doctors only see patients that have (had) an appointment with them. */
@@ -164,7 +167,7 @@ export class PatientsController {
     await assertPatientAccess(this.db.pool, ctx, id);
     const minimal = ctx.role === 'cashier' || ctx.role === 'lab';
     const p = await this.db.one(
-      `SELECT ${minimal ? MIN_COLS : FULL_COLS}${ctx.role === 'doctor' ? ', p.allergy_state, p.allergy_note' : ''},
+      `SELECT ${minimal ? MIN_COLS : FULL_COLS}${ctx.role === 'doctor' ? ', p.allergy_state, p.allergy_note' : ''}, ${MIRROR_SQL} AS mirror,
               (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void' AND i.branch_id = ANY($3))::bigint AS balance_due,
               (SELECT coalesce(sum(CASE WHEN d.kind = 'in' THEN d.amount ELSE -d.amount END),0) FROM patient_deposits d WHERE d.patient_id = p.id)::bigint AS deposit_balance
          FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId, ctx.branchIds]);
@@ -259,7 +262,7 @@ export class PatientsController {
     await assertPatientAccess(this.db.pool, ctx, id);
     const r = ctx.role;
     const visits = r === 'lab' ? [] : await this.db.rows(
-      `SELECT a.id, a.starts_at, a.ends_at, a.status, a.branch_id, b.name AS branch_name, d.display_name AS doctor_name, d.specialty, s.name AS service_name,
+      `SELECT a.id, a.starts_at, a.ends_at, a.status, a.branch_id, b.name AS branch_name, d.display_name AS doctor_name, d.specialty, s.name AS service_name, a.external_source_id IS NOT NULL AS mirrored,
               e.id AS encounter_id, n.status AS note_status, n.signed_at
          FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN services s ON s.id = a.service_id JOIN branches b ON b.id = a.branch_id
          LEFT JOIN encounters e ON e.appointment_id = a.id LEFT JOIN clinical_notes n ON n.encounter_id = e.id
@@ -280,7 +283,7 @@ export class PatientsController {
          FROM service_orders o LEFT JOIN diagnostic_reports dr ON dr.order_id = o.id
         WHERE o.patient_id = $1 AND o.tenant_id = $2 AND o.category = 'ultrasound' ORDER BY o.ordered_at DESC`, [id, ctx.tenantId]);
     const invoices = r === 'doctor' || r === 'lab' ? [] : await this.db.rows(
-      `SELECT i.id, i.invoice_number, i.status, i.total, i.paid_amount, i.created_at, b.name AS branch_name,
+      `SELECT i.id, i.invoice_number, i.status, i.total, i.paid_amount, i.created_at, b.name AS branch_name, i.external_source_id IS NOT NULL AS mirrored,
               (SELECT string_agg(it.description || CASE WHEN it.quantity > 1 THEN ' × ' || it.quantity ELSE '' END, ', ' ORDER BY it.position) FROM invoice_items it WHERE it.invoice_id = i.id) AS services
          FROM invoices i JOIN branches b ON b.id = i.branch_id WHERE i.patient_id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3) ORDER BY i.created_at DESC`, [id, ctx.tenantId, ctx.branchIds]);
     return { data: { visits, notes, labs, diagnostics, invoices } };

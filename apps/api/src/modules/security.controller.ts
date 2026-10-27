@@ -968,7 +968,7 @@ export class SecurityController {
     await audit(this.db.pool, ctx, 'security.export', 'security', null, `Eksport: ${what}, ${from} — ${to}`);
   }
 
-  @Roles('manager') @Get('incidents.csv')
+  @Roles('manager') @Get(['incidents.csv', 'incidents.xlsx'])
   async incidentsCsv(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>, @Res() res: Response) {
     const { from, to } = csvPeriod(q);
     const branches = branchScope(ctx, q.branch_id);
@@ -988,7 +988,7 @@ export class SecurityController {
     ]);
   }
 
-  @Roles('manager') @Get('visitors.csv')
+  @Roles('manager') @Get(['visitors.csv', 'visitors.xlsx'])
   async visitorsCsv(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>, @Res() res: Response) {
     const { from, to } = csvPeriod(q);
     const branches = branchScope(ctx, q.branch_id);
@@ -1008,7 +1008,7 @@ export class SecurityController {
     ]);
   }
 
-  @Roles('manager') @Get('alerts.csv')
+  @Roles('manager') @Get(['alerts.csv', 'alerts.xlsx'])
   async alertsCsv(@CurrentCtx() ctx: Ctx, @Query() q: Record<string, string>, @Res() res: Response) {
     const { from, to } = csvPeriod(q);
     const branches = branchScope(ctx, q.branch_id);
