@@ -13,6 +13,7 @@ export const syncApi = {
   'api.sync.fileTooLarge': ['Fayl juda katta (ko‘pi bilan {mb} MB)', 'Файл слишком большой (не более {mb} МБ)'],
   'api.sync.tooManyRows': ['Faylda {n} qatordan ko‘p — uni qismlarga bo‘ling', 'В файле больше {n} строк — разделите его на части'],
   'api.sync.xlsOld': ['Eski {app} formati. Faylni {app} dasturida ochib, {fmt} sifatida saqlang.', 'Старый формат {app}. Откройте файл в {app} и сохраните как {fmt}.'],
+  'api.sync.allBranches': ['Integratsiyani barcha filiallarga ruxsati bor rahbar boshqaradi', 'Интеграцией управляет руководитель с доступом ко всем филиалам'],
   'api.sync.badFile': ['Faylni o‘qib bo‘lmadi: jadval topilmadi', 'Не удалось прочитать файл: таблица не найдена'],
   'api.noun.integration': ['Integratsiya', 'Интеграция'],
   'api.noun.mapping': ['Moslik', 'Соответствие'],

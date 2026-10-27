@@ -10,7 +10,7 @@ import { bootTestApp, db } from './_helpers.mjs';
 const require = createRequire(import.meta.url);
 const { SEED_IDS } = db;
 const M = SEED_IDS.membership;
-const { buildXlsx, readXlsx, readTable, zip, unzip } = require('../dist/core/xlsx.js');
+const { buildXlsx, readXlsx, readTable, zip, unzip, openZip } = require('../dist/core/xlsx.js');
 let app, base, pool;
 
 function session() {
@@ -377,6 +377,47 @@ test('XLSX: yozuvchi → o‘quvchi aylanma (raqam, sana, matn, formula himoyasi
   assert.deepEqual(readTable(cp1251), [['ИД', 'ФИО'], ['1', 'Иван']]);
   const html = readTable(Buffer.from('<html><meta charset="utf-8"><table><tr><th>ID</th><th>ФИО</th></tr><tr><td>5</td><td>Петров&nbsp;П.</td></tr></table></html>'));
   assert.deepEqual(html, [['ID', 'ФИО'], ['5', 'Петров' + String.fromCharCode(32) + 'П.']], '&nbsp; → oddiy bo‘shliq');
+});
+
+test('zip bomba: umumiy byudjet, faqat kerakli qismlar ochiladi, takroriy nom va ustma-ust yozuv rad etiladi', async () => {
+  const zeros = Buffer.alloc(3 * 1024 * 1024); // deflates to a few KB
+  // many small-compressed large entries: the archive-wide budget stops them
+  const bomb = zip(Array.from({ length: 10 }, (_, i) => ({ name: `x${i}.xml`, data: zeros })));
+  assert.ok(bomb.length < 200_000, `kichik arxiv: ${bomb.length}`);
+  assert.throws(() => unzip(bomb, { total: 10 * 1024 * 1024 }), (e) => e.code === 'TOO_LARGE');
+  // a real workbook padded with 40 × 3 MB junk entries (120 MB, over the 80 MB budget): the junk is never inflated
+  const book = unzip(buildXlsx(['ID', 'Ism'], [[1, 'Ali']]));
+  const padded = zip([...[...book].map(([name, data]) => ({ name, data })), ...Array.from({ length: 40 }, (_, i) => ({ name: `xl/media/junk${i}.bin`, data: zeros }))]);
+  assert.deepEqual(readXlsx(padded), [['ID', 'Ism'], [1, 'Ali']]);
+  assert.throws(() => unzip(padded), (e) => e.code === 'TOO_LARGE', 'hammasini ochish byudjetdan oshadi');
+  // an entry that lies about its size is cut at the per-entry cap
+  const liar = zip([{ name: 'big.xml', data: Buffer.alloc(2 * 1024 * 1024) }]);
+  const cd = liar.readUInt32LE(liar.length - 6); liar.writeUInt32LE(100, cd + 24);
+  assert.throws(() => openZip(liar, { entry: 1024 * 1024 }).read('big.xml'), (e) => e.code === 'TOO_LARGE');
+  // duplicate names and two central entries pointing at one local header
+  assert.throws(() => openZip(zip([{ name: 'a', data: Buffer.from('1') }, { name: 'a', data: Buffer.from('2') }])), (e) => e.code === 'BAD_FILE' && /duplicate/.test(e.message));
+  const two = zip([{ name: 'a', data: Buffer.from('1') }, { name: 'b', data: Buffer.from('2') }]);
+  const cd2 = two.readUInt32LE(two.length - 6); const second = cd2 + 46 + 1; two.writeUInt32LE(0, second + 42);
+  assert.throws(() => openZip(two), (e) => e.code === 'BAD_FILE' && /overlapping/.test(e.message));
+  // through the upload: refused cleanly
+  const f = new FormData(); f.append('file', new Blob([bomb]), 'bomb.xlsx'); f.append('kind', 'patients');
+  const r = await manager.post(`/integrations/sources/${source.id}/import/preview`, f);
+  assert.equal(r.status, 422); assert.equal(r.body.error.code, 'BAD_FILE');
+});
+
+test('filial doirasi: faqat bitta filialga ruxsati bor rahbar integratsiyani boshqara olmaydi (403)', async () => {
+  const u = (await pool.query(`INSERT INTO users (id, email, full_name) VALUES (gen_random_uuid(), $1, 'Filial rahbari') RETURNING id`, [`branch-${randomUUID()}@test.local`])).rows[0].id;
+  const mid = (await pool.query(`INSERT INTO memberships (id, tenant_id, user_id, role, branch_ids, title) VALUES (gen_random_uuid(), $1, $2, 'manager', $3, 'Filial rahbari') RETURNING id`, [SEED_IDS.tenant, u, [CENTRAL]])).rows[0].id;
+  const bm = session(); assert.equal((await bm.demo(mid)).status, 200);
+  const f = new FormData(); f.append('file', new Blob([buildXlsx(['ID'], [[1]])]), 'a.xlsx'); f.append('kind', 'patients');
+  for (const [m, p, body] of [['get', '/integrations/sources'], ['post', '/integrations/sources', {}], ['get', `/integrations/sources/${source.id}/status`],
+    ['get', `/integrations/sources/${source.id}/reconciliation`], ['get', `/integrations/sources/${source.id}/duplicates`], ['get', `/integrations/sources/${source.id}/targets?kind=branch`],
+    ['get', `/integrations/sources/${source.id}/mappings?kind=branch`], ['patch', `/integrations/sources/${source.id}`, { default_branch_id: SEED_IDS.branchYunusobod }],
+    ['post', `/integrations/sources/${source.id}/token`], ['post', `/integrations/sources/${source.id}/import/preview`, f]]) {
+    const r = await bm[m](p, body);
+    assert.equal(r.status, 403, `${m} ${p}`);
+  }
+  assert.equal((await one(`SELECT settings FROM external_sources WHERE id = $1`, [source.id])).settings.default_branch_id, undefined);
 });
 
 test('eksport: har CSV yonida XLSX (bir xil ustunlar va Jami qatori), davr chegarasi ham bir xil', async () => {

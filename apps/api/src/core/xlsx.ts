@@ -46,28 +46,66 @@ export class TableReadError extends Error {
   constructor(public code: 'BAD_FILE' | 'XLS_OLD' | 'TOO_LARGE' | 'EMPTY', message: string) { super(message); }
 }
 
-/** Entries of a zip archive. Each entry is limited (a «zip bomb» stops at the limit instead of filling the memory). */
-export function unzip(buf: Buffer, maxEntryBytes = 60 * 1024 * 1024): Map<string, Buffer> {
+/** Most bytes one entry and one archive may inflate to (a «zip bomb» stops at the budget instead of filling the memory). */
+export const ZIP_MAX_ENTRY_BYTES = 60 * 1024 * 1024;
+export const ZIP_MAX_TOTAL_BYTES = 80 * 1024 * 1024;
+
+/**
+ * Reads a zip's central directory without inflating anything; `read(name)` inflates one entry on demand. Duplicate
+ * names and shared/overlapping local headers are refused (crafted archives), and every inflated byte counts against
+ * one budget for the whole archive.
+ */
+export function openZip(buf: Buffer, limits: { entry?: number; total?: number } = {}) {
+  const maxEntry = limits.entry ?? ZIP_MAX_ENTRY_BYTES; let budget = limits.total ?? ZIP_MAX_TOTAL_BYTES;
   let eocd = -1;
   for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
   if (eocd < 0) throw new TableReadError('BAD_FILE', 'zip: end of central directory not found');
   const count = buf.readUInt16LE(eocd + 10); let p = buf.readUInt32LE(eocd + 16);
-  const out = new Map<string, Buffer>();
+  if (count > 10_000) throw new TableReadError('BAD_FILE', 'zip: too many entries');
+  const entries = new Map<string, { method: number; start: number; csize: number; usize: number }>();
+  const spans: [number, number][] = [];
   for (let n = 0; n < count; n++) {
     if (p + 46 > buf.length || buf.readUInt32LE(p) !== 0x02014b50) throw new TableReadError('BAD_FILE', 'zip: bad central directory');
     const method = buf.readUInt16LE(p + 10), csize = buf.readUInt32LE(p + 20), usize = buf.readUInt32LE(p + 24);
     const nameLen = buf.readUInt16LE(p + 28), extraLen = buf.readUInt16LE(p + 30), commentLen = buf.readUInt16LE(p + 32), local = buf.readUInt32LE(p + 42);
     const name = buf.subarray(p + 46, p + 46 + nameLen).toString('utf8');
     p += 46 + nameLen + extraLen + commentLen;
+    if (entries.has(name)) throw new TableReadError('BAD_FILE', 'zip: duplicate entry name');
     if (local + 30 > buf.length || buf.readUInt32LE(local) !== 0x04034b50) throw new TableReadError('BAD_FILE', 'zip: bad local header');
     const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
-    const data = buf.subarray(start, start + csize);
-    if (usize > maxEntryBytes) throw new TableReadError('TOO_LARGE', 'zip: entry too large');
-    if (method === 0) out.set(name, Buffer.from(data));
-    else if (method === 8) {
-      try { out.set(name, inflateRawSync(data, { maxOutputLength: maxEntryBytes })); } catch { throw new TableReadError('BAD_FILE', 'zip: cannot inflate'); }
-    } // other methods: skipped (never used by spreadsheet programs for the parts we read)
+    const end = start + csize;
+    if (end > buf.length) throw new TableReadError('BAD_FILE', 'zip: entry outside the file');
+    if (spans.some(([a, b]) => local < b && end > a)) throw new TableReadError('BAD_FILE', 'zip: overlapping entries');
+    spans.push([local, end]);
+    entries.set(name, { method, start, csize, usize });
   }
+  return {
+    names: () => [...entries.keys()],
+    read(name: string): Buffer | undefined {
+      const e = entries.get(name);
+      if (!e) return undefined;
+      const cap = Math.min(maxEntry, budget);
+      if (e.usize > cap || cap <= 0) throw new TableReadError('TOO_LARGE', 'zip: over the size budget');
+      const data = buf.subarray(e.start, e.start + e.csize);
+      let out: Buffer;
+      if (e.method === 0) out = Buffer.from(data);
+      else if (e.method === 8) {
+        try { out = inflateRawSync(data, { maxOutputLength: cap }); } catch (err: any) {
+          throw new TableReadError(err?.code === 'ERR_BUFFER_TOO_LARGE' ? 'TOO_LARGE' : 'BAD_FILE', 'zip: cannot inflate');
+        }
+      } else return undefined; // other methods are never used by spreadsheet programs for the parts we read
+      if (out.length > cap) throw new TableReadError('TOO_LARGE', 'zip: over the size budget');
+      budget -= out.length;
+      return out;
+    },
+  };
+}
+
+/** Every entry of a small archive (tests, tools): the same checks and budget as openZip. */
+export function unzip(buf: Buffer, limits: { entry?: number; total?: number } = {}): Map<string, Buffer> {
+  const z = openZip(buf, limits);
+  const out = new Map<string, Buffer>();
+  for (const n of z.names()) { const b = z.read(n); if (b) out.set(n, b); }
   return out;
 }
 
@@ -184,8 +222,9 @@ const isDateFormat = (code: string) => {
 
 /** The first worksheet of an .xlsx file as rows of cells (empty trailing rows dropped). */
 export function readXlsx(buf: Buffer): Table {
-  const files = unzip(buf);
-  const text = (name: string) => files.get(name)?.toString('utf8');
+  // only the parts a first sheet needs are inflated (workbook, its rels, the sheet, shared strings, styles)
+  const zf = openZip(buf);
+  const text = (name: string) => zf.read(name)?.toString('utf8');
   const wb = text('xl/workbook.xml');
   if (!wb) throw new TableReadError('BAD_FILE', 'xlsx: no workbook');
   const date1904 = /<workbookPr\b[^>]*date1904="(1|true)"/.test(wb);

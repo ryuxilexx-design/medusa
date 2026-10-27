@@ -90,7 +90,17 @@ export class IntegrationsController {
 
   // ---------------------------------------------------------------- sources
 
+  /**
+   * MedPlus mirrors the whole clinic (every branch's patients, money, reconciliation), so only a manager whose
+   * branch scope covers every active branch manages it; a branch-limited manager gets 403.
+   */
+  private async assertWholeClinic(ctx: Ctx) {
+    const outside = (await this.db.one(`SELECT count(*)::int AS n FROM branches WHERE tenant_id = $1 AND active AND NOT (id = ANY($2::uuid[]))`, [ctx.tenantId, ctx.branchIds]))!.n;
+    if (outside > 0) throw coded(403, 'FORBIDDEN', 'api.sync.allBranches');
+  }
+
   private async source(ctx: Ctx, id: string): Promise<Source & { active: boolean }> {
+    await this.assertWholeClinic(ctx);
     if (!isUuid(id)) throw notFound('Integratsiya');
     const s = await this.db.one(`SELECT id, tenant_id, kind, name, settings, active FROM external_sources WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
     if (!s) throw notFound('Integratsiya');
@@ -99,12 +109,14 @@ export class IntegrationsController {
 
   @Roles('manager') @Get('sources')
   async sources(@CurrentCtx() ctx: Ctx) {
+    await this.assertWholeClinic(ctx);
     return { data: await this.db.rows(`SELECT ${SOURCE_COLS} FROM external_sources s WHERE s.tenant_id = $1 ORDER BY s.created_at`, [ctx.tenantId]) };
   }
 
   /** Connects MedPlus: one source per clinic. The bridge token is returned here once and never again. */
   @Roles('manager') @Post('sources') @HttpCode(201)
   async create(@CurrentCtx() ctx: Ctx, @Body() body: unknown) {
+    await this.assertWholeClinic(ctx);
     const input = parse(sourceCreateSchema, body ?? {});
     const token = newToken();
     return this.db.tx(async (c) => {
