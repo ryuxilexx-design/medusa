@@ -4,6 +4,15 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Chegirmalar, imtiyoz toifalari va kompaniyalar (migratsiya 043, `docs/DISCOUNTS_COMPANIES.md`)
+
+| Imkoniyat | Holat | Tekshiruv |
+|---|---|---|
+| **Chegirma qoidalari** (foiz yoki har xizmatdan summa, qamrov: hammasi / xizmat turi / xizmatlar, muddat, xodim limiti) va **imtiyoz toifalari** (odatiy qoida, hujjat raqami) — «Chegirmalar» bo‘limi (rahbar) | Ishlaydi | API test `discounts.test.mjs` |
+| **Hisobda chegirma**: kassir/registrator limit ichida, undan kattasi faqat rahbar sabab bilan; bemor toifasi yoki kompaniyasi bo‘yicha oldindan tanlanadi; to‘lovdan keyin o‘zgarmaydi (409 + DB trigger); shifokor/hamkor ulushi chegirmali sofdan | Ishlaydi | API test, E2E `discounts` |
+| **Kompaniyalar** (ish beruvchi, sug‘urta): hisobni kompaniyaga yozish (shartnoma foizi, kredit limiti), bemor faqat o‘z qismini to‘laydi; bank o‘tkazmasini hisoblarga taqsimlash, bir marta bekor qilish; qarz yoshi, hisobot, akt sverki (A4), CSV jami bilan. «Joriy qarz» — faqat bemor qarzi, kompaniya qarzi alohida | Ishlaydi | API test `companies.test.mjs`, E2E `discounts` |
+| **Cheklovlar** | — | Kompaniya o‘tkazmasi faqat bank (naqd/karta yo‘q); oldindan to‘lov (taqsimlanmagan avans) yo‘q; kompaniyaga elektron hisob-faktura (Didox/Soliq) yo‘q; kredit limiti faqat ulush qo‘yilganda tekshiriladi (keyin qo‘shilgan xizmatda emas); registrator «Hozir qabul qilish» oynasida emas, hisob sahifasida chegirma tanlaydi |
+
 ## Yo‘llovchi hamkorlar va reklama manbalari (migratsiya 041, `docs/REFERRALS.md`)
 
 | Nima | Holat | Tekshiruv |

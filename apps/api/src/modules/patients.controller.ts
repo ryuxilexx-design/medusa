@@ -13,9 +13,12 @@ import { config } from '../core/config';
 import { consentHistory, latestConsents, recordConsent } from './consent';
 import { anonymisePatient, patientCard, patientExport, takeExportSlot } from './erasure';
 import { assertLeadSource } from './referrals';
+import { checkPatientPayer, PAYER_FIELDS } from './companies';
 
 const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.pinfl, p.id_document, p.created_at, p.updated_at, p.source, p.anonymised_at,
   p.lead_source_id, (SELECT ls.name FROM lead_sources ls WHERE ls.id = p.lead_source_id) AS lead_source_name,
+  p.benefit_category_id, (SELECT bc.name FROM benefit_categories bc WHERE bc.id = p.benefit_category_id) AS benefit_category_name, p.benefit_note,
+  p.company_id, (SELECT c.name FROM companies c WHERE c.id = p.company_id) AS company_name, p.company_member_no,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
            WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked,
   ${NOTICE_CHANNEL_SQL} AS notice_channel`;
@@ -105,7 +108,7 @@ export class PatientsController {
          FROM patients p WHERE ${where.join(' AND ')}
          ORDER BY ${search ? 'p.last_name, p.first_name' : 'p.created_at DESC, p.patient_number DESC'}
          LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
-    if (ctx.role === 'doctor') rows.forEach((r) => { delete r.lead_source_id; delete r.lead_source_name; });
+    if (ctx.role === 'doctor') rows.forEach((r) => { delete r.lead_source_id; delete r.lead_source_name; for (const k of PAYER_FIELDS) delete r[k]; });
     return { data: rows, meta: { page, page_size: pageSize, total } };
   }
 
@@ -148,12 +151,15 @@ export class PatientsController {
       }
       await assertPinflFree(c, ctx.tenantId, input.pinfl, null);
       if (input.lead_source_id) await assertLeadSource(c, ctx.tenantId, input.lead_source_id);
+      await checkPatientPayer(c, ctx.tenantId, input);
       const seq = (await c.query(`UPDATE tenants SET patient_seq = patient_seq + 1 WHERE id = $1 RETURNING patient_seq`, [ctx.tenantId])).rows[0].patient_seq;
       const row = (await c.query(
-        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note, allergy_state, allergy_note, pinfl, id_document, lead_source_id)
-         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id, patient_number`,
+        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note, allergy_state, allergy_note, pinfl, id_document, lead_source_id,
+                               benefit_category_id, benefit_note, company_id, company_member_no)
+         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id, patient_number`,
         [ctx.tenantId, seq, input.last_name, input.first_name, input.middle_name, input.birth_date, input.sex, input.phone, input.contact_name, input.contact_phone,
-          input.address, input.note, input.allergy_state, input.allergy_note, input.pinfl ?? null, input.id_document ?? null, input.lead_source_id ?? null])).rows[0];
+          input.address, input.note, input.allergy_state, input.allergy_note, input.pinfl ?? null, input.id_document ?? null, input.lead_source_id ?? null,
+          input.benefit_category_id ?? null, input.benefit_category_id ? input.benefit_note ?? null : null, input.company_id ?? null, input.company_id ? input.company_member_no ?? null : null])).rows[0];
       await audit(c, ctx, 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi${dups.length ? ' (dublikat ogohlantirishi tasdiqlangan)' : ''}`);
       const consent = input.consent;
       if (consent?.data_processing) await recordConsent(c, ctx, row.id, { kind: 'data_processing', granted: true, method: consent.method, textVersion: CONSENT_TEXT_VERSION });
@@ -169,11 +175,13 @@ export class PatientsController {
     const minimal = ctx.role === 'cashier' || ctx.role === 'lab';
     const p = await this.db.one(
       `SELECT ${minimal ? MIN_COLS : FULL_COLS}${ctx.role === 'doctor' ? ', p.allergy_state, p.allergy_note' : ''},
-              (SELECT coalesce(sum(i.total - i.paid_amount),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void' AND i.branch_id = ANY($3))::bigint AS balance_due,
+              (SELECT coalesce(sum(i.total - i.company_share_amount - (i.paid_amount - i.company_paid_amount)),0) FROM invoices i WHERE i.patient_id = p.id AND i.status <> 'void' AND i.branch_id = ANY($3))::bigint AS balance_due,
               (SELECT coalesce(sum(CASE WHEN d.kind = 'in' THEN d.amount ELSE -d.amount END),0) FROM patient_deposits d WHERE d.patient_id = p.id)::bigint AS deposit_balance
          FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId, ctx.branchIds]);
     if (ctx.role === 'doctor' || ctx.role === 'lab') { delete (p as any).balance_due; delete (p as any).deposit_balance; }
     if (ctx.role === 'doctor') { delete (p as any).lead_source_id; delete (p as any).lead_source_name; } // reception's marketing field (docs/REFERRALS.md)
+    // benefit category and company are money matters (docs/DISCOUNTS_COMPANIES.md): never the doctor's
+    if (ctx.role === 'doctor') for (const k of PAYER_FIELDS) delete (p as any)[k];
     // consent status: for the roles that collect it (not cashier/lab, who see only the minimal card)
     if (!minimal) (p as any).consents = await latestConsents(this.db.pool, ctx.tenantId, id);
     if (!minimal) (p as any).follow_up = await followUp(this.db.pool, ctx.tenantId, id, ctx.role === 'doctor' ? ctx.doctorId : null); // a doctor sees only their own recommendation
@@ -209,7 +217,7 @@ export class PatientsController {
     await assertPatientAccess(this.db.pool, ctx, id);
     const input = parse(patientUpdateSchema, body) as Record<string, any>;
     // doctors may only update the allergy status; registrars/managers only demographic data
-    const allowed = ctx.role === 'doctor' ? ['allergy_state', 'allergy_note'] : ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'phone', 'contact_name', 'contact_phone', 'address', 'note', 'pinfl', 'id_document', 'lead_source_id'];
+    const allowed = ctx.role === 'doctor' ? ['allergy_state', 'allergy_note'] : ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'phone', 'contact_name', 'contact_phone', 'address', 'note', 'pinfl', 'id_document', 'lead_source_id', 'benefit_category_id', 'benefit_note', 'company_id', 'company_member_no'];
     const keys = Object.keys(input).filter((k) => allowed.includes(k) && (body as any)?.[k] !== undefined);
     if (!keys.length) return { data: { ok: true } };
     if (input.birth_date && input.birth_date > today()) throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { birth_date: 'Tug‘ilgan sana kelajakda bo‘lishi mumkin emas' });
@@ -219,6 +227,14 @@ export class PatientsController {
       if (cur?.anonymised_at && ctx.role !== 'doctor') throw coded(409, 'PATIENT_ANONYMISED', 'api.erasure.anonymised');
       if (keys.includes('pinfl')) await assertPinflFree(c, ctx.tenantId, input.pinfl, id);
       if (input.lead_source_id) await assertLeadSource(c, ctx.tenantId, input.lead_source_id);
+      if (keys.some((k) => ['benefit_category_id', 'benefit_note', 'company_id', 'company_member_no'].includes(k))) {
+        // the note belongs to the category (and the number to the company): validated against the card's resulting values
+        const cur2 = (await c.query(`SELECT benefit_category_id, benefit_note, company_id, company_member_no FROM patients WHERE id = $1`, [id])).rows[0];
+        const merged = { ...cur2, ...Object.fromEntries(keys.map((k) => [k, input[k]])) };
+        await checkPatientPayer(c, ctx.tenantId, merged);
+        if (!merged.benefit_category_id && keys.includes('benefit_category_id')) { input.benefit_note = null; if (!keys.includes('benefit_note')) keys.push('benefit_note'); }
+        if (!merged.company_id && keys.includes('company_id')) { input.company_member_no = null; if (!keys.includes('company_member_no')) keys.push('company_member_no'); }
+      }
       const sets = keys.map((k, i) => `${k} = $${i + 3}`);
       await c.query(`UPDATE patients SET ${sets.join(', ')}, updated_at = demo_now() WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId, ...keys.map((k) => input[k])]);
       await audit(c, ctx, ctx.role === 'doctor' ? 'patient.allergy_update' : 'patient.update', 'patient', id, `O‘zgargan maydonlar: ${keys.join(', ')}`);

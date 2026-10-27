@@ -9,16 +9,21 @@ import { Alert, Button, Checkbox, Field, Input, Modal, ModalCancel, Select, Text
 import { FileSignature, Printer } from 'lucide-react';
 import { useT } from '@/lib/i18n';
 import { canRefer, LeadSourceSelect } from './referrals';
+import { PayerFields } from './discounts';
 
 export type PatientFormValue = {
   last_name: string; first_name: string; middle_name: string; birth_date: string; sex: string; phone: string;
   contact_name: string; contact_phone: string; address: string; note: string; pinfl: string; id_document: string;
   /** where the patient heard of the clinic (docs/REFERRALS.md); '' = not asked */
   lead_source_id: string;
+  /** benefit category and company (docs/DISCOUNTS_COMPANIES.md); '' = none */
+  benefit_category_id: string; benefit_note: string; company_id: string; company_member_no: string;
 };
 type ConsentValue = { data: boolean; method: 'signed_paper' | 'verbal'; notifications: boolean };
 const NO_CONSENT: ConsentValue = { data: false, method: 'signed_paper', notifications: false };
-const EMPTY: PatientFormValue = { last_name: '', first_name: '', middle_name: '', birth_date: '', sex: 'unspecified', phone: '', contact_name: '', contact_phone: '', address: '', note: '', pinfl: '', id_document: '', lead_source_id: '' };
+const EMPTY: PatientFormValue = { last_name: '', first_name: '', middle_name: '', birth_date: '', sex: 'unspecified', phone: '', contact_name: '', contact_phone: '', address: '', note: '', pinfl: '', id_document: '', lead_source_id: '',
+  benefit_category_id: '', benefit_note: '', company_id: '', company_member_no: '' };
+const PAYER_KEYS = ['benefit_category_id', 'benefit_note', 'company_id', 'company_member_no'] as const;
 
 /** Create or edit basic patient data. Duplicate warning (same phone, or same name + birth date) needs explicit confirmation. */
 export function PatientFormModal({ open, onClose, patient, onSaved }: { open: boolean; onClose: () => void; patient?: any; onSaved?: (id: string, created: boolean) => void }) {
@@ -72,6 +77,11 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
       const body: any = { ...v, confirm_duplicate: confirm || undefined, lead_source_id: v.lead_source_id || null };
       // an unchanged source is not sent (it may be one the manager has since switched off)
       if (!canRefer(me.role) || (patient && v.lead_source_id === initial.lead_source_id)) delete body.lead_source_id;
+      // payer fields: '' = none; unchanged ones are not sent (a category the manager has since switched off stays as it is)
+      for (const k of PAYER_KEYS) body[k] = v[k] || null;
+      if (!v.benefit_category_id) body.benefit_note = null;
+      if (!v.company_id) body.company_member_no = null;
+      if (!canRefer(me.role) || (patient && PAYER_KEYS.every((k) => v[k] === initial[k]))) for (const k of PAYER_KEYS) delete body[k];
       if (patient) { delete body.confirm_duplicate; return api(`/patients/${patient.id}`, { method: 'PATCH', body }); }
       if (consent.data || consent.notifications) body.consent = { data_processing: consent.data, notifications: consent.notifications, method: consent.method };
       return api<{ data: { id: string; patient_number: number } }>('/patients', { method: 'POST', body });
@@ -128,6 +138,8 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
           <Field label={t('registrar.form.idDocument')} error={errors.id_document}>{(id) => <Input id={id} value={v.id_document} onChange={set('id_document')} invalid={!!errors.id_document} maxLength={12} autoComplete="off" placeholder="AA1234567" />}</Field>
           <Field label={t('registrar.form.address')} className={canRefer(me.role) ? 'sm:col-span-2' : 'sm:col-span-3'} error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
           {canRefer(me.role) && <LeadSourceSelect value={v.lead_source_id} onChange={(id) => { setV((x) => ({ ...x, lead_source_id: id })); setErrors((x) => ({ ...x, lead_source_id: '' })); }} error={errors.lead_source_id} />}
+          {canRefer(me.role) && <PayerFields value={{ benefit_category_id: v.benefit_category_id, benefit_note: v.benefit_note, company_id: v.company_id, company_member_no: v.company_member_no }}
+            errors={errors} onChange={(p) => { setV((x) => ({ ...x, ...p })); setErrors((x) => ({ ...x, benefit_category_id: '', benefit_note: '', company_id: '', company_member_no: '' })); }} />}
           <Field label={t('registrar.note')} className="sm:col-span-3" error={errors.note} hint={t('registrar.form.noteHint')}>{(id) => <Textarea id={id} rows={2} value={v.note} onChange={set('note')} />}</Field>
           {!patient && <ConsentFields value={consent} required={consentRequired} error={errors.consent} onChange={(c) => { setConsent(c); setErrors((x) => ({ ...x, consent: '' })); }} />}
           <button type="submit" className="hidden" />

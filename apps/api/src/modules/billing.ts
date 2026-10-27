@@ -95,14 +95,15 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
  *    as `i.line_refunded_amount`);
  *  - an invoice-level refund (the rest of `i.credit_amount`) is spread over the lines in proportion to what is left of
  *    them: (line_total − refunded) × total / (subtotal − discount − line_refunded).
- * Without refunds the value is exactly line_total. Used for service revenue, doctor share and service rankings.
+ * Without refunds the value is exactly line_total = line_subtotal − discount_share (gross − the line's discount), so
+ * NET_LINE = gross − discount − refunds. Used for service revenue, doctor share, partner share and service rankings.
  */
 export const NET_LINE = `(CASE WHEN i.credit_amount = 0 THEN it.line_total
   WHEN i.credit_amount = i.line_refunded_amount THEN it.line_total - it.refunded_amount
   ELSE coalesce(round((it.line_total - it.refunded_amount) * i.total::numeric / NULLIF(i.subtotal - i.discount_amount - i.line_refunded_amount, 0)), 0) END)`;
 /**
  * A referral partner's amount of one line (aliases `o` = service_orders, `it`, `i`): the line's net value (NET_LINE:
- * after discounts and refunds; a later discount module only has to change NET_LINE) × the percent snapshotted on the order.
+ * after discounts and refunds) × the percent snapshotted on the order.
  */
 export const PARTNER_LINE = `round(${NET_LINE} * o.partner_percent_snapshot / 100)`;
 /** Service count for reports: a course of 10 procedures counts as 10 (alias `it`). */
@@ -116,25 +117,66 @@ export function invoiceStatus(inv: { status?: string; total: number; paid: numbe
   return inv.paid >= inv.total ? 'paid' : 'partially_paid';
 }
 
-/** Recomputes subtotal, discount allocation (proportional, remainder on the last line) and total. Only valid before any payment. */
+/** Patient debt of an invoice (alias `a`): what the patient still owes — the company's part is the company's receivable. */
+export const PATIENT_DUE = (a = 'i') => `(${a}.total - ${a}.company_share_amount - (${a}.paid_amount - ${a}.company_paid_amount))`;
+/** Company receivable of an invoice (alias `a`): the company's part not yet paid. */
+export const COMPANY_DUE = (a = 'i') => `(${a}.company_share_amount - ${a}.company_paid_amount)`;
+
+/** Which lines a discount rule covers (snapshotted on the invoice as `discount_scope`). */
+export type DiscountScopeSnap = { scope: 'all' | 'categories' | 'services'; categories: string[]; service_ids: string[]; order_ids: string[] | null };
+export const inScope = (s: DiscountScopeSnap, line: { category: string; service_id: string; order_id: string }) =>
+  (!s.order_ids || s.order_ids.includes(line.order_id))
+  && (s.scope === 'all' || (s.scope === 'categories' ? s.categories.includes(line.category) : s.service_ids.includes(line.service_id)));
+/** One line's discount: a percent of the line (rounded to the tiyin) or a fixed sum, never more than the line. */
+export const lineDiscount = (kind: 'percent' | 'fixed', value: number, lineSubtotal: number) =>
+  Math.min(lineSubtotal, kind === 'percent' ? Math.round((lineSubtotal * Math.round(value * 100)) / 10000) : Math.round(value));
+/** The company's part of a bill: percent of the lines in its coverage categories (none listed = all), rounded to the tiyin. */
+export const companyShareOf = (lines: { category: string; line_total: number }[], categories: string[], percent: number) =>
+  Math.round((lines.filter((l) => !categories.length || categories.includes(l.category)).reduce((a, l) => a + l.line_total, 0) * Math.round(percent * 100)) / 10000);
+
+/**
+ * Recomputes subtotal, the line discounts, total and the company's part. Only valid before any payment (line amounts
+ * are frozen by a DB trigger once money moved). Two kinds of discount:
+ *  - a rule (`discount_kind` + `discount_scope`, docs/DISCOUNTS_COMPANIES.md): each line in scope gets its own
+ *    discount, a percent of the line or a fixed sum per line;
+ *  - the manager's invoice-level discount (`discount_type` percent/amount): spread over the lines in proportion,
+ *    the rounding remainder on the last line.
+ * line_total = line_subtotal − discount_share, so NET_LINE (and the doctor / partner shares) are net of discounts.
+ */
 export async function recalcInvoice(q: Q, invoiceId: string) {
   const inv = (await q.query(`SELECT * FROM invoices WHERE id = $1`, [invoiceId])).rows[0];
-  const items = (await q.query(`SELECT id, line_subtotal FROM invoice_items WHERE invoice_id = $1 ORDER BY position, id`, [invoiceId])).rows;
-  const subtotal = items.reduce((a: number, b: any) => a + Number(b.line_subtotal), 0);
-  let discount = 0;
-  if (inv.discount_type === 'percent') discount = Math.round((subtotal * Number(inv.discount_value)) / 100);
-  else if (inv.discount_type === 'amount') discount = Math.min(Math.round(Number(inv.discount_value)), subtotal);
-  let allocated = 0;
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    const share = i === items.length - 1 ? discount - allocated : subtotal ? Math.floor((Number(it.line_subtotal) * discount) / subtotal) : 0;
-    allocated += share;
-    await q.query(`UPDATE invoice_items SET discount_share = $2, line_total = line_subtotal - $2 WHERE id = $1`, [it.id, share]);
+  const items = (await q.query(
+    `SELECT it.id, it.line_subtotal, it.order_id, it.service_id, o.category FROM invoice_items it JOIN service_orders o ON o.id = it.order_id
+      WHERE it.invoice_id = $1 ORDER BY it.position, it.id`, [invoiceId])).rows.map((r: any) => ({ ...r, line_subtotal: Number(r.line_subtotal) }));
+  const subtotal = items.reduce((a: number, b: any) => a + b.line_subtotal, 0);
+  const shares: number[] = [];
+  if (inv.discount_kind && inv.discount_scope) {
+    const scope = inv.discount_scope as DiscountScopeSnap;
+    for (const it of items) shares.push(inScope(scope, it) ? lineDiscount(inv.discount_kind, Number(inv.discount_rule_value), it.line_subtotal) : 0);
+  } else {
+    let discount = 0;
+    if (inv.discount_type === 'percent') discount = Math.round((subtotal * Number(inv.discount_value)) / 100);
+    else if (inv.discount_type === 'amount') discount = Math.min(Math.round(Number(inv.discount_value)), subtotal);
+    let allocated = 0;
+    items.forEach((it: any, i: number) => {
+      const share = i === items.length - 1 ? discount - allocated : subtotal ? Math.floor((it.line_subtotal * discount) / subtotal) : 0;
+      allocated += share; shares.push(share);
+    });
   }
+  for (const [i, it] of items.entries())
+    await q.query(`UPDATE invoice_items SET discount_share = $2, line_total = line_subtotal - $2 WHERE id = $1 AND discount_share <> $2`, [it.id, shares[i]]);
+  const discount = shares.reduce((a, b) => a + b, 0);
   const credit = Number(inv.credit_amount ?? 0);
-  const total = subtotal - discount - credit; // refunds (credit) keep reducing the invoice when services are added later
+  const total = subtotal - discount - credit;
+  // the company's part follows the lines (a service added to the open bill is covered like the others)
+  let companyShare = 0;
+  if (inv.company_id) {
+    const c = (await q.query(`SELECT coverage_categories FROM companies WHERE id = $1`, [inv.company_id])).rows[0];
+    const lines = items.map((it: any, i: number) => ({ category: it.category, line_total: it.line_subtotal - shares[i] }));
+    companyShare = Math.min(total, companyShareOf(lines, c?.coverage_categories ?? [], Number(inv.company_percent ?? 100)));
+  }
   const paid = Number(inv.paid_amount);
   const status = invoiceStatus({ status: inv.status, total, paid, credit, hasItems: items.length > 0 });
-  await q.query(`UPDATE invoices SET subtotal = $2, discount_amount = $3, total = $4, status = $5, version = version + 1, updated_at = demo_now() WHERE id = $1`,
-    [invoiceId, subtotal, discount, total, status]);
+  await q.query(`UPDATE invoices SET subtotal = $2, discount_amount = $3, total = $4, status = $5, company_share_amount = $6, version = version + 1, updated_at = demo_now() WHERE id = $1`,
+    [invoiceId, subtotal, discount, total, status, companyShare]);
 }

@@ -17,6 +17,10 @@ export const SECTION_ROLES = {
   '/finance': ['manager', 'cashier'],
   // referral partners, their payouts and the lead-source report (docs/REFERRALS.md): percents and amounts are the manager's
   '/partners': ['manager'],
+  // discount rules, benefit categories and the discounts report (docs/DISCOUNTS_COMPANIES.md)
+  '/discounts': ['manager'],
+  // employers and insurers: the cashier records their bank transfers; the statement and the act are the manager's
+  '/companies': ['manager', 'cashier'],
   '/staff': ['manager'],
   '/inventory': ['manager', 'storekeeper'],
   '/materials': ['doctor', 'lab'],
@@ -52,6 +56,7 @@ const DETAIL_ROLES: Record<string, Role[]> = {
   '/print/appointment/': ['manager', 'registrar'],
   '/print/warehouse/': ['storekeeper', 'manager'],
   '/print/guard-shift/': ['guard', 'manager'],
+  '/print/company-act/': ['manager'],
 };
 
 /** May this role open this path? Unknown paths are allowed (Next shows its own 404). */

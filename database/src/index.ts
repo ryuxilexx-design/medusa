@@ -85,9 +85,9 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
 
 const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
-  'doctor_services', 'schedule_exceptions', 'lead_sources', 'referral_partners', 'referral_partner_services', 'patients', 'patient_consents', 'patient_allergies', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
+  'doctor_services', 'schedule_exceptions', 'lead_sources', 'referral_partners', 'referral_partner_services', 'discount_rules', 'benefit_categories', 'companies', 'patients', 'patient_consents', 'patient_allergies', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
   'note_addenda', 'medical_documents', 'patient_summaries',
-  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'refunds', 'patient_deposits', 'expenses', 'partner_payouts',
+  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'company_payments', 'payments', 'company_payment_allocations', 'refunds', 'patient_deposits', 'expenses', 'partner_payouts',
   'inventory_items', 'inventory_receipts', 'inventory_batches', 'inventory_requests', 'inventory_request_lines', 'inventory_movements',
   'inventory_writeoffs', 'inventory_writeoff_lines', 'inventory_doc_counters', 'cold_devices', 'fridge_temperature_log', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions', 'camera_snapshots',
 ];
@@ -96,7 +96,7 @@ export class ResetInProgressError extends Error {
   constructor() { super('Demo reset is already running'); }
 }
 
-const JSON_COLUMNS = new Set(['values', 'lab_template', 'vitals', 'icd10', 'body']);
+const JSON_COLUMNS = new Set(['values', 'lab_template', 'vitals', 'icd10', 'body', 'discount_scope']);
 
 /**
  * Seed prescriptions name their drugs by INN; the reference ids (and ATC, prescription-only) live in the `drugs` table,
@@ -429,6 +429,49 @@ export async function backfillSeedReferrals(q: Pick<PoolClient, 'query'>, demoDa
   const branches = new Set((await q.query('SELECT id FROM branches WHERE tenant_id = $1', [T])).rows.map((r) => r.id));
   await insertRows(q as PoolClient, 'partner_payouts', seed.partner_payouts.filter((p) => branches.has(p.branch_id)));
   return seed.referral_partners.length;
+}
+
+/**
+ * Demo databases seeded before migration 043 have no discount rules: adds the seed's rules, benefit categories and
+ * companies, the payer fields of the seed's cards (only where empty), and the seed's extra past bills with their
+ * payments, company payments and the voided transfer's reversals — without a reset (all the bills or none, when a
+ * visit changed since); refund numbers continue the clinic's own counter. Idempotent: nothing happens once the seed
+ * clinic has a discount rule.
+ */
+export async function backfillSeedDiscounts(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const T = SEED_IDS.tenant;
+  const seeded = (await q.query('SELECT 1 FROM tenants WHERE id = $1', [T])).rowCount;
+  const has = (await q.query('SELECT 1 FROM discount_rules WHERE tenant_id = $1 LIMIT 1', [T])).rowCount;
+  if (!seeded || has) return 0;
+  const seed = buildSeed(demoDate);
+  const c = q as PoolClient;
+  await insertRows(c, 'discount_rules', seed.discount_rules);
+  await insertRows(c, 'benefit_categories', seed.benefit_categories);
+  await insertRows(c, 'companies', seed.companies);
+  await q.query(`UPDATE patients p SET benefit_category_id = r.b, benefit_note = r.bn, company_id = r.c, company_member_no = r.cn
+      FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, b uuid, bn text, c uuid, cn text)
+     WHERE p.id = r.id AND p.tenant_id = $2 AND p.benefit_category_id IS NULL AND p.company_id IS NULL AND p.anonymised_at IS NULL`,
+    [JSON.stringify(seed.patients.filter((p) => p.tenant_id === T && (p.benefit_category_id || p.company_id))
+      .map((p) => ({ id: p.id, b: p.benefit_category_id, bn: p.benefit_note, c: p.company_id, cn: p.company_member_no }))), T]);
+  // the post-pass's bills: invoice numbers 8001–8999 (never used by the clinic's own counter)
+  const bills = seed.invoices.filter((i) => i.tenant_id === T && i.invoice_number > 8000 && i.invoice_number < 9000);
+  const appts = (await q.query(`SELECT count(*)::int AS n FROM appointments WHERE id = ANY($1::uuid[]) AND status = 'completed' AND referral_partner_id IS NULL`, [bills.map((b) => b.appointment_id)])).rows[0].n;
+  // the bills, their payments and the company transfers belong together: all of them or none (a visit changed since)
+  if (appts !== bills.length) return seed.discount_rules.length;
+  const ids = new Set(bills.map((b) => b.id));
+  const items = seed.invoice_items.filter((it) => ids.has(it.invoice_id));
+  const orderIds = new Set(items.map((it) => it.order_id));
+  let refundSeq = Number((await q.query('SELECT refund_seq FROM tenants WHERE id = $1', [T])).rows[0].refund_seq);
+  const refunds = seed.refunds.filter((r) => r.reason_code === 'company_payment_void').map((r) => ({ ...r, refund_number: ++refundSeq }));
+  await insertRows(c, 'service_orders', seed.service_orders.filter((o) => orderIds.has(o.id)));
+  await insertRows(c, 'invoices', bills);
+  await insertRows(c, 'invoice_items', items);
+  await insertRows(c, 'company_payments', seed.company_payments);
+  await insertRows(c, 'payments', seed.payments.filter((p) => ids.has(p.invoice_id)));
+  await insertRows(c, 'company_payment_allocations', seed.company_payment_allocations);
+  await insertRows(c, 'refunds', refunds);
+  await q.query('UPDATE tenants SET refund_seq = $2, company_payment_seq = GREATEST(company_payment_seq, $3) WHERE id = $1', [T, refundSeq, seed.company_payments.length]);
+  return seed.discount_rules.length;
 }
 
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */

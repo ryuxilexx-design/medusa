@@ -125,7 +125,9 @@ test('kun xulosasi: faktlar SQL bilan bir xil; AI’ga bemor ismi va klinik matn
   const v = (await pool.query(`SELECT count(*) FILTER (WHERE status = 'completed')::int AS c, count(*) FILTER (WHERE status = 'no_show')::int AS ns, count(*) FILTER (WHERE status = 'cancelled')::int AS cx
       FROM appointments WHERE tenant_id = $1 AND branch_id = ANY($2) AND starts_at >= $3 AND starts_at < $4`, P)).rows[0];
   assert.equal(d.facts['visits.completed'].value, v.c); assert.equal(d.facts['visits.no_show'].value, v.ns); assert.equal(d.facts['visits.cancelled'].value, v.cx);
-  const debt = (await pool.query(`SELECT coalesce(sum(total - paid_amount),0)::bigint AS s, count(*)::int AS n FROM invoices WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total > paid_amount`, [SEED_IDS.tenant, branches])).rows[0];
+  // patient debt: a company's part of a bill is the company's receivable (docs/DISCOUNTS_COMPANIES.md)
+  const debt = (await pool.query(`SELECT coalesce(sum(total - company_share_amount - (paid_amount - company_paid_amount)),0)::bigint AS s, count(*)::int AS n FROM invoices
+      WHERE tenant_id = $1 AND branch_id = ANY($2) AND status IN ('unpaid','partially_paid') AND total - company_share_amount - (paid_amount - company_paid_amount) > 0`, [SEED_IDS.tenant, branches])).rows[0];
   assert.equal(d.facts['debts.invoices'].value, debt.n); assert.equal(d.facts['debts.total'].value, Math.round(Number(debt.s) / 100));
   const P7 = [SEED_IDS.tenant, branches, dayStart(addDays(yesterday, -7)), dayStart(addDays(yesterday, -6))];
   const pay7 = (await pool.query(`SELECT coalesce(sum(amount),0)::bigint AS s FROM payments WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4`, P7)).rows[0];

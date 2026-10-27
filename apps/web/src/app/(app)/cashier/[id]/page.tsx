@@ -15,6 +15,7 @@ import { canTakeMoney, ShiftLoadError, useCurrentShift } from '@/components/cash
 import { RefundModal } from '@/components/refund-modal';
 import { MoneyInput } from '@/components/money-input';
 import { canEnterFiscal, FiscalBadge, FiscalEnterForm, FiscalEnterModal, useFiscalEnabled } from '@/components/fiscal';
+import { InvoicePayerCard, PayerTotals } from '@/components/discounts';
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -53,9 +54,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <Card>
             <div className="space-y-1">
               {Number(inv.credit_amount) > 0 && <KeyVal k={t('cash.creditLabel')} v={<span className="tabular-nums text-red-700">−{formatSom(inv.credit_amount)}</span>} />}
+              <PayerTotals inv={inv} />
               <KeyVal k={t('cash.invoiceTotal')} v={<span className="tabular-nums">{formatSom(inv.total)}</span>} />
               <KeyVal k={t('cash.colPaid')} v={<span className="tabular-nums text-emerald-800">{formatSom(inv.paid_amount)}</span>} />
-              <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3"><span className="text-body font-semibold text-slate-700">{t('cash.colDue')}</span><span className={cx('text-2xl font-bold tabular-nums', inv.status !== 'void' && inv.due > 0 ? 'text-red-700' : 'text-slate-900')}>{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
+              {Number(inv.company_due) > 0 && <KeyVal k={t('disc.companyDue')} v={<span className="tabular-nums text-amber-800">{formatSom(inv.company_due)}</span>} />}
+              <div className="flex items-baseline justify-between gap-3 border-t border-slate-100 pt-3"><span className="text-body font-semibold text-slate-700">{Number(inv.company_share_amount) > 0 ? t('disc.patientPays') : t('cash.colDue')}</span><span className={cx('text-2xl font-bold tabular-nums', inv.status !== 'void' && inv.due > 0 ? 'text-red-700' : 'text-slate-900')}>{inv.status === 'void' ? '—' : formatSom(inv.due)}</span></div>
               {/* a debt: when the patient promised to pay (cashier or manager sets it) */}
               {canPromise && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-body">
                 <span className="text-slate-700">{t('cash.promise')}</span>
@@ -65,8 +68,10 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               {Number(inv.deposit_balance) > 0 && open && <p className="border-t border-slate-100 pt-3 text-body text-emerald-800">{t('cash.depositAvailable', { sum: formatSom(inv.deposit_balance) })}</p>}
             </div>
           </Card>
+          {/* discount (benefit category / company / a rule) and the company split: drafts until the first money */}
+          <InvoicePayerCard inv={inv} />
           {/* a cashier or the manager takes money (each in their own open shift); the registrar only looks */}
-          {canTakeMoney(me.role) && open && <CashierPay inv={inv} />}
+          {canTakeMoney(me.role) && open && inv.due > 0 && <CashierPay inv={inv} />}
           {inv.status === 'paid' && <Alert tone="green" title={t('cash.fullyPaidTitle')}>{t('cash.fullyPaidText')}</Alert>}
           {!canTakeMoney(me.role) && open && <Alert tone="blue">{t('cash.cashierTakes')}</Alert>}
         </div>
@@ -115,7 +120,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                         {fiscalCell && <div className="mt-1.5 md:hidden">{fiscalCell}</div>}
                       </Td>
                       <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{fmtDateTime(p.paid_at)}</Td>
-                      <Td className="hidden sm:table-cell">{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-small text-slate-600">{p.cashier_name}</span></Td>
+                      <Td className="hidden sm:table-cell">{t(`payment.${p.method}` as MessageKey)}<span className="block whitespace-nowrap text-small text-slate-600">{p.company_payment_number ? t('comp.paidByCompany', { n: p.company_payment_number }) : p.cashier_name}</span></Td>
                       {fiscal && <Td className="hidden md:table-cell">{fiscalCell}</Td>}
                       <Td right className="align-top font-semibold sm:align-middle">{formatSom(p.amount)}</Td>
                     </tr>

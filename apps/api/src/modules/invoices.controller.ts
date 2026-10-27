@@ -10,7 +10,7 @@ import { audit } from '../core/audit';
 import { addDays, dayStart, localDate, now, today } from '../core/clock';
 import { branchScope } from '../core/scope';
 import { csvDate, csvPeriod, csvSom, csvTime, sendCsv } from '../core/csv';
-import { invoiceStatus, recalcInvoice } from './billing';
+import { COMPANY_DUE, invoiceStatus, PATIENT_DUE, recalcInvoice } from './billing';
 import { applyDeposit } from './deposits';
 import { effectiveVat, FISCAL_COLS, recordFiscal } from '../fiscal/provider';
 
@@ -52,7 +52,11 @@ export class InvoicesController {
     if (isDate(q.to)) { params.push(dayStart(addDays(q.to, 1))); where.push(`i.created_at < $${params.length}`); }
     if (q.status) { params.push(String(q.status).split(',')); where.push(`i.status = ANY($${params.length})`); }
     const debt = q.debt === '1';
-    if (debt) where.push(`i.status IN ('unpaid','partially_paid') AND i.total > i.paid_amount`);
+    // debtors: the patient's own debt; `payer=company` lists the companies' receivables instead (never mixed)
+    const company = debt && q.payer === 'company';
+    const DUE = company ? COMPANY_DUE() : PATIENT_DUE();
+    if (debt) where.push(company ? `i.status <> 'void' AND ${DUE} > 0` : `i.status IN ('unpaid','partially_paid') AND ${DUE} > 0`);
+    if (isUuid(q.company_id)) { params.push(q.company_id); where.push(`i.company_id = $${params.length}`); }
     if (debt && AGE_BUCKETS[q.age]) where.push(AGE_BUCKETS[q.age]);
     if (isUuid(q.patient_id)) { params.push(q.patient_id); where.push(`i.patient_id = $${params.length}`); }
     if (q.search) {
@@ -62,23 +66,23 @@ export class InvoicesController {
     }
     const base = `FROM invoices i JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = i.branch_id WHERE ${where.join(' AND ')}`;
     const agg = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(i.total) FILTER (WHERE i.status <> 'void'),0)::bigint AS total,
-        coalesce(sum(i.paid_amount),0)::bigint AS paid, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE i.status <> 'void'),0)::bigint AS due ${base}`, params))!;
+        coalesce(sum(i.paid_amount),0)::bigint AS paid, coalesce(sum(${DUE}) FILTER (WHERE i.status <> 'void'),0)::bigint AS due ${base}`, params))!;
     // debtors: how old the debts are (days since the invoice), for the collections card
-    const ageing = debt ? await this.ageing(base, params) : undefined;
+    const ageing = debt ? await this.ageing(base, params, DUE) : undefined;
     params.push(pageSize, offset);
     const rows = await this.db.rows(
-      `SELECT i.id, i.invoice_number, i.status, i.subtotal, i.discount_amount, i.total, i.paid_amount, (i.total - i.paid_amount) AS due, i.created_at, i.branch_id, b.name AS branch_name,
+      `SELECT i.id, i.invoice_number, i.status, i.subtotal, i.discount_amount, i.total, i.paid_amount, ${DUE} AS due, ${COMPANY_DUE()} AS company_due, i.company_share_amount, i.created_at, i.branch_id, b.name AS branch_name,
               p.id AS patient_id, p.patient_number, p.last_name, p.first_name, p.phone, i.promise_date, i.promise_note, ${AGE_DAYS}::int AS age_days,
-              ${SERVICES_SQL} AS services
+              ${SERVICES_SQL} AS services, (SELECT c.name FROM companies c WHERE c.id = i.company_id) AS company_name
          ${base} ORDER BY CASE WHEN i.status IN ('unpaid','partially_paid') THEN 0 ELSE 1 END, i.created_at ${debt ? 'ASC' : 'DESC'} LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
     return { data: rows, meta: { page, page_size: pageSize, total: agg.n, sums: { total: Number(agg.total), paid: Number(agg.paid), due: Number(agg.due) }, ...(ageing ? { ageing } : {}) } };
   }
 
-  private async ageing(base: string, params: unknown[]) {
+  private async ageing(base: string, params: unknown[], due: string) {
     const a = (await this.db.one(
-      `SELECT count(*) FILTER (WHERE ${AGE_BUCKETS['0-7']})::int AS n1, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${AGE_BUCKETS['0-7']}),0)::bigint AS s1,
-              count(*) FILTER (WHERE ${AGE_BUCKETS['8-30']})::int AS n2, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${AGE_BUCKETS['8-30']}),0)::bigint AS s2,
-              count(*) FILTER (WHERE ${AGE_BUCKETS['31+']})::int AS n3, coalesce(sum(i.total - i.paid_amount) FILTER (WHERE ${AGE_BUCKETS['31+']}),0)::bigint AS s3 ${base}`, params))!;
+      `SELECT count(*) FILTER (WHERE ${AGE_BUCKETS['0-7']})::int AS n1, coalesce(sum(${due}) FILTER (WHERE ${AGE_BUCKETS['0-7']}),0)::bigint AS s1,
+              count(*) FILTER (WHERE ${AGE_BUCKETS['8-30']})::int AS n2, coalesce(sum(${due}) FILTER (WHERE ${AGE_BUCKETS['8-30']}),0)::bigint AS s2,
+              count(*) FILTER (WHERE ${AGE_BUCKETS['31+']})::int AS n3, coalesce(sum(${due}) FILTER (WHERE ${AGE_BUCKETS['31+']}),0)::bigint AS s3 ${base}`, params))!;
     return { '0-7': { n: a.n1, sum: Number(a.s1) }, '8-30': { n: a.n2, sum: Number(a.s2) }, '31+': { n: a.n3, sum: Number(a.s3) } };
   }
 
@@ -86,11 +90,11 @@ export class InvoicesController {
   @Roles('manager', 'cashier') @Get('debtors.csv')
   async debtorsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const params: unknown[] = [ctx.tenantId, branchScope(ctx, q.branch_id)];
-    const where = [`i.tenant_id = $1`, `i.branch_id = ANY($2)`, `i.status IN ('unpaid','partially_paid')`, `i.total > i.paid_amount`];
+    const where = [`i.tenant_id = $1`, `i.branch_id = ANY($2)`, `i.status IN ('unpaid','partially_paid')`, `${PATIENT_DUE()} > 0`]; // the patient's own debt (a company's part is its receivable)
     if (AGE_BUCKETS[q.age]) where.push(AGE_BUCKETS[q.age]);
     const rows = await this.db.rows(
       `SELECT i.invoice_number, i.created_at, ${AGE_DAYS}::int AS age_days, b.name AS branch, p.patient_number, p.last_name || ' ' || p.first_name AS patient, p.phone,
-              ${SERVICES_SQL} AS services, i.total, i.paid_amount, (i.total - i.paid_amount) AS due, i.promise_date, i.promise_note
+              ${SERVICES_SQL} AS services, i.total, i.paid_amount, ${PATIENT_DUE()} AS due, i.promise_date, i.promise_note
          FROM invoices i JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = i.branch_id WHERE ${where.join(' AND ')} ORDER BY i.created_at LIMIT 10000`, params);
     const total = rows.reduce((a, r) => a + BigInt(r.due), 0n);
     sendCsv(res, `meduzai-qarzdorlar-${today()}.csv`,
@@ -103,10 +107,16 @@ export class InvoicesController {
   async get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     if (!isUuid(id)) throw notFound('Hisob');
     const inv = await this.db.one(
-      `SELECT i.*, (i.total - i.paid_amount) AS due, b.name AS branch_name, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
+      `SELECT i.*, ${PATIENT_DUE()} AS due, ${COMPANY_DUE()} AS company_due, (i.total - i.paid_amount) AS total_due, b.name AS branch_name, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
               a.starts_at AS appointment_at, a.status AS appointment_status, d.display_name AS doctor_name,
-              rp.full_name AS referral_partner_name -- the name only: percents and amounts are the manager's (docs/REFERRALS.md)
+              rp.full_name AS referral_partner_name, -- the name only: percents and amounts are the manager's (docs/REFERRALS.md)
+              co.name AS company_name, co.kind AS company_kind, bcd.name AS discount_benefit_category_name,
+              -- the patient's payer data, for the defaults of the discount picker and the company split
+              p.benefit_category_id AS patient_benefit_category_id, bc.name AS patient_benefit_category_name, bc.discount_rule_id AS patient_benefit_rule_id, p.benefit_note AS patient_benefit_note,
+              p.company_id AS patient_company_id, pc.name AS patient_company_name, pc.discount_rule_id AS patient_company_rule_id, p.company_member_no AS patient_company_member_no
          FROM invoices i JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = i.branch_id
+         LEFT JOIN companies co ON co.id = i.company_id LEFT JOIN benefit_categories bcd ON bcd.id = i.discount_benefit_category_id
+         LEFT JOIN benefit_categories bc ON bc.id = p.benefit_category_id LEFT JOIN companies pc ON pc.id = p.company_id
          LEFT JOIN appointments a ON a.id = i.appointment_id LEFT JOIN doctors d ON d.id = a.doctor_id
          LEFT JOIN referral_partners rp ON rp.id = a.referral_partner_id
         WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
@@ -120,12 +130,14 @@ export class InvoicesController {
     (inv as any).deposit_balance = Number(dep?.balance ?? 0);
     const payments = await this.db.rows(
       `SELECT pm.id, pm.receipt_number, pm.amount, pm.method, pm.cashier_name, pm.cashier_membership_id, pm.paid_at, pm.note, ${FISCAL_JSON} AS fiscal,
-              (pm.amount - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.payment_id = pm.id), 0))::bigint AS refundable
+              (pm.amount - coalesce((SELECT sum(r.amount) FROM refunds r WHERE r.payment_id = pm.id), 0))::bigint AS refundable,
+              pm.company_payment_id, (SELECT cp.number FROM company_payments cp WHERE cp.id = pm.company_payment_id) AS company_payment_number
          FROM payments pm WHERE pm.invoice_id = $1 ORDER BY pm.paid_at`, [id]);
     const refunds = await this.db.rows(
       `SELECT r.id, r.refund_number, r.payment_id, r.amount, r.method, r.reason_code, r.reason, r.approved_by_name, r.refunded_at, r.order_id, o.service_name, ${FISCAL_JSON_REFUND} AS fiscal
          FROM refunds r LEFT JOIN service_orders o ON o.id = r.order_id WHERE r.invoice_id = $1 ORDER BY r.refunded_at`, [id]);
-    return { data: { ...inv, items, payments: payments.map((p) => ({ ...p, refundable: Math.min(Number(p.refundable), Number(inv.paid_amount)) })), refunds } };
+    // a company's payment is corrected by voiding it (Kompaniyalar), never by a refund to the patient
+    return { data: { ...inv, items, payments: payments.map((p) => ({ ...p, refundable: p.company_payment_id ? 0 : Math.min(Number(p.refundable), Number(inv.paid_amount)) })), refunds } };
   }
 
   /** Discount: manager only, mandatory reason, percent or fixed amount, only before any payment. */
@@ -134,13 +146,17 @@ export class InvoicesController {
     const input = parse(discountSchema, body);
     return this.db.tx(async (c) => {
       const inv = await lockInvoice(c, ctx, id);
-      if (inv.status !== 'unpaid' || Number(inv.paid_amount) > 0 || Number(inv.credit_amount) > 0) throw conflict('INVOICE_LOCKED', 'To‘lov yoki qaytarish bo‘lgan, yoxud bekor qilingan hisobga chegirma qo‘llanmaydi');
+      if (inv.status !== 'unpaid' || Number(inv.paid_amount) > 0 || Number(inv.credit_amount) > 0 || (await c.query(`SELECT 1 FROM payments WHERE invoice_id = $1 LIMIT 1`, [id])).rowCount) throw conflict('INVOICE_LOCKED', 'To‘lov yoki qaytarish bo‘lgan, yoxud bekor qilingan hisobga chegirma qo‘llanmaydi');
       const value = input.type === 'amount' ? Math.round(input.value) : input.value; // amount in tiyin
       if (input.type === 'amount' && value > Number(inv.subtotal)) throw invalid({ value: 'Chegirma hisob summasidan oshmasligi kerak' });
-      await c.query(`UPDATE invoices SET discount_type = $2, discount_value = $3, discount_reason = $4, discount_approved_by_name = $5 WHERE id = $1`, [id, input.type, value, input.reason, ctx.name]);
+      // the manager's invoice-level discount replaces a rule applied before (one discount per bill)
+      await c.query(`UPDATE invoices SET discount_type = $2, discount_value = $3, discount_reason = $4, discount_approved_by_name = $5, discount_rule_id = NULL, discount_rule_name = NULL,
+          discount_kind = NULL, discount_rule_value = NULL, discount_scope = NULL, discount_source = 'manual', discount_benefit_category_id = NULL, discount_granted_by = $6,
+          discount_granted_by_name = $5, discount_granted_at = demo_now(), discount_over_limit = false WHERE id = $1`, [id, input.type, value, input.reason, ctx.name, ctx.membershipId || null]);
       await recalcInvoice(c, id);
       const after = (await c.query(`SELECT discount_amount, total FROM invoices WHERE id = $1`, [id])).rows[0];
-      await audit(c, ctx, 'invoice.discount', 'invoice', id, `Chegirma ${input.type === 'percent' ? input.value + '%' : som(value) + ' so‘m'} (${som(Number(after.discount_amount))} so‘m): ${input.reason}`, inv.branch_id);
+      // the reason stays on the bill; the audit keeps the amount only (no free text)
+      await audit(c, ctx, 'invoice.discount', 'invoice', id, `Chegirma ${input.type === 'percent' ? input.value + '%' : som(value) + ' so‘m'} (${som(Number(after.discount_amount))} so‘m)`, inv.branch_id);
       return { data: { ok: true, ...after } };
     });
   }
@@ -179,7 +195,8 @@ export class InvoicesController {
         return { data: { payment: prev, invoice: await this.invoiceState(c, id), fiscal: await this.fiscalOf(c, prev.id), replayed: true } };
       }
       if (inv.status === 'void') throw conflict('INVOICE_VOID', 'Bekor qilingan hisobga to‘lov qabul qilinmaydi');
-      const due = Number(inv.total) - Number(inv.paid_amount);
+      // the patient pays only their part: a company's share is collected from the company (company payments)
+      const due = Number(inv.total) - Number(inv.company_share_amount) - (Number(inv.paid_amount) - Number(inv.company_paid_amount));
       if (due <= 0) throw conflict('INVOICE_PAID', 'Hisob to‘liq to‘langan');
       if (input.amount > due) throw invalid({ amount: `Summa qoldiqdan (${som(due)} so‘m) oshmasligi kerak` });
       let shiftId: string | null = null;
@@ -220,7 +237,7 @@ export class InvoicesController {
   }
 
   private async invoiceState(c: Q, id: string) {
-    return (await c.query(`SELECT id, status, total, paid_amount, (total - paid_amount) AS due FROM invoices WHERE id = $1`, [id])).rows[0];
+    return (await c.query(`SELECT i.id, i.status, i.total, i.paid_amount, ${PATIENT_DUE()} AS due, ${COMPANY_DUE()} AS company_due FROM invoices i WHERE i.id = $1`, [id])).rows[0];
   }
 
   @Roles('manager', 'cashier') @Post(':id/void') @HttpCode(200)
@@ -297,7 +314,7 @@ export class PaymentsController {
   async get(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
     if (!isUuid(id)) throw notFound('To‘lov');
     const p = await this.db.one(
-      `SELECT pm.*, i.invoice_number, i.total, i.paid_amount, (i.total - i.paid_amount) AS due, i.status AS invoice_status, b.name AS branch_name, t.name AS clinic_name,
+      `SELECT pm.*, i.invoice_number, i.total, i.paid_amount, ${PATIENT_DUE()} AS due, i.company_share_amount, i.status AS invoice_status, b.name AS branch_name, t.name AS clinic_name,
               p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date,
               (SELECT json_agg(json_build_object('description', it.description, 'quantity', it.quantity, 'line_total', it.line_total, 'ikpu_code', s.ikpu_code, 'vat_percent', s.vat_percent, 'vat_exempt', s.vat_exempt) ORDER BY it.position)
                  FROM invoice_items it LEFT JOIN services s ON s.id = it.service_id WHERE it.invoice_id = i.id) AS items,

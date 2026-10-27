@@ -51,6 +51,12 @@ export const patientBaseSchema = z.object({
   }),
   /** Where the patient first heard of the clinic (lead_sources, docs/REFERRALS.md). */
   lead_source_id: uuid.nullable().optional(),
+  /** Benefit category («Категория льгот») and the paper that proves it — text only (docs/DISCOUNTS_COMPANIES.md). */
+  benefit_category_id: uuid.nullable().optional(),
+  benefit_note: optionalText(120),
+  /** Employer or insurer that covers the patient, and the employee / policy number. */
+  company_id: uuid.nullable().optional(),
+  company_member_no: optionalText(60),
   /** Passport or ID card series + number (AA1234567). */
   id_document: z.string().max(40).optional().nullable().transform((s, ctx) => {
     const v = (s ?? '').replace(/[\s-]/g, '').toUpperCase();
