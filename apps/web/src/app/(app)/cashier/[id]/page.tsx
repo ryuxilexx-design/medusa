@@ -13,6 +13,7 @@ import { Alert, Badge, Button, Card, cx, ErrorState, Field, Input, KeyVal, Loadi
 import { AppointmentStatus, InvoiceStatus } from '@/components/status';
 import { canTakeMoney, ShiftLoadError, useCurrentShift } from '@/components/cash-shift';
 import { RefundModal } from '@/components/refund-modal';
+import { MirrorBadge, MP } from '@/components/integrations';
 import { MoneyInput } from '@/components/money-input';
 import { canEnterFiscal, FiscalBadge, FiscalEnterForm, FiscalEnterModal, useFiscalEnabled } from '@/components/fiscal';
 
@@ -33,15 +34,17 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
   const inv = q.data;
   const open = ['unpaid', 'partially_paid'].includes(inv.status);
   const hasDiscount = Number(inv.discount_amount) > 0;
-  const canDiscount = me.role === 'manager' && inv.status === 'unpaid' && inv.paid_amount === 0;
-  const canVoid = (me.role === 'manager' || me.role === 'cashier') && inv.status === 'unpaid' && inv.paid_amount === 0;
-  const canRefund = me.role === 'manager' && inv.status !== 'void' && Number(inv.paid_amount) > 0;
-  const canPromise = canTakeMoney(me.role) && open && inv.due > 0;
+  // a MedPlus invoice is a mirror: payments, discounts and refunds happen in MedPlus (the server answers 409 anyway)
+  const mirrored = !!inv.external_source_id;
+  const canDiscount = !mirrored && me.role === 'manager' && inv.status === 'unpaid' && inv.paid_amount === 0;
+  const canVoid = !mirrored && (me.role === 'manager' || me.role === 'cashier') && inv.status === 'unpaid' && inv.paid_amount === 0;
+  const canRefund = !mirrored && me.role === 'manager' && inv.status !== 'void' && Number(inv.paid_amount) > 0;
+  const canPromise = !mirrored && canTakeMoney(me.role) && open && inv.due > 0;
   return (
     <>
       <div className="mb-3"><TextLink href="/cashier" className="text-body" icon={<ArrowLeft className="h-4 w-4" />}>{t('cash.backToList')}</TextLink></div>
       <PageHeader title={t('cash.invoiceNo', { n: inv.invoice_number })}
-        subtitle={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"><span className="inline-flex flex-wrap items-center gap-x-2"><TextLink href={`/patients/${inv.patient_id}`}>{fullName(inv, true)}</TextLink><span className="tabular-nums">{pid(inv.patient_number)}</span></span><span className="inline-flex items-center gap-2"><span>{t('cash.invoiceStatus')}</span><InvoiceStatus status={inv.status} /></span></span>}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1"><span className="inline-flex flex-wrap items-center gap-x-2"><TextLink href={`/patients/${inv.patient_id}`}>{fullName(inv, true)}</TextLink><span className="tabular-nums">{pid(inv.patient_number)}</span></span><span className="inline-flex items-center gap-2"><span>{t('cash.invoiceStatus')}</span><InvoiceStatus status={inv.status} /></span>{mirrored && <MirrorBadge />}</span>}
         actions={(canDiscount || canVoid || canRefund) && <>
           {canDiscount && <Button icon={<Percent className="h-4 w-4" />} onClick={() => setDiscount(true)}>{t('cash.discount')}</Button>}
           {canVoid && <Button variant="danger" icon={<Ban className="h-4 w-4" />} onClick={() => setVoiding(true)}>{t('cash.voidInvoice')}</Button>}
@@ -66,9 +69,10 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             </div>
           </Card>
           {/* a cashier or the manager takes money (each in their own open shift); the registrar only looks */}
-          {canTakeMoney(me.role) && open && <CashierPay inv={inv} />}
-          {inv.status === 'paid' && <Alert tone="green" title={t('cash.fullyPaidTitle')}>{t('cash.fullyPaidText')}</Alert>}
-          {!canTakeMoney(me.role) && open && <Alert tone="blue">{t('cash.cashierTakes')}</Alert>}
+          {mirrored && <Alert tone="blue">{t('sync.mirroredInvoice', MP)}</Alert>}
+          {!mirrored && canTakeMoney(me.role) && open && <CashierPay inv={inv} />}
+          {inv.status === 'paid' && !mirrored && <Alert tone="green" title={t('cash.fullyPaidTitle')}>{t('cash.fullyPaidText')}</Alert>}
+          {!mirrored && !canTakeMoney(me.role) && open && <Alert tone="blue">{t('cash.cashierTakes')}</Alert>}
         </div>
         <div className="min-w-0 space-y-5 xl:order-1">
           {(inv.appointment_status === 'cancelled' || inv.status === 'void') && <div className="space-y-3">
@@ -80,7 +84,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <div className="divide-y divide-slate-100">
                 <KeyVal k={t('cash.branch')} v={inv.branch_name} />
                 <KeyVal k={t('cash.created')} v={<span className="whitespace-nowrap tabular-nums">{fmtDateTime(inv.created_at)}</span>} />
-                {inv.discount_amount > 0 && <KeyVal k={t('cash.discount')} v={`${inv.discount_type === 'percent' ? inv.discount_value + '%' : formatSom(inv.discount_value)}, ${inv.discount_reason} (${inv.discount_approved_by_name})`} />}
+                {inv.discount_amount > 0 && inv.discount_type && <KeyVal k={t('cash.discount')} v={`${inv.discount_type === 'percent' ? inv.discount_value + '%' : formatSom(inv.discount_value)}, ${inv.discount_reason} (${inv.discount_approved_by_name})`} />}
               </div>
               <div className="divide-y divide-slate-100">
                 {inv.appointment_at && <KeyVal k={t('cash.appointment')} v={<span className="inline-flex flex-wrap items-center justify-end gap-2"><span className="whitespace-nowrap tabular-nums">{fmtDateTime(inv.appointment_at)}</span> <AppointmentStatus status={inv.appointment_status} /></span>} />}

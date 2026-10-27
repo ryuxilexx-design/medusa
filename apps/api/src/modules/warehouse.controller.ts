@@ -492,7 +492,7 @@ export class WarehouseController {
     return { data: rows.map((r) => ({ ...r, unit_cost: Number(r.unit_cost), value: Number(r.value) })), meta: { page, page_size: pageSize, total } };
   }
 
-  @Roles(...KEEPERS) @Get('movements.csv')
+  @Roles(...KEEPERS) @Get(['movements.csv', 'movements.xlsx'])
   async movementsCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     csvPeriod(q); // a bounded period is required for an export
     const { params, where, from, to } = this.movementFilter(ctx, q);
@@ -1002,7 +1002,7 @@ export class WarehouseController {
   }
 
   /** The same report as CSV: one row per group × item (quantity, unit, value), the totals row last. */
-  @Roles(...KEEPERS) @Get('reports/consumption.csv')
+  @Roles(...KEEPERS) @Get(['reports/consumption.csv', 'reports/consumption.xlsx'])
   async consumptionCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     csvPeriod(q);
     const d = await this.consumptionData(ctx, q);

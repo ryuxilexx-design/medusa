@@ -10,18 +10,19 @@ import { useI18n, useT } from '@/lib/i18n';
 import { TelegramSettings } from '@/components/telegram-settings';
 import { SmsSettings } from '@/components/sms-settings';
 import { DhpSettings } from '@/components/dhp-settings';
+import { IntegrationsSettings } from '@/components/integrations';
 import { ClinicSettings, ServicesSettings } from '@/components/catalog-settings';
 import { AiSettings } from '@/components/ai-settings';
 import { Alert, Badge, Button, Card, EmptyState, ErrorState, Field, Input, LoadingRows, Modal, ModalCancel, PageHeader, Pagination, Select, Table, Tabs, Td, Th, Toolbar, useToast } from '@/components/ui';
 
-type Tab = 'clinic' | 'services' | 'telegram' | 'sms' | 'dhp' | 'ai' | 'audit' | 'demo';
+type Tab = 'clinic' | 'services' | 'telegram' | 'sms' | 'dhp' | 'integrations' | 'ai' | 'audit' | 'demo';
 
 export default function SettingsPage() {
   const t = useT();
   const { me } = useSession();
   const [tab, setTab] = useState<Tab>('clinic');
   // a real clinic (production) has no demo data to reset: no demo tab
-  const tabs: { value: Tab; label: string }[] = [{ value: 'clinic', label: t('admin.set.tabClinic') }, { value: 'services', label: t('admin.set.tabServices') }, { value: 'telegram', label: t('admin.set.tabTelegram') }, { value: 'sms', label: t('admin.set.tabSms') }, { value: 'dhp', label: t('admin.set.tabDhp') }, { value: 'ai', label: t('admin.set.tabAi') }, { value: 'audit', label: t('admin.set.tabAudit') }];
+  const tabs: { value: Tab; label: string }[] = [{ value: 'clinic', label: t('admin.set.tabClinic') }, { value: 'services', label: t('admin.set.tabServices') }, { value: 'telegram', label: t('admin.set.tabTelegram') }, { value: 'sms', label: t('admin.set.tabSms') }, { value: 'dhp', label: t('admin.set.tabDhp') }, { value: 'integrations', label: t('admin.set.tabIntegrations') }, { value: 'ai', label: t('admin.set.tabAi') }, { value: 'audit', label: t('admin.set.tabAudit') }];
   if (me.demo) tabs.push({ value: 'demo', label: t('admin.set.tabDemo') });
   return (
     <>
@@ -32,6 +33,7 @@ export default function SettingsPage() {
       {tab === 'telegram' && <TelegramSettings />}
       {tab === 'sms' && <SmsSettings />}
       {tab === 'dhp' && <DhpSettings />}
+      {tab === 'integrations' && <IntegrationsSettings />}
       {tab === 'ai' && <AiSettings />}
       {tab === 'audit' && <Audit />}
       {tab === 'demo' && me.demo && <Demo />}
@@ -40,7 +42,7 @@ export default function SettingsPage() {
 }
 
 /** Action groups for the filter: the API filters by an action-code prefix (`?action=payment.`). */
-const AUDIT_GROUPS = ['appointment.', 'patient.', 'order.', 'payment.', 'refund.', 'invoice.', 'cash_shift.', 'expense.', 'clinical_note.', 'diagnostic_report.', 'lab', 'document.', 'inventory.', 'staff.', 'doctor.', 'auth.', 'service.', 'room.', 'branch.', 'settings.', 'telegram.', 'sms.', 'camera.', 'security.', 'ai.', 'demo.'] as const;
+const AUDIT_GROUPS = ['appointment.', 'patient.', 'order.', 'payment.', 'refund.', 'invoice.', 'cash_shift.', 'expense.', 'clinical_note.', 'diagnostic_report.', 'lab', 'document.', 'inventory.', 'staff.', 'doctor.', 'auth.', 'service.', 'room.', 'branch.', 'settings.', 'telegram.', 'sms.', 'camera.', 'security.', 'sync.', 'ai.', 'demo.'] as const;
 const groupKey = (g: string) => `admin.auditGroup.${g.replace(/\.$/, '')}` as MessageKey;
 
 function Audit() {

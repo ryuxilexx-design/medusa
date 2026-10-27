@@ -31,7 +31,9 @@
     "db:create-clinic": "npm run build:packages && node database/dist/src/cli.js create-clinic",
     "db:reset-password": "npm run build:packages && node database/dist/src/cli.js reset-password",
     "db:import-icd10": "npm run build:packages && node database/dist/src/cli.js import-icd10",
-    "db:import-drugs": "npm run build:packages && node database/dist/src/cli.js import-drugs"
+    "db:import-drugs": "npm run build:packages && node database/dist/src/cli.js import-drugs",
+    "db:import-medplus": "npm run build:packages && npm run build -w @meduza/api && node apps/api/dist/cli/import-medplus.js",
+    "test:bridge": "node --test tools/medplus-bridge/test/*.test.mjs"
   },
   "devDependencies": {
     "railway": "3.12.0",

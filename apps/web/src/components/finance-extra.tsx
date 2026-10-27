@@ -20,11 +20,21 @@ export function StatRow({ children, label, cols = 4 }: { children: React.ReactNo
   return <div className={cx('mb-5 grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4', cols === 4 ? 'xl:grid-cols-4' : 'xl:grid-cols-2')} role={label ? 'group' : undefined} aria-label={label}>{children}</div>;
 }
 
-/** A plain download link (the browser saves the file) with the secondary Button look, the height of the row's fields. */
+/**
+ * Export: a small «Excel / CSV» choice — two plain download links (the browser saves the file) with the secondary
+ * Button look, the height of the row's fields. Every CSV route also answers as .xlsx (same columns and totals row).
+ */
 export function CsvLink({ href, label, className }: { href: string; label?: string; className?: string }) {
   const t = useT();
-  const title = label ?? t('cash.csvExport', { format: 'CSV' });
-  return <a href={href} download aria-label={title} title={title} className={buttonClass('secondary', 'md', cx('!px-4', className))}><Download className="h-4 w-4" />CSV</a>;
+  const xlsx = href.replace(/\.csv(?=\?|$)/, '.xlsx');
+  const excel = label ? `${label} (Excel)` : t('cash.csvExport', { format: 'Excel' });
+  const csv = label ? `${label} (CSV)` : t('cash.csvExport', { format: 'CSV' });
+  return (
+    <span role="group" aria-label={label ?? t('cash.csvExport', { format: 'Excel / CSV' })} className={cx('inline-flex items-center gap-1.5', className)}>
+      <a href={xlsx} download aria-label={excel} title={excel} className={buttonClass('secondary', 'md', '!px-4')}><Download className="h-4 w-4" />Excel</a>
+      <a href={href} download aria-label={csv} title={csv} className={buttonClass('secondary', 'md', '!px-4')}>CSV</a>
+    </span>
+  );
 }
 
 /** Period: two date fields + «Bugun / 7 kun / 30 kun» (a segmented control; none chosen for another range), one control height. */

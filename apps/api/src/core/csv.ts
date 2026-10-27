@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { addDays, TZ_OFFSET_MS } from './clock';
 import { invalid } from './errors';
 import { isDate } from './validate';
+import { buildXlsx } from './xlsx';
 
 /**
  * A cell starting with = + - @ or a tab/CR would be executed by a spreadsheet: it gets a leading apostrophe. A plain
@@ -40,7 +41,22 @@ export function assertCsvRows(n: number, max = csvMaxRows()) {
   if (n > Math.min(max, csvMaxRows())) throw invalid({ from: `Eksportda ${Math.min(max, csvMaxRows())} qatordan ko‘p bo‘ladi — davrni qisqartiring` });
 }
 
+/** A totals row starts with one of these labels (Uzbek, Uzbek Cyrillic, Russian; the reorder list's estimate). */
+const TOTALS_LABEL = /^(Jami|Жами|Итого|Всего|Taxminiy summa|Тахминий сумма|Ориентировочная сумма)\b/;
+
+/**
+ * Sends an export. Every export route answers as `…csv` and `…xlsx` (same columns, same totals row, same period limit):
+ * the route path decides the format, so one handler serves both (core/xlsx.ts).
+ */
 export function sendCsv(res: Response, filename: string, header: string[], rows: unknown[][]) {
+  if (/\.xlsx$/i.test(String((res as any).req?.path ?? ''))) {
+    const last = rows[rows.length - 1];
+    const xlsx = buildXlsx(header, rows, { boldLastRow: !!last && TOTALS_LABEL.test(String(last[0] ?? '')) });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename.replace(/\.csv$/i, '')}.xlsx"`);
+    res.send(xlsx);
+    return;
+  }
   const lines = [header.map(csvCell).join(';'), ...rows.map((r) => r.map(csvCell).join(';'))];
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

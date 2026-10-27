@@ -16,13 +16,14 @@ import { labAi } from './messages/lab-ai';
 import { patientSummary } from './messages/patient-summary';
 import { guard } from './messages/guard';
 import { referrals } from './messages/referrals';
+import { sync, syncApi } from './messages/sync';
 
 export * from './core';
 export { cyrillicToLatin, latinToCyrillic, searchTranslit } from './translit';
 export { BIOMETRIC_CONSENT_TEXT, BIOMETRIC_CONSENT_VERSION, CONSENT_TEXT_VERSION, CONSENT_TEXTS, type ConsentTextVersion } from './messages/consent';
 
 /** Every interface message. Each area keeps its own file; keys are prefixed by area, so they never collide. */
-export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print, ...consent, ...cameras, ...warehouse, ...managerAi, ...labAi, ...patientSummary, ...guard, ...referrals };
+export const MESSAGES = { ...common, ...shell, ...doctor, ...registrar, ...cash, ...clinical, ...admin, ...api, ...print, ...consent, ...cameras, ...warehouse, ...managerAi, ...labAi, ...patientSummary, ...guard, ...referrals, ...sync, ...syncApi };
 export type MessageKey = keyof typeof MESSAGES;
 export const translate: (locale: Locale, key: MessageKey, params?: Params) => string = createTranslator(MESSAGES);
 
@@ -34,7 +35,7 @@ let nouns: Map<string, MessageKey> = new Map();
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function compile() {
   exact = new Map(); templates = []; nouns = new Map();
-  for (const [key, entry] of Object.entries(api) as [MessageKey, readonly [string, unknown]][]) {
+  for (const [key, entry] of Object.entries({ ...api, ...syncApi }) as [MessageKey, readonly [string, unknown]][]) {
     const uz = entry[0];
     if (key.startsWith('api.noun.')) { nouns.set(uz, key); continue; }
     const names = [...uz.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);

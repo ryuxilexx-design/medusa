@@ -62,6 +62,7 @@ export class Notifier {
            SELECT a.tenant_id, a.patient_id, a.id, a.starts_at, ${NOTICE_CHANNEL_SQL} AS channel
              FROM appointments a JOIN patients p ON p.id = a.patient_id
             WHERE a.status = 'scheduled' AND a.starts_at > demo_now() + $2::interval AND a.starts_at <= demo_now() + $3::interval
+              AND a.external_source_id IS NULL -- a MedPlus visit: MedPlus sends its own reminders (docs/MEDPLUS_SYNC.md)
               AND a.created_at <= demo_now() - $4::interval AND a.created_at <= a.starts_at - $5::interval) x
           WHERE channel IS NOT NULL
          ON CONFLICT (tenant_id, channel, dedupe_key) DO NOTHING`, [kind, from, to, age, minLead]);

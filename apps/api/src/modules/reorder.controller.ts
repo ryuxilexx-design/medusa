@@ -54,7 +54,7 @@ export class ReorderController {
   }
 
   /** The suggestion as CSV (a draft «Buyurtma so‘rovi» for the supplier — it creates no receipt). Rows to order only. */
-  @Roles(...KEEPERS) @Get('reorder.csv')
+  @Roles(...KEEPERS) @Get(['reorder.csv', 'reorder.xlsx'])
   async reorderCsv(@CurrentCtx() ctx: Ctx, @Query() q: any, @Res() res: Response) {
     const horizon = horizonOf(q.horizon);
     const { today, rows } = await reorderRows(this.db, ctx.tenantId, branchScope(ctx, q.branch_id), horizon);

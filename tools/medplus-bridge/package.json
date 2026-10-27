@@ -1,0 +1,21 @@
+{
+  "name": "medplus-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only MedPlus (MySQL) → Med.uz.ai sync bridge for the clinic PC. See docs/MEDPLUS_SYNC.md.",
+  "type": "module",
+  "main": "bridge.mjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "probe": "node bridge.mjs --probe",
+    "dry-run": "node bridge.mjs --dry-run",
+    "once": "node bridge.mjs --once",
+    "start": "node bridge.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "mysql2": "3.11.3"
+  }
+}
