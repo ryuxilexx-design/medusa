@@ -416,14 +416,14 @@ export async function backfillSeedReferrals(q: Pick<PoolClient, 'query'>, demoDa
   await q.query(`UPDATE services s SET partner_percent = r.pct FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, pct numeric)
     WHERE s.id = r.id AND s.tenant_id = $2 AND s.partner_percent IS NULL`, [json(seed.services.filter((s) => s.tenant_id === T && s.partner_percent != null).map((s) => ({ id: s.id, pct: s.partner_percent }))), T]);
   await q.query(`UPDATE patients p SET lead_source_id = r.src FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, src uuid)
-    WHERE p.id = r.id AND p.tenant_id = $2 AND p.lead_source_id IS NULL AND r.src IS NOT NULL`,
+    WHERE p.id = r.id AND p.tenant_id = $2 AND p.lead_source_id IS NULL AND r.src IS NOT NULL AND p.external_source_id IS NULL`,
     [json(seed.patients.filter((p) => p.tenant_id === T).map((p) => ({ id: p.id, src: p.lead_source_id ? seedSource.get(p.lead_source_id) : null }))), T]);
   await q.query(`UPDATE appointments a SET referral_partner_id = r.partner, lead_source_id = coalesce(a.lead_source_id, r.src) FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, partner uuid, src uuid)
-    WHERE a.id = r.id AND a.tenant_id = $2 AND a.referral_partner_id IS NULL`,
+    WHERE a.id = r.id AND a.tenant_id = $2 AND a.referral_partner_id IS NULL AND a.external_source_id IS NULL`,
     [json(seed.appointments.filter((a) => a.tenant_id === T).map((a) => ({ id: a.id, partner: a.referral_partner_id, src: a.lead_source_id ? seedSource.get(a.lead_source_id) : null }))), T]);
   // only orders of visits that now carry that same partner (the snapshot follows the visit)
   await q.query(`UPDATE service_orders o SET referral_partner_id = r.partner, partner_percent_snapshot = r.pct FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, partner uuid, pct numeric)
-    WHERE o.id = r.id AND o.tenant_id = $2 AND o.referral_partner_id IS NULL
+    WHERE o.id = r.id AND o.tenant_id = $2 AND o.referral_partner_id IS NULL AND o.external_source_id IS NULL
       AND EXISTS (SELECT 1 FROM appointments a WHERE a.id = o.appointment_id AND a.referral_partner_id = r.partner)`,
     [json(seed.service_orders.filter((o) => o.referral_partner_id).map((o) => ({ id: o.id, partner: o.referral_partner_id, pct: o.partner_percent_snapshot }))), T]);
   const branches = new Set((await q.query('SELECT id FROM branches WHERE tenant_id = $1', [T])).rows.map((r) => r.id));

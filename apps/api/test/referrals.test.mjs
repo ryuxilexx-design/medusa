@@ -348,12 +348,12 @@ test('backfill: migratsiyadan oldingi demo bazaga hamkorlar bir marta qo‘shila
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
-    // a database seeded before migration 041: no partners, no sources on cards/visits/orders
+    // a database seeded before migration 041: no partners, no sources on cards/visits/orders (MedPlus-mirrored rows are read-only and never had them)
     await c.query(`ALTER TABLE partner_payouts DISABLE TRIGGER partner_payouts_immutable`);
     await c.query(`DELETE FROM partner_payouts`); await c.query(`DELETE FROM referral_partner_services`);
-    await c.query(`UPDATE service_orders SET referral_partner_id = NULL, partner_percent_snapshot = 0`);
-    await c.query(`UPDATE appointments SET referral_partner_id = NULL, lead_source_id = NULL`);
-    await c.query(`UPDATE patients SET lead_source_id = NULL`);
+    await c.query(`UPDATE service_orders SET referral_partner_id = NULL, partner_percent_snapshot = 0 WHERE external_source_id IS NULL`);
+    await c.query(`UPDATE appointments SET referral_partner_id = NULL, lead_source_id = NULL WHERE external_source_id IS NULL`);
+    await c.query(`UPDATE patients SET lead_source_id = NULL WHERE external_source_id IS NULL`);
     await c.query(`UPDATE services SET partner_percent = NULL`);
     await c.query(`DELETE FROM referral_partners`); await c.query(`DELETE FROM lead_sources`);
     await c.query(`ALTER TABLE partner_payouts ENABLE TRIGGER partner_payouts_immutable`);
