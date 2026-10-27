@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { buildWarehouse } from './warehouse';
 import { buildHistory } from './history';
+import { applyReferrals } from './referrals';
 import { fitTemplate, icdSnap, labValues, NOTE_TEMPLATES, profilesOf, uziVariant, type NoteTpl } from './clinical';
 
 export const DEMO_TIMEZONE_OFFSET_HOURS = 5; // Asia/Tashkent, no DST
@@ -35,6 +36,7 @@ export interface SeedData {
   patient_consents: Row[];
   medical_documents: Row[]; note_addenda: Row[]; patient_summaries: Row[]; patient_allergies: Row[]; schedule_exceptions: Row[]; patient_deposits: Row[]; refunds: Row[];
   cameras: Row[]; face_codes: Row[]; camera_events: Row[]; camera_event_acks: Row[]; arrival_suggestions: Row[]; camera_snapshots: Row[];
+  lead_sources: Row[]; referral_partners: Row[]; referral_partner_services: Row[]; partner_payouts: Row[];
 }
 
 export function sid(key: string): string {
@@ -111,6 +113,7 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
     patient_consents: [],
     medical_documents: [], note_addenda: [], patient_summaries: [], patient_allergies: [], schedule_exceptions: [], patient_deposits: [], refunds: [],
     cameras: [], face_codes: [], camera_events: [], camera_event_acks: [], arrival_suggestions: [], camera_snapshots: [],
+    lead_sources: [], referral_partners: [], referral_partner_services: [], partner_payouts: [],
   };
 
   // ---------- tenant, branches ----------
@@ -997,6 +1000,9 @@ export function buildSeed(demoDate: string, demoTime?: string): SeedData {
   // ---------- the longer story (history.ts): months of results, documents, summaries, addenda, allergies, deposits, promises ----------
   // Its own PRNG stream, after everything above: the seeded KPIs of «today» stay as they were.
   buildHistory(data, { demoDate, demoTime, rnd: mulberry32(20261033), docs: DOCS, svc, schedOf, priceAt, adultsActive, ageOf: pAge, visits, lolaLeave, plannedCritical });
+
+  // ---------- referral partners and lead sources (referrals.ts, migration 041): a post-pass with its own PRNG ----------
+  applyReferrals(data, demoDate);
 
   return data;
 }

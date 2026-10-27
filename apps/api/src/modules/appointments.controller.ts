@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
-import { appointmentActionSchema, appointmentCreateSchema, appointmentUpdateSchema, walkInSchema } from '@meduza/contracts';
+import { appointmentActionSchema, appointmentCreateSchema, appointmentUpdateSchema, visitReferralSchema, walkInSchema } from '@meduza/contracts';
 import { PoolClient } from 'pg';
 import { Db, Q } from '../core/db';
 import { Ctx, CurrentCtx, Roles } from '../core/context';
@@ -10,19 +10,25 @@ import { addDays, dayStart, localDate, localTime, localToUtc, now, toMinutes, to
 import { assertBranch, branchScope } from '../core/scope';
 import { createBilledOrder } from './billing';
 import { cancelAppointment, createAppointment, lockAppointment, rescheduleAppointment, walkInSlot } from './booking';
+import { setVisitReferral } from './referrals';
 
 export const APPT_SELECT = `
   SELECT a.id, a.branch_id, b.name AS branch_name, b.address AS branch_address, b.phone AS branch_phone, a.patient_id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
          a.doctor_id, d.display_name AS doctor_name, d.specialty, a.service_id, s.name AS service_name, s.category AS service_category,
          a.room_id, r.name AS room_name, a.starts_at, a.ends_at, a.status, a.note, a.cancel_reason, a.version, a.source, a.patient_confirmed_at,
+         a.referral_partner_id, rp.full_name AS referral_partner_name, rp.code AS referral_partner_code, a.lead_source_id, ls.name AS lead_source_name,
          qt.number AS queue_number, qt.arrived_at, qt.started_at, qt.finished_at, qt.wait_seconds, e.id AS encounter_id,
          (SELECT json_build_object('id', i.id, 'status', i.status, 'total', i.total, 'paid_amount', i.paid_amount, 'invoice_number', i.invoice_number)
             FROM invoices i WHERE i.appointment_id = a.id AND i.status <> 'void' ORDER BY i.created_at LIMIT 1) AS invoice
     FROM appointments a JOIN patients p ON p.id = a.patient_id JOIN doctors d ON d.id = a.doctor_id JOIN services s ON s.id = a.service_id
     JOIN branches b ON b.id = a.branch_id LEFT JOIN rooms r ON r.id = a.room_id
+    LEFT JOIN referral_partners rp ON rp.id = a.referral_partner_id LEFT JOIN lead_sources ls ON ls.id = a.lead_source_id
     LEFT JOIN queue_tickets qt ON qt.appointment_id = a.id LEFT JOIN encounters e ON e.appointment_id = a.id`;
 
 export { lockAppointment } from './booking';
+
+/** A doctor sees neither who referred the patient nor the lead source (docs/REFERRALS.md). */
+const hideReferral = (a: any) => { for (const k of ['referral_partner_id', 'referral_partner_name', 'referral_partner_code', 'lead_source_id', 'lead_source_name']) delete a[k]; };
 
 @Controller('appointments')
 export class AppointmentsController {
@@ -43,6 +49,7 @@ export class AppointmentsController {
     const LIMIT = 4000;
     const rows = await this.db.rows(`${APPT_SELECT} WHERE ${where.join(' AND ')} ORDER BY a.starts_at, d.display_name LIMIT ${LIMIT + 1}`, params);
     const truncated = rows.length > LIMIT;
+    if (ctx.role === 'doctor') rows.forEach(hideReferral);
     return { data: truncated ? rows.slice(0, LIMIT) : rows, meta: { from, to, total: Math.min(rows.length, LIMIT), truncated } };
   }
 
@@ -52,6 +59,7 @@ export class AppointmentsController {
     const a = await this.db.one(`${APPT_SELECT} WHERE a.id = $1 AND a.tenant_id = $2 AND a.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!a) throw notFound('Qabul');
     if (ctx.role === 'doctor' && a.doctor_id !== ctx.doctorId) throw forbidden('Bu qabul sizga tegishli emas');
+    if (ctx.role === 'doctor') hideReferral(a);
     return { data: a };
   }
 
@@ -60,6 +68,8 @@ export class AppointmentsController {
   async create(@CurrentCtx() ctx: Ctx, @Body() body: unknown, @Headers('idempotency-key') key?: string) {
     const input = parse(appointmentCreateSchema, body);
     if (ctx.role === 'doctor' && input.doctor_id !== ctx.doctorId) throw forbidden('Shifokor faqat o‘z qabuliga yozadi');
+    // the referral partner and the lead source are reception's (docs/REFERRALS.md): a doctor's follow-up takes the patient's source
+    if (ctx.role === 'doctor' && (input.referral_partner_id || input.lead_source_id)) throw forbidden();
     const requestKey = key && key.length >= 8 && key.length <= 100 ? key : null;
     return this.db.tx(async (c) => {
       if (ctx.role === 'doctor') {
@@ -95,7 +105,8 @@ export class AppointmentsController {
       const slot = await walkInSlot(c, ctx.tenantId, input.doctor_id, service.duration_min);
       if (!slot) throw conflict('NO_SLOT', 'Shifokorda yaqin bir soatda bo‘sh vaqt yo‘q. Boshqa shifokorni tanlang yoki qabulga yozing.');
       assertBranch(ctx, slot.branch_id);
-      const r = await createAppointment(c, ctx, { patient_id: input.patient_id, service_id: service.id, doctor_id: input.doctor_id, note: input.note ?? null, ...slot }, null, { walkIn: true });
+      const r = await createAppointment(c, ctx, { patient_id: input.patient_id, service_id: service.id, doctor_id: input.doctor_id, note: input.note ?? null,
+        referral_partner_id: input.referral_partner_id ?? null, lead_source_id: input.lead_source_id ?? null, ...slot }, null, { walkIn: true });
       const q = await checkInAppointment(c, ctx, r.id);
       return { data: { id: r.id, queue_number: q.queue_number, invoice_id: q.invoice_id, start_time: slot.start_time } };
     });
@@ -106,6 +117,13 @@ export class AppointmentsController {
   async update(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     const input = parse(appointmentUpdateSchema, body);
     return this.db.tx(async (c) => ({ data: await rescheduleAppointment(c, ctx, id, input) }));
+  }
+
+  /** «Yo‘llanma / manba»: the visit's referral partner and lead source (the partner only until money is taken for the visit). */
+  @Roles('manager', 'registrar') @Patch(':id/referral')
+  async referral(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    const input = parse(visitReferralSchema, body);
+    return this.db.tx(async (c) => ({ data: await setVisitReferral(c, ctx, id, input) }));
   }
 
   /** Check-in: creates one queue ticket per appointment (numbered per branch and local day) and bills the booked service. Idempotent. */

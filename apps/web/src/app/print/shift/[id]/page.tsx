@@ -54,6 +54,7 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
               {row(t('print.shift.cashExpenses', { n: tot.cash_expenses.n }), formatSom(tot.cash_expenses.sum))}
               {(tot.deposit_in?.cash.sum ?? 0) > 0 && row(t('print.shift.depositIn', { n: tot.deposit_in!.cash.n }), formatSom(tot.deposit_in!.cash.sum))}
               {(tot.deposit_out?.cash.sum ?? 0) > 0 && row(t('print.shift.depositOut', { n: tot.deposit_out!.cash.n }), formatSom(tot.deposit_out!.cash.sum))}
+              {(tot.partner_payouts?.sum ?? 0) > 0 && row(t('ref.shiftPayoutsN', { n: tot.partner_payouts.n }), formatSom(tot.partner_payouts.sum))}
               {row(t('print.shift.expected'), formatSom(s.expected_cash), true)}
               {closed && row(t('print.shift.counted'), formatSom(s.counted_cash))}
               {closed && row(t('print.shift.difference'), `${s.difference > 0 ? '+' : ''}${formatSom(s.difference)}`, true)}
@@ -83,6 +84,10 @@ export default function PrintShift({ params }: { params: Promise<{ id: string }>
         {s.expenses.length > 0 && <>
           <h2 className="mt-4 text-xs font-bold text-slate-600">{t('print.shift.expenses')}</h2>
           <table className="mt-1 w-full border-collapse text-[0.75rem]"><tbody>{s.expenses.map((e: any) => <tr key={e.id} className={e.status === 'void' ? 'text-slate-400 line-through' : 'border-b border-slate-100'}><td className="py-0.5">{fmtTime(e.occurred_at)}</td><td>{expenseCategoryLabel(t, e.category)}</td><td>{e.note}</td><td>{e.created_by_name}</td><td className="whitespace-nowrap text-right tabular-nums">−{formatSom(e.amount)}</td></tr>)}</tbody></table>
+        </>}
+        {(s.partner_payouts ?? []).length > 0 && <>
+          <h2 className="mt-4 text-xs font-bold text-slate-600">{t('ref.shiftPayouts')}</h2>
+          <table className="mt-1 w-full border-collapse text-[0.75rem]"><tbody>{s.partner_payouts.map((p: any) => <tr key={p.id} className={p.status === 'void' ? 'text-slate-400 line-through' : 'border-b border-slate-100'}><td className="py-0.5">{fmtTime(p.paid_at)}</td><td>{p.partner_name} · {t('ref.codeShort', { code: p.partner_code })}</td><td>{p.created_by_name}</td><td className="whitespace-nowrap text-right tabular-nums">−{formatSom(p.amount)}</td></tr>)}</tbody></table>
         </>}
         <footer className="mt-10 grid grid-cols-2 gap-8 border-t border-slate-300 pt-3 text-xs text-slate-600">
           <div>{t('print.shift.signCashier')}</div><div>{t('print.shift.signManager')}</div>

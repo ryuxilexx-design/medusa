@@ -8,6 +8,7 @@ import { branchScope } from '../core/scope';
 import { NET_LINE } from './billing';
 import { cameraAttention } from '../cameras/cameras.controller';
 import { USABLE_SQL } from './warehouse';
+import { NEW_PATIENTS_SQL } from './referrals';
 
 export function range(q: any) {
   const t = today();
@@ -87,6 +88,9 @@ export class DashboardController {
         WHERE a.tenant_id = $1 AND a.branch_id = ANY($2) AND a.status = 'cancelled' AND i.status <> 'void' AND (i.paid_amount > 0 OR i.status = 'unpaid')
           AND a.starts_at >= (SELECT demo_now()) - interval '90 days'`, [ctx.tenantId, branches]))!.n; // recent ones: older ones were dealt with
     const cams = (await cameraAttention(this.db, ctx.tenantId, branches))!;
+    // «Yangi bemorlar manbasi»: where the period's new patients (first visit ever) heard of the clinic — the same rows as the report
+    const sources = await this.db.rows(
+      `SELECT x.id, ls.name, x.n FROM (${NEW_PATIENTS_SQL}) x LEFT JOIN lead_sources ls ON ls.id = x.id ORDER BY x.n DESC, ls.name LIMIT 6`, P);
     return {
       data: {
         range: { from: r.from, to: r.to, branch_ids: branches },
@@ -95,6 +99,7 @@ export class DashboardController {
         by_service: byService.map((s) => ({ ...s, value: Number(s.value) })),
         doctors,
         recent_payments: recentPayments,
+        new_patient_sources: sources,
         attention: { unpaid_invoices: debt.invoices, unpaid_sum: Number(debt.debt), lab_draft: labPending.draft, lab_waiting: labPending.waiting, low_stock: lowStock, cancelled_with_invoice: cancelledWithPayments,
           camera_alerts: cams.open_alerts, silent_cameras: cams.silent_cameras },
       },

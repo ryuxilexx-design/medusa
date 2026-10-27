@@ -8,6 +8,7 @@ import { addDays, fromMinutes, localDate, localTime, localToUtc, now, toMinutes,
 import { assertBranch } from '../core/scope';
 import { enqueueNotice } from '../telegram/outbox';
 import { isUuid } from '../core/validate';
+import { fillPatientSource, visitReferral } from './referrals';
 
 export async function lockAppointment(c: Q, ctx: Ctx, id: string) {
   if (!isUuid(id)) throw notFound('Qabul');
@@ -151,7 +152,8 @@ export type CreateOptions = {
 };
 
 /** Creates a booking. A repeated request_key returns the original appointment instead of a duplicate. */
-export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { patient_id: string; note?: string | null }, requestKey: string | null, opts: CreateOptions | 'staff' | 'telegram' = {}) {
+export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { patient_id: string; note?: string | null; referral_partner_id?: string | null; lead_source_id?: string | null },
+  requestKey: string | null, opts: CreateOptions | 'staff' | 'telegram' = {}) {
   const { source = 'staff', walkIn = false } = typeof opts === 'string' ? { source: opts } : opts;
   if (requestKey) {
     // serialise retries of the same request, then return the original booking if it already exists
@@ -168,13 +170,17 @@ export async function createAppointment(c: Q, ctx: Ctx, input: SlotInput & { pat
   // an anonymised card (ZRU-547 erasure) is closed for new visits: the person asked the clinic to stop processing their data
   if (patient.anonymised_at) throw invalid({ patient_id: 'Bemor kartasi anonimlashtirilgan' });
   const slot = await validateSlot(c, ctx, input, walkIn ? WALK_IN_GRACE_MIN : undefined);
+  // who sent the patient and where they heard of the clinic (docs/REFERRALS.md): a bot booking is always «Telegram bot», never referred
+  const ref = await visitReferral(c, ctx.tenantId, { patientId: input.patient_id, partnerId: input.referral_partner_id, leadSourceId: input.lead_source_id, telegram: source === 'telegram' });
   const row = (await c.query(
-    `INSERT INTO appointments (id, tenant_id, branch_id, patient_id, doctor_id, service_id, room_id, starts_at, ends_at, status, note, created_by, created_at, updated_at, request_key, source)
-     VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,'scheduled',$9,$10, demo_now(), demo_now(), $11, $12) RETURNING id`,
+    `INSERT INTO appointments (id, tenant_id, branch_id, patient_id, doctor_id, service_id, room_id, starts_at, ends_at, status, note, created_by, created_at, updated_at, request_key, source,
+                               referral_partner_id, lead_source_id)
+     VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,'scheduled',$9,$10, demo_now(), demo_now(), $11, $12, $13, $14) RETURNING id`,
     [ctx.tenantId, input.branch_id, input.patient_id, input.doctor_id, input.service_id, slot.roomId, slot.startsAt, slot.endsAt, input.note ?? null,
-      ctx.membershipId || null, requestKey, source])).rows[0];
+      ctx.membershipId || null, requestKey, source, ref.partnerId, ref.leadSourceId])).rows[0];
+  await fillPatientSource(c, ctx.tenantId, input.patient_id, ref.leadSourceId);
   await audit(c, ctx, 'appointment.create', 'appointment', row.id,
-    `#${patient.patient_number}: ${slot.service.name}, ${input.date} ${input.start_time}, ${slot.doctor.display_name}${source === 'telegram' ? ' (Telegram)' : source === 'doctor' ? ' (qayta qabul, shifokor)' : walkIn ? ' (navbatsiz)' : ''}`, input.branch_id);
+    `#${patient.patient_number}: ${slot.service.name}, ${input.date} ${input.start_time}, ${slot.doctor.display_name}${source === 'telegram' ? ' (Telegram)' : source === 'doctor' ? ' (qayta qabul, shifokor)' : walkIn ? ' (navbatsiz)' : ''}${ref.partnerCode ? `, yo‘llanma #${ref.partnerCode}` : ''}`, input.branch_id);
   // the patient hears about a booking the clinic made for them (the bot already answered its own booking)
   if (source !== 'telegram' && !walkIn) await enqueueNotice(c, { tenantId: ctx.tenantId, kind: 'booked', patientId: input.patient_id, appointmentId: row.id, dedupeKey: `booked:${row.id}` });
   return { id: row.id as string, replayed: false };

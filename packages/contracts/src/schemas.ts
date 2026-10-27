@@ -49,6 +49,8 @@ export const patientBaseSchema = z.object({
     if (!/^\d{14}$/.test(v)) { ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'JShShIR (PINFL) 14 ta raqamdan iborat bo‘lsin' }); return z.NEVER; }
     return v;
   }),
+  /** Where the patient first heard of the clinic (lead_sources, docs/REFERRALS.md). */
+  lead_source_id: uuid.nullable().optional(),
   /** Passport or ID card series + number (AA1234567). */
   id_document: z.string().max(40).optional().nullable().transform((s, ctx) => {
     const v = (s ?? '').replace(/[\s-]/g, '').toUpperCase();
@@ -100,6 +102,10 @@ export const appointmentCreateSchema = z.object({
   start_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Vaqt HH:MM formatida bo‘lsin'),
   duration_min: z.number().int().min(5, 'Kamida 5 daqiqa').max(240, '240 daqiqadan oshmasin').optional(),
   note: optionalText(300),
+  /** «Yo‘llanma bor»: the partner who sent the patient (reception and the manager only) */
+  referral_partner_id: uuid.nullable().optional(),
+  /** the visit's lead source; default: «Yo‘llovchi shifokor» with a partner, else the patient's own source */
+  lead_source_id: uuid.nullable().optional(),
 });
 export const appointmentUpdateSchema = z.object({
   version: z.number().int(),
@@ -112,7 +118,8 @@ export const appointmentUpdateSchema = z.object({
 });
 export const appointmentActionSchema = z.object({ version: z.number().int().optional(), reason: optionalText(300) });
 /** Walk-in: the registrar picks the doctor (and optionally the service); the server picks the time and checks the patient in. */
-export const walkInSchema = z.object({ patient_id: uuid, doctor_id: uuid, service_id: uuid.optional(), note: optionalText(300) });
+export const walkInSchema = z.object({ patient_id: uuid, doctor_id: uuid, service_id: uuid.optional(), note: optionalText(300),
+  referral_partner_id: uuid.nullable().optional(), lead_source_id: uuid.nullable().optional() });
 
 const vitalNum = (min: number, max: number, label: string) =>
   z.union([z.number(), z.null()]).optional().refine((v) => v == null || (v >= min && v <= max), `${label}: ${min}–${max} oralig‘ida bo‘lsin`);
@@ -221,6 +228,9 @@ const serviceCategory = z.enum(SERVICE_CATEGORIES, { errorMap: () => ({ message:
 const priceTiyin = z.number({ invalid_type_error: 'Narxni kiriting' }).int('Narx tiyinda butun son bo‘lsin').min(0, 'Narx manfiy bo‘lmasin').max(1_000_000_000_00, 'Narx juda katta');
 const sharePercent = z.number({ invalid_type_error: 'Ulushni kiriting' }).min(0, 'Ulush 0–100 oralig‘ida bo‘lsin').max(100, 'Ulush 0–100 oralig‘ida bo‘lsin')
   .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'Ulush ko‘pi bilan 2 ta kasr xona');
+/** A referral partner's percent of a service (docs/REFERRALS.md): 0–100, two decimals at most. */
+export const partnerPercent = z.number({ invalid_type_error: 'Foizni kiriting' }).min(0, 'Foiz 0–100 oralig‘ida bo‘lsin').max(100, 'Foiz 0–100 oralig‘ida bo‘lsin')
+  .refine((v) => Math.abs(v * 100 - Math.round(v * 100)) < 1e-6, 'Foiz ko‘pi bilan 2 ta kasr xona');
 const durationMin = z.number({ invalid_type_error: 'Davomiylikni kiriting' }).int('Davomiylik butun son bo‘lsin').min(5, 'Davomiylik 5–240 daqiqa bo‘lsin').max(240, 'Davomiylik 5–240 daqiqa bo‘lsin');
 /** One row of a lab service's result form: what the laborant fills in and the reference range shown to the doctor. */
 export const labTemplateRowSchema = z.object({
@@ -239,6 +249,8 @@ export const serviceCreateSchema = z.object({
   price: priceTiyin, // tiyin, general price (all branches)
   duration_min: durationMin,
   share_percent: sharePercent.default(0),
+  /** referral partner percent for this service (NULL = each partner's own default) */
+  partner_percent: partnerPercent.nullable().optional(),
   lab_template: labTemplateSchema.nullable().optional(),
   active: z.boolean().default(true),
   /** Fiscal attributes (ОФД): 17-digit IKPU code, VAT percent (NULL = clinic default 12 %), «без НДС», package code. */
@@ -255,6 +267,7 @@ export const servicePatchSchema = z.object({
   branch_id: uuid.nullable().optional(),
   duration_min: durationMin.optional(),
   share_percent: sharePercent.optional(),
+  partner_percent: partnerPercent.nullable().optional(),
   lab_template: labTemplateSchema.nullable().optional(),
   active: z.boolean().optional(),
   /** Fiscal attributes (ОФД): 17-digit IKPU code, VAT percent (NULL = clinic default 12 %), «без НДС», package code. */

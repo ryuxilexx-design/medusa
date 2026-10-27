@@ -22,6 +22,26 @@ export async function sharePercentFor(q: Q, tenantId: string, doctorId: string |
   return own > 0 ? own : servicePercent;
 }
 
+/**
+ * Partner percent snapshotted on an order of a referred visit (docs/REFERRALS.md), the one place it is resolved:
+ *   1. this partner's own percent for this service (referral_partner_services), else
+ *   2. the service's `partner_percent` (NULL = not set), else
+ *   3. the partner's `default_percent` (0 = none).
+ * Snapshotted at order time like the doctor share: later edits of any of them never rewrite past lines.
+ */
+export async function partnerPercentFor(q: Q, tenantId: string, partnerId: string | null, serviceId: string): Promise<number> {
+  if (!partnerId) return 0;
+  const r = (await q.query(
+    `SELECT p.default_percent, s.partner_percent, ps.percent AS pair
+       FROM referral_partners p JOIN services s ON s.id = $3 AND s.tenant_id = p.tenant_id
+       LEFT JOIN referral_partner_services ps ON ps.partner_id = p.id AND ps.service_id = s.id
+      WHERE p.id = $2 AND p.tenant_id = $1`, [tenantId, partnerId, serviceId])).rows[0];
+  if (!r) return 0;
+  if (r.pair != null) return Number(r.pair);
+  if (r.partner_percent != null) return Number(r.partner_percent);
+  return Number(r.default_percent);
+}
+
 export async function nextInvoiceNumber(q: Q, tenantId: string): Promise<number> {
   return (await q.query(`UPDATE tenants SET invoice_seq = invoice_seq + 1 WHERE id = $1 RETURNING invoice_seq`, [tenantId])).rows[0].invoice_seq;
 }
@@ -40,13 +60,17 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
   const qty = Math.max(1, Math.min(50, Math.round(o.quantity ?? 1)));
   const price = await currentPrice(q, o.serviceId, o.branchId); // unit price; the line carries qty × price
   const share = await sharePercentFor(q, ctx.tenantId, o.performerDoctorId ?? o.doctorId, Number(s.share_percent));
+  // a referred visit: every service ordered on it carries the partner and the partner percent of that moment
+  const partnerId: string | null = o.appointmentId
+    ? (await q.query(`SELECT referral_partner_id FROM appointments WHERE id = $1 AND tenant_id = $2`, [o.appointmentId, ctx.tenantId])).rows[0]?.referral_partner_id ?? null : null;
+  const partnerPct = await partnerPercentFor(q, ctx.tenantId, partnerId, s.id);
   const at = now();
   const orderId = (await q.query(
     `INSERT INTO service_orders (id, tenant_id, branch_id, patient_id, appointment_id, encounter_id, service_id, category, service_name, is_primary, price_snapshot,
-                                 share_percent_snapshot, doctor_id, performer_doctor_id, status, ordered_at, created_by, quantity)
-     VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ordered',$14,$15,$16) RETURNING id`,
+                                 share_percent_snapshot, doctor_id, performer_doctor_id, status, ordered_at, created_by, quantity, referral_partner_id, partner_percent_snapshot)
+     VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'ordered',$14,$15,$16,$17,$18) RETURNING id`,
     [ctx.tenantId, o.branchId, o.patientId, o.appointmentId, o.encounterId, s.id, s.category, s.name, o.isPrimary, price, share,
-      o.doctorId, o.performerDoctorId, at, ctx.membershipId, qty])).rows[0].id;
+      o.doctorId, o.performerDoctorId, at, ctx.membershipId, qty, partnerId, partnerPct])).rows[0].id;
 
   let invoice = o.appointmentId ? (await q.query(
     `SELECT id FROM invoices WHERE appointment_id = $1 AND tenant_id = $2 AND status = 'unpaid' AND paid_amount = 0 AND credit_amount = 0 ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
@@ -76,6 +100,11 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
 export const NET_LINE = `(CASE WHEN i.credit_amount = 0 THEN it.line_total
   WHEN i.credit_amount = i.line_refunded_amount THEN it.line_total - it.refunded_amount
   ELSE coalesce(round((it.line_total - it.refunded_amount) * i.total::numeric / NULLIF(i.subtotal - i.discount_amount - i.line_refunded_amount, 0)), 0) END)`;
+/**
+ * A referral partner's amount of one line (aliases `o` = service_orders, `it`, `i`): the line's net value (NET_LINE:
+ * after discounts and refunds; a later discount module only has to change NET_LINE) × the percent snapshotted on the order.
+ */
+export const PARTNER_LINE = `round(${NET_LINE} * o.partner_percent_snapshot / 100)`;
 /** Service count for reports: a course of 10 procedures counts as 10 (alias `it`). */
 export const LINE_QTY = `it.quantity`;
 

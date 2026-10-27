@@ -4,6 +4,15 @@ Yangilangan: 19-oktabr 2026 · Demo sanasi: 18-oktabr 2026 · Reliz: 0.8 (demo M
 
 Holat belgilari: **Ishlaydi** — yozuv yaratiladi yoki o‘zgaradi, server tekshiradi, refreshdan keyin saqlanadi. **Demo ma’lumoti** — ko‘rish va filtr ishlaydi, to‘liq jarayon avtomatlashtirilmagan. **Namunaviy AI** — oldindan yozilgan natija, ochiq belgilangan. **Rejada** — demo’da yo‘q yoki faol tugmasiz. **Qisman** — asosiy qismi bor, lekin quyida yozilgan cheklov bilan.
 
+## Yo‘llovchi hamkorlar va reklama manbalari (migratsiya 041, `docs/REFERRALS.md`)
+
+| Nima | Holat | Tekshiruv |
+|---|---|---|
+| **Yo‘llanma**: qabulga yozish va «Hozir qabul qilish» oynasida «Yo‘llanma bor» → hamkorni ism, telefon yoki ID bo‘yicha qidirish yoki shu yerda foizsiz qo‘shish; bemor kartasidagi tashrifda yo‘llovchi va manbani to‘g‘rilash (to‘lov olinguncha). Check-in va keyingi buyurtmalarda hamkor foizi qatorga bir marta yoziladi (hamkor+xizmat → xizmat → hamkor foizi), keyingi o‘zgarishlar o‘tgan qatorlarni o‘zgartirmaydi | Ishlaydi | API test `referrals.test.mjs`, E2E `referrals` |
+| **«Hamkorlar» bo‘limi** (rahbar): hisobot (bemorlar, qabullar, xizmatlar qiymati, ulush = NET_LINE × foiz qaytarishdan keyin, to‘langan, qoldiq), hamkor xizmatlari ro‘yxati, CSV jami bilan; ro‘yxat (qo‘shish, tahrir, foiz, xizmat bo‘yicha foiz, nofaol); to‘lovlar (bank o‘tkazmasi yoki ochiq kassadan naqd — INSUFFICIENT_CASH, qoldiqdan ko‘p emas, bir marta bekor qilish) | Ishlaydi | Rollar 403, boshqa klinika 404, smena jami, moliya xulosasi (to‘lov tushumni kamaytirmaydi, sof natijani kamaytiradi) |
+| **Reklama manbalari**: kartada va har qabulda; bot → «Telegram bot», hamkor → «Yo‘llovchi shifokor», aks holda kartaniki. «Manbalar» hisoboti: yangi bemorlar (birinchi tashrif), yozilgan → kelgan, tushum (dashboard bilan bir xil), o‘rtacha chek, CSV; dashboard kartasi «Yangi bemorlar manbasi»; manbalar ro‘yxatini rahbar tahrirlaydi | Ishlaydi | Skrinshotlar 1366×768 va 390 px, uz va ru |
+| **Cheklovlar** | — | Hamkorga ulush bajarilgan xizmatdan hisoblanadi (to‘lanmagan hisob ham kiradi, shifokor ulushi kabi). Registrator qo‘shgan hamkor rahbar foiz qo‘ygunicha 0 % — shu orada yaratilgan qatorlar 0 % bilan qoladi. Hamkorga avtomatik SMS/hisob-faktura yo‘q |
+
 ## Shifokor uchun «Natija sharhi» va ombor uchun «Buyurtma taklifi» (migratsiya 037, `docs/AI.md`, `docs/WAREHOUSE.md`)
 
 | Nima | Holat | Tekshiruv |

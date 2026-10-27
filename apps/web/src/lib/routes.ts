@@ -15,6 +15,8 @@ export const SECTION_ROLES = {
   '/news': ['doctor'],
   '/cashier': ['cashier', 'manager', 'registrar'],
   '/finance': ['manager', 'cashier'],
+  // referral partners, their payouts and the lead-source report (docs/REFERRALS.md): percents and amounts are the manager's
+  '/partners': ['manager'],
   '/staff': ['manager'],
   '/inventory': ['manager', 'storekeeper'],
   '/materials': ['doctor', 'lab'],

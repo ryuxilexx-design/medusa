@@ -24,13 +24,16 @@ export type ShiftTotals = {
   payments: ByMethod; refunds: ByMethod;
   /** patient prepayments taken in this shift / unused prepayments paid back from it (cash ones move the drawer) */
   deposit_in: ByMethod; deposit_out: ByMethod;
-  cash_expenses: MethodSum; cash_in: number; cash_out: number;
+  cash_expenses: MethodSum;
+  /** cash paid to referral partners from this drawer (docs/REFERRALS.md; voided payouts excluded) */
+  partner_payouts: MethodSum;
+  cash_in: number; cash_out: number;
 };
 const zeroByMethod = (): ByMethod => ({ cash: { n: 0, sum: 0 }, card: { n: 0, sum: 0 }, transfer: { n: 0, sum: 0 } });
 /** A closed shift's snapshot from before deposits existed lacks the deposit keys: fill them with zeros. */
-export const normalizeTotals = (t: Partial<ShiftTotals>): ShiftTotals => ({ payments: zeroByMethod(), refunds: zeroByMethod(), deposit_in: zeroByMethod(), deposit_out: zeroByMethod(), cash_expenses: { n: 0, sum: 0 }, cash_in: 0, cash_out: 0, ...t });
+export const normalizeTotals = (t: Partial<ShiftTotals>): ShiftTotals => ({ payments: zeroByMethod(), refunds: zeroByMethod(), deposit_in: zeroByMethod(), deposit_out: zeroByMethod(), cash_expenses: { n: 0, sum: 0 }, partner_payouts: { n: 0, sum: 0 }, cash_in: 0, cash_out: 0, ...t });
 
-/** Live totals for many shifts in four grouped queries (no N+1). */
+/** Live totals for many shifts in five grouped queries (no N+1). */
 export async function shiftTotalsMany(q: Q, ids: string[]): Promise<Map<string, ShiftTotals>> {
   const out = new Map<string, ShiftTotals>(ids.map((id) => [id, normalizeTotals({})]));
   if (!ids.length) return out;
@@ -42,7 +45,9 @@ export async function shiftTotalsMany(q: Q, ids: string[]): Promise<Map<string, 
     out.get(r.shift_id)![r.kind === 'in' ? 'deposit_in' : 'deposit_out'][r.method as 'cash'] = { n: r.n, sum: Number(r.sum) };
   for (const r of (await q.query(`SELECT shift_id, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM expenses WHERE shift_id = ANY($1::uuid[]) AND status = 'active' AND paid_from = 'cash_drawer' GROUP BY 1`, [ids])).rows)
     out.get(r.shift_id)!.cash_expenses = { n: r.n, sum: Number(r.sum) };
-  for (const t of out.values()) { t.cash_in = t.payments.cash.sum + t.deposit_in.cash.sum; t.cash_out = t.refunds.cash.sum + t.cash_expenses.sum + t.deposit_out.cash.sum; }
+  for (const r of (await q.query(`SELECT shift_id, count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum FROM partner_payouts WHERE shift_id = ANY($1::uuid[]) AND status = 'active' AND method = 'cash' GROUP BY 1`, [ids])).rows)
+    out.get(r.shift_id)!.partner_payouts = { n: r.n, sum: Number(r.sum) };
+  for (const t of out.values()) { t.cash_in = t.payments.cash.sum + t.deposit_in.cash.sum; t.cash_out = t.refunds.cash.sum + t.cash_expenses.sum + t.deposit_out.cash.sum + t.partner_payouts.sum; }
   return out;
 }
 /** Live totals of one shift (all methods for the report; cash movements for the drawer). */
@@ -105,23 +110,23 @@ export class CashController {
       WHERE s.tenant_id = $1 AND s.branch_id = ANY($2) AND s.opened_at < $4 AND coalesce(s.closed_at, 'infinity') >= $3 ${own} ORDER BY s.opened_at LIMIT 5000`, params);
     const live = await shiftTotalsMany(this.db.pool, rows.filter((s) => s.status === 'open').map((s) => s.id));
     const full = await Promise.all(rows.map((s) => this.withTotals(this.db.pool, s, live.get(s.id))));
-    const sum = { opening: 0n, cash: 0n, card: 0n, transfer: 0n, refunds: 0n, depIn: 0n, depOut: 0n, expenses: 0n, expected: 0n, counted: 0n, diff: 0n };
+    const sum = { opening: 0n, cash: 0n, card: 0n, transfer: 0n, refunds: 0n, depIn: 0n, depOut: 0n, expenses: 0n, partners: 0n, expected: 0n, counted: 0n, diff: 0n };
     const out: unknown[][] = [];
     for (const s of full) {
       const t: ShiftTotals = s!.totals;
       const refunds = t.refunds.cash.sum + t.refunds.card.sum + t.refunds.transfer.sum;
       const depIn = t.deposit_in.cash.sum + t.deposit_in.card.sum + t.deposit_in.transfer.sum, depOut = t.deposit_out.cash.sum + t.deposit_out.card.sum + t.deposit_out.transfer.sum;
       out.push([s!.number, s!.branch_name, s!.cashier_name, csvTime(s!.opened_at), s!.closed_at ? csvTime(s!.closed_at) : '', s!.status === 'open' ? 'Ochiq' : 'Yopilgan',
-        csvSom(s!.opening_cash), csvSom(t.payments.cash.sum), csvSom(t.payments.card.sum), csvSom(t.payments.transfer.sum), csvSom(refunds), csvSom(depIn), csvSom(depOut), csvSom(t.cash_expenses.sum),
+        csvSom(s!.opening_cash), csvSom(t.payments.cash.sum), csvSom(t.payments.card.sum), csvSom(t.payments.transfer.sum), csvSom(refunds), csvSom(depIn), csvSom(depOut), csvSom(t.cash_expenses.sum), csvSom(t.partner_payouts.sum),
         csvSom(s!.expected_cash), s!.counted_cash == null ? '' : csvSom(s!.counted_cash), s!.difference == null ? '' : csvSom(s!.difference), s!.close_note]);
       sum.opening += BigInt(s!.opening_cash); sum.cash += BigInt(t.payments.cash.sum); sum.card += BigInt(t.payments.card.sum); sum.transfer += BigInt(t.payments.transfer.sum);
-      sum.refunds += BigInt(refunds); sum.depIn += BigInt(depIn); sum.depOut += BigInt(depOut); sum.expenses += BigInt(t.cash_expenses.sum); sum.expected += BigInt(s!.expected_cash);
+      sum.refunds += BigInt(refunds); sum.depIn += BigInt(depIn); sum.depOut += BigInt(depOut); sum.expenses += BigInt(t.cash_expenses.sum); sum.partners += BigInt(t.partner_payouts.sum); sum.expected += BigInt(s!.expected_cash);
       sum.counted += BigInt(s!.counted_cash ?? 0); sum.diff += BigInt(s!.difference ?? 0);
     }
-    out.push(['Jami', '', `${rows.length} ta smena`, '', '', '', csvSom(sum.opening), csvSom(sum.cash), csvSom(sum.card), csvSom(sum.transfer), csvSom(sum.refunds), csvSom(sum.depIn), csvSom(sum.depOut), csvSom(sum.expenses), csvSom(sum.expected), csvSom(sum.counted), csvSom(sum.diff), '']);
+    out.push(['Jami', '', `${rows.length} ta smena`, '', '', '', csvSom(sum.opening), csvSom(sum.cash), csvSom(sum.card), csvSom(sum.transfer), csvSom(sum.refunds), csvSom(sum.depIn), csvSom(sum.depOut), csvSom(sum.expenses), csvSom(sum.partners), csvSom(sum.expected), csvSom(sum.counted), csvSom(sum.diff), '']);
     sendCsv(res, `meduzai-smenalar-${period.from}-${period.to}.csv`,
       ['№', 'Filial', 'Kassir', 'Ochilgan (Toshkent)', 'Yopilgan (Toshkent)', 'Holat', 'Boshlang‘ich (so‘m)', 'Naqd to‘lov (so‘m)', 'Karta (so‘m)', 'O‘tkazma (so‘m)', 'Qaytarish (so‘m)',
-        'Depozit kirim (so‘m)', 'Depozit qaytarish (so‘m)', 'Kassadan xarajat (so‘m)', 'Kutilgan naqd (so‘m)', 'Sanalgan (so‘m)', 'Farq (so‘m)', 'Izoh'], out);
+        'Depozit kirim (so‘m)', 'Depozit qaytarish (so‘m)', 'Kassadan xarajat (so‘m)', 'Hamkorlarga naqd (so‘m)', 'Kutilgan naqd (so‘m)', 'Sanalgan (so‘m)', 'Farq (so‘m)', 'Izoh'], out);
   }
 
   @Roles('cashier', 'manager') @Post('cash-shifts') @HttpCode(201)
@@ -188,12 +193,16 @@ export class CashController {
       `SELECT r.id, r.refund_number, r.amount, r.method, r.refunded_at, r.reason_code, r.approved_by_name, i.invoice_number, p.last_name, p.first_name, p.patient_number, ${FISCAL_JSON_REFUND} AS fiscal
          FROM refunds r JOIN invoices i ON i.id = r.invoice_id JOIN patients p ON p.id = i.patient_id WHERE r.shift_id = $1 ORDER BY r.refunded_at`, [id]);
     const expenses = await this.db.rows(`SELECT id, category, amount, occurred_at, note, status, created_by_name FROM expenses WHERE shift_id = $1 ORDER BY occurred_at`, [id]);
+    // cash paid to referral partners from this drawer: the cashier sees the outflow and the partner's name, never a percent
+    const partnerPayouts = await this.db.rows(
+      `SELECT pp.id, pp.amount, pp.paid_at, pp.status, pp.created_by_name, rp.full_name AS partner_name, rp.code AS partner_code
+         FROM partner_payouts pp JOIN referral_partners rp ON rp.id = pp.partner_id WHERE pp.shift_id = $1 ORDER BY pp.paid_at`, [id]);
     const deposits = await this.db.rows(
       `SELECT d.id, d.kind, d.amount, d.method, d.occurred_at, d.note, d.actor_name, p.last_name, p.first_name, p.patient_number
          FROM patient_deposits d JOIN patients p ON p.id = d.patient_id WHERE d.shift_id = $1 ORDER BY d.occurred_at`, [id]);
     // payments of this shift whose fiscal receipt is still owed (parallel mode: KKM number not typed in yet)
     const fiscalPending = payments.filter((p) => p.fiscal && (p.fiscal.status === 'pending' || p.fiscal.status === 'failed')).length;
-    return { data: { ...s, payments, refunds, expenses, deposits, fiscal_pending: fiscalPending } };
+    return { data: { ...s, payments, refunds, expenses, deposits, partner_payouts: partnerPayouts, fiscal_pending: fiscalPending } };
   }
 
   // ---------------------------------------------------------------- refunds
@@ -368,7 +377,10 @@ export class CashController {
         coalesce(sum(amount) FILTER (WHERE kind = 'apply'),0)::bigint AS applied FROM patient_deposits WHERE tenant_id = $1 AND branch_id = ANY($2) AND occurred_at >= $3 AND occurred_at < $4`, P))!;
     // the outstanding balance counts where the money was taken / applied / paid back (every ledger row has its branch), within the manager's scope
     const liability = (await this.db.one(`SELECT coalesce(sum(CASE WHEN kind = 'in' THEN amount ELSE -amount END),0)::bigint AS balance FROM patient_deposits WHERE tenant_id = $1 AND branch_id = ANY($2)`, [P[0], P[1]]))!;
-    const gross = pay.reduce((a, b) => a + Number(b.sum), 0), refunds = Number(ref.sum), expenses = exp.reduce((a, b) => a + Number(b.sum), 0);
+    // referral partner payouts: an outflow next to expenses, never a reduction of revenue (docs/REFERRALS.md)
+    const ppo = (await this.db.one(`SELECT count(*)::int AS n, coalesce(sum(amount),0)::bigint AS sum, coalesce(sum(amount) FILTER (WHERE method = 'cash'),0)::bigint AS cash
+        FROM partner_payouts WHERE tenant_id = $1 AND branch_id = ANY($2) AND paid_at >= $3 AND paid_at < $4 AND status = 'active'`, P))!;
+    const gross = pay.reduce((a, b) => a + Number(b.sum), 0), refunds = Number(ref.sum), expenses = exp.reduce((a, b) => a + Number(b.sum), 0), partnerOut = Number(ppo.sum);
     const fiscal = (await this.db.one(`SELECT count(*)::int AS n FROM payments pm WHERE pm.tenant_id = $1 AND pm.branch_id = ANY($2) AND pm.paid_at >= $3 AND pm.paid_at < $4 AND ${FISCAL_MISSING}`, P))!;
     return { data: {
       from: r.from, to: r.to,
@@ -377,7 +389,8 @@ export class CashController {
       refunds: { total: refunds, count: ref.n },
       net_revenue: gross - refunds,
       expenses: { total: expenses, by_category: exp.map((x) => ({ category: x.category, count: x.n, sum: Number(x.sum) })) },
-      net_result: gross - refunds - expenses,
+      partner_payouts: { total: partnerOut, count: ppo.n, cash: Number(ppo.cash) },
+      net_result: gross - refunds - expenses - partnerOut,
       deposits: { in: Number(dep.inflow), out: Number(dep.outflow), applied: Number(dep.applied), balance: Number(liability.balance) },
     } };
   }

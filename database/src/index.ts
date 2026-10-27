@@ -5,6 +5,7 @@ import { buildSeed, SeedData, DEMO_TIMEZONE_OFFSET_HOURS, SEED_IDS } from '../se
 import { seedDrugLinks } from '../seed/warehouse';
 import { STARTER_TEMPLATES } from '../seed/templates';
 import { buildGuard, GUARD_TABLES } from '../seed/guard';
+import { STARTER_LEAD_SOURCES } from '../seed/referrals';
 import { ensureStarterDrugs } from './drugs';
 
 // bigint (int8) money values fit safely into JS numbers (< 2^53 tiyin).
@@ -19,6 +20,7 @@ export type { SeedData };
 export { SEED_IDS, DEMO_TIMEZONE_OFFSET_HOURS, readSeedSnapshot, SNAPSHOT_DIR } from '../seed/build';
 export { STARTER_TEMPLATES } from '../seed/templates';
 export { GUARD_IDS, buildGuard } from '../seed/guard';
+export { STARTER_LEAD_SOURCES, partnerSeedId, leadSourceSeedId } from '../seed/referrals';
 export { ensureStarterDrugs, parseDrugsCsv, upsertDrugs, STARTER_DRUGS_CSV } from './drugs';
 
 /**
@@ -83,9 +85,9 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
 
 const TABLES_IN_INSERT_ORDER: (keyof SeedData)[] = [
   'tenants', 'branches', 'users', 'memberships', 'doctors', 'rooms', 'schedules', 'services', 'service_prices',
-  'doctor_services', 'schedule_exceptions', 'patients', 'patient_consents', 'patient_allergies', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
+  'doctor_services', 'schedule_exceptions', 'lead_sources', 'referral_partners', 'referral_partner_services', 'patients', 'patient_consents', 'patient_allergies', 'appointments', 'queue_counters', 'queue_tickets', 'encounters', 'clinical_notes',
   'note_addenda', 'medical_documents', 'patient_summaries',
-  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'refunds', 'patient_deposits', 'expenses',
+  'service_orders', 'lab_results', 'diagnostic_reports', 'invoices', 'invoice_items', 'cash_shifts', 'payments', 'refunds', 'patient_deposits', 'expenses', 'partner_payouts',
   'inventory_items', 'inventory_receipts', 'inventory_batches', 'inventory_requests', 'inventory_request_lines', 'inventory_movements',
   'inventory_writeoffs', 'inventory_writeoff_lines', 'inventory_doc_counters', 'cold_devices', 'fridge_temperature_log', 'audit_logs', 'cameras', 'face_codes', 'camera_events', 'camera_event_acks', 'arrival_suggestions', 'camera_snapshots',
 ];
@@ -372,6 +374,63 @@ export async function backfillSeedGuard(q: Pick<PoolClient, 'query'>, demoDate: 
   return g.memberships.length;
 }
 
+/**
+ * The starter lead sources (seed/referrals.ts) of a clinic, idempotent by key: a renamed or switched-off source stays as
+ * the manager left it; a name the manager already uses is skipped. Run on create-clinic, demo reset and API start.
+ */
+export async function ensureLeadSources(q: Pick<PoolClient, 'query'>, tenantId: string): Promise<number> {
+  let n = 0;
+  for (const [i, s] of STARTER_LEAD_SOURCES.entries()) {
+    const r = await q.query(
+      `INSERT INTO lead_sources (tenant_id, name, system_key, starter_key, sort) VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+      [tenantId, s.name, s.system ?? null, s.key, (i + 1) * 10]);
+    n += r.rowCount ?? 0;
+  }
+  return n;
+}
+
+/**
+ * Demo databases seeded before migration 041 have no referral partners: adds the seed's partners, their overrides and
+ * payouts, and the lead source / partner / percent snapshot of the seed's cards, visits and orders — without a reset.
+ * Only empty fields are filled (a card or visit the demo user already marked keeps its value). Idempotent: nothing
+ * happens once the seed clinic has a partner.
+ */
+export async function backfillSeedReferrals(q: Pick<PoolClient, 'query'>, demoDate: string): Promise<number> {
+  const T = SEED_IDS.tenant;
+  const seeded = (await q.query('SELECT 1 FROM tenants WHERE id = $1', [T])).rowCount;
+  const has = (await q.query('SELECT 1 FROM referral_partners WHERE tenant_id = $1 LIMIT 1', [T])).rowCount;
+  if (!seeded || has) return 0;
+  const seed = buildSeed(demoDate);
+  const tenants = new Set((await q.query('SELECT id FROM tenants WHERE id = ANY($1::uuid[])', [[T, SEED_IDS.tenant2]])).rows.map((r) => r.id));
+  for (const t of tenants) await ensureLeadSources(q, t);
+  // the database's own ids of the starter sources (ensureLeadSources may have run before with generated ids)
+  const dbSource = new Map<string, string>();
+  for (const r of (await q.query('SELECT tenant_id, starter_key, id FROM lead_sources WHERE tenant_id = ANY($1::uuid[]) AND starter_key IS NOT NULL', [[...tenants]])).rows)
+    dbSource.set(`${r.tenant_id}:${r.starter_key}`, r.id);
+  const seedSource = new Map(seed.lead_sources.map((s) => [s.id, dbSource.get(`${s.tenant_id}:${s.starter_key}`) ?? null]));
+  const json = (rows: unknown[]) => JSON.stringify(rows);
+  await insertRows(q as PoolClient, 'referral_partners', seed.referral_partners);
+  await q.query('UPDATE tenants SET partner_seq = GREATEST(partner_seq, $2) WHERE id = $1', [T, Math.max(...seed.referral_partners.map((p) => Number(p.code)))]);
+  const services = new Set((await q.query('SELECT id FROM services WHERE tenant_id = $1', [T])).rows.map((r) => r.id));
+  await insertRows(q as PoolClient, 'referral_partner_services', seed.referral_partner_services.filter((x) => services.has(x.service_id)));
+  await q.query(`UPDATE services s SET partner_percent = r.pct FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, pct numeric)
+    WHERE s.id = r.id AND s.tenant_id = $2 AND s.partner_percent IS NULL`, [json(seed.services.filter((s) => s.tenant_id === T && s.partner_percent != null).map((s) => ({ id: s.id, pct: s.partner_percent }))), T]);
+  await q.query(`UPDATE patients p SET lead_source_id = r.src FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, src uuid)
+    WHERE p.id = r.id AND p.tenant_id = $2 AND p.lead_source_id IS NULL AND r.src IS NOT NULL`,
+    [json(seed.patients.filter((p) => p.tenant_id === T).map((p) => ({ id: p.id, src: p.lead_source_id ? seedSource.get(p.lead_source_id) : null }))), T]);
+  await q.query(`UPDATE appointments a SET referral_partner_id = r.partner, lead_source_id = coalesce(a.lead_source_id, r.src) FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, partner uuid, src uuid)
+    WHERE a.id = r.id AND a.tenant_id = $2 AND a.referral_partner_id IS NULL`,
+    [json(seed.appointments.filter((a) => a.tenant_id === T).map((a) => ({ id: a.id, partner: a.referral_partner_id, src: a.lead_source_id ? seedSource.get(a.lead_source_id) : null }))), T]);
+  // only orders of visits that now carry that same partner (the snapshot follows the visit)
+  await q.query(`UPDATE service_orders o SET referral_partner_id = r.partner, partner_percent_snapshot = r.pct FROM jsonb_to_recordset($1::jsonb) AS r(id uuid, partner uuid, pct numeric)
+    WHERE o.id = r.id AND o.tenant_id = $2 AND o.referral_partner_id IS NULL
+      AND EXISTS (SELECT 1 FROM appointments a WHERE a.id = o.appointment_id AND a.referral_partner_id = r.partner)`,
+    [json(seed.service_orders.filter((o) => o.referral_partner_id).map((o) => ({ id: o.id, partner: o.referral_partner_id, pct: o.partner_percent_snapshot }))), T]);
+  const branches = new Set((await q.query('SELECT id FROM branches WHERE tenant_id = $1', [T])).rows.map((r) => r.id));
+  await insertRows(q as PoolClient, 'partner_payouts', seed.partner_payouts.filter((p) => branches.has(p.branch_id)));
+  return seed.referral_partners.length;
+}
+
 /** Guard for destructive resets: refuses to run against a database whose name does not match `expectSuffix`. */
 export async function assertDatabaseName(q: Pick<PoolClient, 'query'>, expectSuffix: string): Promise<string> {
   const name = (await q.query('SELECT current_database() AS n')).rows[0].n as string;
@@ -435,7 +494,7 @@ export async function resetDemo(pool: Pool, demoDate: string, demoTime?: string)
     await insertRows(client, 'dhp_settings', dhpSettings.filter((s) => tenantIds.has(s.tenant_id)));
     await insertRows(client, 'telegram_faq_settings', faqSettings.filter((s) => tenantIds.has(s.tenant_id)));
     // templates and phrases are not part of the seed tables (a static list, no PRNG): the starter set comes back after the wipe
-    for (const t of seed.tenants) await ensureStarterTemplates(client, t.id as string);
+    for (const t of seed.tenants) { await ensureStarterTemplates(client, t.id as string); await ensureLeadSources(client, t.id as string); }
     // Data and clock are reset together: the demo starts again at DEMO_DATE + DEMO_TIME.
     await client.query(`INSERT INTO demo_clock (id, demo_anchor, real_anchor, set_reason) VALUES (1, $1, clock_timestamp(), 'reset')
       ON CONFLICT (id) DO UPDATE SET demo_anchor = EXCLUDED.demo_anchor, real_anchor = EXCLUDED.real_anchor, set_reason = 'reset', set_at = clock_timestamp()`,

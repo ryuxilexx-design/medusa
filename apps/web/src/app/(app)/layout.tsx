@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BarChart3, Banknote, Boxes, ClipboardCheck, Contact, Footprints, PackageOpen, CalendarDays, Cctv, ChevronDown, FlaskConical, Gauge, KeyRound, Languages, ListOrdered, Loader2, LogOut, Menu,
-  Newspaper, NotebookPen, ScanLine, Search, Settings, ShieldCheck, Stethoscope, UserCheck, Users, UsersRound, Wallet, X,
+  Handshake, Newspaper, NotebookPen, ScanLine, Search, Settings, ShieldCheck, Stethoscope, UserCheck, Users, UsersRound, Wallet, X,
 } from 'lucide-react';
 import type { MessageKey, Role } from '@meduza/contracts';
 import { meReconnecting, SessionProvider, useLogout, useMeQuery, useSession } from '@/lib/session';
@@ -46,6 +46,7 @@ const MENU: Item[] = [
   entry('/on-site', 'nav.onSite', UserCheck, 'work'),
   entry('/post', 'nav.post', ClipboardCheck, 'work'),
   entry('/finance', 'nav.finance', Banknote, 'manage'),
+  entry('/partners', 'nav.partners', Handshake, 'manage'),
   entry('/staff', 'nav.staff', UsersRound, 'manage'),
   entry('/inventory', 'nav.inventory', Boxes, 'manage'),
   entry('/cameras', 'nav.cameras', Cctv, 'manage'),

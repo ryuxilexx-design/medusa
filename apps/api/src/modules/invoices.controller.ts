@@ -104,9 +104,11 @@ export class InvoicesController {
     if (!isUuid(id)) throw notFound('Hisob');
     const inv = await this.db.one(
       `SELECT i.*, (i.total - i.paid_amount) AS due, b.name AS branch_name, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.phone,
-              a.starts_at AS appointment_at, a.status AS appointment_status, d.display_name AS doctor_name
+              a.starts_at AS appointment_at, a.status AS appointment_status, d.display_name AS doctor_name,
+              rp.full_name AS referral_partner_name -- the name only: percents and amounts are the manager's (docs/REFERRALS.md)
          FROM invoices i JOIN patients p ON p.id = i.patient_id JOIN branches b ON b.id = i.branch_id
          LEFT JOIN appointments a ON a.id = i.appointment_id LEFT JOIN doctors d ON d.id = a.doctor_id
+         LEFT JOIN referral_partners rp ON rp.id = a.referral_partner_id
         WHERE i.id = $1 AND i.tenant_id = $2 AND i.branch_id = ANY($3)`, [id, ctx.tenantId, ctx.branchIds]);
     if (!inv) throw notFound('Hisob');
     const items = await this.db.rows(
