@@ -85,6 +85,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <div className="divide-y divide-slate-100">
                 {inv.appointment_at && <KeyVal k={t('cash.appointment')} v={<span className="inline-flex flex-wrap items-center justify-end gap-2"><span className="whitespace-nowrap tabular-nums">{fmtDateTime(inv.appointment_at)}</span> <AppointmentStatus status={inv.appointment_status} /></span>} />}
                 {inv.doctor_name && <KeyVal k={t('role.doctor')} v={inv.doctor_name} />}
+                {inv.referral_partner_name && <KeyVal k={t('ref.referredBy')} v={inv.referral_partner_name} />}
               </div>
             </div>
           </Card>

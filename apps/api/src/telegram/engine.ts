@@ -369,8 +369,8 @@ export class BotEngine {
     if (await this.overCardLimit(t)) { t.send(t.t.regLimit); return this.showMenu(t); }
     const seq = (await t.c.query(`UPDATE tenants SET patient_seq = patient_seq + 1 WHERE id = $1 RETURNING patient_seq`, [t.chat.tenant_id])).rows[0].patient_seq;
     const row = (await t.c.query(
-      `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, birth_date, sex, phone, source)
-       VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,'unspecified',$6,'telegram') RETURNING id, patient_number`,
+      `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, birth_date, sex, phone, source, lead_source_id)
+       VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,'unspecified',$6,'telegram', (SELECT id FROM lead_sources WHERE tenant_id = $1 AND system_key = 'telegram_bot')) RETURNING id, patient_number`,
       [t.chat.tenant_id, seq, d.last, d.first, d.birth, t.chat.phone])).rows[0];
     const ctx = t.ctx();
     await audit(t.c, ctx, 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi (Telegram)`);

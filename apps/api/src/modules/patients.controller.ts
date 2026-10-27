@@ -12,8 +12,10 @@ import { today } from '../core/clock';
 import { config } from '../core/config';
 import { consentHistory, latestConsents, recordConsent } from './consent';
 import { anonymisePatient, patientCard, patientExport, takeExportSlot } from './erasure';
+import { assertLeadSource } from './referrals';
 
 const FULL_COLS = `p.id, p.patient_number, p.last_name, p.first_name, p.middle_name, p.birth_date, p.sex, p.phone, p.contact_name, p.contact_phone, p.address, p.note, p.pinfl, p.id_document, p.created_at, p.updated_at, p.source, p.anonymised_at,
+  p.lead_source_id, (SELECT ls.name FROM lead_sources ls WHERE ls.id = p.lead_source_id) AS lead_source_name,
   EXISTS (SELECT 1 FROM telegram_chats tc JOIN telegram_bots b ON b.id = tc.bot_id
            WHERE tc.tenant_id = p.tenant_id AND tc.phone IS NOT NULL AND (tc.phone = p.phone OR (tc.phone = p.contact_phone AND ${GUARDIAN_CARD_SQL})) AND NOT tc.blocked AND b.status = 'active') AS telegram_linked,
   ${NOTICE_CHANNEL_SQL} AS notice_channel`;
@@ -103,6 +105,7 @@ export class PatientsController {
          FROM patients p WHERE ${where.join(' AND ')}
          ORDER BY ${search ? 'p.last_name, p.first_name' : 'p.created_at DESC, p.patient_number DESC'}
          LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    if (ctx.role === 'doctor') rows.forEach((r) => { delete r.lead_source_id; delete r.lead_source_name; });
     return { data: rows, meta: { page, page_size: pageSize, total } };
   }
 
@@ -144,12 +147,13 @@ export class PatientsController {
         throw new AppError(409, 'DUPLICATE_WARNING', 'O‘xshash bemor topildi. Mavjud profilni oching yoki yangi bemor yaratishni tasdiqlang.', undefined, { candidates: dups });
       }
       await assertPinflFree(c, ctx.tenantId, input.pinfl, null);
+      if (input.lead_source_id) await assertLeadSource(c, ctx.tenantId, input.lead_source_id);
       const seq = (await c.query(`UPDATE tenants SET patient_seq = patient_seq + 1 WHERE id = $1 RETURNING patient_seq`, [ctx.tenantId])).rows[0].patient_seq;
       const row = (await c.query(
-        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note, allergy_state, allergy_note, pinfl, id_document)
-         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, patient_number`,
+        `INSERT INTO patients (id, tenant_id, patient_number, last_name, first_name, middle_name, birth_date, sex, phone, contact_name, contact_phone, address, note, allergy_state, allergy_note, pinfl, id_document, lead_source_id)
+         VALUES (gen_random_uuid(), $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id, patient_number`,
         [ctx.tenantId, seq, input.last_name, input.first_name, input.middle_name, input.birth_date, input.sex, input.phone, input.contact_name, input.contact_phone,
-          input.address, input.note, input.allergy_state, input.allergy_note, input.pinfl ?? null, input.id_document ?? null])).rows[0];
+          input.address, input.note, input.allergy_state, input.allergy_note, input.pinfl ?? null, input.id_document ?? null, input.lead_source_id ?? null])).rows[0];
       await audit(c, ctx, 'patient.create', 'patient', row.id, `Bemor #${row.patient_number} yaratildi${dups.length ? ' (dublikat ogohlantirishi tasdiqlangan)' : ''}`);
       const consent = input.consent;
       if (consent?.data_processing) await recordConsent(c, ctx, row.id, { kind: 'data_processing', granted: true, method: consent.method, textVersion: CONSENT_TEXT_VERSION });
@@ -169,6 +173,7 @@ export class PatientsController {
               (SELECT coalesce(sum(CASE WHEN d.kind = 'in' THEN d.amount ELSE -d.amount END),0) FROM patient_deposits d WHERE d.patient_id = p.id)::bigint AS deposit_balance
          FROM patients p WHERE p.id = $1 AND p.tenant_id = $2`, [id, ctx.tenantId, ctx.branchIds]);
     if (ctx.role === 'doctor' || ctx.role === 'lab') { delete (p as any).balance_due; delete (p as any).deposit_balance; }
+    if (ctx.role === 'doctor') { delete (p as any).lead_source_id; delete (p as any).lead_source_name; } // reception's marketing field (docs/REFERRALS.md)
     // consent status: for the roles that collect it (not cashier/lab, who see only the minimal card)
     if (!minimal) (p as any).consents = await latestConsents(this.db.pool, ctx.tenantId, id);
     if (!minimal) (p as any).follow_up = await followUp(this.db.pool, ctx.tenantId, id, ctx.role === 'doctor' ? ctx.doctorId : null); // a doctor sees only their own recommendation
@@ -204,7 +209,7 @@ export class PatientsController {
     await assertPatientAccess(this.db.pool, ctx, id);
     const input = parse(patientUpdateSchema, body) as Record<string, any>;
     // doctors may only update the allergy status; registrars/managers only demographic data
-    const allowed = ctx.role === 'doctor' ? ['allergy_state', 'allergy_note'] : ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'phone', 'contact_name', 'contact_phone', 'address', 'note', 'pinfl', 'id_document'];
+    const allowed = ctx.role === 'doctor' ? ['allergy_state', 'allergy_note'] : ['last_name', 'first_name', 'middle_name', 'birth_date', 'sex', 'phone', 'contact_name', 'contact_phone', 'address', 'note', 'pinfl', 'id_document', 'lead_source_id'];
     const keys = Object.keys(input).filter((k) => allowed.includes(k) && (body as any)?.[k] !== undefined);
     if (!keys.length) return { data: { ok: true } };
     if (input.birth_date && input.birth_date > today()) throw new AppError(422, 'VALIDATION', 'Maydonlarni tekshiring', { birth_date: 'Tug‘ilgan sana kelajakda bo‘lishi mumkin emas' });
@@ -213,6 +218,7 @@ export class PatientsController {
       const cur = (await c.query(`SELECT anonymised_at FROM patients WHERE id = $1 AND tenant_id = $2 FOR UPDATE`, [id, ctx.tenantId])).rows[0];
       if (cur?.anonymised_at && ctx.role !== 'doctor') throw coded(409, 'PATIENT_ANONYMISED', 'api.erasure.anonymised');
       if (keys.includes('pinfl')) await assertPinflFree(c, ctx.tenantId, input.pinfl, id);
+      if (input.lead_source_id) await assertLeadSource(c, ctx.tenantId, input.lead_source_id);
       const sets = keys.map((k, i) => `${k} = $${i + 3}`);
       await c.query(`UPDATE patients SET ${sets.join(', ')}, updated_at = demo_now() WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId, ...keys.map((k) => input[k])]);
       await audit(c, ctx, ctx.role === 'doctor' ? 'patient.allergy_update' : 'patient.update', 'patient', id, `O‘zgargan maydonlar: ${keys.join(', ')}`);
@@ -260,11 +266,15 @@ export class PatientsController {
     const r = ctx.role;
     const visits = r === 'lab' ? [] : await this.db.rows(
       `SELECT a.id, a.starts_at, a.ends_at, a.status, a.branch_id, b.name AS branch_name, d.display_name AS doctor_name, d.specialty, s.name AS service_name,
-              e.id AS encounter_id, n.status AS note_status, n.signed_at
+              e.id AS encounter_id, n.status AS note_status, n.signed_at,
+              a.referral_partner_id, rp.full_name AS referral_partner_name, rp.code AS referral_partner_code, a.lead_source_id, ls.name AS lead_source_name
          FROM appointments a JOIN doctors d ON d.id = a.doctor_id JOIN services s ON s.id = a.service_id JOIN branches b ON b.id = a.branch_id
          LEFT JOIN encounters e ON e.appointment_id = a.id LEFT JOIN clinical_notes n ON n.encounter_id = e.id
+         LEFT JOIN referral_partners rp ON rp.id = a.referral_partner_id LEFT JOIN lead_sources ls ON ls.id = a.lead_source_id
         WHERE a.patient_id = $1 AND a.tenant_id = $2 ORDER BY a.starts_at DESC`, [id, ctx.tenantId]);
     if (r !== 'doctor') visits.forEach((v) => { delete v.note_status; delete v.signed_at; delete v.encounter_id; });
+    // who referred the patient is reception's and the manager's business (docs/REFERRALS.md), never the doctor's
+    else visits.forEach((v) => { for (const k of ['referral_partner_id', 'referral_partner_name', 'referral_partner_code', 'lead_source_id', 'lead_source_name']) delete v[k]; });
     const notes = r !== 'doctor' ? [] : await this.db.rows(
       `SELECT n.id, n.encounter_id, e.appointment_id, n.status, n.complaints, n.diagnosis, n.recommendations, n.signed_at, n.signed_by_name, n.saved_at,
               d.display_name AS doctor_name, d.specialty, a.starts_at

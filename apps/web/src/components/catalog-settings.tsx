@@ -257,6 +257,8 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
   const [dur, setDur] = useState(String(s?.duration_min ?? 30));
   const [share, setShare] = useState(String(s?.share_percent == null ? 0 : Number(s.share_percent)));
   const [active, setActive] = useState<boolean>(s?.active ?? true);
+  // referral partner percent of this service (docs/REFERRALS.md): empty = each partner's own percent
+  const [partnerPct, setPartnerPct] = useState<string>(s?.partner_percent == null ? '' : String(Number(s.partner_percent)));
   // fiscal attributes: IKPU (17 digits, may be empty until the clinic fills its catalogue) and the VAT choice
   const [ikpu, setIkpu] = useState<string>(s?.ikpu_code ?? '');
   const [vat, setVat] = useState<string>(s?.vat_exempt ? 'exempt' : s?.vat_percent == null ? '' : String(s.vat_percent));
@@ -266,6 +268,7 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
   const p = parseSomToTiyin(price);
   const d = Number(dur);
   const sh = Number(share.replace(',', '.'));
+  const pp = partnerPct.trim() === '' ? null : Number(partnerPct.replace(',', '.'));
   const show = tried || !!s;
   const local = {
     name: show && name.trim().length < 2 ? t('admin.set.errName') : undefined,
@@ -273,12 +276,13 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
     duration_min: show && (!Number.isInteger(d) || d < 5 || d > 240) ? t('admin.set.badDuration') : undefined,
     share_percent: show && (!(sh >= 0 && sh <= 100) || share.trim() === '') ? t('settings.services.badShare') : undefined,
     ikpu_code: ikpu.trim() && !/^\d{17}$/.test(ikpu.trim()) ? t('settings.services.badIkpu') : undefined,
+    partner_percent: pp != null && !(pp >= 0 && pp <= 100) ? t('ref.percentRange') : undefined,
   };
-  const invalid = !!(local.name || local.price || local.duration_min || local.share_percent || local.ikpu_code);
+  const invalid = !!(local.name || local.price || local.duration_min || local.share_percent || local.ikpu_code || local.partner_percent);
   const fiscalBody = { ikpu_code: ikpu.trim() || null, vat_exempt: vat === 'exempt', vat_percent: vat === '' || vat === 'exempt' ? null : Number(vat), package_code: pkg.trim() || null };
   const m = useMutation({
     mutationFn: () => {
-      const body: any = { name: name.trim(), category, duration_min: d, share_percent: sh, active, ...fiscalBody };
+      const body: any = { name: name.trim(), category, duration_min: d, share_percent: sh, partner_percent: pp, active, ...fiscalBody };
       if (!s) return api('/services', { method: 'POST', body: { ...body, price: p } });
       // the price goes to the chosen branch only; the other fields are general
       if (p !== Number(s.price) || priceBranch) { body.price = p; if (priceBranch) body.branch_id = priceBranch; }
@@ -294,6 +298,7 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
   const save = () => { setTried(true); if (!invalid) m.mutate(); };
   const dirty = s
     ? name !== s.name || category !== s.category || p !== Number(s.price) || d !== s.duration_min || sh !== Number(s.share_percent ?? 0) || active !== s.active || !!priceBranch
+      || pp !== (s.partner_percent == null ? null : Number(s.partner_percent))
       || fiscalBody.ikpu_code !== (s.ikpu_code ?? null) || fiscalBody.vat_exempt !== !!s.vat_exempt || fiscalBody.vat_percent !== (s.vat_percent ?? null) || fiscalBody.package_code !== (s.package_code ?? null)
     : !!(name || price);
   const e = (k: keyof typeof local) => err[k] ?? local[k];
@@ -316,6 +321,7 @@ function ServiceModal({ s, branches, onClose }: { s: any | null; branches: any[]
             </Select>)}</Field>
         ) : <div className="hidden sm:block" />}
         <Field label={t('settings.services.share')} required error={e('share_percent')}>{(id) => <Input id={id} type="number" inputMode="decimal" min={0} max={100} step={0.5} value={share} invalid={!!e('share_percent')} onChange={(e) => setShare(e.target.value)} />}</Field>
+        <Field label={t('ref.servicePercent')} hint={t('ref.servicePercentHint')} error={e('partner_percent')}>{(id) => <Input id={id} inputMode="decimal" value={partnerPct} invalid={!!e('partner_percent')} placeholder={t('ref.servicePercentPlaceholder')} onChange={(e) => setPartnerPct(e.target.value)} />}</Field>
         <Field label={t('settings.services.ikpu')} hint={t('settings.services.ikpuHint')} error={e('ikpu_code')}>{(id) => <Input id={id} inputMode="numeric" maxLength={17} value={ikpu} invalid={!!e('ikpu_code')} onChange={(e) => setIkpu(e.target.value.replace(/\D/g, ''))} className="tabular-nums" />}</Field>
         <Field label={t('settings.services.vat')} error={err.vat_percent}>{(id) => <Select id={id} value={vat} onChange={(e) => setVat(e.target.value)}>{VAT_OPTIONS.map((v) => <option key={v} value={v}>{vatLabel(v)}</option>)}</Select>}</Field>
         <Field label={t('settings.services.packageCode')} error={err.package_code}>{(id) => <Input id={id} maxLength={40} value={pkg} onChange={(e) => setPkg(e.target.value)} />}</Field>

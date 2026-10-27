@@ -17,7 +17,9 @@ export type Shift = {
   stale?: boolean;
   totals: { payments: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; refunds: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; cash_expenses: { n: number; sum: number }; cash_in: number; cash_out: number;
     /** patient prepayments taken in / paid back from this drawer (absent on shifts closed before deposits existed) */
-    deposit_in?: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; deposit_out?: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }> };
+    deposit_in?: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>; deposit_out?: Record<'cash' | 'card' | 'transfer', { n: number; sum: number }>;
+    /** cash paid to referral partners from this drawer (absent on shifts closed before migration 041) */
+    partner_payouts?: { n: number; sum: number } };
   /** Payments of the shift whose fiscal (KKM) receipt is not recorded yet. Only on /cash-shifts/:id. */
   fiscal_pending?: number;
 };
@@ -157,6 +159,7 @@ export function CloseShiftModal({ shift: initial, onClose }: { shift: Shift; onC
           <dt className="text-slate-600">{t('cash.cashPaymentsN', { n: tot.payments.cash.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.payments.cash.sum)}</dd>
           {tot.refunds.cash.sum > 0 && <><dt className="text-slate-600">{t('cash.cashRefundsN', { n: tot.refunds.cash.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.refunds.cash.sum)}</dd></>}
           {tot.cash_expenses.sum > 0 && <><dt className="text-slate-600">{t('cash.cashExpensesN', { n: tot.cash_expenses.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.cash_expenses.sum)}</dd></>}
+          {(tot.partner_payouts?.sum ?? 0) > 0 && <><dt className="text-slate-600">{t('ref.shiftPayoutsN', { n: tot.partner_payouts!.n })}</dt><dd className="text-right tabular-nums">{formatSom(tot.partner_payouts!.sum)}</dd></>}
           <div aria-hidden="true" className="col-span-2 my-0.5 border-t border-slate-200" />
           <dt className="font-semibold">{t('cash.expectedCashShort')}</dt><dd className="text-right font-semibold tabular-nums">{formatSom(shift.expected_cash)}</dd>
         </dl>

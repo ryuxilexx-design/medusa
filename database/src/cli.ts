@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 import { randomUUID } from 'crypto';
-import { buildSeed, createPool, ensureStarterTemplates, migrate, resetDemo, SEED_IDS } from './index';
+import { buildSeed, createPool, ensureLeadSources, ensureStarterTemplates, migrate, resetDemo, SEED_IDS } from './index';
 import { generateTempPassword, hashPassword } from './password';
 import { parseDrugsCsv, upsertDrugs } from './drugs';
 
@@ -60,6 +60,8 @@ async function createClinic(pool: ReturnType<typeof createPool>, a: Record<strin
     }
     // starter note templates (database/seed/templates.ts): the doctors start with something to tap instead of typing
     const templates = await ensureStarterTemplates(c, tenantId);
+    // the starter lead sources (Instagram, Telegram, «Yo‘llovchi shifokor», the bot's own row …): docs/REFERRALS.md
+    await ensureLeadSources(c, tenantId);
     await c.query(`INSERT INTO audit_logs (tenant_id, actor_name, action, resource_type, resource_id, summary) VALUES ($1, 'CLI', 'tenant.create', 'tenant', $2, $3)`,
       [tenantId, tenantId, `Klinika yaratildi: ${name}; rahbar ${managerName} (${login})`]);
     await c.query('COMMIT');

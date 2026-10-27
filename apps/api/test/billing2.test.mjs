@@ -237,7 +237,7 @@ test('eksport: qaytarish, xarajat, smena, shifokor ulushi, qarzdorlar — sarlav
   const checks = [
     ['/refunds/export.csv', 13, async () => (await manager.get(`/refunds?${period}&page_size=1`)).body.meta.count],
     ['/expenses/export.csv', 10, async () => (await manager.get(`/expenses?${period}&page_size=1`)).body.meta.count],
-    ['/cash-shifts/export.csv', 18, async () => (await manager.get(`/cash-shifts?${period}`)).body.data.length],
+    ['/cash-shifts/export.csv', 19, async () => (await manager.get(`/cash-shifts?${period}`)).body.data.length],
     ['/reports/doctors/export.csv', 5, async () => (await manager.get(`/reports/doctors?${period}`)).body.data.length],
   ];
   for (const [path, cols, count] of checks) {

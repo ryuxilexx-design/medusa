@@ -91,10 +91,32 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {d && d.new_patient_sources?.length > 0 && <NewPatientSources rows={d.new_patient_sources} rangeQs={rangeQs} />}
+
           <AskNumbers />
         </div>
       )}
     </>
+  );
+}
+
+/** «Yangi bemorlar manbasi»: where the period's new cards heard of the clinic (docs/REFERRALS.md). */
+function NewPatientSources({ rows, rangeQs }: { rows: { id: string | null; name: string | null; n: number }[]; rangeQs: string }) {
+  const t = useT();
+  const total = rows.reduce((a, r) => a + r.n, 0);
+  const max = Math.max(...rows.map((r) => r.n), 1);
+  return (
+    <Card className="overflow-hidden" title={t('ref.dashTitle')} padded={false}
+      actions={<TextLink href={`/partners?tab=sources&${rangeQs}`} className="text-sm">{t('ref.dashMore')}<ChevronRight className="h-4 w-4" /></TextLink>}>
+      <ul className="grid grid-cols-1 gap-x-8 gap-y-2 px-5 py-4 md:grid-cols-2" aria-label={t('ref.dashTitle')}>
+        {rows.map((r) => (
+          <li key={r.id ?? 'none'} className="min-w-0">
+            <div className="flex items-baseline justify-between gap-3 text-body"><span className="min-w-0 truncate font-medium text-slate-900">{r.name ?? t('ref.sourceUnknown')}</span><span className="shrink-0 tabular-nums text-slate-700">{r.n} <span className="text-small text-slate-600">({Math.round((r.n / total) * 100)}%)</span></span></div>
+            <div className="mt-1 h-1.5 rounded-full bg-slate-100" aria-hidden="true"><div className="h-1.5 rounded-full bg-brand-600" style={{ width: `${(r.n / max) * 100}%` }} /></div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

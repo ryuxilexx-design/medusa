@@ -8,14 +8,17 @@ import { useSession } from '@/lib/session';
 import { Alert, Button, Checkbox, Field, Input, Modal, ModalCancel, Select, Textarea, TextLink, useToast } from './ui';
 import { FileSignature, Printer } from 'lucide-react';
 import { useT } from '@/lib/i18n';
+import { canRefer, LeadSourceSelect } from './referrals';
 
 export type PatientFormValue = {
   last_name: string; first_name: string; middle_name: string; birth_date: string; sex: string; phone: string;
   contact_name: string; contact_phone: string; address: string; note: string; pinfl: string; id_document: string;
+  /** where the patient heard of the clinic (docs/REFERRALS.md); '' = not asked */
+  lead_source_id: string;
 };
 type ConsentValue = { data: boolean; method: 'signed_paper' | 'verbal'; notifications: boolean };
 const NO_CONSENT: ConsentValue = { data: false, method: 'signed_paper', notifications: false };
-const EMPTY: PatientFormValue = { last_name: '', first_name: '', middle_name: '', birth_date: '', sex: 'unspecified', phone: '', contact_name: '', contact_phone: '', address: '', note: '', pinfl: '', id_document: '' };
+const EMPTY: PatientFormValue = { last_name: '', first_name: '', middle_name: '', birth_date: '', sex: 'unspecified', phone: '', contact_name: '', contact_phone: '', address: '', note: '', pinfl: '', id_document: '', lead_source_id: '' };
 
 /** Create or edit basic patient data. Duplicate warning (same phone, or same name + birth date) needs explicit confirmation. */
 export function PatientFormModal({ open, onClose, patient, onSaved }: { open: boolean; onClose: () => void; patient?: any; onSaved?: (id: string, created: boolean) => void }) {
@@ -66,7 +69,9 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
 
   const save = useMutation({
     mutationFn: (confirm: boolean) => {
-      const body: any = { ...v, confirm_duplicate: confirm || undefined };
+      const body: any = { ...v, confirm_duplicate: confirm || undefined, lead_source_id: v.lead_source_id || null };
+      // an unchanged source is not sent (it may be one the manager has since switched off)
+      if (!canRefer(me.role) || (patient && v.lead_source_id === initial.lead_source_id)) delete body.lead_source_id;
       if (patient) { delete body.confirm_duplicate; return api(`/patients/${patient.id}`, { method: 'PATCH', body }); }
       if (consent.data || consent.notifications) body.consent = { data_processing: consent.data, notifications: consent.notifications, method: consent.method };
       return api<{ data: { id: string; patient_number: number } }>('/patients', { method: 'POST', body });
@@ -121,7 +126,8 @@ export function PatientFormModal({ open, onClose, patient, onSaved }: { open: bo
           <Field label={t('registrar.form.contactPhone')} error={errors.contact_phone}>{(id) => <Input id={id} value={v.contact_phone} onChange={set('contact_phone')} invalid={!!errors.contact_phone} inputMode="tel" />}</Field>
           <Field label={t('registrar.form.pinfl')} className="sm:col-span-2" error={errors.pinfl} hint={t('registrar.form.pinflHint')}>{(id) => <Input id={id} value={v.pinfl} onChange={set('pinfl')} invalid={!!errors.pinfl} inputMode="numeric" maxLength={20} autoComplete="off" placeholder="12345678901234" />}</Field>
           <Field label={t('registrar.form.idDocument')} error={errors.id_document}>{(id) => <Input id={id} value={v.id_document} onChange={set('id_document')} invalid={!!errors.id_document} maxLength={12} autoComplete="off" placeholder="AA1234567" />}</Field>
-          <Field label={t('registrar.form.address')} className="sm:col-span-3" error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
+          <Field label={t('registrar.form.address')} className={canRefer(me.role) ? 'sm:col-span-2' : 'sm:col-span-3'} error={errors.address}>{(id) => <Input id={id} value={v.address} onChange={set('address')} />}</Field>
+          {canRefer(me.role) && <LeadSourceSelect value={v.lead_source_id} onChange={(id) => { setV((x) => ({ ...x, lead_source_id: id })); setErrors((x) => ({ ...x, lead_source_id: '' })); }} error={errors.lead_source_id} />}
           <Field label={t('registrar.note')} className="sm:col-span-3" error={errors.note} hint={t('registrar.form.noteHint')}>{(id) => <Textarea id={id} rows={2} value={v.note} onChange={set('note')} />}</Field>
           {!patient && <ConsentFields value={consent} required={consentRequired} error={errors.consent} onChange={(c) => { setConsent(c); setErrors((x) => ({ ...x, consent: '' })); }} />}
           <button type="submit" className="hidden" />

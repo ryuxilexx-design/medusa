@@ -4,7 +4,7 @@ import { INestApplication } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import { randomUUID } from 'crypto';
-import { backfillSeedCameras, backfillSeedConsents, backfillSeedGuard, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
+import { backfillSeedCameras, backfillSeedConsents, backfillSeedGuard, backfillSeedReferrals, backfillSeedSnapshots, backfillSeedWarehouse, ensureDemoClock, ensureLeadSources, ensureStarterTemplates, migrate, readDemoClock, resetDemo } from '@meduza/db';
 import { purgeSnapshots } from './cameras/ingest';
 import { purgeVisitors } from './modules/security';
 import { config } from './core/config';
@@ -52,6 +52,8 @@ export async function createApp(): Promise<INestApplication> {
     if (keepers) console.log(`Ombor demo: omborchi va dori partiyalari qo‘shildi`);
     const guards = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedGuard(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
     if (guards) console.log(`Qorovul demo: qorovullar, smenalar, obxod va jurnallar qo‘shildi (migratsiya 038 dan oldingi baza)`);
+    const partners = await pool.connect().then(async (c) => { try { await c.query('BEGIN'); const n = await backfillSeedReferrals(c, config.demoDate); await c.query('COMMIT'); return n; } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); } });
+    if (partners) console.log(`Hamkorlar demo: ${partners} ta yo‘llovchi hamkor, manbalar va to‘lovlar qo‘shildi (migratsiya 041 dan oldingi baza)`);
     if (snaps) console.log(`Demo: ${snaps} ta kamera ogohlantirish surati qo‘shildi (migratsiya 016 dan oldingi baza)`);
   } else if (await readDemoClock(pool)) {
     // A real clinic runs on real time. A demo clock here means this is a demo database: refuse rather than
@@ -62,6 +64,7 @@ export async function createApp(): Promise<INestApplication> {
   for (const t of (await pool.query('SELECT id FROM tenants')).rows) {
     const n = await ensureStarterTemplates(pool, t.id);
     if (n) console.log(`${n} ta boshlang‘ich qayd shabloni qo‘shildi (klinika ${t.id})`);
+    await ensureLeadSources(pool, t.id); // starter lead sources (migration 041), idempotent by key
   }
   syncClock((await pool.query('SELECT demo_now() AS n')).rows[0].n);
   // expired sessions, old alert snapshots and old visitor names are removed hourly (they would only make the tables grow)

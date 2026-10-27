@@ -7,6 +7,7 @@ import { formatSom } from '@/lib/format';
 import { Alert, Button, Field, LinkButton, Modal, ModalCancel, Select, useToast } from './ui';
 import { PatientFormModal } from './patient-form';
 import { PatientPicker, PatientRef } from './patient-picker';
+import { type PartnerRef, ReferralFields } from './referrals';
 import { useT } from '@/lib/i18n';
 
 /**
@@ -24,8 +25,12 @@ export function WalkInModal({ open, onClose, patient: given }: { open: boolean; 
   const [formError, setFormError] = useState<string | null>(null);
   const [newPatient, setNewPatient] = useState(false);
   const [done, setDone] = useState<{ id: string; queue_number: number; start_time: string } | null>(null);
+  // «Yo‘llanma bor» / «Qayerdan bildi» (docs/REFERRALS.md): the walk-in is reception's, so always offered here
+  const [referred, setReferred] = useState(false);
+  const [partner, setPartner] = useState<PartnerRef | null>(null);
+  const [sourceId, setSourceId] = useState('');
 
-  useEffect(() => { if (open) { setPatient(given ?? null); setDoctorId(''); setServiceId(''); setErrors({}); setFormError(null); setDone(null); } }, [open, given]);
+  useEffect(() => { if (open) { setPatient(given ?? null); setDoctorId(''); setServiceId(''); setErrors({}); setFormError(null); setDone(null); setReferred(false); setPartner(null); setSourceId(''); } }, [open, given]);
 
   const doctors = useQuery({ queryKey: ['doctors'], queryFn: () => api('/doctors').then((r) => r.data as any[]), enabled: open });
   const services = useQuery({ queryKey: ['services'], queryFn: () => api('/services').then((r) => r.data as any[]), enabled: open });
@@ -37,7 +42,7 @@ export function WalkInModal({ open, onClose, patient: given }: { open: boolean; 
   }, [doctor, doctorServices, serviceId]);
 
   const save = useMutation({
-    mutationFn: () => api('/appointments/walk-in', { method: 'POST', body: { patient_id: patient!.id, doctor_id: doctorId, service_id: serviceId || undefined } }),
+    mutationFn: () => api('/appointments/walk-in', { method: 'POST', body: { patient_id: patient!.id, doctor_id: doctorId, service_id: serviceId || undefined, referral_partner_id: partner?.id ?? null, lead_source_id: sourceId || null } }),
     onSuccess: (r: any) => {
       ['appointments', 'queue', 'patient', 'patients', 'availability', 'dashboard', 'invoices'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(t('registrar.ap.queued', { n: r.data.queue_number }));
@@ -53,6 +58,7 @@ export function WalkInModal({ open, onClose, patient: given }: { open: boolean; 
     const e: Record<string, string> = {};
     if (!patient) e.patient_id = t('registrar.bk.pickPatient');
     if (!doctorId) e.doctor_id = t('registrar.bk.pickDoctor');
+    if (referred && !partner) e.referral_partner_id = t('ref.pickPartner');
     setErrors(e); setFormError(null);
     if (!Object.keys(e).length && !save.isPending) save.mutate();
   }
@@ -87,6 +93,8 @@ export function WalkInModal({ open, onClose, patient: given }: { open: boolean; 
                 {doctorServices.map((s) => <option key={s.id} value={s.id}>{s.name}, {formatSom(s.price)}, {t('duration.min', { n: s.duration_min })}</option>)}
               </Select>
             )}</Field>
+            <ReferralFields referred={referred} onReferred={setReferred} partner={partner} onPartner={(p) => { setPartner(p); setErrors((x) => ({ ...x, referral_partner_id: '' })); }}
+              sourceId={sourceId} onSource={setSourceId} patientSourceId={(patient as any)?.lead_source_id ?? null} errors={errors} />
             <p className="text-small text-slate-600">{t('registrar.wi.hint')}</p>
           </div>
         )}

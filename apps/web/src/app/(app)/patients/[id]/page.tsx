@@ -19,6 +19,7 @@ import { useT } from '@/lib/i18n';
 import { canDeposit, DepositCard, DepositModal } from '@/components/deposits';
 import { PatientRights } from '@/components/patient-rights';
 import { AllergiesPanel, ReportAllergyButton } from '@/components/allergies';
+import { VisitReferralModal } from '@/components/referrals';
 
 /** Quiet separator between the facts of the header line. */
 const Dot = () => <span className="text-slate-400" aria-hidden="true">·</span>;
@@ -118,7 +119,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
         {h.isLoading ? <LoadingRows /> : h.isError ? <ErrorState error={h.error} onRetry={() => h.refetch()} /> : (
           <div className="p-4 sm:p-5">
             {tab === 'overview' && <Overview pt={pt} h={h.data} role={role} onConsent={setConsentKind} />}
-            {tab === 'visits' && <Visits visits={h.data.visits} />}
+            {tab === 'visits' && <Visits visits={h.data.visits} canRefer={canEdit} />}
             {tab === 'notes' && <Notes notes={h.data.notes} />}
             {tab === 'labs' && <Labs labs={h.data.labs} diagnostics={h.data.diagnostics} role={role} />}
             {tab === 'invoices' && <><Invoices invoices={h.data.invoices} /><div className="mt-6"><DepositCard patientId={pt.id} /></div></>}
@@ -152,6 +153,7 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
     pt.pinfl !== undefined && { k: t('registrar.form.pinfl'), v: pt.pinfl || '—' },
     pt.address !== undefined && { k: t('registrar.address'), v: pt.address || '—' },
     pt.note !== undefined && { k: t('registrar.note'), v: pt.note || '—' },
+    pt.lead_source_id !== undefined && { k: t('ref.source'), v: pt.lead_source_name || '—' },
   ].filter(Boolean) as { k: string; v: string }[];
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
@@ -193,16 +195,29 @@ function Overview({ pt, h, role, onConsent }: { pt: any; h: any; role: string; o
   );
 }
 
-function Visits({ visits }: { visits: any[] }) {
+function Visits({ visits, canRefer }: { visits: any[]; canRefer: boolean }) {
   const t = useT();
+  const [editing, setEditing] = useState<any>(null);
   if (!visits.length) return <EmptyState title={t('registrar.noVisits')} />;
+  // reception and the manager see who referred the patient and the source of each visit (never the doctor: the API drops it)
+  const showRef = visits.some((v) => 'lead_source_id' in v);
   return (
-    <Table>
-      <thead><tr><Th>{t('registrar.dateTime')}</Th><Th>{t('registrar.service')}</Th><Th>{t('registrar.doctor')}</Th><Th>{t('registrar.branch')}</Th><Th>{t('registrar.status')}</Th></tr></thead>
-      <tbody>{visits.map((v) => (
-        <tr key={v.id}><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(v.starts_at)}</Td><Td>{v.service_name}</Td><Td>{v.doctor_name}<span className="text-slate-600">, {v.specialty}</span></Td><Td>{v.branch_name}</Td><Td><AppointmentStatus status={v.status} /></Td></tr>
-      ))}</tbody>
-    </Table>
+    <>
+      <Table>
+        <thead><tr><Th>{t('registrar.dateTime')}</Th><Th>{t('registrar.service')}</Th><Th className="hidden md:table-cell">{t('registrar.doctor')}</Th><Th className="hidden lg:table-cell">{t('registrar.branch')}</Th>{showRef && <Th className="hidden sm:table-cell">{t('ref.visitCol')}</Th>}<Th>{t('registrar.status')}</Th></tr></thead>
+        <tbody>{visits.map((v) => (
+          <tr key={v.id}><Td className="whitespace-nowrap tabular-nums">{fmtDateTime(v.starts_at)}</Td><Td>{v.service_name}<div className="text-small text-slate-600 md:hidden">{v.doctor_name}</div></Td><Td className="hidden md:table-cell">{v.doctor_name}<span className="text-slate-600">, {v.specialty}</span></Td><Td className="hidden lg:table-cell">{v.branch_name}</Td>
+            {showRef && <Td className="hidden min-w-[9rem] sm:table-cell">
+              <div className="flex items-start justify-between gap-1">
+                <div className="min-w-0">{v.referral_partner_name ? <div className="font-medium text-slate-900">{v.referral_partner_name}</div> : null}<div className="text-small text-slate-600">{v.lead_source_name ?? '—'}</div></div>
+                {canRefer && !['cancelled', 'no_show'].includes(v.status) && <Button size="icon" variant="ghost" className="-my-1 shrink-0" aria-label={t('ref.editVisit')} title={t('ref.editVisit')} onClick={() => setEditing(v)}><Pencil className="h-4 w-4" /></Button>}
+              </div>
+            </Td>}
+            <Td><AppointmentStatus status={v.status} /></Td></tr>
+        ))}</tbody>
+      </Table>
+      {editing && <VisitReferralModal visit={editing} onClose={() => setEditing(null)} />}
+    </>
   );
 }
 

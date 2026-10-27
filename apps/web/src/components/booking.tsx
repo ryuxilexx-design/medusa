@@ -8,10 +8,11 @@ import { useSession } from '@/lib/session';
 import { Alert, Button, Chip, cx, Field, Input, Modal, ModalCancel, Select, Skeleton, Textarea, useToast } from './ui';
 import { PatientFormModal } from './patient-form';
 import { PatientPicker } from './patient-picker';
+import { canRefer, type PartnerRef, ReferralFields } from './referrals';
 import { useT } from '@/lib/i18n';
 
 export type BookingInit = {
-  patient?: { id: string; last_name: string; first_name: string; patient_number: number }; doctorId?: string; date?: string; time?: string;
+  patient?: { id: string; last_name: string; first_name: string; patient_number: number; lead_source_id?: string | null }; doctorId?: string; date?: string; time?: string;
   /** Follow-up from the signed note: the doctor's «qayta ko‘rik» service is preselected when the doctor has one. */
   followUp?: boolean;
 };
@@ -33,6 +34,11 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [newPatient, setNewPatient] = useState(false);
+  // «Yo‘llanma bor» and «Qayerdan bildi» (docs/REFERRALS.md): reception and the manager, never on a reschedule or a doctor's follow-up
+  const [referred, setReferred] = useState(false);
+  const [partner, setPartner] = useState<PartnerRef | null>(null);
+  const [sourceId, setSourceId] = useState('');
+  const referral = !reschedule && canRefer(me.role);
   // one key per booking dialog: a retry after a lost response returns the same appointment instead of a 409
   const requestKey = useRef(newIdempotencyKey());
   const panel = useRef<HTMLDivElement>(null);
@@ -47,6 +53,7 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     } else {
       setPatient(init?.patient ?? null); setDoctorId(init?.doctorId ?? ''); setServiceId(''); setDate(init?.date ?? me.today); setTime(init?.time ?? ''); setDuration(''); setNote('');
     }
+    setReferred(false); setPartner(null); setSourceId('');
     setErrors({}); setFormError(null);
   }, [open, init, reschedule, me.today]);
 
@@ -81,7 +88,8 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
   const save = useMutation({
     mutationFn: () => reschedule
       ? api(`/appointments/${reschedule.id}`, { method: 'PATCH', body: { version: reschedule.version, doctor_id: doctorId, service_id: serviceId, date, start_time: time, duration_min: duration || undefined, note: note || null } })
-      : api('/appointments', { method: 'POST', headers: { 'Idempotency-Key': requestKey.current }, body: { patient_id: patient!.id, branch_id: avail.data?.branch_id, doctor_id: doctorId, service_id: serviceId, date, start_time: time, duration_min: duration || undefined, note: note || null } }),
+      : api('/appointments', { method: 'POST', headers: { 'Idempotency-Key': requestKey.current }, body: { patient_id: patient!.id, branch_id: avail.data?.branch_id, doctor_id: doctorId, service_id: serviceId, date, start_time: time, duration_min: duration || undefined, note: note || null,
+        ...(referral ? { referral_partner_id: partner?.id ?? null, lead_source_id: sourceId || null } : {}) } }),
     onSuccess: () => {
       ['appointments', 'queue', 'patient', 'patients', 'availability', 'dashboard'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast.success(reschedule ? t('registrar.bk.rescheduled') : t('registrar.bk.booked', { date: fmtDate(date), time, doctor: doctor?.display_name }));
@@ -100,13 +108,14 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
     if (!doctorId) e.doctor_id = t('registrar.bk.pickDoctor');
     if (!serviceId) e.service_id = t('registrar.bk.pickService');
     if (!time || !branchKnown) e.start_time = t('registrar.bk.pickSlot');
+    if (referral && referred && !partner) e.referral_partner_id = t('ref.pickPartner');
     setErrors(e); setFormError(null);
     if (!Object.keys(e).length) { if (!save.isPending) save.mutate(); return; }
     // the first field with an error gets the focus: the patient search, a select, or the slot grid
     setTimeout(() => panel.current?.querySelector<HTMLElement>('[aria-invalid="true"], [data-testid="slot-error"] ~ * button:not([disabled]), [data-testid="slot-error"] ~ p')?.focus(), 30);
   }
 
-  const dirty = !!(time || note || (!init?.patient && patient));
+  const dirty = !!(time || note || partner || (!init?.patient && patient));
   const canEditDuration = me.role === 'manager' || me.role === 'registrar';
   return (
     <>
@@ -177,6 +186,13 @@ export function BookingModal({ open, onClose, init, reschedule }: { open: boolea
                   )}
                 </>
               )}
+            {/* who sent the patient and where they heard of the clinic (docs/REFERRALS.md), under the time it belongs to */}
+            {referral && open && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                <ReferralFields referred={referred} onReferred={setReferred} partner={partner} onPartner={(p) => { setPartner(p); setErrors((x) => ({ ...x, referral_partner_id: '' })); }}
+                  sourceId={sourceId} onSource={setSourceId} patientSourceId={patient?.lead_source_id ?? null} errors={errors} />
+              </div>
+            )}
           </div>
         </div>
       </Modal>
