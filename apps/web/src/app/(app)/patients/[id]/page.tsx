@@ -19,6 +19,7 @@ import { useT } from '@/lib/i18n';
 import { canDeposit, DepositCard, DepositModal } from '@/components/deposits';
 import { PatientRights } from '@/components/patient-rights';
 import { AllergiesPanel, ReportAllergyButton } from '@/components/allergies';
+import { MirrorBadge } from '@/components/integrations';
 
 /** Quiet separator between the facts of the header line. */
 const Dot = () => <span className="text-slate-400" aria-hidden="true">·</span>;
@@ -71,8 +72,10 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
                 ].filter(Boolean).map((el, i) => <span key={i} className="inline-flex items-center gap-2 whitespace-nowrap">{i > 0 && <Dot />}{el}</span>)}
               </p>
               {anonymised && <div className="mt-2"><Badge icon={<ShieldOff className="h-3.5 w-3.5" />}>{t('registrar.anonymisedAt', { date: fmtDate(pt.anonymised_at) })}</Badge></div>}
-              {!anonymised && (pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined || pt.follow_up) && (
+              {!anonymised && (pt.balance_due > 0 || pt.deposit_balance > 0 || pt.telegram_linked || pt.source === 'telegram' || pt.notice_channel !== undefined || pt.follow_up || pt.mirror) && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {/* mirrored from MedPlus: the identity is edited there (docs/MEDPLUS_SYNC.md) */}
+                  {pt.mirror && <MirrorBadge id={pt.mirror.external_id} />}
                   {/* the doctor's recommended follow-up: reception books it from here; once booked the marker turns green */}
                   {pt.follow_up && !pt.follow_up.booked && (
                     <span className="inline-flex max-w-full flex-wrap items-center gap-2" data-testid="follow-up-marker">
@@ -95,7 +98,7 @@ export default function PatientProfile({ params }: { params: Promise<{ id: strin
           {(canEdit || (canDeposit(role) && !anonymised)) && (
             <div className="flex flex-wrap gap-2">
               {canDeposit(role) && !anonymised && <Button icon={<PiggyBank className="h-4 w-4" />} onClick={() => setDepositing(true)}>{t('cash.depositButton')}</Button>}
-              {canEdit && <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>}
+              {canEdit && !pt.mirror && <Button icon={<Pencil className="h-4 w-4" />} onClick={() => setEdit(true)}>{t('registrar.edit')}</Button>}
               {canEdit && <Button icon={<Zap className="h-4 w-4" />} onClick={() => setWalkIn(true)}>{t('registrar.wi.button')}</Button>}
               {canEdit && <Button variant="primary" icon={<CalendarPlus className="h-4 w-4" />} onClick={() => setBook({ patient: pt })}>{t('registrar.newAppt')}</Button>}
             </div>
