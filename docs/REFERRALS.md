@@ -24,8 +24,10 @@ advertising channel («Рекламный канал», «Отчет по ист
 3. `referral_partners.default_percent`.
 
 It is evaluated once, when the order is created (check-in for the booked service, the doctor's orders later on the
-same visit). Later edits of any percent never change past lines. The registrar's quick-added partner has 0 % until
-the manager sets it — lines created before that keep 0 %.
+same visit). Later edits of any percent never change past lines. A partner quick-added by the registrar is
+`approved = false`: `partnerPercentFor()` returns 0 for it on every service (also where the service has its own
+partner percent), so nobody at the desk can create a paid partner. The manager approves it in the partner dialog
+(«Tasdiqlash: ulush hisoblansin»); lines created before that keep 0 %.
 
 The visit's partner can be corrected (`PATCH /appointments/:id/referral`) only while no money was taken for the
 visit (no payment, no refund): its orders are then re-snapshotted with the new partner. After a payment → 409

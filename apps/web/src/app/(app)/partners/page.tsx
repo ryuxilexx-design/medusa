@@ -129,6 +129,7 @@ function DirectoryTab() {
             <Td className="min-w-[10rem]"><div className="font-semibold text-slate-900">{p.full_name}</div>
               <div className="text-small text-slate-600">{t('ref.codeShort', { code: p.code })} · {t(`ref.kind.${p.kind}` as MessageKey)}{p.specialty ? ` · ${p.specialty}` : ''}</div>
               {!p.active && <Badge className="mt-1">{t('ref.inactive')}</Badge>}
+              {p.approved === false && <Badge tone="yellow" className="mt-1">{t('ref.notApproved')}</Badge>}
               <div className="text-small text-slate-600 md:hidden">{p.workplace}</div></Td>
             <Td className="hidden min-w-[10rem] md:table-cell">{p.workplace ?? '—'}{p.region && <div className="text-small text-slate-600">{p.region}</div>}</Td>
             <Td className="hidden whitespace-nowrap tabular-nums sm:table-cell">{p.phone ? formatPhone(p.phone) : '—'}</Td>

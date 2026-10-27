@@ -36,6 +36,9 @@ CREATE TABLE referral_partners (
   -- the partner's percent of a referred service; 0 = none. Service and partner-service overrides: partnerPercentFor()
   default_percent numeric(5,2) NOT NULL DEFAULT 0 CHECK (default_percent BETWEEN 0 AND 100),
   active boolean NOT NULL DEFAULT true,
+  -- a partner quick-added at the desk earns nothing until the manager approves it (partnerPercentFor() returns 0):
+  -- otherwise a service-level percent would pay anyone the registrar types in
+  approved boolean NOT NULL DEFAULT true,
   created_by uuid,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),

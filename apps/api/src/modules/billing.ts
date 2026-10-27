@@ -32,11 +32,11 @@ export async function sharePercentFor(q: Q, tenantId: string, doctorId: string |
 export async function partnerPercentFor(q: Q, tenantId: string, partnerId: string | null, serviceId: string): Promise<number> {
   if (!partnerId) return 0;
   const r = (await q.query(
-    `SELECT p.default_percent, s.partner_percent, ps.percent AS pair
+    `SELECT p.default_percent, p.approved, s.partner_percent, ps.percent AS pair
        FROM referral_partners p JOIN services s ON s.id = $3 AND s.tenant_id = p.tenant_id
        LEFT JOIN referral_partner_services ps ON ps.partner_id = p.id AND ps.service_id = s.id
       WHERE p.id = $2 AND p.tenant_id = $1`, [tenantId, partnerId, serviceId])).rows[0];
-  if (!r) return 0;
+  if (!r || !r.approved) return 0; // not yet approved by the manager (a desk quick-add)
   if (r.pair != null) return Number(r.pair);
   if (r.partner_percent != null) return Number(r.partner_percent);
   return Number(r.default_percent);

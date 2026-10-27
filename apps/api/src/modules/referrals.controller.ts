@@ -22,7 +22,7 @@ import { NEW_PATIENTS_SQL } from './referrals';
 const som = (t: number) => (t / 100).toLocaleString('ru-RU').replace(/ /g, ' ');
 /** Performed services on a live bill — the same rule as the doctor share (reports.controller PERFORMED). */
 const PERFORMED = `o.status IN ('completed','verified') AND i.status <> 'void'`;
-const PARTNER_LIST_COLS = `p.id, p.code, p.full_name, p.phone, p.kind, p.workplace, p.specialty, p.region, p.active`;
+const PARTNER_LIST_COLS = `p.id, p.code, p.full_name, p.phone, p.kind, p.workplace, p.specialty, p.region, p.active, p.approved`;
 const PARTNER_MANAGER_COLS = `${PARTNER_LIST_COLS}, p.default_percent, p.note, p.created_at`;
 
 /** Average check in whole so‘m (tiyin, rounded to 100): revenue of the period / bills paid in it. */
@@ -108,9 +108,10 @@ export class ReferralsController {
       }
       const code = (await c.query(`UPDATE tenants SET partner_seq = partner_seq + 1 WHERE id = $1 RETURNING partner_seq`, [ctx.tenantId])).rows[0].partner_seq;
       const row = (await c.query(
-        `INSERT INTO referral_partners (tenant_id, code, full_name, phone, kind, workplace, specialty, region, note, default_percent, created_by, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, demo_now(), demo_now()) RETURNING ${PARTNER_LIST_COLS.replace(/p\./g, '')}`,
-        [ctx.tenantId, code, input.full_name, input.phone, input.kind, input.workplace, input.specialty, input.region, input.note, input.default_percent ?? 0, ctx.membershipId || null])).rows[0];
+        `INSERT INTO referral_partners (tenant_id, code, full_name, phone, kind, workplace, specialty, region, note, default_percent, approved, created_by, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, demo_now(), demo_now()) RETURNING ${PARTNER_LIST_COLS.replace(/p\./g, '')}`,
+        [ctx.tenantId, code, input.full_name, input.phone, input.kind, input.workplace, input.specialty, input.region, input.note, input.default_percent ?? 0,
+          ctx.role === 'manager', ctx.membershipId || null])).rows[0];
       await audit(c, ctx, 'referral_partner.create', 'referral_partner', row.id, `Hamkor #${code} qo‘shildi${input.default_percent ? `, ${input.default_percent}%` : ''}`);
       return { data: row };
     });
@@ -119,7 +120,7 @@ export class ReferralsController {
   @Roles('manager') @Patch('referral-partners/:id')
   async update(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
     const input = parse(partnerUpdateSchema, body) as Record<string, any>;
-    const FIELDS = ['full_name', 'phone', 'kind', 'workplace', 'specialty', 'region', 'note', 'default_percent', 'active'];
+    const FIELDS = ['full_name', 'phone', 'kind', 'workplace', 'specialty', 'region', 'note', 'default_percent', 'active', 'approved'];
     return this.db.tx(async (c) => {
       const p = await this.loadPartner(c, ctx, id, true);
       const keys = FIELDS.filter((k) => (body as any)?.[k] !== undefined && input[k] !== undefined && String(input[k]) !== String(p[k] ?? (k === 'default_percent' ? 0 : null)));

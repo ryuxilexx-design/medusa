@@ -93,6 +93,14 @@ test('rollar: hamkorlar, foizlar, to‘lovlar va hisobotlar faqat rahbarniki; re
   const dup = await registrar.post('/referral-partners', { full_name: 'Boshqa ism', phone: '+998901234567' });
   assert.equal(dup.status, 409); assert.equal(dup.body.error.code, 'PARTNER_EXISTS'); assert.equal(dup.body.error.details.partner.code, 109, 'mavjud hamkor qaytariladi');
   assert.equal((await manager.get(`/referral-partners/${quick.body.data.id}`)).body.data.default_percent, 0, 'rahbar foizni keyin belgilaydi');
+  // a desk quick-add earns nothing until the manager approves it — even on a service that has its own partner percent
+  const { partnerPercentFor } = require('../dist/modules/billing.js');
+  const labSvc = (await sql(`SELECT id FROM services WHERE tenant_id = $1 AND partner_percent = 10 LIMIT 1`, [SEED_IDS.tenant]))[0].id;
+  assert.equal(quick.body.data.approved, false, 'qabulxonada qo‘shilgan — tasdiqlanmagan');
+  assert.equal(await partnerPercentFor(pool, SEED_IDS.tenant, quick.body.data.id, labSvc), 0, 'tasdiqlanmaguncha 0%');
+  assert.equal((await registrar.patch(`/referral-partners/${quick.body.data.id}`, { approved: true })).status, 403, 'registrator o‘zi tasdiqlay olmaydi');
+  assert.equal((await manager.patch(`/referral-partners/${quick.body.data.id}`, { approved: true })).status, 200);
+  assert.equal(await partnerPercentFor(pool, SEED_IDS.tenant, quick.body.data.id, labSvc), 10, 'tasdiqdan keyin xizmat foizi');
   // percents of services and doctors' views
   assert.ok((await cashier.get('/services')).body.data.every((s) => s.partner_percent === null), 'kassir xizmat foizini ko‘rmaydi');
   assert.ok((await manager.get('/services')).body.data.some((s) => Number(s.partner_percent) === 10), 'rahbar ko‘radi');

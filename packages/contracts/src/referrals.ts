@@ -35,7 +35,8 @@ export const partnerCreateSchema = z.object({
   /** manager only: the registrar's quick-add leaves it at 0 and the manager sets it */
   default_percent: partnerPercent.optional(),
 });
-export const partnerUpdateSchema = partnerCreateSchema.partial().extend({ active: z.boolean().optional() });
+/** `approved`: the manager confirms a desk quick-add; until then the partner earns 0% (lines keep that snapshot). */
+export const partnerUpdateSchema = partnerCreateSchema.partial().extend({ active: z.boolean().optional(), approved: z.boolean().optional() });
 export type PartnerInput = z.infer<typeof partnerCreateSchema>;
 /** This partner's percent on chosen services (replaces the whole list). */
 export const partnerServicesSchema = z.object({

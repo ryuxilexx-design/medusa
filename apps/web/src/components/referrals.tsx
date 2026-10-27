@@ -156,8 +156,8 @@ export function VisitReferralModal({ visit, onClose }: { visit: any; onClose: ()
 
 // ---------------------------------------------------------------- manager
 
-type PartnerForm = { full_name: string; phone: string; kind: string; workplace: string; specialty: string; region: string; note: string; default_percent: string; active: boolean };
-const EMPTY_FORM: PartnerForm = { full_name: '', phone: '', kind: 'doctor', workplace: '', specialty: '', region: '', note: '', default_percent: '', active: true };
+type PartnerForm = { full_name: string; phone: string; kind: string; workplace: string; specialty: string; region: string; note: string; default_percent: string; active: boolean; approved: boolean };
+const EMPTY_FORM: PartnerForm = { full_name: '', phone: '', kind: 'doctor', workplace: '', specialty: '', region: '', note: '', default_percent: '', active: true, approved: true };
 
 /** Manager: add or edit a partner, its percent and its own percent on chosen services. */
 export function PartnerFormModal({ partner, onClose }: { partner?: any; onClose: () => void }) {
@@ -165,7 +165,7 @@ export function PartnerFormModal({ partner, onClose }: { partner?: any; onClose:
   const qc = useQueryClient();
   const toast = useToast();
   const init: PartnerForm = partner ? { full_name: partner.full_name, phone: partner.phone ? formatPhone(partner.phone) : '', kind: partner.kind, workplace: partner.workplace ?? '', specialty: partner.specialty ?? '', region: partner.region ?? '',
-    note: partner.note ?? '', default_percent: String(partner.default_percent ?? ''), active: partner.active } : EMPTY_FORM;
+    note: partner.note ?? '', default_percent: String(partner.default_percent ?? ''), active: partner.active, approved: partner.approved !== false } : EMPTY_FORM;
   const [v, setV] = useState<PartnerForm>(init);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [err, setErr] = useState<string | null>(null);
@@ -179,7 +179,7 @@ export function PartnerFormModal({ partner, onClose }: { partner?: any; onClose:
     mutationFn: async () => {
       const body = { full_name: v.full_name, phone: v.phone || null, kind: v.kind, workplace: v.workplace || null, specialty: v.specialty || null, region: v.region || null, note: v.note || null, default_percent: pct };
       if (!partner) return api('/referral-partners', { method: 'POST', body });
-      await api(`/referral-partners/${partner.id}`, { method: 'PATCH', body: { ...body, active: v.active } });
+      await api(`/referral-partners/${partner.id}`, { method: 'PATCH', body: { ...body, active: v.active, approved: v.approved } });
       if (overrides) await api(`/referral-partners/${partner.id}/services`, { method: 'PUT', body: { items: overrides.filter((o) => o.service_id).map((o) => ({ service_id: o.service_id, percent: Number(o.percent.replace(',', '.')) })) } });
     },
     onSuccess: () => { ['referral-partners', 'referral-partner', 'reports'].forEach((k) => qc.invalidateQueries({ queryKey: [k] })); toast.success(partner ? t('ref.saved') : t('ref.created')); onClose(); },
@@ -201,6 +201,7 @@ export function PartnerFormModal({ partner, onClose }: { partner?: any; onClose:
         <Field label={t('ref.region')} error={errors.region}>{(id) => <Input id={id} value={v.region} onChange={set('region')} />}</Field>
         <Field label={t('ref.percent')} error={errors.default_percent ?? (badPct ? t('ref.percentRange') : undefined)} hint={t('ref.percentHint')}>{(id) => <Input id={id} value={v.default_percent} onChange={set('default_percent')} invalid={badPct || !!errors.default_percent} inputMode="decimal" placeholder="0" className="w-32" />}</Field>
         <Field label={t('registrar.note')} className="sm:col-span-2" error={errors.note}>{(id) => <Input id={id} value={v.note} onChange={set('note')} />}</Field>
+        {partner && partner.approved === false && <div className="sm:col-span-2"><Checkbox checked={v.approved} onChange={(e) => setV({ ...v, approved: e.target.checked })} label={t('ref.approveLabel')} hint={t('ref.approveHint')} /></div>}
         {partner && <div className="sm:col-span-2"><Checkbox checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} label={t('ref.activeLabel')} hint={t('ref.activeHint')} /></div>}
         {partner && (
           <fieldset className="space-y-2 rounded-field border border-slate-200 p-3 sm:col-span-2">
