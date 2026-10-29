@@ -192,6 +192,8 @@ export async function anonymisePatient(c: Q, ctx: Ctx, patientId: string, input:
             benefit_note = NULL, company_member_no = NULL, -- a certificate or policy number identifies the person too
             anonymised_at = $5, erasure_reason = $6, updated_at = $5
       WHERE id = $1 AND tenant_id = $2`, [patientId, ctx.tenantId, ANON_LAST_NAME, ANON_BIRTH_DATE, at, input.reason]);
+  // the bills stay (retention law) but lose the policy/employee number: the company's act lists bill numbers and sums
+  await c.query(`UPDATE invoices SET company_member_no = NULL WHERE tenant_id = $1 AND patient_id = $2 AND company_member_no IS NOT NULL`, [ctx.tenantId, patientId]);
   await stripDhpForPatient(c, ctx.tenantId, patientId); // queued platform bundles lose the identity too
   await audit(c, ctx, 'patient.anonymise', 'patient', patientId, `Bemor #${p.patient_number} anonimlashtirildi (O‘RQ-547 so‘rovi); sabab: ${input.reason.slice(0, 120)}`);
   return { id: patientId, patient_number: p.patient_number, anonymised_at: at };

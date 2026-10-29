@@ -156,6 +156,49 @@ test('kredit limiti: oshsa kassir 403, rahbar tasdiqlaydi (over_limit)', async (
   S.limitCompany = c.body.data.id; S.limitBills = [b1.invoiceId, b2.invoiceId];
 });
 
+test('kredit limiti: ulushli hisobga keyin qo‘shilgan xizmat kompaniyaga limitdan oshmaydi (qolgani bemorniki), rahbar — oshirishi mumkin', async () => {
+  const c = await manager.post('/companies', { name: 'Limit-2 MChJ (demo)', kind: 'employer', inn: '308777777', coverage_percent: 100, credit_limit: 100_000_00 });
+  const b = await newBill([['P01', 1]]); // 70 000, within the limit
+  assert.equal((await cashier.post(`/invoices/${b.invoiceId}/company`, { company_id: c.body.data.id })).status, 200);
+  // a doctor/registrar adds another 70 000 service to the same open bill: the company covers only up to 100 000
+  const [row] = await sql(`SELECT patient_id, appointment_id, branch_id FROM invoices WHERE id = $1`, [b.invoiceId]);
+  const svc = (await sql(`SELECT id FROM services WHERE tenant_id = $1 AND code = 'P01'`, [SEED_IDS.tenant]))[0].id;
+  const add = (role) => billing.createBilledOrder(pool, { tenantId: SEED_IDS.tenant, membershipId: M.registrar, role },
+    { branchId: row.branch_id, patientId: row.patient_id, appointmentId: row.appointment_id, encounterId: null, serviceId: svc, isPrimary: false, doctorId: null, performerDoctorId: null });
+  await add('registrar');
+  let i = await inv(b.invoiceId);
+  assert.equal(i.total, 140_000_00); assert.equal(i.company_share_amount, 100_000_00, 'kompaniya ulushi limitda to‘xtadi');
+  // the manager adding a service may take the company over its limit (an explicit decision)
+  await add('manager');
+  i = await inv(b.invoiceId);
+  assert.equal(i.company_share_amount, 210_000_00);
+});
+
+test('anonimlashtirish hisoblardagi polis/xodim raqamini ham o‘chiradi', async () => {
+  // a patient with nothing that blocks an erasure: no open bill, no deposit, no future visit
+  const [a] = await sql(`SELECT a.id, a.patient_id, a.branch_id FROM appointments a JOIN patients p ON p.id = a.patient_id
+    WHERE a.tenant_id = $1 AND a.branch_id = $2 AND a.status = 'completed' AND p.anonymised_at IS NULL AND p.external_source_id IS NULL
+      AND NOT EXISTS (SELECT 1 FROM invoices i WHERE i.patient_id = p.id AND i.status IN ('unpaid','partially_paid'))
+      AND NOT EXISTS (SELECT 1 FROM patient_deposits d WHERE d.patient_id = p.id)
+      AND NOT EXISTS (SELECT 1 FROM appointments f WHERE f.patient_id = p.id AND f.starts_at > (SELECT demo_now()) AND f.status NOT IN ('cancelled','no_show','completed'))
+    ORDER BY a.starts_at LIMIT 1`, [SEED_IDS.tenant, SEED_IDS.branchCentral]);
+  assert.ok(a, 'mos bemor topildi');
+  const svc = (await sql(`SELECT id FROM services WHERE tenant_id = $1 AND code = 'P01'`, [SEED_IDS.tenant]))[0].id;
+  const r = await billing.createBilledOrder(pool, { tenantId: SEED_IDS.tenant, membershipId: M.registrar, role: 'registrar' },
+    { branchId: a.branch_id, patientId: a.patient_id, appointmentId: a.id, encounterId: null, serviceId: svc, isPrimary: false, doctorId: null, performerDoctorId: null });
+  const co = await company('');
+  assert.equal((await manager.post(`/invoices/${r.invoiceId}/company`, { company_id: co.id, member_no: 'POL-12345' })).status, 200);
+  const { anonymisePatient } = require('../dist/modules/erasure.js');
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query(`UPDATE invoices SET status = 'void' WHERE id = $1`, [r.invoiceId]); // no debt left (rolled back below)
+    await anonymisePatient(c, { tenantId: SEED_IDS.tenant, membershipId: M.manager, role: 'manager', name: 'Rahbar', branchIds: [SEED_IDS.branchCentral] }, a.patient_id, { reason: 'Sinov: ma’lumot egasining so‘rovi', method: 'signed_paper' });
+    assert.equal((await c.query(`SELECT company_member_no FROM invoices WHERE id = $1`, [r.invoiceId])).rows[0].company_member_no, null, 'polis raqami o‘chdi');
+    await c.query('ROLLBACK');
+  } finally { c.release(); }
+});
+
 test('kompaniya to‘lovi: taqsimot, idempotentlik, fiskal qator, tushum; qaytarish emas — bekor qilish (bir marta, sabab bilan)', async () => {
   const [b1, b2] = S.limitBills;
   const bad = await cashier.post('/company-payments', { company_id: S.limitCompany, amount: 100_000_00, allocations: [{ invoice_id: b1, amount: 70_000_00 }] }, key());

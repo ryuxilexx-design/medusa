@@ -127,10 +127,13 @@ ALTER TABLE invoices ADD CONSTRAINT invoices_company_split CHECK (
 CREATE INDEX invoices_company ON invoices (company_id, created_at) WHERE company_id IS NOT NULL;
 CREATE INDEX invoices_discounted ON invoices (tenant_id, created_at) WHERE discount_amount > 0;
 
--- the line discount is a snapshot: once money moved on the bill it never changes (a refund is the way back)
+-- the line discount is a snapshot: once money moved on the bill it never changes (a refund is the way back).
+-- The MedPlus mirror (migration 042, sync_writing()) is the exception: a mirrored line follows MedPlus's own figures and
+-- the sync itself refuses a change the paid amount no longer covers (docs/MEDPLUS_SYNC.md).
 CREATE FUNCTION invoice_item_discount_frozen() RETURNS trigger AS $$
 BEGIN
   IF (NEW.discount_share IS DISTINCT FROM OLD.discount_share OR NEW.line_total IS DISTINCT FROM OLD.line_total OR NEW.line_subtotal IS DISTINCT FROM OLD.line_subtotal)
+     AND NOT sync_writing()
      AND (EXISTS (SELECT 1 FROM payments p WHERE p.invoice_id = OLD.invoice_id)
           OR EXISTS (SELECT 1 FROM invoices i WHERE i.id = OLD.invoice_id AND (i.paid_amount > 0 OR i.credit_amount > 0))) THEN
     RAISE EXCEPTION 'invoice line amounts are frozen after a payment' USING ERRCODE = 'P0001';

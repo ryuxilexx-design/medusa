@@ -85,7 +85,7 @@ export async function createBilledOrder(q: Q, ctx: Ctx, o: {
   await q.query(
     `INSERT INTO invoice_items (tenant_id, invoice_id, order_id, service_id, description, quantity, unit_price, line_subtotal, discount_share, line_total, position)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,0,$8,$9)`, [ctx.tenantId, invoice.id, orderId, s.id, s.name, qty, price, price * qty, pos]);
-  await recalcInvoice(q, invoice.id);
+  await recalcInvoice(q, invoice.id, { allowOverLimit: ctx.role === 'manager' });
   return { orderId, invoiceId: invoice.id };
 }
 
@@ -143,7 +143,11 @@ export const companyShareOf = (lines: { category: string; line_total: number }[]
  *    the rounding remainder on the last line.
  * line_total = line_subtotal − discount_share, so NET_LINE (and the doctor / partner shares) are net of discounts.
  */
-export async function recalcInvoice(q: Q, invoiceId: string) {
+/**
+ * `allowOverLimit`: the company's part may grow past its credit limit (the manager, or setCompanySplit, which checks the
+ * limit itself). Otherwise a service added to a split bill is covered only up to the limit and the rest is the patient's.
+ */
+export async function recalcInvoice(q: Q, invoiceId: string, opts: { allowOverLimit?: boolean } = {}) {
   const inv = (await q.query(`SELECT * FROM invoices WHERE id = $1`, [invoiceId])).rows[0];
   const items = (await q.query(
     `SELECT it.id, it.line_subtotal, it.order_id, it.service_id, o.category FROM invoice_items it JOIN service_orders o ON o.id = it.order_id
@@ -174,6 +178,16 @@ export async function recalcInvoice(q: Q, invoiceId: string) {
     const c = (await q.query(`SELECT coverage_categories FROM companies WHERE id = $1`, [inv.company_id])).rows[0];
     const lines = items.map((it: any, i: number) => ({ category: it.category, line_total: it.line_subtotal - shares[i] }));
     companyShare = Math.min(total, companyShareOf(lines, c?.coverage_categories ?? [], Number(inv.company_percent ?? 100)));
+    const before = Number(inv.company_share_amount ?? 0);
+    if (companyShare > before && !opts.allowOverLimit) {
+      const limit = Number((await q.query(`SELECT credit_limit FROM companies WHERE id = $1`, [inv.company_id])).rows[0]?.credit_limit ?? 0);
+      if (limit > 0) {
+        const others = Number((await q.query(
+          `SELECT coalesce(sum(${COMPANY_DUE()}),0)::bigint AS s FROM invoices i WHERE i.tenant_id = $1 AND i.company_id = $2 AND i.status <> 'void' AND i.id <> $3`,
+          [inv.tenant_id, inv.company_id, invoiceId])).rows[0].s);
+        companyShare = Math.min(companyShare, Math.max(before, limit - others)); // never above the limit, never below what was approved
+      }
+    }
   }
   const paid = Number(inv.paid_amount);
   const status = invoiceStatus({ status: inv.status, total, paid, credit, hasItems: items.length > 0 });

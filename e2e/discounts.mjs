@@ -67,14 +67,14 @@ try {
   const insurer = (await api(m, '/companies?all=1&page_size=50')).data.find((x) => x.name.includes('Ishonch'));
   const open = await api(m, `/companies/${insurer.id}/open-invoices?page_size=100`);
   check(open.data.some((i) => i.id === bill.id), 'Ochiq hisoblar orasida bizning hisob');
-  await m.click('[data-testid="company-payment-open"]'); await m.waitForSelector('[role=dialog]'); await settle(m);
+  await m.click('[data-testid="company-payment-open"]'); await m.waitForSelector('[role=dialog]', { timeout: 30000 }); await settle(m);
   await fill(m, 'Kompaniya', insurer.name, '[role=dialog]'); await settle(m);
   await fill(m, 'Summa', String(open.meta.due / 100), '[role=dialog]');
   await fill(m, 'To‘lov topshiriqnomasi', 'p/t 777', '[role=dialog]');
   await clickText(m, 'Eskilaridan boshlab taqsimlash', '[role=dialog] button'); await sleep(200);
   await shot(m, 'disc-05-company-payment');
   await m.click('[data-testid="company-payment-save"]'); await settle(m);
-  await waitText(m, 'Kompaniya to‘lovi №');
+  await waitText(m, 'Kompaniya to‘lovi №', 30000); // the dev server may still be compiling this dialog on a full run
   const after = (await api(m, `/companies/${insurer.id}`)).data;
   check(after.outstanding === 0, 'Sug‘urta qarzi yopildi');
   inv = (await api(m, `/invoices/${bill.id}`)).data;
@@ -84,7 +84,7 @@ try {
   // the reconciliation act (A4) for this month
   const from = me.today.slice(0, 8) + '01';
   await m.goto(`${BASE}/print/company-act/${insurer.id}?from=${from}&to=${me.today}`, { waitUntil: 'networkidle0' }); await settle(m);
-  await waitText(m, 'solishtirish dalolatnomasi');
+  await waitText(m, 'solishtirish dalolatnomasi', 30000); // first compile of the print page
   check(await m.evaluate(() => document.body.innerText.includes('Davr oxiriga qoldiq') && document.body.innerText.includes('Kontragent nomidan')), 'Akt sverki: qoldiqlar va imzolar');
   await shot(m, 'disc-06-act');
   // the discounts report shows the cashier's discount

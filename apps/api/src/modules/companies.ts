@@ -59,7 +59,7 @@ export async function setCompanySplit(c: Q, ctx: Ctx, invoiceId: string, input: 
   const p = (await c.query(`SELECT company_id, company_member_no FROM patients WHERE id = $1`, [inv.patient_id])).rows[0];
   const memberNo = input.member_no ?? (p?.company_id === co.id ? p.company_member_no : null);
   await c.query(`UPDATE invoices SET company_id = $2, company_percent = $3, company_member_no = $4, company_set_by_name = $5 WHERE id = $1`, [invoiceId, co.id, percent, memberNo, ctx.name]);
-  await recalcInvoice(c, invoiceId);
+  await recalcInvoice(c, invoiceId, { allowOverLimit: true }); // the limit is checked just below (manager may go over)
   const share = Number((await c.query(`SELECT company_share_amount FROM invoices WHERE id = $1`, [invoiceId])).rows[0].company_share_amount);
   if (!share) throw coded(422, 'COMPANY_NO_LINES', 'api.comp.noLines');
   const limit = Number(co.credit_limit);
