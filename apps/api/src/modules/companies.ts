@@ -63,6 +63,7 @@ export async function setCompanySplit(c: Q, ctx: Ctx, invoiceId: string, input: 
   const share = Number((await c.query(`SELECT company_share_amount FROM invoices WHERE id = $1`, [invoiceId])).rows[0].company_share_amount);
   if (!share) throw coded(422, 'COMPANY_NO_LINES', 'api.comp.noLines');
   const limit = Number(co.credit_limit);
+  await c.query(`SELECT pg_advisory_xact_lock(hashtext('company-limit:' || $1::text))`, [co.id]); // same lock as recalcInvoice()
   const outstanding = await companyOutstanding(c, ctx.tenantId, co.id, invoiceId);
   const overLimit = limit > 0 && outstanding + share > limit;
   if (overLimit && ctx.role !== 'manager') throw coded(403, 'COMPANY_CREDIT_LIMIT', 'api.comp.creditLimit', { limit: som(limit), outstanding: som(outstanding) });

@@ -180,6 +180,9 @@ export async function recalcInvoice(q: Q, invoiceId: string, opts: { allowOverLi
     companyShare = Math.min(total, companyShareOf(lines, c?.coverage_categories ?? [], Number(inv.company_percent ?? 100)));
     const before = Number(inv.company_share_amount ?? 0);
     if (companyShare > before && !opts.allowOverLimit) {
+      // one credit-limit decision per company at a time (setCompanySplit takes the same lock): two bills growing
+      // together must not both fit under the limit. An advisory lock, so the company row's lock order is untouched.
+      await q.query(`SELECT pg_advisory_xact_lock(hashtext('company-limit:' || $1::text))`, [inv.company_id]);
       const limit = Number((await q.query(`SELECT credit_limit FROM companies WHERE id = $1`, [inv.company_id])).rows[0]?.credit_limit ?? 0);
       if (limit > 0) {
         const others = Number((await q.query(
