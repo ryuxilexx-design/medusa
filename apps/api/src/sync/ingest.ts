@@ -97,7 +97,14 @@ export async function mapRef(run: Run, kind: MapKind, extId: string | null | und
   }
   const label = (name || key).slice(0, 200);
   let target: string | null = null, code: string | null = null, placeholder = false;
-  if (kind === 'branch') {
+  // the same service/doctor already mapped under another key (a file import keys by name, the bridge by MedPlus's id):
+  // follow that mapping, so a manager's choice holds for both and no second placeholder is made
+  const sibling = (kind === 'service' || kind === 'doctor') && name
+    ? (await c.query(`SELECT target_id, placeholder FROM external_mappings WHERE source_id = $1 AND kind = $2 AND target_id IS NOT NULL AND lower(external_name) = lower($3)
+                       ORDER BY placeholder, created_at LIMIT 1`, [src.id, kind, name.slice(0, 200)])).rows[0]
+    : undefined;
+  if (sibling) { target = sibling.target_id; placeholder = sibling.placeholder; }
+  else if (kind === 'branch') {
     const b = name ? (await c.query(`SELECT id FROM branches WHERE tenant_id = $1 AND lower(name) = $2`, [src.tenant_id, normName(name)])).rows : [];
     if (b.length === 1) target = b[0].id;
     else {
@@ -108,10 +115,14 @@ export async function mapRef(run: Run, kind: MapKind, extId: string | null | und
     const s = name ? (await c.query(`SELECT id FROM services WHERE tenant_id = $1 AND active AND lower(name) = $2 LIMIT 2`, [src.tenant_id, normName(name)])).rows : [];
     if (s.length === 1) target = s[0].id;
     else {
+      // the same name may already have a placeholder under another key (a file import keyed it by name, the bridge
+      // now sends MedPlus's id; or two MedPlus services share a name) — reuse it, service names are unique per clinic
+      const pname = `MedPlus: ${label}`.slice(0, 200);
       const cat = hint.category && ['consultation', 'lab', 'ultrasound', 'procedure'].includes(hint.category) ? hint.category : guessCategory(label);
-      target = (await c.query(
-        `INSERT INTO services (id, tenant_id, code, name, category, duration_min, share_percent, active) VALUES (gen_random_uuid(), $1, $2, $3, $4, 15, 0, false) RETURNING id`,
-        [src.tenant_id, `MP-${stableHash([src.id, key]).slice(0, 10).toUpperCase()}`, `MedPlus: ${label}`.slice(0, 200), cat])).rows[0].id;
+      target = (await c.query(`SELECT id FROM services WHERE tenant_id = $1 AND lower(name) = lower($2)`, [src.tenant_id, pname])).rows[0]?.id
+        ?? (await c.query(
+          `INSERT INTO services (id, tenant_id, code, name, category, duration_min, share_percent, active) VALUES (gen_random_uuid(), $1, $2, $3, $4, 15, 0, false) RETURNING id`,
+          [src.tenant_id, `MP-${stableHash([src.id, key]).slice(0, 10).toUpperCase()}`, pname, cat])).rows[0].id;
       placeholder = true;
     }
   } else if (kind === 'doctor') {

@@ -233,6 +233,31 @@ test('xizmat moslashtirish: keyingi yozuvlar yangi xizmatga, eskilari o‘z nusx
   assert.equal(rows[1].service_id, real.id, 'yangisi tasdiqlangan xizmatga');
 });
 
+test('fayl (nom bo‘yicha) keyin ko‘prik (MedPlus ID bilan): o‘sha xizmat/shifokor — xato yo‘q, ikkinchi vaqtinchalik yozuv yo‘q, rahbar tanlovi saqlanadi', async () => {
+  // a file import keys a service by its name only; the bridge later sends the same service with MedPlus's id
+  const r1 = await bridge([{ kind: 'order', external_id: 'o-n1', data: { patient_id: '28354', branch_id: '1', service_name: 'Массаж спины', doctor_name: 'Нуриддинов Ш.', price: 900_00, ordered_at: '2026-10-16 15:00' } }]);
+  assert.equal(r1.body.data.errors, 0);
+  const r2 = await bridge([
+    { kind: 'service', external_id: 'svc-77', data: { name: 'Массаж спины' } },
+    { kind: 'doctor', external_id: 'doc-77', data: { name: 'Нуриддинов Ш.' } },
+    { kind: 'service', external_id: 'svc-88', data: { name: 'Справка' } },
+    { kind: 'order', external_id: 'o-n2', data: { patient_id: '28354', branch_id: '1', service_id: 'svc-77', service_name: 'Массаж спины', doctor_id: 'doc-77', price: 900_00, ordered_at: '2026-10-16 15:10' } },
+  ]);
+  assert.equal(r2.status, 200);
+  assert.equal(r2.body.data.errors, 0, JSON.stringify(r2.body.data));
+  const orders = (await pool.query(`SELECT x.external_id, o.service_id, o.doctor_id FROM service_orders o JOIN external_refs x ON x.our_id = o.id WHERE x.source_id = $1 AND x.external_id IN ('o-n1','o-n2') ORDER BY 1`, [source.id])).rows;
+  assert.equal(orders.length, 2);
+  assert.equal(orders[1].service_id, orders[0].service_id, 'bitta vaqtinchalik xizmat');
+  assert.equal(orders[1].doctor_id, orders[0].doctor_id, 'bitta shifokor');
+  assert.equal(Number((await one(`SELECT count(*) FROM services WHERE tenant_id = $1 AND lower(name) = lower('MedPlus: Массаж спины')`, [SEED_IDS.tenant])).count), 1);
+  // «Справка» was mapped by the manager to a real service: the id-keyed mapping follows that choice
+  const maps = (await pool.query(`SELECT external_id, external_name, target_id, placeholder FROM external_mappings WHERE source_id = $1 AND kind = 'service'`, [source.id])).rows;
+  const byName = maps.find((x) => x.external_id !== 'svc-88' && x.external_name === 'Справка');
+  const byId = maps.find((x) => x.external_id === 'svc-88');
+  assert.equal(byId.target_id, byName.target_id);
+  assert.equal(byId.placeholder, false);
+});
+
 test('bemorni moslash: JShShIR, telefon + tug‘ilgan sana bilan mavjud kartaga bog‘lanadi; noaniq — yangi karta + dublikat belgisi', async () => {
   const seed = (await pool.query(`SELECT id, last_name, first_name, birth_date, phone FROM patients p WHERE tenant_id = $1 AND phone IS NOT NULL AND external_source_id IS NULL AND anonymised_at IS NULL
       AND NOT EXISTS (SELECT 1 FROM patients o WHERE o.tenant_id = p.tenant_id AND o.id <> p.id AND o.phone = p.phone AND o.birth_date = p.birth_date) ORDER BY patient_number LIMIT 6`, [SEED_IDS.tenant])).rows;

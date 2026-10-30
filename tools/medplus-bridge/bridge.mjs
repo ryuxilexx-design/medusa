@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // MedPlus → Med.uz.ai bridge (runs on the clinic's Windows PC next to MedPlus). docs/MEDPLUS_SYNC.md
 //
-//   node bridge.mjs --probe            list MedPlus tables and columns (schema only, no rows) → send the output to us
+//   node bridge.mjs --probe [--out f]  list MedPlus tables and columns (schema only, no rows) → send the output to us
+//                                      (without mysql.database: the list of databases, to find MedPlus's one)
 //   node bridge.mjs --dry-run          read with queries.json and print counts; sends nothing, keeps no cursor
 //   node bridge.mjs --once             one pass (Windows Task Scheduler every minute)
 //   node bridge.mjs                    run forever, one pass every interval_sec (as a service)
 //
 // Options: --config config.json (default: next to this file), --queries queries.json.
-import { appendFileSync, existsSync, readdirSync, readFileSync, unlinkSync } from 'node:fs';
+import { appendFileSync, existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fileCursorStore, httpSender, loadQueries, memoryCursorStore, runOnce, takeLock, FatalSendError } from './core.mjs';
@@ -44,7 +45,12 @@ async function source() {
 
 async function probe() {
   const src = await source();
-  try { console.log(JSON.stringify(await src.probe(), null, 1)); } finally { await src.close(); }
+  try {
+    const text = JSON.stringify(await src.probe(), null, 1);
+    // --out writes UTF-8 itself (PowerShell's «>» would write UTF-16)
+    const out = opt('--out', null);
+    if (out) { writeFileSync(resolve(out), text + '\n'); console.log(`saqlandi: ${resolve(out)}`); } else console.log(text);
+  } finally { await src.close(); }
 }
 
 async function pass(dryRun) {

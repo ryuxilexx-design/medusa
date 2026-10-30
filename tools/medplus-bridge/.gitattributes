@@ -1,0 +1,3 @@
+*.bat text eol=crlf
+windows/*.txt text eol=crlf
+windows/*.sql text eol=crlf

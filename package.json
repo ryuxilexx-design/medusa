@@ -33,7 +33,8 @@
     "db:import-icd10": "npm run build:packages && node database/dist/src/cli.js import-icd10",
     "db:import-drugs": "npm run build:packages && node database/dist/src/cli.js import-drugs",
     "db:import-medplus": "npm run build:packages && npm run build -w @meduza/api && node apps/api/dist/cli/import-medplus.js",
-    "test:bridge": "node --test tools/medplus-bridge/test/*.test.mjs"
+    "test:bridge": "node --test tools/medplus-bridge/test/*.test.mjs",
+    "bridge:pack": "node tools/medplus-bridge/pack.mjs"
   },
   "devDependencies": {
     "railway": "3.12.0",

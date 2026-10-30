@@ -34,7 +34,9 @@ Manager: Sozlamalar → Integratsiyalar ── file import (XLSX/CSV) ──► 
   merged; an ambiguous match creates a new card and a «possible duplicate» row for the manager. On linking, the card's
   own data stays and empty fields are filled; later MedPlus changes overwrite the identity fields.
 - **Reference data:** an unknown service → inactive placeholder «MedPlus: <name>», an unknown doctor → inactive stub;
-  both listed for the manager to map. Branches are matched by name (or the only branch); an unknown branch or payment
+  both listed for the manager to map. The same service/doctor arriving under a second key (the file import keys by name,
+  the bridge by MedPlus's id) follows the existing mapping of that name — the manager's choice holds for both and no
+  second placeholder is made. Branches are matched by name (or the only branch); an unknown branch or payment
   form parks its records until mapped. Remapping changes future records only; mirrored rows keep their snapshot.
 - Visits become appointments (completed/scheduled/cancelled), lines without a visit go to a day invoice
   (patient + branch + day). No encounters or clinical notes are created (MedPlus sends no clinical text). The
@@ -79,12 +81,21 @@ Use MedPlus's ids consistently (`branch_id`, `doctor_id`, `service_id`); a name-
    (`clinic` = MedPlus's database name, see `D:\OSPanel\domains\clinic` config.) The bridge also sets the session
    READ ONLY, runs each query in `START TRANSACTION READ ONLY`, a 30 s statement limit, no multi-statements, and
    refuses any query that is not a single SELECT.
-2. Install **Node.js 20 LTS (x64)** from nodejs.org. Copy `tools/medplus-bridge` to `C:\medplus-bridge`, then in
-   `cmd`: `cd C:\medplus-bridge && npm install --omit=dev` (pinned `mysql2`).
+2. **Offline package:** `npm run bridge:pack` → `dist/medplus-bridge-YYYYMMDD.zip` (bridge, `npm ci` node_modules,
+   portable `node\node.exe` win-x64 checked against nodejs.org's SHASUMS256, and the helpers from
+   `tools/medplus-bridge/windows/` at the root: `README-UZ.txt` — the step-by-step for the clinic's admin,
+   `0-readonly-user.sql`, `1-probe.bat`, `2-dry-run.bat`, `probe-phpmyadmin.sql`). Unzip to `C:\medplus-bridge`;
+   nothing is installed. Node 22 needs Windows 10 / Server 2016+; on older Windows use `probe-phpmyadmin.sql`
+   (the same schema query, exported as CSV from phpMyAdmin). The `.bat` files use the bundled `node.exe`, else a
+   system `node`. Tested against MariaDB 10.4 and MySQL 5.7 (probe, dry-run, `--once` into the API, incremental pass
+   with a refund row and a patient update, reconciliation 0); the `.bat` files have not been run on real Windows yet.
 3. In Med.uz.ai: **Sozlamalar → Integratsiyalar → «MedPlus’ni ulash»**. Copy *Manzil*, *Manba ID* and *Kalit* (shown
    once; «Yangi kalit» issues a new one and revokes the old) into `config.json` (from `config.example.json`). Restrict
    the file to the bridge's Windows account (or put the key in the `MEDPLUS_BRIDGE_TOKEN` environment variable).
-4. `node bridge.mjs --probe > schema.json` — tables, approximate row counts and columns, **no rows**. Send it to us.
+4. `1-probe.bat` (= `node bridge.mjs --probe --out schema.json`; `--out` writes UTF-8 — PowerShell's `>` would
+   write UTF-16) — tables, approximate row counts, collations and columns, **no rows**. Send it to us. With an empty
+   `mysql.database` it lists the databases the user can see instead. MySQL < 5.6.5 (no `READ ONLY` transactions)
+   falls back to plain SELECTs — the SELECT-only user still guards it (`read_only_tx: false` in the output).
 5. Write `queries.json` (from `queries.example.json`, see below), then `node bridge.mjs --dry-run` (counts only).
 6. Schedule: Task Scheduler → *Create Task* → «Run whether user is logged on or not», trigger *At startup* and
    *Daily, repeat every 1 minute indefinitely*, action `C:\Program Files\nodejs\node.exe` with arguments
