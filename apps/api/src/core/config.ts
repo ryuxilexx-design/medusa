@@ -7,6 +7,18 @@ function packageVersion(): string {
   try { return String(JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')).version || '0'); } catch { return '0'; }
 }
 
+/**
+ * A database password with «/», «@», «#» or «?» breaks the postgres:// address the production compose file builds
+ * (pg then fails with a bare «Invalid URL» or connects to the wrong host). main.ts refuses to start with a clear message.
+ */
+export function databaseUrlProblem(url: string): string | null {
+  try { new URL(url); } catch { return 'DATABASE_URL noto‘g‘ri manzil'; }
+  // «user:12/ab@db» parses as host «user», port 12: an «@» outside the authority means the password was cut
+  const authority = url.slice(url.indexOf('//') + 2).split(/[/?#]/)[0];
+  if (!authority.includes('@') && url.split('?')[0].includes('@')) return 'DATABASE_URL da parol o‘qilmadi';
+  return null;
+}
+
 const mode = (process.env.APP_MODE || 'demo') as 'development' | 'demo' | 'production';
 const sttProvider = (process.env.STT_PROVIDER || 'off') as 'off' | 'local' | 'openai';
 if (!['off', 'local', 'openai'].includes(sttProvider)) throw new Error(`STT_PROVIDER must be off, local or openai, got "${sttProvider}"`);

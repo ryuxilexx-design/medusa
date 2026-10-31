@@ -39,7 +39,11 @@ export async function createApp(): Promise<INestApplication> {
   // anyone choose their own IP with X-Forwarded-For and walk around the login throttle
   (app.getHttpAdapter().getInstance() as any).set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 2));
   const pool = app.get(Db).pool;
-  await migrate(pool, () => undefined);
+  // one summary line (not one per file): the operator's update check reads it (docs/DEPLOY_UZ.md §5)
+  let applied = 0;
+  await migrate(pool, (msg: string) => { if (msg.startsWith('migratsiya')) applied++; });
+  const lastMigration = (await pool.query(`SELECT max(name) AS m FROM schema_migrations`)).rows[0]?.m ?? '—';
+  console.log(`Migratsiyalar: ${applied ? `${applied} ta yangi qo‘llandi` : 'yangi yo‘q'}, oxirgisi ${lastMigration}`);
   // First deploy: an empty database gets the deterministic demo seed (never runs in production mode).
   if (config.autoSeed && config.demoEnabled && !(await pool.query('SELECT count(*)::int AS n FROM tenants')).rows[0].n) {
     await resetDemo(pool, config.demoDate, config.demoTime);

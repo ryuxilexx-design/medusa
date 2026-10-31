@@ -60,7 +60,7 @@ export async function migrate(pool: Pool, log = console.log): Promise<void> {
         await client.query(sql);
         await client.query('INSERT INTO schema_migrations(name) VALUES ($1)', [f]);
         await client.query('COMMIT');
-        log(`migratsiya qo'llandi: ${f}`);
+        log(`migratsiya qo‘llandi: ${f}`);
       } catch (e) {
         await client.query('ROLLBACK');
         throw e;

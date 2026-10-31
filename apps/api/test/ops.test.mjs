@@ -130,3 +130,15 @@ test('CLI reset-password: yangi vaqtinchalik parol bir marta, qulf ochiladi, ses
   assert.equal((await again.get('/me')).body.data.must_change_password, true);
   assert.equal((await again.get('/patients')).status, 403, 'parol almashtirilmaguncha boshqa yo‘llar yopiq');
 });
+
+test('DATABASE_URL: parolda «/» (openssl rand -base64) bo‘lsa — API aniq xabar bilan to‘xtaydi, hex parol va oddiy manzillar o‘tadi', () => {
+  const { databaseUrlProblem } = require('../dist/core/config.js');
+  // rehearsal 2026-10-31: base64 passwords contain «/» about 40 % of the time; pg then fails with a bare «Invalid URL»
+  assert.ok(databaseUrlProblem('postgres://meduza:ab/cd+ef=@db:5432/meduza'), '«/» → port xatosi');
+  assert.ok(databaseUrlProblem('postgres://meduza:123/abc@db:5432/meduza'), '«/» raqamdan keyin → noto‘g‘ri server');
+  assert.ok(databaseUrlProblem('postgres://meduza:a#b@db:5432/meduza'));
+  assert.equal(databaseUrlProblem('postgres://meduza:0f3a9c2b7d1e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e@db:5432/meduza'), null);
+  assert.equal(databaseUrlProblem('postgres://meduza:Ab+cd=ef@db:5432/meduza'), null);
+  assert.equal(databaseUrlProblem('postgres://meduza:meduza_local@127.0.0.1:5433/meduza_test'), null);
+  assert.equal(databaseUrlProblem('postgres://127.0.0.1:5433/meduza'), null);
+});

@@ -23,6 +23,31 @@ Hamma narsa bitta serverda, Docker Compose bilan ishlaydi:
 Fayllar: `Dockerfile`, `deploy/docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/backup/*.sh`,
 `deploy/.env.production.example`.
 
+## 0. Pilot oldidan: hal qilinishi kerak bo‘lgan masalalar
+
+Har bandga mas’ul shaxs va sana yozilsin; hammasi «ha» bo‘lmaguncha haqiqiy bemor kiritilmaydi.
+
+- [ ] **Domen** tanlangan (masalan `med.klinika.uz`), DNS kim boshqarishi aniq, A-yozuvi server IP’siga qaratilgan.
+- [ ] **Server provayderi** — O‘zbekistonda, shartnomada ma’lumot O‘zbekiston hududida saqlanishi yozilgan; serverdan
+      Let’s Encrypt sertifikati olinishi va klinika tarmog‘idan kechikish (TAS-IX) sinab ko‘rilgan (1-bo‘lim).
+- [ ] **Sirlar serverdan tashqarida saqlangan**: `APP_SECRET_KEY`, `BACKUP_PASSPHRASE`, `POSTGRES_PASSWORD` — rahbarning
+      parol menejerida va muhrlangan konvertda (seyf). Kim ochishi mumkinligi yozilgan. Ularsiz nusxani ochib bo‘lmaydi.
+- [ ] **Serverdan tashqari nusxa joyi** tanlangan (O‘zbekistondagi ikkinchi server yoki klinikadagi shifrlangan disk),
+      `rsync` har kuni ishlaydi (4-bo‘lim) va u yerdagi fayldan bir marta tiklash sinovi o‘tkazilgan.
+- [ ] **Uptime monitor** `https://DOMAIN/api/v1/health` ni har 5 daqiqada tekshiradi; xabar kimga borishi (telefon/Telegram)
+      belgilangan (6-bo‘lim).
+- [ ] **Fiskal rejim — `manual`** (parallel rejim, 7-bo‘lim): KKM klinikada qoladi, kassirlar chek raqamini kiritishni
+      o‘rgangan; Sozlamalar → Xizmatlar da har xizmatga IKPU kodi va QQS kiritilgan («IKPU kodi kiritilmagan xizmatlar: 0»).
+- [ ] **Rozilik matni** (`CONSENT_TEXT_VERSION`, `packages/contracts/src/i18n/messages/consent.ts`) yurist tomonidan
+      tekshirilgan; matn o‘zgarsa versiya ham o‘zgartirilgan; qog‘oz varaqlar chop etilgan.
+- [ ] **AI haqiqiy bemorlar uchun o‘chiq**: `AI_MODE=off`, `AI_CLINICAL_ALLOWED=0` (8-bo‘lim). Yoqish — faqat rozilik matni
+      va shartnoma AI’ga uzatishni qamrab olgach, to‘lovli kalit bilan. Ovozli diktovka — faqat `STT_PROVIDER=local` (6b).
+- [ ] **Telegram bot — ixtiyoriy.** Yoqilsa: klinikaning o‘z boti, token faqat Sozlamalar → Telegram bot orqali (shifrlanadi).
+      SMS (Eskiz) va kameralar ham ixtiyoriy; kamerada bemor yuzi faqat imzolangan biometrik rozilik bilan.
+- [ ] **Katalog va xodimlar**: haqiqiy narxlar (namunaviy `--catalog demo` narxlari almashtirilgan), ikkala filial,
+      xonalar, xodimlar va rollar, shifokorlar jadvali kiritilgan (3-bo‘lim); har xodim vaqtinchalik parolni almashtirgan.
+- [ ] **Operator**: yangilash, haftalik nusxa tekshiruvi (`restore-test.log`) va disk joyini kim kuzatishi belgilangan.
+
 ## 1. Server
 
 - O‘zbekistondagi data-markaz (VPS yoki ajratilgan server). Provayder bilan shartnomada ma’lumot
@@ -48,14 +73,27 @@ cd /opt/meduzai/deploy
 cp .env.production.example .env
 chmod 600 .env
 openssl rand -base64 32   # → APP_SECRET_KEY
-openssl rand -base64 24   # → POSTGRES_PASSWORD
+openssl rand -hex 24      # → POSTGRES_PASSWORD (faqat hex: base64 dagi «/» baza manzilini buzadi)
 openssl rand -base64 24   # → BACKUP_PASSPHRASE
 nano .env                 # DOMAIN, ACME_EMAIL va yuqoridagi uchta qiymat; PUBLIC_URL — server tashqaridan
                           # ko‘rinadigan manzil (bo‘sh qoldirilsa https://DOMAIN; kameralar va Telegram havolalari shuni ishlatadi)
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml ps        # hammasi "running", app "healthy"
-docker compose -f docker-compose.prod.yml logs app | tail -20
+docker compose -f docker-compose.prod.yml up -d --build    # birinchi marta 5–15 daqiqa (image yig‘iladi)
+docker compose -f docker-compose.prod.yml ps        # hammasi "running", app "healthy" (ishga tushgandan ~1 daqiqa keyin)
+docker compose -f docker-compose.prod.yml logs app | grep -E "Migratsiyalar|Med.uz.ai API"
+#   Migratsiyalar: 43 ta yangi qo‘llandi, oxirgisi 043_….sql
+#   Med.uz.ai API: … rejim: production · vaqt: <hozirgi Toshkent vaqti> · AI: off
+docker compose -f docker-compose.prod.yml logs backup | tail -5   # birinchi nusxa va «OK restore-test»
 ```
+
+`.env` aynan `deploy/` papkasida bo‘lsin (Compose uni `docker-compose.prod.yml` yonidan o‘qiydi). Parollarni
+hech kimga ko‘rsatmang va terminal tarixida qoldirmang (`nano` da qo‘lda joylang). **`POSTGRES_PASSWORD` faqat harf va
+raqamdan iborat bo‘lsin** — u ilovaning `postgres://` manziliga qo‘shiladi; `/`, `@`, `#`, `?` bo‘lsa ilova ishga
+tushmaydi va jurnalda «DATABASE_URL … parol» xabari chiqadi. Baza birinchi ishga tushishda parolni eslab qoladi:
+keyin `.env` da o‘zgartirish yetmaydi (`docker compose down -v` bilan bazani o‘chirib qayta boshlash — faqat hali
+ma’lumot kiritilmagan bo‘lsa).
+
+Zaxira konteyneri ilova migratsiyalarni tugatishini kutadi (15 daqiqagacha), keyin darhol birinchi nusxani oladi va
+uni tiklab tekshiradi — `logs backup` da `OK backup …` va `OK restore-test …` qatorlari bo‘lishi kerak.
 
 `BACKUP_PASSPHRASE` va `APP_SECRET_KEY` ni **serverdan tashqarida ham** saqlang (masalan rahbarning parol
 menejerida). Parolsiz zaxira nusxalarni ochib bo‘lmaydi; `APP_SECRET_KEY` siz Telegram bot tokeni ochilmaydi.
@@ -63,18 +101,30 @@ menejerida). Parolsiz zaxira nusxalarni ochib bo‘lmaydi; `APP_SECRET_KEY` siz 
 Tekshirish: brauzerda `https://DOMAIN/login` ochiladi, qulf belgisi bor. `/demo/login` → 404 bo‘lishi kerak
 (production rejimida demo kirish yo‘q). Sanalar haqiqiy bugungi kun (demo soati ishlatilmaydi).
 `curl -s https://DOMAIN/api/v1/health` → `{"ok":true,"db":"ok","version":"…"}` (baza javob bermasa — 503).
+`http://DOMAIN` → `https://DOMAIN` ga yo‘naltiriladi (308). Sertifikat olinmagan bo‘lsa: `docker compose -f
+docker-compose.prod.yml logs caddy | grep -i error` — odatda DNS A-yozuvi hali tarqalmagan yoki 80-port yopiq.
 
 ## 3. Klinikani yaratish
 
 ```bash
 docker compose -f docker-compose.prod.yml exec app node database/dist/src/cli.js create-clinic \
-  --name "Klinika nomi" --branch "Markaziy filial" \
+  --name "Klinika nomi" --branch "Markaziy filial" --branch-code MRK \
   --manager-name "Familiya Ism Sharif" --manager-login +998901234567 --catalog demo
 ```
 
 Buyruq rahbar uchun **bir martalik vaqtinchalik parolni** chiqaradi — uni rahbarga shaxsan bering, hech qayerga
-yozib qo‘ymang. Birinchi kirishda tizim parolni almashtirishni talab qiladi. Keyin rahbar «Sozlamalar»da
-xodimlarni (shifokor, registrator, kassir), xonalarni va xizmatlar narxini kiritadi.
+yozib qo‘ymang. Birinchi kirishda tizim parolni almashtirishni talab qiladi. `--branch-code` — filialning 2–8 belgili
+lotin kodi (berilmasa `ASO`). `--catalog demo` 30 ta namunaviy xizmatni namunaviy narxlari bilan nusxalaydi — ular
+klinikaning haqiqiy narxlari va IKPU kodlari bilan almashtirilishi shart (bayroqsiz — katalog bo‘sh, rahbar o‘zi kiritadi).
+
+Buyruq **bitta filial** yaratadi. Ikkinchi (va keyingi) filialni rahbar o‘zi qo‘shadi: **Sozlamalar → Klinika →
+Filiallar → «Filial qo‘shish»** (nomi, kodi, manzil). Filialni qo‘shgan rahbar unga avtomatik biriktiriladi; boshqa
+rahbarlar va xodimlarga filial «Xodimlar» kartasida belgilanadi.
+
+Keyin rahbar quyidagilarni kiritadi (tekshirilgan tartib): Sozlamalar → Klinika (xonalar), Sozlamalar → Xizmatlar
+(narx, IKPU, QQS), Xodimlar (shifokor — mutaxassislik va xizmatlari, registrator, kassir; har biriga filial(lar)),
+shifokor kartasida haftalik jadval. Har bir yangi xodim uchun ekranda bir martalik vaqtinchalik parol chiqadi.
+Production rejimida bemor kartasi faqat ma’lumotlarni qayta ishlashga rozilik qayd etilgandagina yaratiladi.
 
 **Rahbar vaqtinchalik parolni unutdi (yoki yagona rahbar qulflanib qoldi).** Tizim ichidan o‘z parolini
 tiklab bo‘lmaydi — server konsolidan yangi bir martalik parol beriladi, akkaunt qulfdan chiqadi va uning barcha
@@ -96,15 +146,15 @@ docker compose -f docker-compose.prod.yml exec app node database/dist/src/cli.js
 
 Avtomatik: har kuni `BACKUP_HOUR` (Toshkent vaqti) da `deploy/backups/daily/meduza-YYYYMMDD-HHMM.dump.gpg`
 yaratiladi, yakshanba nusxasi `weekly/` ga ham ko‘chiriladi va tiklash sinovi o‘tkaziladi. Birinchi
-ishga tushishda darhol bitta nusxa va sinov qilinadi. Jurnallar: `deploy/backups/backup.log`,
-`deploy/backups/restore-test.log`.
+ishga tushishda (migratsiyalar tugagach) darhol bitta nusxa va sinov qilinadi. Jurnallar: `deploy/backups/backup.log`,
+`deploy/backups/restore-test.log`. Tiklashdan oldingi xavfsizlik nusxalari alohida: `deploy/backups/pre-restore/`.
 
 ```bash
 # hozir qo‘lda nusxa olish
 docker compose -f docker-compose.prod.yml exec backup bash /scripts/backup.sh
 # eng so‘nggi nusxani alohida bazaga tiklab tekshirish (jonli bazaga tegmaydi)
 docker compose -f docker-compose.prod.yml exec backup bash /scripts/restore-test.sh
-tail -5 backups/backup.log backups/restore-test.log
+tail -5 backups/backup.log backups/restore-test.log     # deploy/ papkasidan
 ```
 
 **Serverdan tashqari nusxa — majburiy.** Server yonsa yoki o‘g‘irlansa, faqat shu nusxa qoladi. Fayllar
@@ -119,7 +169,8 @@ Shifrlash paroli (`BACKUP_PASSPHRASE`) nusxalar bilan bir joyda saqlanmasin.
 
 ### Tiklash (falokat holati)
 
-Jonli bazani nusxa bilan **almashtiradi**. Avval joriy holatning xavfsizlik nusxasi olinadi.
+Jonli bazani nusxa bilan **almashtiradi**. Avval joriy holatning xavfsizlik nusxasi `backups/pre-restore/` ga
+olinadi (tanlangan faylga tegmaydi). Tiklash bitta tranzaksiyada: xato bo‘lsa jonli baza o‘zgarmay qoladi.
 
 ```bash
 docker compose -f docker-compose.prod.yml stop app
@@ -128,8 +179,12 @@ docker compose -f docker-compose.prod.yml exec -e CONFIRM=RESTORE backup \
 docker compose -f docker-compose.prod.yml start app
 ```
 
-Yangi serverga ko‘chirish: 2-bo‘limdagi o‘rnatishni bajaring (xuddi shu `BACKUP_PASSPHRASE` bilan), nusxa
-faylini `deploy/backups/daily/` ga qo‘ying va yuqoridagi tiklashni bajaring.
+Tiklangandan keyin: `docker compose -f docker-compose.prod.yml ps` da `app` — `healthy`, rahbar kirib oxirgi
+to‘lovlar va qabullarni tekshiradi; nusxadan keyin kiritilgan yozuvlar (to‘lovlar!) qog‘oz/KKM cheklaridan qayta kiritiladi.
+
+Yangi serverga ko‘chirish: 2-bo‘limdagi o‘rnatishni bajaring — xuddi shu `BACKUP_PASSPHRASE` **va xuddi shu
+`APP_SECRET_KEY`** bilan (aks holda Telegram bot tokeni, SMS paroli va kamera parollari ochilmaydi), nusxa faylini
+`deploy/backups/daily/` ga qo‘ying va yuqoridagi tiklashni bajaring. So‘ng DNS A-yozuvini yangi serverga o‘tkazing.
 
 ## 5. Yangilash
 
@@ -138,10 +193,17 @@ cd /opt/meduzai
 docker compose -f deploy/docker-compose.prod.yml exec backup bash /scripts/backup.sh   # avval nusxa
 git pull
 docker compose -f deploy/docker-compose.prod.yml up -d --build app
-docker compose -f deploy/docker-compose.prod.yml logs app | tail -20                   # migratsiyalar OK
+docker compose -f deploy/docker-compose.prod.yml logs app | grep -E "Migratsiyalar|Med.uz.ai API" | tail -2
+#   Migratsiyalar: 1 ta yangi qo‘llandi, oxirgisi 044_….sql   (yoki «yangi yo‘q»)
+docker compose -f deploy/docker-compose.prod.yml ps                                     # app "healthy"
+# deploy/backup/*.sh o‘zgargan bo‘lsa zaxira jadvalchisini ham qayta ishga tushiring:
+docker compose -f deploy/docker-compose.prod.yml restart backup
 ```
 
-Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta ishga tushadi).
+Yangilashni klinika ish vaqtidan tashqarida qiling (yig‘ish bir necha daqiqa, ilova ~1 daqiqa ishlamaydi; ma’lumotlar
+`pgdata` hajmida qoladi). Migratsiya xato bersa ilova ishga tushmaydi (`logs app` da xato), xato bergan migratsiya
+o‘z tranzaksiyasida bekor qilinadi. Avvalgi versiyaga qaytish: oldingi commit/tegni tanlab yana `up -d --build app`
+(yangi migratsiya qo‘llangan bo‘lsa — avval nusxadan tiklash, 4-bo‘lim).
 
 ## 6. Kuzatish
 
@@ -151,9 +213,11 @@ Yangilashni klinika ish vaqtidan tashqarida qiling (konteyner ~30 soniya qayta i
   (HTTP 200 va javobda `"ok":true`). Sessiya, kirish kodi va audit talab qilinmaydi.
 - Jurnallar: har bir konteyner 5 × 50 MB aylanma fayl (`logging` bo‘limi, disk to‘lmaydi). API har so‘rov uchun
   bitta qator yozadi (`HTTP`: metod, yo‘l, status, ms, `request_id`, klinika) — so‘rov tanasi, klinik matn yoki
-  parol hech qachon jurnalga tushmaydi. Xato bo‘yicha qidirish: `docker compose logs app | grep <request_id>`.
-- Har hafta: `backups/restore-test.log` da oxirgi qator `OK restore-test` bo‘lsin; disk joyi `df -h`.
-- Sertifikat Caddy tomonidan avtomatik yangilanadi; `docker compose logs caddy` da xato bo‘lmasin.
+  parol hech qachon jurnalga tushmaydi. Xato bo‘yicha qidirish:
+  `docker compose -f deploy/docker-compose.prod.yml logs app | grep <request_id>`.
+- Har hafta: `deploy/backups/restore-test.log` da oxirgi qator `OK restore-test` bo‘lsin; disk joyi `df -h`.
+- Sertifikat Caddy tomonidan avtomatik yangilanadi; `docker compose -f deploy/docker-compose.prod.yml logs caddy` da
+  xato bo‘lmasin.
 
 ## 6b. Shifokor ovozli diktovkasi (ixtiyoriy)
 
