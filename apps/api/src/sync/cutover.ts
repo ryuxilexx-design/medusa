@@ -11,6 +11,10 @@ import { now } from '../core/clock';
 import { PATIENT_DUE } from '../modules/billing';
 import { Source, syncBusy } from './ingest';
 
+/** A mirrored visit `a` that overlaps another live visit of the same doctor. */
+const OVERLAPS = `a.status NOT IN ('cancelled', 'no_show') AND EXISTS (SELECT 1 FROM appointments b WHERE b.doctor_id = a.doctor_id AND b.id <> a.id
+  AND b.status NOT IN ('cancelled', 'no_show') AND tstzrange(b.starts_at, b.ends_at, '[)') && tstzrange(a.starts_at, a.ends_at, '[)'))`;
+
 export const sourceClosed = () => coded(409, 'SOURCE_CLOSED', 'api.sync.closed', { mp: 'MedPlus' });
 
 /** What the switch turns into ordinary rows, and what still needs the manager first. */
@@ -19,6 +23,7 @@ export async function cutoverPreview(db: Db, src: Source) {
     `SELECT (SELECT count(*)::int FROM patients WHERE external_source_id = $1) AS patients,
             (SELECT count(*)::int FROM appointments WHERE external_source_id = $1) AS visits,
             (SELECT count(*)::int FROM appointments WHERE external_source_id = $1 AND status = 'scheduled' AND starts_at >= $2) AS future_visits,
+            (SELECT count(*)::int FROM appointments a WHERE a.external_source_id = $1 AND a.starts_at >= $2 AND ${OVERLAPS}) AS future_overlaps,
             (SELECT count(*)::int FROM service_orders WHERE external_source_id = $1) AS orders,
             (SELECT count(*)::int FROM invoices WHERE external_source_id = $1) AS invoices,
             (SELECT count(*)::int FROM invoices i WHERE i.external_source_id = $1 AND i.status <> 'void' AND ${PATIENT_DUE()} > 0) AS debt_invoices,
@@ -48,7 +53,10 @@ export async function cutover(db: Db, src: Source, ctx: Ctx, opts: { discardPend
       if (s.cutover_at) throw sourceClosed();
       const counts = await cutoverPreview(db, src);
       if (counts.pending > 0 && !opts.discardPending) throw coded(409, 'PENDING_RECORDS', 'api.sync.pendingLeft', { n: counts.pending });
+      if (counts.future_overlaps > 0) throw coded(409, 'FUTURE_OVERLAP', 'api.sync.futureOverlap', { n: counts.future_overlaps, mp: 'MedPlus' });
       await c.query(`SELECT set_config('meduza.sync', 'on', true)`);
+      // MedPlus's past overlaps stay as they were: only those rows are exempt from the double-booking guard
+      await c.query(`UPDATE appointments a SET legacy_overlap = true WHERE a.external_source_id = $1 AND a.starts_at < $2 AND ${OVERLAPS}`, [src.id, now()]);
       // the order matters only for readability: every table's guard lets the marked transaction through
       for (const t of ['patients', 'appointments', 'service_orders', 'invoices']) {
         await c.query(`UPDATE ${t} SET external_source_id = NULL, imported_source_id = $2 WHERE tenant_id = $1 AND external_source_id = $2`, [src.tenant_id, src.id]);

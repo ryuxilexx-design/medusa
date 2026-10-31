@@ -83,6 +83,13 @@ test('kutayotgan yozuv o‘tishni to‘xtatadi; «tashlab yuborish» bilan o‘t
   assert.equal(r.body.data.parked, 1);
   const blocked = await manager.post(`/integrations/sources/${source.id}/cutover`, { confirm: true });
   assert.equal(blocked.status, 409); assert.equal(blocked.body.error.code, 'PENDING_RECORDS');
+  // two FUTURE MedPlus visits of one doctor overlap: the switch stops until MedPlus fixes them (one is cancelled)
+  const fut = (id, at, status) => ({ kind: 'visit', external_id: id, data: { patient_id: '40001', branch_id: '1', doctor_name: 'Karimov Bahodir', service_name: 'Консультация терапевта', starts_at: at, duration_min: 30, ...(status ? { status } : {}) } });
+  assert.equal((await bridge([fut('cf-1', '2026-10-25 09:00:00'), fut('cf-2', '2026-10-25 09:15:00')])).body.data.errors, 0);
+  assert.equal((await manager.get(`/integrations/sources/${source.id}/cutover`)).body.data.counts.future_overlaps, 2);
+  const ov = await manager.post(`/integrations/sources/${source.id}/cutover`, { confirm: true, discard_pending: true });
+  assert.equal(ov.status, 409); assert.equal(ov.body.error.code, 'FUTURE_OVERLAP');
+  assert.equal((await bridge([fut('cf-2', '2026-10-25 09:15:00', 'Отменён')])).body.data.errors, 0);
   assert.equal((await one(`SELECT cutover_at FROM external_sources WHERE id = $1`, [source.id])).cutover_at, null, 'hech narsa o‘zgarmadi');
   const ok = await manager.post(`/integrations/sources/${source.id}/cutover`, { confirm: true, discard_pending: true });
   assert.equal(ok.status, 200, ok.text);
@@ -115,9 +122,19 @@ test('o‘tishdan keyin: karta tahrirlanadi, eski qarz bizning smenada to‘lana
   assert.equal((await one(`SELECT status FROM invoices WHERE id = $1`, [inv])).status, 'paid');
   const fiscal = (await pool.query(`SELECT f.payment_id FROM fiscal_receipts f JOIN payments pm ON pm.id = f.payment_id WHERE pm.invoice_id = $1`, [inv])).rows;
   assert.equal(fiscal.length, 1, 'faqat yangi to‘lovga fiskal yozuv');
-  // MedPlus's overlapping visits of one doctor are kept as they were
-  const ov = (await pool.query(`SELECT a.status FROM appointments a JOIN external_refs x ON x.our_id = a.id WHERE x.source_id = $1 AND x.external_id IN ('cv-1','cv-2')`, [source.id])).rows;
-  assert.equal(ov.length, 2);
+  // MedPlus's past overlapping visits are kept and marked; nothing else is exempt from the double-booking guard
+  const ov = (await pool.query(`SELECT x.external_id, a.legacy_overlap FROM appointments a JOIN external_refs x ON x.our_id = a.id WHERE x.source_id = $1 AND x.kind = 'visit' ORDER BY 1`, [source.id])).rows;
+  assert.deepEqual(ov.filter((r) => r.legacy_overlap).map((r) => r.external_id), ['cv-1', 'cv-2']);
+  // a new booking on top of an imported future visit is refused by the database (not exempt)
+  const f1 = await one(`SELECT a.* FROM appointments a JOIN external_refs x ON x.our_id = a.id WHERE x.source_id = $1 AND x.external_id = 'cf-1'`, [source.id]);
+  assert.equal(f1.legacy_overlap, false);
+  await assert.rejects(pool.query(`INSERT INTO appointments (id, tenant_id, branch_id, patient_id, doctor_id, service_id, starts_at, ends_at, status, source)
+    SELECT gen_random_uuid(), tenant_id, branch_id, patient_id, doctor_id, service_id, starts_at, ends_at, 'scheduled', 'staff' FROM appointments WHERE id = $1`, [f1.id]), (e) => e.code === '23P01');
+  // moving a legacy visit clears its mark; the mark cannot be set by hand
+  const cv2 = await refOf('visit', 'cv-2');
+  await pool.query(`UPDATE appointments SET starts_at = starts_at + interval '2 hours', ends_at = ends_at + interval '2 hours' WHERE id = $1`, [cv2]);
+  assert.equal((await one(`SELECT legacy_overlap FROM appointments WHERE id = $1`, [cv2])).legacy_overlap, false);
+  await assert.rejects(pool.query(`UPDATE appointments SET legacy_overlap = true WHERE id = $1`, [cv2]), (e) => e.code === 'MR409');
 });
 
 test('yopilgan manba: paket, fayl, yangi kalit, qayta yoqish, ikkinchi o‘tish — rad; baza ham himoyalaydi', async () => {

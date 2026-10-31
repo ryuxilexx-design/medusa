@@ -47,9 +47,32 @@ CREATE TRIGGER appointments_imported_guard BEFORE INSERT OR UPDATE ON appointmen
 CREATE TRIGGER service_orders_imported_guard BEFORE INSERT OR UPDATE ON service_orders FOR EACH ROW EXECUTE FUNCTION imported_guard();
 CREATE TRIGGER invoices_imported_guard BEFORE INSERT OR UPDATE ON invoices FOR EACH ROW EXECUTE FUNCTION imported_guard();
 
--- MedPlus let a doctor's visits overlap (queues, walk-ins): the double-booking guard keeps covering our own bookings
--- only, imported history included (booking.ts still treats an imported visit as busy time when it offers slots)
+-- MedPlus let a doctor's visits overlap (queues, walk-ins). The switch marks only the PAST imported visits that really
+-- overlap another visit as legacy_overlap; the double-booking guard skips those rows alone. New bookings are never in
+-- the past, and moving a legacy visit (doctor or time) or bringing it back from cancelled/no-show clears the mark, so
+-- the guard applies again. Future imported visits that overlap stop the switch (409 FUTURE_OVERLAP).
+ALTER TABLE appointments ADD COLUMN legacy_overlap boolean NOT NULL DEFAULT false;
+
+CREATE FUNCTION legacy_overlap_guard() RETURNS trigger AS $$
+BEGIN
+  IF sync_writing() THEN RETURN NEW; END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.legacy_overlap THEN RAISE EXCEPTION 'legacy_overlap is set only by the MedPlus switch' USING ERRCODE = 'MR409'; END IF;
+    RETURN NEW;
+  END IF;
+  IF NEW.legacy_overlap AND NOT OLD.legacy_overlap THEN
+    RAISE EXCEPTION 'legacy_overlap is set only by the MedPlus switch' USING ERRCODE = 'MR409';
+  END IF;
+  IF OLD.legacy_overlap AND (NEW.doctor_id IS DISTINCT FROM OLD.doctor_id OR NEW.starts_at IS DISTINCT FROM OLD.starts_at
+       OR NEW.ends_at IS DISTINCT FROM OLD.ends_at OR (OLD.status IN ('cancelled', 'no_show') AND NEW.status NOT IN ('cancelled', 'no_show'))) THEN
+    NEW.legacy_overlap := false;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER appointments_legacy_overlap_guard BEFORE INSERT OR UPDATE ON appointments FOR EACH ROW EXECUTE FUNCTION legacy_overlap_guard();
+
 ALTER TABLE appointments DROP CONSTRAINT appointments_doctor_no_overlap;
 ALTER TABLE appointments ADD CONSTRAINT appointments_doctor_no_overlap EXCLUDE USING gist (
   doctor_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&
-) WHERE (status NOT IN ('cancelled', 'no_show') AND external_source_id IS NULL AND imported_source_id IS NULL);
+) WHERE (status NOT IN ('cancelled', 'no_show') AND external_source_id IS NULL AND NOT legacy_overlap);

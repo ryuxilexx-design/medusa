@@ -171,7 +171,7 @@ function SourceView({ src, onToken }: { src: Source; onToken: (x: { id: string; 
 
 // ---------------------------------------------------------------- the switch (migration 044)
 
-type CutoverCounts = { patients: number; visits: number; future_visits: number; orders: number; invoices: number; debt_invoices: number; debt_sum: number; payments: number; refunds: number; pending: number; duplicates: number; placeholder_services: number; placeholder_doctors: number; pending_dropped?: number };
+type CutoverCounts = { patients: number; visits: number; future_visits: number; future_overlaps: number; orders: number; invoices: number; debt_invoices: number; debt_sum: number; payments: number; refunds: number; pending: number; duplicates: number; placeholder_services: number; placeholder_doctors: number; pending_dropped?: number };
 
 /** After «O‘tishni yakunlash»: what moved, when and by whom; the log stays readable. */
 function ClosedSource({ src }: { src: Source }) {
@@ -213,6 +213,7 @@ function Cutover({ src }: { src: Source }) {
   const c = q.data!.counts;
   const checks: { key: MessageKey; n: number; tone: 'red' | 'yellow' }[] = [
     { key: 'sync.cut.chkPending', n: c.pending, tone: 'red' },
+    { key: 'sync.cut.chkOverlap', n: c.future_overlaps, tone: 'red' },
     { key: 'sync.cut.chkDuplicates', n: c.duplicates, tone: 'yellow' },
     { key: 'sync.cut.chkServices', n: c.placeholder_services, tone: 'yellow' },
     { key: 'sync.cut.chkDoctors', n: c.placeholder_doctors, tone: 'yellow' },
@@ -235,7 +236,7 @@ function Cutover({ src }: { src: Source }) {
       ) : <Alert tone="green">{t('sync.cut.allClear')}</Alert>}
       <div><Button variant="danger" icon={<Flag className="h-4 w-4" />} onClick={() => { setSure(false); setDrop(false); setOpen(true); }}>{t('sync.cut.button')}</Button></div>
       <Modal open={open} onClose={() => setOpen(false)} title={t('sync.cut.button')}
-        footer={<><ModalCancel /><Button variant="danger" disabled={!sure || (c.pending > 0 && !drop)} loading={m.isPending} onClick={() => m.mutate()}>{t('sync.cut.confirm')}</Button></>}>
+        footer={<><ModalCancel /><Button variant="danger" disabled={!sure || (c.pending > 0 && !drop) || c.future_overlaps > 0} loading={m.isPending} onClick={() => m.mutate()}>{t('sync.cut.confirm')}</Button></>}>
         <div className="flex flex-col gap-4">
           <Alert tone="yellow">{t('sync.cut.warn', MP)}</Alert>
           {c.pending > 0 && <Checkbox label={t('sync.cut.drop', { n: c.pending })} checked={drop} onChange={(e) => setDrop(e.target.checked)} />}
