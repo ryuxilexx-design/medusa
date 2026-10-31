@@ -142,6 +142,25 @@ patients|services|payments [--tenant …] [--dry-run] [--map "external_id=ID,…
 3. Confirm the «Taxminiy»/«Vaqtinchalik» mappings (services, doctors) once; review «Dublikatlar».
 4. Exit criteria for the pilot: 14 consecutive days without a reconciliation difference.
 
+## Full switch («O‘tishni yakunlash», migration 044)
+
+A clinic that leaves MedPlus for good (the Planbaby pilot) uses the same import once, then closes the source:
+**Sozlamalar → Integratsiyalar → O‘tishni yakunlash** (manager covering every branch; `GET/POST
+/integrations/sources/:id/cutover`, `apps/api/src/sync/cutover.ts`).
+
+- The preview counts what becomes ours (cards, visits, invoices, the patient debt that carries over) and what still
+  needs the manager: waiting records (block the switch unless «tashlab o‘tish» is ticked → 409 `PENDING_RECORDS`),
+  unreviewed duplicates, placeholder services/doctors, future MedPlus visits (check the schedule).
+- In one transaction under the source's sync lock: `external_source_id → NULL` and `imported_source_id = source` on
+  patients, appointments, service_orders, invoices — they become ordinary rows (edit, book, pay in our shift with a
+  fiscal receipt, discount, refund). MedPlus's **payments and refunds stay mirrored** (no shift, no Med.uz.ai fiscal
+  receipt — MedPlus's KKM issued them) and keep counting in cash-basis revenue. `external_refs` keep the MedPlus ids.
+- The source is closed: inactive, token removed, `cutover_at` set once (DB trigger: final), no batch (401), no file
+  import / new key / resume (409 `SOURCE_CLOSED`, also checked inside `runBatch` under the lock). The log stays.
+- Imported visits keep MedPlus's overlaps: the double-booking constraint skips `imported_source_id` rows (our own new
+  bookings are still guarded).
+- Tests: `apps/api/test/cutover.test.mjs`, E2E `e2e/sync.mjs`. Runbook for the pilot: `docs/PILOT_PLANBABY.md`.
+
 ## Privacy
 
 Data flows clinic PC → the clinic's Med.uz.ai server in Uzbekistan only (never the Railway demo). Only the fields

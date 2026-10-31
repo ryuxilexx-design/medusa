@@ -18,6 +18,7 @@ import { periodFits } from '../core/csv';
 import { TableReadError } from '../core/xlsx';
 import { batchSchema } from './records';
 import { RecordResult, retryPending, runBatch, Source, systemCtx } from './ingest';
+import { cutover, cutoverPreview, sourceClosed } from './cutover';
 import { IMPORT_FIELDS, IMPORT_KINDS, IMPORT_MAX_BYTES, IMPORT_MAX_ROWS, ImportKind, prepareRecords, PREVIEW_ROWS, readImport } from './file-import';
 
 /** Largest JSON body of a bridge batch (express.json on this route only, see app.ts). */
@@ -62,7 +63,9 @@ const sourcePatchSchema = z.object({
 });
 const mappingPatchSchema = z.object({ target_id: z.string().uuid().nullable().optional(), target_code: z.enum(['cash', 'card', 'transfer']).nullable().optional() });
 
-const SOURCE_COLS = `s.id, s.kind, s.name, s.active, s.last_seen_at, s.last_batch_at, s.last_cursor, s.settings, s.created_at, s.created_by_name, (s.token_hash IS NOT NULL) AS has_token`;
+const SOURCE_COLS = `s.id, s.kind, s.name, s.active, s.last_seen_at, s.last_batch_at, s.last_cursor, s.settings, s.created_at, s.created_by_name, (s.token_hash IS NOT NULL) AS has_token,
+  s.cutover_at, s.cutover_by_name, s.cutover_counts`;
+const cutoverSchema = z.object({ confirm: z.literal(true, { errorMap: () => ({ message: 'Tasdiqlang' }) }), discard_pending: z.boolean().default(false) });
 
 @Controller('integrations')
 export class IntegrationsController {
@@ -102,9 +105,15 @@ export class IntegrationsController {
   private async source(ctx: Ctx, id: string): Promise<Source & { active: boolean }> {
     await this.assertWholeClinic(ctx);
     if (!isUuid(id)) throw notFound('Integratsiya');
-    const s = await this.db.one(`SELECT id, tenant_id, kind, name, settings, active FROM external_sources WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
+    const s = await this.db.one(`SELECT id, tenant_id, kind, name, settings, active, cutover_at FROM external_sources WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
     if (!s) throw notFound('Integratsiya');
     return s as any;
+  }
+  /** A source still in use (not switched off for good). */
+  private async openSource(ctx: Ctx, id: string) {
+    const s = await this.source(ctx, id);
+    if ((s as any).cutover_at) throw sourceClosed();
+    return s;
   }
 
   @Roles('manager') @Get('sources')
@@ -133,7 +142,7 @@ export class IntegrationsController {
   /** A new bridge token (the old one stops working at once). Shown once. */
   @Roles('manager') @Post('sources/:id/token') @HttpCode(200)
   async rotate(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
-    const src = await this.source(ctx, id);
+    const src = await this.openSource(ctx, id);
     const token = newToken();
     await this.db.tx(async (c) => {
       await c.query(`UPDATE external_sources SET token_hash = $2 WHERE id = $1`, [src.id, hashToken(token)]);
@@ -144,7 +153,7 @@ export class IntegrationsController {
 
   @Roles('manager') @Patch('sources/:id')
   async update(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
-    const src = await this.source(ctx, id);
+    const src = await this.openSource(ctx, id);
     const input = parse(sourcePatchSchema, body ?? {});
     if (input.default_branch_id && !(await this.db.one(`SELECT 1 FROM branches WHERE id = $1 AND tenant_id = $2`, [input.default_branch_id, ctx.tenantId])))
       throw invalid({ default_branch_id: 'Filial topilmadi' });
@@ -175,6 +184,27 @@ export class IntegrationsController {
       counts: { patients: by.patient ?? 0, visits: by.visit ?? 0, orders: by.order ?? 0, payments: money.n, payments_sum: Number(money.s), refunds: by.refund ?? 0 },
       pending, pending_total: pending.reduce((a, r) => a + r.n, 0), review: Object.fromEntries(review.map((r) => [r.kind, r.n])), duplicates: dups, errors_24h: errors, last: last ?? null,
     } };
+  }
+
+  // ---------------------------------------------------------------- the switch (migration 044)
+
+  /** What «O‘tishni yakunlash» would turn into ordinary Med.uz.ai rows, and what still waits. */
+  @Roles('manager') @Get('sources/:id/cutover')
+  async cutoverInfo(@CurrentCtx() ctx: Ctx, @Param('id') id: string) {
+    const src = await this.source(ctx, id);
+    if ((src as any).cutover_at) {
+      const row = (await this.db.one(`SELECT cutover_at, cutover_by_name, cutover_counts FROM external_sources WHERE id = $1`, [src.id]))!;
+      return { data: { done: true, ...row } };
+    }
+    return { data: { done: false, counts: await cutoverPreview(this.db, src) } };
+  }
+
+  /** The clinic leaves MedPlus: once, final. */
+  @Roles('manager') @Post('sources/:id/cutover') @HttpCode(200)
+  async cutoverRun(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Body() body: unknown) {
+    const src = await this.openSource(ctx, id);
+    const input = parse(cutoverSchema, body ?? {});
+    return { data: await cutover(this.db, src, ctx, { discardPending: input.discard_pending }) };
   }
 
   // ---------------------------------------------------------------- mappings
@@ -343,7 +373,7 @@ export class IntegrationsController {
   /** Step 1: read the file, find the header row, guess the columns. Nothing is stored. */
   @Roles('manager') @Post('sources/:id/import/preview') @HttpCode(200)
   async importPreview(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    await this.source(ctx, id);
+    await this.openSource(ctx, id);
     const { file, body } = await readUpload(req, res);
     const kind = this.kind(body.kind);
     const parsed = this.read(file, kind);
@@ -355,7 +385,7 @@ export class IntegrationsController {
   /** Step 2: dry run (dry_run=1, the first PREVIEW_ROWS rows) or the import itself — through the bridge's upsert path. */
   @Roles('manager') @Post('sources/:id/import') @HttpCode(200)
   async importFile(@CurrentCtx() ctx: Ctx, @Param('id') id: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const src = await this.source(ctx, id);
+    const src = await this.openSource(ctx, id);
     const { file, body } = await readUpload(req, res);
     const kind = this.kind(body.kind);
     const dry = body.dry_run === '1' || body.dry_run === 'true';

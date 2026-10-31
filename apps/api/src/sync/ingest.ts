@@ -671,6 +671,8 @@ export async function runBatch(db: Db, src: Source, raw: unknown[], opts: { chan
   try {
     locked = (await lock.query(`SELECT pg_try_advisory_lock(74042, hashtext($1)) AS ok`, [src.id])).rows[0].ok;
     if (!locked) throw syncBusy();
+    // after the switch (migration 044) the source takes nothing more — checked under the lock the switch also holds
+    if ((await lock.query(`SELECT cutover_at FROM external_sources WHERE id = $1`, [src.id])).rows[0]?.cutover_at) throw coded(409, 'SOURCE_CLOSED', 'api.sync.closed', { mp: 'MedPlus' });
     const started = now();
     const { records, bad } = parseRecords(raw);
     const results: RecordResult[] = [...bad];

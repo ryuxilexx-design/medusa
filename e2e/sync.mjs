@@ -90,6 +90,25 @@ try {
   check(!buttons.some((x) => /Qaytarish|Chegirma|Bekor qilish|To‘lovni qabul/.test(x)), 'Ko‘chirilgan hisobda to‘lov, chegirma va qaytarish tugmalari yo‘q');
   await shot(m, 'sync-08-invoice');
 
+  // ---- the full switch: the manager closes MedPlus once; the cards become ordinary, editable rows
+  await m.goto(BASE + '/settings', { waitUntil: 'networkidle0' }); await settle(m);
+  await openTab(m, 'Integratsiyalar');
+  await openTab(m, 'O‘tishni yakunlash');
+  await waitText(m, 'O‘tadigan qarz');
+  await shot(m, 'sync-09-cutover');
+  await clickText(m, 'O‘tishni yakunlash', 'main button'); await sleep(300);
+  const dis = await m.evaluate(() => [...document.querySelectorAll('[role=dialog] button')].find((x) => x.textContent.trim() === 'Yakunlash')?.disabled);
+  check(dis === true, 'Tasdiq belgisisiz «Yakunlash» yopiq');
+  await clickText(m, 'Klinika MedPlus’da ishlashni to‘xtatdi', '[role=dialog] label'); await sleep(200);
+  await clickText(m, 'Yakunlash', '[role=dialog] button'); await settle(m);
+  await waitText(m, 'O‘tish yakunlangan');
+  const closed = await m.evaluate(() => document.querySelector('main').innerText);
+  check(!closed.includes('Yangi kalit') && !closed.includes('Fayldan import'), 'Yopilgan manbada kalit va import yo‘q');
+  await shot(m, 'sync-10-closed');
+  await m.goto(`${BASE}/patients/${imported.id}`, { waitUntil: 'networkidle0' }); await settle(m);
+  const card2 = await m.evaluate(() => document.querySelector('main').innerText);
+  check(!card2.includes('MedPlus #52001') && card2.includes('Tahrirlash'), 'O‘tishdan keyin karta oddiy: nishon yo‘q, «Tahrirlash» bor');
+
   // ---- exports: Excel next to CSV
   await m.goto(`${BASE}/finance`, { waitUntil: 'networkidle0' }); await settle(m);
   const links = await m.evaluate(() => [...document.querySelectorAll('a[download]')].map((a) => a.getAttribute('href')));

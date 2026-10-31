@@ -4,7 +4,7 @@
 // file import. Manager only (the server checks every call). No personal data is kept in the browser.
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Copy, FileSpreadsheet, KeyRound, Link2, Pause, Play, PlugZap } from 'lucide-react';
+import { CheckCircle2, Copy, FileSpreadsheet, Flag, KeyRound, Link2, Pause, Play, PlugZap } from 'lucide-react';
 import type { MessageKey } from '@meduza/contracts';
 import { api, ApiError, qs } from '@/lib/api';
 import { addDays, fmtDate, fmtDateTime, formatSom, fullName, pid } from '@/lib/format';
@@ -22,13 +22,13 @@ export function MirrorBadge({ id }: { id?: string | null }) {
   return <span title={t('sync.badgeTitle', MP)}><Badge tone="violet" icon={<Link2 className="h-3.5 w-3.5" />}>{id ? t('sync.badgeId', { ...MP, id }) : t('sync.badge', MP)}</Badge></span>;
 }
 
-type Source = { id: string; name: string; active: boolean; last_seen_at: string | null; last_batch_at: string | null; has_token: boolean; created_at: string };
+type Source = { id: string; name: string; active: boolean; last_seen_at: string | null; last_batch_at: string | null; has_token: boolean; created_at: string; cutover_at: string | null; cutover_by_name: string | null };
 type Status = {
   counts: { patients: number; visits: number; orders: number; payments: number; payments_sum: number; refunds: number };
   pending: { reason: string; n: number }[]; pending_total: number; review: Record<string, number>; duplicates: number; errors_24h: number;
   last: { finished_at: string } | null;
 };
-type Tab = 'mapping' | 'duplicates' | 'pending' | 'import' | 'reconcile' | 'log';
+type Tab = 'mapping' | 'duplicates' | 'pending' | 'import' | 'reconcile' | 'log' | 'cutover';
 
 export function IntegrationsSettings() {
   const t = useT();
@@ -123,6 +123,7 @@ function SourceView({ src, onToken }: { src: Source; onToken: (x: { id: string; 
     onError: (e) => toast.error(e),
   });
   const s = st.data;
+  if (src.cutover_at) return <ClosedSource src={src} />;
   const review = s ? Object.values(s.review).reduce((a, n) => a + n, 0) : undefined;
   const tabs: { value: Tab; label: string; count?: number }[] = [
     { value: 'mapping', label: t('sync.tab.mapping'), count: review || undefined },
@@ -131,6 +132,7 @@ function SourceView({ src, onToken }: { src: Source; onToken: (x: { id: string; 
     { value: 'import', label: t('sync.tab.import') },
     { value: 'reconcile', label: t('sync.tab.reconcile') },
     { value: 'log', label: t('sync.tab.log') },
+    { value: 'cutover', label: t('sync.tab.cutover') },
   ];
   return (
     <div className="flex flex-col gap-5">
@@ -156,11 +158,89 @@ function SourceView({ src, onToken }: { src: Source; onToken: (x: { id: string; 
           {tab === 'import' && <FileImport src={src} />}
           {tab === 'reconcile' && <Reconcile src={src} />}
           {tab === 'log' && <Log src={src} />}
+          {tab === 'cutover' && <Cutover src={src} />}
         </div>
       </Card>
       <Modal open={rotating} onClose={() => setRotating(false)} title={t('sync.newToken')}
         footer={<><ModalCancel /><Button variant="primary" loading={rotate.isPending} onClick={() => rotate.mutate()}>{t('sync.newToken')}</Button></>}>
         <Alert tone="yellow">{t('sync.newTokenConfirm')}</Alert>
+      </Modal>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- the switch (migration 044)
+
+type CutoverCounts = { patients: number; visits: number; future_visits: number; orders: number; invoices: number; debt_invoices: number; debt_sum: number; payments: number; refunds: number; pending: number; duplicates: number; placeholder_services: number; placeholder_doctors: number; pending_dropped?: number };
+
+/** After «O‘tishni yakunlash»: what moved, when and by whom; the log stays readable. */
+function ClosedSource({ src }: { src: Source }) {
+  const t = useT();
+  const q = useQuery({ queryKey: ['sync', 'cutover', src.id], queryFn: () => api<{ data: { cutover_counts: CutoverCounts } }>(`/integrations/sources/${src.id}/cutover`).then((r) => r.data) });
+  const c = q.data?.cutover_counts;
+  return (
+    <div className="flex flex-col gap-5">
+      <Card title={<span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">{src.name}<Badge tone="green" icon={<Flag className="h-3.5 w-3.5" />}>{t('sync.cut.closedBadge')}</Badge></span>}>
+        <p className="text-body text-slate-700">{t('sync.cut.closedText', { ...MP, time: fmtDateTime(src.cutover_at!), who: src.cutover_by_name ?? '—' })}</p>
+      </Card>
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        <StatCard label={t('sync.stat.patients')} value={c?.patients} loading={!c} />
+        <StatCard label={t('sync.stat.visits')} value={c?.visits} loading={!c} />
+        <StatCard label={t('sync.cut.invoices')} value={c?.invoices} loading={!c} />
+        <StatCard label={t('sync.cut.history')} value={c?.payments} sub={c ? t('sync.cut.historySub', MP) : undefined} loading={!c} />
+      </div>
+      <Card padded={false} title={t('sync.tab.log')}><Log src={src} /></Card>
+    </div>
+  );
+}
+
+/** Before the switch: what becomes ours, what still needs the manager, and the one final button. */
+function Cutover({ src }: { src: Source }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [sure, setSure] = useState(false);
+  const [drop, setDrop] = useState(false);
+  const q = useQuery({ queryKey: ['sync', 'cutover', src.id], queryFn: () => api<{ data: { done: boolean; counts: CutoverCounts } }>(`/integrations/sources/${src.id}/cutover`).then((r) => r.data) });
+  const m = useMutation({
+    mutationFn: () => api(`/integrations/sources/${src.id}/cutover`, { method: 'POST', body: { confirm: true, discard_pending: drop } }),
+    onSuccess: () => { setOpen(false); qc.invalidateQueries({ queryKey: ['sync'] }); toast.success(t('sync.cut.done', MP)); },
+    onError: (e) => toast.error(e),
+  });
+  if (q.isLoading) return <LoadingRows />;
+  if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
+  const c = q.data!.counts;
+  const checks: { key: MessageKey; n: number; tone: 'red' | 'yellow' }[] = [
+    { key: 'sync.cut.chkPending', n: c.pending, tone: 'red' },
+    { key: 'sync.cut.chkDuplicates', n: c.duplicates, tone: 'yellow' },
+    { key: 'sync.cut.chkServices', n: c.placeholder_services, tone: 'yellow' },
+    { key: 'sync.cut.chkDoctors', n: c.placeholder_doctors, tone: 'yellow' },
+    { key: 'sync.cut.chkFuture', n: c.future_visits, tone: 'yellow' },
+  ];
+  const open_ = checks.filter((x) => x.n > 0);
+  return (
+    <div className="flex flex-col gap-5 p-5">
+      <p className="text-body text-slate-700">{t('sync.cut.lead', MP)}</p>
+      <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+        <StatCard label={t('sync.stat.patients')} value={c.patients} />
+        <StatCard label={t('sync.stat.visits')} value={c.visits} />
+        <StatCard label={t('sync.cut.debt')} value={<Money tiyin={c.debt_sum} />} sub={t('sync.cut.debtSub', { n: c.debt_invoices })} />
+        <StatCard label={t('sync.cut.history')} value={c.payments} sub={t('sync.cut.historySub', MP)} />
+      </div>
+      {open_.length > 0 ? (
+        <ul className="flex flex-col gap-2" data-testid="cutover-checks">
+          {open_.map((x) => <li key={x.key} className="flex items-center gap-3 text-body text-slate-800"><Badge tone={x.tone}>{x.n}</Badge>{t(x.key, MP)}</li>)}
+        </ul>
+      ) : <Alert tone="green">{t('sync.cut.allClear')}</Alert>}
+      <div><Button variant="danger" icon={<Flag className="h-4 w-4" />} onClick={() => { setSure(false); setDrop(false); setOpen(true); }}>{t('sync.cut.button')}</Button></div>
+      <Modal open={open} onClose={() => setOpen(false)} title={t('sync.cut.button')}
+        footer={<><ModalCancel /><Button variant="danger" disabled={!sure || (c.pending > 0 && !drop)} loading={m.isPending} onClick={() => m.mutate()}>{t('sync.cut.confirm')}</Button></>}>
+        <div className="flex flex-col gap-4">
+          <Alert tone="yellow">{t('sync.cut.warn', MP)}</Alert>
+          {c.pending > 0 && <Checkbox label={t('sync.cut.drop', { n: c.pending })} checked={drop} onChange={(e) => setDrop(e.target.checked)} />}
+          <Checkbox data-autofocus label={t('sync.cut.sure', MP)} checked={sure} onChange={(e) => setSure(e.target.checked)} />
+        </div>
       </Modal>
     </div>
   );
