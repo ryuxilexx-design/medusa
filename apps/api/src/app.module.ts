@@ -8,6 +8,7 @@ import { config } from './core/config';
 import { HealthController } from './modules/health.controller';
 import { SessionController } from './modules/session.controller';
 import { ReferenceController } from './modules/reference.controller';
+import { PriceImportController } from './modules/price-import.controller';
 import { PatientsController } from './modules/patients.controller';
 import { AppointmentsController } from './modules/appointments.controller';
 import { QueueController } from './modules/queue.controller';
@@ -73,7 +74,7 @@ function requestLog(req: any, res: any) {
 }
 
 @Module({
-  controllers: [HealthController, SessionController,ReferenceController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
+  controllers: [HealthController, SessionController, ReferenceController, PriceImportController, PatientsController, AppointmentsController, QueueController, EncountersController, DoctorController,
     LabController, LabCommentaryController, InvoicesController, PaymentsController, DashboardController, ReportsController, InventoryController, WarehouseController, ReorderController, SecurityController, DiagnosticsController, AiController, ManagerAiController,
     AuthController, StaffController, ScheduleExceptionsController, TelegramController, SmsController, DictationController, FiscalController, DocumentsController, PatientSummaryController, DrugsController, AllergiesController, CashController, DepositsController, ReferralsController, DiscountsController, CompaniesController, NoteTemplatesController, QuickPhrasesController, CamerasController, HikController, CameraIsapiController, DhpController, IntegrationsController],
   providers: [Db, BotEngine, BotFaq, BotRegistry, Notifier, SmsSender, TelegramWorkers, CameraWorkers, AiClient, SttClient, Icd10Service, NewsService, NewsWorker, { provide: APP_GUARD, useClass: AuthGuard }, { provide: APP_FILTER, useClass: ErrorFilter }, FiscalWorker, DhpWorker],
