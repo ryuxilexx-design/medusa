@@ -46,6 +46,7 @@ services:
     # the container probe asks the API's health route through the web proxy (see Dockerfile HEALTHCHECK)
     environment:
       APP_MODE: production
+      # POSTGRES_PASSWORD goes into this address unencoded: letters and digits only (openssl rand -hex 24)
       DATABASE_URL: postgres://meduza:${POSTGRES_PASSWORD}@db:5432/meduza
       COOKIE_SECURE: "1"
       APP_SECRET_KEY: ${APP_SECRET_KEY:?set APP_SECRET_KEY in deploy/.env}

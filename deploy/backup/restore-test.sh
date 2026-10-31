@@ -10,6 +10,8 @@ scratch=meduza_restore_test
 log() { echo "$(date -Iseconds) $*" | tee -a /backups/restore-test.log; }
 cleanup() { psql -d postgres -qc "DROP DATABASE IF EXISTS $scratch" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
+# any other failure (set -e) still leaves a FAIL line in the log the operator checks every week
+trap 'log "FAIL restore-test $file: error on line $LINENO"' ERR
 
 psql -d postgres -qc "DROP DATABASE IF EXISTS $scratch" -c "CREATE DATABASE $scratch"
 if ! gpg --batch --quiet --decrypt --passphrase-fd 3 "$file" 3<<<"$BACKUP_PASSPHRASE" | pg_restore --no-owner --no-privileges --exit-on-error -d "$scratch"; then
@@ -17,9 +19,11 @@ if ! gpg --batch --quiet --decrypt --passphrase-fd 3 "$file" 3<<<"$BACKUP_PASSPH
 fi
 
 fail=0
-live_tables=$(psql -tAc "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1")
-restored_tables=$(psql -d "$scratch" -tAc "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1")
-missing=$(comm -23 <(echo "$live_tables") <(echo "$restored_tables"))
+# comm needs both lists in its own (byte) order: sort them with LC_ALL=C instead of the database collation, otherwise
+# comm fails («not in sorted order») and set -e ends the script before it writes a log line
+live_tables=$(psql -tAc "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" | LC_ALL=C sort)
+restored_tables=$(psql -d "$scratch" -tAc "SELECT tablename FROM pg_tables WHERE schemaname = 'public'" | LC_ALL=C sort)
+missing=$(LC_ALL=C comm -23 <(echo "$live_tables") <(echo "$restored_tables")) || { log "FAIL restore-test $file: could not compare table lists"; exit 1; }
 if [ -n "$missing" ]; then log "FAIL restore-test $file: tables missing: $(echo $missing)"; fail=1; fi
 
 summary=""

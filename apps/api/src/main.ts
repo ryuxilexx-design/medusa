@@ -1,8 +1,13 @@
 import { createApp } from './app';
-import { config } from './core/config';
+import { config, databaseUrlProblem } from './core/config';
 import { now } from './core/clock';
 
 async function main() {
+  const problem = databaseUrlProblem(config.databaseUrl);
+  if (problem) {
+    console.error(`${problem}: bazaning parolida «/», «@», «#», «?» belgilari bo‘lmasin — faqat harf va raqam (openssl rand -hex 24). docs/DEPLOY_UZ.md §2`);
+    process.exit(1);
+  }
   const app = await createApp();
   app.enableShutdownHooks();
   await app.listen(config.port, '127.0.0.1');

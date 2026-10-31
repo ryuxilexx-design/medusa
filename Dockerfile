@@ -21,6 +21,9 @@ RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 FROM node:22.12.0-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOST=0.0.0.0 PORT=3000 TZ=UTC
+# `concurrently -k` (npm run start) stops the other process through `ps`; without procps a crashing API took the
+# whole container down with «spawn ps ENOENT» instead of a clean exit
+RUN apt-get update && apt-get install -y --no-install-recommends procps && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=node:node /app /app
 USER node
 EXPOSE 3000
