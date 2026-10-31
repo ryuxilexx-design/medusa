@@ -58,23 +58,24 @@ export const IMPORT_FIELDS: Record<ImportKind, Field[]> = {
 export const normHeader = (h: unknown) => String(h ?? '').toLowerCase().replace(/ё/g, 'е').replace(/[.,:;()«»"№#_\-/\\]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** Header row: the first of the top 15 rows where at least two columns are recognised (exports often start with a title). */
-export function findHeader(table: Table, kind: ImportKind): number {
-  const known = new Set(IMPORT_FIELDS[kind].flatMap((f) => f.headers.map(normHeader)));
+export function findHeader(table: Table, kind: ImportKind): number { return findHeaderBy(table, IMPORT_FIELDS[kind]); }
+export function findHeaderBy(table: Table, fields: { headers: string[] }[]): number {
+  const known = new Set(fields.flatMap((f) => f.headers.map(normHeader)));
   for (let i = 0; i < Math.min(15, table.length); i++) if (table[i].filter((c) => known.has(normHeader(c))).length >= 2) return i;
   return 0;
 }
 
 /** field → column index guessed from the headers (each column used once; exact synonyms first, in the field's order). */
-export function guessMapping(headers: unknown[], kind: ImportKind): Record<string, number> {
+export function guessMapping(headers: unknown[], kind: ImportKind): Record<string, number> { return guessMappingBy(headers, IMPORT_FIELDS[kind]); }
+export function guessMappingBy(headers: unknown[], fields: { key: string; headers: string[] }[]): Record<string, number> {
   const norm = headers.map(normHeader);
   const used = new Set<number>(); const out: Record<string, number> = {};
-  for (const f of IMPORT_FIELDS[kind]) {
+  for (const f of fields) {
     for (const h of f.headers.map(normHeader)) {
       const i = norm.findIndex((x, j) => x === h && !used.has(j));
       if (i >= 0) { out[f.key] = i; used.add(i); break; }
     }
   }
-  // a payments export without a «patient ID» column: the patient column may still carry the id («28354 Каримов …»)
   return out;
 }
 

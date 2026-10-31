@@ -47,7 +47,7 @@ const badAuth = new Window(BAD_AUTH_PER_MIN);
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const multer: any = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: IMPORT_MAX_BYTES, files: 1, fields: 6, fieldSize: 4000, parts: 8 } }).single('file');
-function readUpload(req: Request, res: Response): Promise<{ file?: { buffer: Buffer; size: number; originalname: string }; body: Record<string, string> }> {
+export function readUpload(req: Request, res: Response): Promise<{ file?: { buffer: Buffer; size: number; originalname: string }; body: Record<string, string> }> {
   return new Promise((resolve, reject) => upload(req, res, (err: any) => {
     if (!err) return resolve({ file: (req as any).file, body: { ...((req as any).body ?? {}) } });
     if (err.code === 'LIMIT_FILE_SIZE') return reject(coded(413, 'FILE_TOO_LARGE', 'api.sync.fileTooLarge', { mb: IMPORT_MAX_BYTES / 1024 / 1024 }));

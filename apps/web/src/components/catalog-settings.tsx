@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, MinusCircle, Pencil, Plus, Search } from 'lucide-react';
+import { CheckCircle2, FileSpreadsheet, MinusCircle, Pencil, Plus, Search } from 'lucide-react';
 import { SERVICE_CATEGORIES, VAT_OPTIONS, type MessageKey } from '@meduza/contracts';
 import { api, ApiError } from '@/lib/api';
 import { formatPhone, formatSom, parseSomToTiyin } from '@/lib/format';
@@ -9,6 +9,7 @@ import { useT } from '@/lib/i18n';
 import { useSession } from '@/lib/session';
 import { MoneyInput } from '@/components/money-input';
 import { DaysOff } from '@/components/days-off';
+import { PriceImportModal } from '@/components/price-import';
 import { Alert, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Field, Input, KeyVal, LoadingRows, Modal, ModalCancel, Select, Table, Td, Th, Toolbar, useToast } from '@/components/ui';
 
 /**
@@ -200,12 +201,16 @@ export function ServicesSettings() {
   const q = useQuery({ queryKey: ['services', 'all'], queryFn: () => api('/services?active=all').then((r) => r.data as any[]) });
   const branches = useQuery({ queryKey: ['branches'], queryFn: () => api('/branches').then((r) => r.data as any[]) });
   const [edit, setEdit] = useState<any | 'new' | null>(null);
+  const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState('');
   const term = search.trim().toLowerCase();
   const rows = (q.data ?? []).filter((s) => !term || s.name.toLowerCase().includes(term) || String(s.code).toLowerCase().includes(term));
   return (
     <Card padded={false}>
-      <Toolbar actions={<Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setEdit('new')}>{t('settings.services.add')}</Button>}>
+      <Toolbar actions={<>
+        <Button icon={<FileSpreadsheet className="h-4 w-4" />} onClick={() => setImporting(true)} data-testid="price-import-open" aria-label={t('settings.priceImport.open')} title={t('settings.priceImport.open')}><span className="hidden md:inline">{t('settings.priceImport.open')}</span></Button>
+        <Button variant="primary" icon={<Plus className="h-4 w-4" />} onClick={() => setEdit('new')}>{t('settings.services.add')}</Button>
+      </>}>
         <div className="relative w-full sm:w-80">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" aria-hidden="true" />
           <Input type="search" aria-label={t('admin.set.searchService')} placeholder={t('admin.set.searchService')} className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -236,6 +241,7 @@ export function ServicesSettings() {
         </Table>
       )}
       {edit && <ServiceModal s={edit === 'new' ? null : edit} branches={branches.data ?? []} onClose={() => setEdit(null)} />}
+      {importing && <PriceImportModal onClose={() => setImporting(false)} />}
     </Card>
   );
 }
